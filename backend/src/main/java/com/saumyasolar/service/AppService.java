@@ -15,6 +15,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 @Service
@@ -35,6 +36,7 @@ public class AppService {
     final CustomerOrderRepository orders;
     final OrderItemRepository orderItems;
     final IdempotencyRecordRepository idem;
+    final RoleRepository roles;
     
     public AppService(
             TenantRepository a,
@@ -52,7 +54,8 @@ public class AppService {
             QuotationItemRepository m,
             CustomerOrderRepository n,
             OrderItemRepository o,
-            IdempotencyRecordRepository p
+            IdempotencyRecordRepository p,
+            RoleRepository roles
     ) {
         tenants = a;
         users = b;
@@ -70,6 +73,7 @@ public class AppService {
         orders = n;
         orderItems = o;
         idem = p;
+        this.roles = roles;
     }
     
     void vendor(Principal p) {
@@ -109,6 +113,20 @@ public class AppService {
             requirePermission(p, "USER_VIEW");
             return users.findByTenantId(p.tenantId()).stream()
                     .filter(u -> "VENDOR".equals(u.getAccountType())).toList();
+        }
+        if (java.util.Set.of("catalog-categories", "catalog-products", "catalog-packages").contains(type)) {
+            if (!"CUSTOMER".equals(p.accountType()) || p.tenantId() == null)
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+            return switch (type) {
+                case "catalog-categories" -> cats.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(ProductCategory::isActive).toList();
+                case "catalog-products" -> products.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(Product::isActive).toList();
+                default -> packs.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(SolarPackage::isActive).toList();
+            };
+        }
+        if ("customer-enquiries".equals(type) && "CUSTOMER".equals(p.accountType())) {
+            var profile = customers.findByTenantIdAndUserId(p.tenantId(), p.userId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer profile not found"));
+            return enquiries.findByTenantIdAndCustomerIdOrderByIdDesc(p.tenantId(), profile.getId());
         }
         if ("customer-orders".equals(type) && "CUSTOMER".equals(p.accountType())) {
             var c = customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(x -> p.userId().equals(x.getUserId())).findFirst().orElseThrow();
@@ -152,6 +170,7 @@ public class AppService {
         return tenants.save(tenant);
     }
 
+    @Transactional
     public Object create(String type, Input x, Principal p) {
         if ("tenants".equals(type)) {
             if (!"PLATFORM".equals(p.accountType())) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
@@ -183,8 +202,13 @@ public class AppService {
                 var e = new Product();
                 e.setId(UUID.randomUUID());
                 e.setTenantId(p.tenantId());
-                if (x.categoryId() != null && cats.findByIdAndTenantId(x.categoryId(), p.tenantId()).isEmpty())
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category does not belong to this vendor");
+                if (x.categoryId() == null || cats.findByIdAndTenantId(x.categoryId(), p.tenantId())
+                        .filter(ProductCategory::isActive).isEmpty())
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select an active product category belonging to this vendor");
+                if (x.price() == null || x.price().signum() < 0)
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product price must be zero or greater");
+                if (x.taxPercent() != null && (x.taxPercent().signum() < 0 || x.taxPercent().compareTo(new BigDecimal("100")) > 0))
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tax percentage must be between 0 and 100");
                 e.setCategoryId(x.categoryId());
                 e.setSku(x.sku());
                 e.setName(x.name());
@@ -195,6 +219,14 @@ public class AppService {
                 yield products.save(e);
             }
             case "packages" -> {
+                if (x.items() == null || x.items().isEmpty())
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Add at least one package component");
+                for (var line : x.items()) {
+                    if (line.productId() == null || line.quantity() < 1)
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Every package component needs a product and positive quantity");
+                    if (products.findByIdAndTenantId(line.productId(), p.tenantId()).filter(Product::isActive).isEmpty())
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package components must use active products from this vendor");
+                }
                 var e = new SolarPackage();
                 e.setId(UUID.randomUUID());
                 e.setTenantId(p.tenantId());
@@ -252,6 +284,36 @@ public class AppService {
         };
     }
     
+    public List<Role> employeeRoles(Principal p) {
+        vendor(p);
+        requirePermission(p, "USER_MANAGE");
+        return roles.findByTenantIdOrderByNameAsc(p.tenantId()).stream()
+                .filter(role -> !java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "CUSTOMER").contains(role.getName()))
+                .toList();
+    }
+
+    @Transactional
+    public Enquiry createCustomerEnquiry(Input x, Principal p) {
+        if (!"CUSTOMER".equals(p.accountType()) || p.tenantId() == null)
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        var profile = customers.findByTenantIdAndUserId(p.tenantId(), p.userId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer profile not found"));
+        var enquiry = new Enquiry();
+        enquiry.setId(UUID.randomUUID());
+        enquiry.setTenantId(p.tenantId());
+        enquiry.setCustomerId(profile.getId());
+        enquiry.setName(profile.getName());
+        enquiry.setEmail(profile.getEmail());
+        enquiry.setPhone(profile.getPhone());
+        enquiry.setPropertyType(x.propertyType());
+        enquiry.setMonthlyBill(x.monthlyBill());
+        enquiry.setRequiredCapacityKw(x.requiredCapacityKw());
+        enquiry.setMessage(x.message());
+        enquiry.setStatus("NEW");
+        enquiry.setCreatedAt(Instant.now());
+        return enquiries.save(enquiry);
+    }
+
     @Transactional
     public SalesLead convertLead(UUID enquiryId, Input x, Principal p) {
         vendor(p);
