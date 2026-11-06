@@ -55,8 +55,8 @@ class Release3OperationsIntegrationTest {
   mvc.perform(post("/api/v1/inventory/returns").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content("{\"warehouseId\":\""+wh+"\",\"productId\":\""+pr+"\",\"quantity\":1,\"reason\":\"Customer return\"}")).andExpect(status().isOk());
   String response=mvc.perform(get("/api/v1/inventory/balances").header("Authorization","Bearer "+auth)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
   JsonNode row=java.util.stream.StreamSupport.stream(json.readTree(response).spliterator(),false).filter(x->x.get("warehouseId").asText().equals(wh)&&x.get("productId").asText().equals(pr)).findFirst().orElseThrow();
-  assertEquals(new BigDecimal("23"),new BigDecimal(row.get("onHand").asText()));
-  assertEquals(new BigDecimal("2"),new BigDecimal(row.get("damaged").asText()));
+  assertEquals(0,new BigDecimal("23").compareTo(new BigDecimal(row.get("onHand").asText())));
+  assertEquals(0,new BigDecimal("2").compareTo(new BigDecimal(row.get("damaged").asText())));
   assertEquals(new BigDecimal("21"),new BigDecimal(row.get("onHand").asText()).subtract(new BigDecimal(row.get("reserved").asText())).subtract(new BigDecimal(row.get("damaged").asText())));
   String ledger=mvc.perform(get("/api/v1/inventory/transactions").header("Authorization","Bearer "+auth)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
   assertTrue(ledger.contains("DAMAGE"));assertTrue(ledger.contains("ISSUE"));assertTrue(ledger.contains("RETURN"));
