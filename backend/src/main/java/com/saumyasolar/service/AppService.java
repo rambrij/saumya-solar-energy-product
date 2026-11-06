@@ -76,6 +76,17 @@ public class AppService {
         if (!"VENDOR".equals(p.accountType()) || p.tenantId() == null)
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
     }
+
+    private void requirePermission(Principal p, String code) {
+        if (p.permissions() == null || !p.permissions().contains(code))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing permission: " + code);
+    }
+
+    private void requireEmployee(UUID id, UUID tenantId) {
+        if (id != null && users.findById(id).filter(u -> tenantId.equals(u.getTenantId())
+                && "VENDOR".equals(u.getAccountType()) && u.isEnabled()).isEmpty())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee must belong to this vendor");
+    }
     
     public Object list(String type, Principal p) {
         if ("tenants".equals(type)) {
@@ -95,6 +106,15 @@ public class AppService {
             return quotes.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(x -> x.getCustomerId().equals(c.getId())).toList();
         }
         vendor(p);
+        switch (type) {
+            case "categories", "products", "packages" -> requirePermission(p, "CATALOG_MANAGE");
+            case "customers" -> requirePermission(p, "CUSTOMER_MANAGE");
+            case "enquiries", "leads" -> requirePermission(p, "LEAD_MANAGE");
+            case "surveys" -> requirePermission(p, "SURVEY_MANAGE");
+            case "quotations" -> requirePermission(p, "QUOTATION_MANAGE");
+            case "orders" -> requirePermission(p, "ORDER_CREATE");
+            default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
         return switch (type) {
             case "categories" -> cats.findByTenantIdOrderByIdDesc(p.tenantId());
             case "products" -> products.findByTenantIdOrderByIdDesc(p.tenantId());
@@ -134,6 +154,8 @@ public class AppService {
                 var e = new Product();
                 e.setId(UUID.randomUUID());
                 e.setTenantId(p.tenantId());
+                if (x.categoryId() != null && cats.findByIdAndTenantId(x.categoryId(), p.tenantId()).isEmpty())
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category does not belong to this vendor");
                 e.setCategoryId(x.categoryId());
                 e.setSku(x.sku());
                 e.setName(x.name());
@@ -199,7 +221,11 @@ public class AppService {
     @Transactional
     public SalesLead convertLead(UUID enquiryId, Input x, Principal p) {
         vendor(p);
+        requirePermission(p, "LEAD_MANAGE");
         var q = enquiries.findByIdAndTenantId(enquiryId, p.tenantId()).orElseThrow();
+        if (!"NEW".equals(q.getStatus()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Enquiry already converted");
+        requireEmployee(x.assignedUserId(), p.tenantId());
         q.setStatus("CONVERTED");
         enquiries.save(q);
         var l = new SalesLead();
@@ -217,9 +243,12 @@ public class AppService {
         return l;
     }
     
+    @Transactional
     public SalesLead updateLead(UUID id, Input x, Principal p) {
         vendor(p);
+        requirePermission(p, "LEAD_MANAGE");
         var l = leads.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
+        requireEmployee(x.assignedUserId(), p.tenantId());
         var old = l.getStage();
         if (x.stage() != null) l.setStage(x.stage());
         if (x.priority() != null) l.setPriority(x.priority());
@@ -244,8 +273,13 @@ public class AppService {
         histories.save(h);
     }
     
+    @Transactional
     public SiteSurvey survey(Input x, Principal p) {
         vendor(p);
+        requirePermission(p, "SURVEY_MANAGE");
+        if (x.leadId() == null || leads.findByIdAndTenantId(x.leadId(), p.tenantId()).isEmpty())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lead must belong to this vendor");
+        requireEmployee(x.assignedUserId(), p.tenantId());
         var e = new SiteSurvey();
         e.setId(UUID.randomUUID());
         e.setTenantId(p.tenantId());
