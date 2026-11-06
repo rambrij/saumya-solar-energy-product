@@ -1,105 +1,156 @@
-# Saumya Solar Energy Platform - Release 2
+# Saumya Solar Energy Platform — Release 1 & 2
 
-Clean, runnable Release 2 including Release 1 identity/tenant foundation and complete Sales Lifecycle.
+This branch is an incremental hardening and completion branch for the existing Release 1 identity/tenant foundation and Release 2 sales lifecycle. It preserves the existing Spring Boot, MySQL, React, and Docker Compose architecture.
 
-## One-command clean start (Windows PowerShell)
+> **Validation honesty:** Source changes are committed, but a successful Maven build, frontend build, database migration run, and end-to-end test run have not yet been observed for this branch. Do not treat any row below as production-ready solely because an entity, API, or screen exists.
+
+## Technology
+
+- Backend: Java 21, Spring Boot 3.5.7, Spring Security, Spring Data JPA, Flyway
+- Database: MySQL 8.4
+- Frontend: React, TypeScript, Vite
+- PDF: OpenPDF
+- Local orchestration: Docker Compose
+
+## Local setup
+
+Prerequisites:
+
+- Docker Desktop or Rancher Desktop with Docker-compatible CLI
+- Docker Compose v2
+- For running checks outside Docker: Java 21, Maven, Node.js 22 and npm
+
+Start the local stack:
 
 ```powershell
-.\start-clean.ps1
+docker compose up --build
 ```
 
-This removes the local Docker volume, rebuilds MySQL/backend/frontend, and starts with deterministic seed data. **It
-deletes local development data.**
+Open:
 
-Manual equivalent:
+- Frontend: http://localhost:3000
+- Backend health: http://localhost:8080/actuator/health
+- Swagger UI: http://localhost:8080/swagger-ui/index.html
 
-```powershell
-docker compose down -v --remove-orphans
-docker compose build --no-cache backend frontend
-docker compose up
-```
+The optional `.`/start-clean.ps1` script and `docker compose down -v` remove the local MySQL volume. They permanently delete local development data. Do not use them when you need to retain local records.
 
-URLs: UI `http://localhost:3000`, Swagger `http://localhost:8080/swagger-ui/index.html`, health
-`http://localhost:8080/actuator/health`.
+The Compose file contains development-only database credentials and JWT secret. Replace all of them before any shared or production deployment. Do not expose the Compose MySQL port to an untrusted network.
 
-## Local credentials
+## Local demo accounts
 
-MySQL root: `root` / `rootpass`; application DB: `solar` / `solarpass`; database: `solar`.
+These credentials are for a disposable local environment only:
 
-Application users:
+| Role | Email | Password |
+|---|---|---|
+| Platform Super Admin | platform@saumya.local | Platform@123 |
+| Vendor Admin | admin@saumya.local | Admin@123 |
+| Vendor Sales User | sales@saumya.local | Sales@123 |
+| Customer | customer@saumya.local | Customer@123 |
 
-- Platform Super Admin: `platform@saumya.local` / `Platform@123`
-- Vendor Admin: `admin@saumya.local` / `Admin@123`
-- Vendor Sales User: `sales@saumya.local` / `Sales@123`
-- Customer: `customer@saumya.local` / `Customer@123`
+Change or remove seeded credentials before deploying outside local development.
 
-Development credentials only. Change them before any shared deployment.
+## Role navigation
 
-## Role-specific UI
+- Platform account: platform tenant list and tenant creation.
+- Vendor account: catalogue, customers, enquiries, leads, surveys, quotations, orders and employee lookup, subject to the permissions carried in the session.
+- Customer account: quotations and own orders.
 
-- Platform: platform dashboard, tenant/vendor list, tenant creation and activation.
-- Vendor: catalogue, customers, enquiries, leads, surveys, quotations, approvals, orders and team lookup.
-- Customer: own quotations, PDF download, accept/reject, own orders.
+The current frontend is a compact role-aware portal, not a complete set of independently routed production layouts. Hiding a menu is not an authorization control; backend checks are required and remain authoritative.
 
-## Correct business flow
+## Business workflow supported by the current code
 
-1. Vendor creates Category -> Product -> Solar Package with package components.
-2. Vendor creates Customer or receives Enquiry.
-3. Enquiry -> Lead; assign vendor employee, set priority/follow-up and transition stage.
-4. Lead -> Site Survey; schedule, assign, capture roof/property/load details, complete.
-5. Survey -> Quotation; add immutable product/package line snapshots; calculate subtotal, discount, tax and total.
-6. Discount <=10% -> DRAFT. Discount >10% -> PENDING_APPROVAL -> approve/reject.
-7. DRAFT -> SEND. New revision clones lines, marks old revision SUPERSEDED and increments revision.
-8. Customer sees only their latest SENT quotation, downloads PDF, accepts/rejects. Expired/superseded quotes are
-   blocked.
-9. ACCEPTED quotation -> order conversion using `Idempotency-Key`. Repeating the key returns the same order; DB unique
-   quotation ID blocks duplicates.
+1. Vendor creates categories, products, packages, customers and enquiries.
+2. Vendor converts an enquiry into a lead, assigns a same-tenant employee, and tracks lead stage/follow-up.
+3. Vendor schedules a site survey for a same-tenant lead.
+4. Vendor creates a quotation with a customer, optional lead/survey and catalogue line references.
+5. Discounts above the current 10% threshold enter pending approval; an authorized user approves or rejects.
+6. Vendor sends a draft quotation.
+7. The customer can accept or reject a quotation visible in their tenant/customer scope.
+8. Vendor converts an accepted quotation to an order with an `Idempotency-Key`.
 
-Lead stages:
-`NEW -> CONTACTED -> SITE_VISIT_SCHEDULED -> SURVEY_COMPLETED -> QUOTATION_SENT -> NEGOTIATION -> WON/LOST`.
-Quotation statuses: `DRAFT, PENDING_APPROVAL, APPROVAL_REJECTED, SENT, SUPERSEDED, ACCEPTED, REJECTED, EXPIRED`.
-
-## 403 prevention
-
-Permissions are created and assigned idempotently by `DataSeeder` before use. A clean start produces new JWTs with
-correct authorities. UI navigation is separated by `accountType`; platform users are never shown vendor sales screens.
-Backend `@PreAuthorize` remains authoritative.
-
-## Release 2 acceptance test
-
-Login as Vendor Admin, create category/product/package/customer/enquiry, convert to lead, assign `sales@saumya.local`,
-update follow-up/stage, create/complete survey, create quote, approve >10% discount, send quote. Login as Customer,
-download/accept it. Login as Vendor, convert to order twice with the same key and confirm the same order ID.
+The 10% threshold is currently hard-coded. A configurable discount policy is still required before production.
 
 ## Implementation matrix
 
-| Feature                           | Backend     | Frontend    | Database    | Evidence / notes                                                                |
-|-----------------------------------|-------------|-------------|-------------|---------------------------------------------------------------------------------|
-| Tenant/vendor management          | Implemented | Implemented | Implemented | `Tenant`, `/api/v1/tenants`, Platform layout                                    |
-| Roles/permissions                 | Implemented | Implemented | Implemented | JWT role+permission claims, role tables, seeded authorities                     |
-| Platform/vendor/customer layouts  | Implemented | Implemented | N/A         | `main.tsx` dispatches by `accountType`                                          |
-| Product categories                | Implemented | Implemented | Implemented | category entity/repo/service/UI                                                 |
-| Products                          | Implemented | Implemented | Implemented | product entity/repo/service/UI                                                  |
-| Solar packages                    | Implemented | Partial     | Implemented | backend package items supported; compact UI captures package core fields        |
-| Customers                         | Implemented | Implemented | Implemented | customer profile CRUD creation/listing                                          |
-| Enquiries/leads                   | Implemented | Implemented | Implemented | enquiry creation and convert action                                             |
-| Lead assignment/follow-up/history | Implemented | Partial     | Implemented | service and tables exist; compact UI listing lacks full edit dialog             |
-| Site surveys                      | Implemented | Partial     | Implemented | API/service and schema; compact UI lacks complete survey form                   |
-| Versioned quotations              | Implemented | Implemented | Implemented | revision endpoint clones immutable line snapshots and supersedes prior revision |
-| Discount approval                 | Implemented | Partial     | Implemented | >10% state and action supported; UI approval view limited                       |
-| Quotation PDF                     | Implemented | Implemented | N/A         | authenticated PDF download action                                               |
-| Customer accept/reject            | Implemented | Implemented | Implemented | customer-only quotation ownership list/actions                                  |
-| Idempotent quote-to-order         | Implemented | Implemented | Implemented | stable per-quotation browser idempotency key + DB uniqueness                    |
-| Access token                      | Implemented | Implemented | N/A         | JWT generated at login                                                          |
-| Refresh/logout/password reset     | Implemented | API-ready   | Implemented | rotating refresh token, revocation, forgot/reset endpoints                      |
-| Cross-tenant tests                | Missing     | N/A         | N/A         | must be added before production claim                                           |
+Statuses describe the code currently present in this branch, not an assumption based on the release plan. "Partial" means at least one part exists but the complete workflow/acceptance criteria are not met. "Missing" means no complete implementation was found. Database status covers the current Flyway schema only.
 
-### Validation status
+| Feature | Backend | Frontend | Database | Issues / evidence |
+|---|---|---|---|---|
+| Tenant and vendor management | Partial | Partial | Implemented | `Tenant`, `TenantRepository`, `POST/GET /api/v1/tenants`, `V1__complete_release2.sql`; tenant creation exists, but vendor-admin provisioning, edit/activation lifecycle and complete tenant management UI are absent. |
+| Customer registration | Implemented | Missing | Implemented | `POST /api/v1/auth/register`, `AuthLifecycleService.register`, `app_user`, `customer_profile`; registration API exists, no registration UI or email verification. |
+| Access and refresh tokens | Partial | Partial | Implemented | `JwtService`, `AuthLifecycleService`, `refresh_token`; access JWT is 2 hours; refresh rotates and reuse now revokes remaining refresh sessions. Access-token revocation/shorter lifetime and automated lifecycle tests remain outstanding. |
+| Logout and token revocation | Partial | Partial | Implemented | `POST /api/v1/auth/logout`; frontend now calls it before clearing local session. Existing access JWT remains usable until expiry. |
+| Password reset | Partial | Missing | Implemented | `PasswordResetToken`, forgot/reset endpoints; single-use and expiry checks, reset revokes refresh sessions. Email delivery and reset UI are absent; development reset token is returned by API. |
+| Roles and permissions | Partial | Partial | Implemented | `Role`, `Permission`, `SecurityConfig`, `AppService`; permission checks added to several vendor operations. Not all endpoints/actions are consistently permission-guarded; role administration is absent. |
+| Vendor employee management | Partial | Partial | Implemented | `AppUser`, `AppUserRepository`, `GET /api/v1/users`; lookup is tenant-filtered. Create/edit/disable/role-assignment workflow is missing. |
+| Platform/vendor/customer layouts | Partial | Partial | N/A | `frontend/src/main.tsx`; account-type-specific views exist, but they are compact conditional views rather than complete route/layout experiences. |
+| Tenant-context enforcement | Partial | Partial | Partial | Tenant ID comes from JWT principal and tenant-filtered repository methods; cross-reference checks added for categories, package products, assigned employees, customer/lead/survey references. More endpoint coverage and tenant-composite FK constraints are needed. |
+| Cross-tenant integration tests | Missing | N/A | N/A | Existing `Release2SecurityTest` only tests principal fields; no real HTTP/database negative tests for cross-tenant read/update/delete/ID guessing. |
+| Product categories | Partial | Partial | Implemented | Entity/repository, tenant-filtered list and create form. Update/delete, uniqueness/validation UX and lifecycle screens absent. |
+| Products | Partial | Partial | Implemented | Entity/repository, category tenant check, create/list. No full update/delete UI; input validation and lifecycle controls incomplete. |
+| Configurable solar packages | Partial | Partial | Implemented | Package and package-item entities; API supports item composition and validates same-tenant active products. UI does not configure package items or optional components. |
+| Customers | Partial | Partial | Implemented | Customer create/list and customer profiles exist. Search, update, detail, duplicate handling and complete customer self-service onboarding are absent. |
+| Enquiries and leads | Partial | Partial | Implemented | Enquiry create/list, one-time conversion, lead update/history. UI stage editing is prompt-based; search, full assignment form and history view are absent. |
+| Lead assignment | Partial | Partial | Implemented | Backend validates assigned employee belongs to tenant; UI does not provide a complete assignment/reassignment workflow or history screen. |
+| Site surveys | Partial | Partial | Implemented | Survey create/list and same-tenant lead/employee checks. Full edit, scheduling calendar, evidence/attachments and detailed completion workflow absent. |
+| Versioned quotations | Partial | Partial | Implemented | `QuotationRevisionService` clones revision line snapshots; server now derives product prices/tax from tenant catalogue. Revision history UI and full quote terms are absent. |
+| Discount approval | Partial | Partial | Implemented | Hard-coded >10% threshold and approval permission check. Configurable threshold/authority matrix and complete approval history are absent. |
+| Quotation PDF generation | Partial | Partial | N/A | Authenticated `GET /api/v1/quotations/{id}/pdf`; current PDF only contains quotation number, revision, status and total, not a complete customer-facing line-item/tax/terms document. |
+| Customer quotation acceptance/rejection | Partial | Implemented | Implemented | Customer list is filtered to own customer profile; action checks owner, SENT state and validity. Acceptance actor/time/version audit fields and comprehensive tests are absent. |
+| Idempotent quotation-to-order conversion | Partial | Partial | Implemented | Idempotency record unique key and unique order quotation; same key cannot be reused for a different quotation and duplicate quotation conversion is checked. Concurrent race handling and concurrency tests remain outstanding. |
 
-Frontend `npm run build` is intended as the first executable check. Backend Maven and Docker must also pass in the
-target environment. Features marked Partial/Missing above are deliberately not claimed complete.
+## Security hardening committed on this branch
 
-### Authentication APIs
+- Added permission checks to vendor list/create workflows and quotation revision creation.
+- Added tenant ownership validation for product category references, package components, customer references, lead/survey relationships and assigned vendor employees.
+- Prevented converting an enquiry more than once.
+- Added catalogue-derived quotation prices and tax instead of trusting browser-supplied price/tax values.
+- Added quotation action state checks and approval permission checks.
+- Bound idempotency keys to the quotation they originally created and guarded duplicate order creation.
+- Added refresh-token reuse detection and refresh-session revocation after password reset.
+- Rejected disabled accounts at login and applied DTO validation annotations in authentication controllers.
+- Frontend logout now calls the refresh-token logout endpoint before clearing the browser session.
+- Added a GitHub Actions workflow for Maven verification and frontend production build.
 
-`POST /api/v1/auth/register`, `/login`, `/refresh`, `/logout`, `/forgot-password`, `/reset-password`. Local password
-reset returns a development reset token; connect an email provider before production.
+These changes are a hardening step, not proof that every Release 1/2 acceptance criterion is complete.
+
+## Build and test instructions
+
+Backend:
+
+```powershell
+cd backend
+mvn clean verify
+```
+
+Frontend:
+
+```powershell
+cd frontend
+npm install
+npm run build
+```
+
+Docker:
+
+```powershell
+docker compose build --no-cache
+docker compose up
+```
+
+A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. Check the Actions tab for the run associated with the latest branch commit. A successful compile/build does not replace API integration, tenant-isolation, concurrency or full workflow tests.
+
+## Remaining release blockers
+
+1. Complete authorization coverage for every controller action, including platform tenant operations and customer endpoints.
+2. Add vendor-admin provisioning, vendor employee create/update/disable and role assignment.
+3. Add registration, forgot/reset-password and session-expiry/refresh UX; deliver reset links through a configured email provider.
+4. Revoke or otherwise invalidate access tokens on logout/password reset; consider HttpOnly secure cookies for refresh tokens instead of localStorage.
+5. Add database-level tenant-composite constraints for all tenant-owned relationships.
+6. Add full CRUD and complete workflows for packages, leads, surveys and quotations.
+7. Make discount policy configurable and add approval history.
+8. Generate complete quotation PDFs from immutable revision snapshots.
+9. Persist customer decision actor/time and accepted revision evidence.
+10. Make order conversion safe under concurrent requests with transactional locking/unique constraints and tests.
+11. Add integration tests for all four personas and cross-tenant negative cases.
+12. Run and record Maven, frontend, Docker/MySQL migration and end-to-end workflow results before production sign-off.
