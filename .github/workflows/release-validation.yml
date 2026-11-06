@@ -40,3 +40,34 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build
+
+  mysql-migrations:
+    name: Validate Flyway migrations on MySQL 8.4
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: rootpass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -prootpass"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MySQL client
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+      - name: Apply V1 schema
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass -e "CREATE DATABASE solar_migration_test"
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V1__complete_release2.sql
+      - name: Verify additive V2 permission migration
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -e "INSERT INTO tenant(id,name,slug,status) VALUES(UUID_TO_BIN(UUID()),'Migration tenant','migration-tenant','ACTIVE'); SET @tenant_id=(SELECT id FROM tenant WHERE slug='migration-tenant'); INSERT INTO role(id,tenant_id,name) VALUES(UUID_TO_BIN(UUID()),@tenant_id,'VENDOR_ADMIN');"
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V2__vendor_employee_management_permission.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass -Nse "SELECT COUNT(*) FROM role_permission rp JOIN role r ON r.id=rp.role_id JOIN permission p ON p.id=rp.permission_id WHERE r.name='VENDOR_ADMIN' AND p.code='USER_MANAGE'" solar_migration_test)" = "1"
+      - name: Apply V3 quotation decision audit migration
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V3__quotation_customer_decision_audit.sql
