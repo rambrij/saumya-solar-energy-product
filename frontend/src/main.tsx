@@ -69,7 +69,10 @@ function QuoteForm({s,lookups,done,error}:any){
  const [catalogId,setCatalogId]=useState('');
  const [quantity,setQuantity]=useState(1);
  const [lines,setLines]=useState<any[]>([]);
+ const [leadId,setLeadId]=useState('');
  const options=kind==='product'?(lookups.products||[]):(lookups.packages||[]);
+ const selectedLead=(lookups.leads||[]).find((x:any)=>x.id===leadId);
+ const surveyOptions=(lookups.surveys||[]).filter((x:any)=>leadId&&x.leadId===leadId);
  const addLine=()=>{
   if(!catalogId||quantity<1){error('Choose an active product/package and a positive quantity');return}
   if(lines.some(x=>x.kind===kind&&x.id===catalogId)){error('This item is already in the quotation');return}
@@ -87,8 +90,9 @@ function QuoteForm({s,lookups,done,error}:any){
   <h2>Create Quotation</h2>
   <label>Customer<select name="customerId" required defaultValue=""><option value="" disabled>Select customer</option>{(lookups.customers||[]).map((x:any)=><option key={x.id} value={x.id}>{x.name} · {x.email}</option>)}</select></label>
   {!(lookups.customers||[]).length&&<p className="muted">No customers found. Create a customer or ask them to register for this vendor store.</p>}
-  <label>Lead (optional)<select name="leadId" defaultValue=""><option value="">No lead</option>{(lookups.leads||[]).map((x:any)=><option key={x.id} value={x.id}>{x.id} · {x.stage}</option>)}</select></label>
-  <label>Site survey (optional)<select name="surveyId" defaultValue=""><option value="">No survey</option>{(lookups.surveys||[]).map((x:any)=><option key={x.id} value={x.id}>{x.id} · {x.status}</option>)}</select></label>
+  <label>Lead (optional)<select name="leadId" value={leadId} onChange={e=>setLeadId(e.target.value)}><option value="">No lead</option>{(lookups.leads||[]).filter((x:any)=>!x.customerId||!f).map((x:any)=><option key={x.id} value={x.id}>{x.id} · {x.stage}</option>)}</select></label>
+  <label>Site survey (optional)<select name="surveyId" defaultValue=""><option value="">No survey</option>{surveyOptions.map((x:any)=><option key={x.id} value={x.id}>{x.id} · {x.status}</option>)}</select></label>
+  {leadId&&!selectedLead?.customerId&&<p className="muted">This lead is not linked to a customer yet. Convert enquiries after adding a valid customer email, then refresh this form.</p>}
   <h3>Quotation items</h3>
   <select value={kind} onChange={e=>{setKind(e.target.value);setCatalogId('')}}><option value="product">Product</option><option value="package">Solar package</option></select>
   <select value={catalogId} onChange={e=>setCatalogId(e.target.value)}><option value="">Select {kind}</option>{options.filter((x:any)=>x.active).map((x:any)=><option key={x.id} value={x.id}>{x.name} · ₹{kind==='product'?x.price:x.basePrice}</option>)}</select>
