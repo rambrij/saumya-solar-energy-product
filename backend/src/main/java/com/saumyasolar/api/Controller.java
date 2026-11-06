@@ -16,6 +16,7 @@ import com.saumyasolar.service.AppService;
 import com.saumyasolar.service.AuthLifecycleService;
 import com.saumyasolar.service.QuotationRevisionService;
 import org.springframework.http.HttpStatus;
+import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -57,8 +58,8 @@ public class Controller {
     }
     
     @PostMapping("/auth/login")
-    Session login(@RequestBody Login x) {
-        var u = users.findByEmailIgnoreCase(x.email()).filter(v -> enc.matches(x.password(), v.getPasswordHash())).orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED));
+    Session login(@Valid @RequestBody Login x) {
+        var u = users.findByEmailIgnoreCase(x.email()).filter(v -> v.isEnabled() && enc.matches(x.password(), v.getPasswordHash())).orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED));
         var rs = new HashSet<String>();
         var ps = new HashSet<String>();
         u.getRoles().forEach(r -> {
@@ -69,7 +70,7 @@ public class Controller {
     }
     
     @PostMapping("/auth/refresh")
-    Session refresh(@RequestBody Refresh x) {
+    Session refresh(@Valid @RequestBody Refresh x) {
         var u = lifecycle.consumeRefresh(x.refreshToken());
         var rs = new HashSet<String>();
         var ps = new HashSet<String>();
@@ -82,24 +83,24 @@ public class Controller {
     
     @PostMapping("/auth/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    void logout(@RequestBody Refresh x) {
+    void logout(@Valid @RequestBody Refresh x) {
         lifecycle.logout(x.refreshToken());
     }
     
     @PostMapping("/auth/register")
-    Session register(@RequestBody Register x) {
+    Session register(@Valid @RequestBody Register x) {
         var u = lifecycle.register(x.storeSlug(), x.name(), x.email(), x.password());
         return new Session(jwt.issue(u), lifecycle.newRefresh(u), new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), Set.of("CUSTOMER"), Set.of()));
     }
     
     @PostMapping("/auth/forgot-password")
-    Map<String, String> forgot(@RequestBody PasswordReset x) {
+    Map<String, String> forgot(@Valid @RequestBody PasswordReset x) {
         return lifecycle.forgot(x.email());
     }
     
     @PostMapping("/auth/reset-password")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    void reset(@RequestBody PasswordReset x) {
+    void reset(@Valid @RequestBody PasswordReset x) {
         lifecycle.reset(x.token(), x.newPassword());
     }
     
