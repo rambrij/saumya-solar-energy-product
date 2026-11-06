@@ -65,7 +65,7 @@ public class Controller {
     
     @PostMapping("/auth/login")
     Session login(@Valid @RequestBody Login x) {
-        var u = users.findByEmailIgnoreCase(x.email()).filter(v -> v.isEnabled() && enc.matches(x.password(), v.getPasswordHash())).orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        var u = users.findByEmailIgnoreCase(x.email()).filter(v -> v.isEnabled() && lifecycle.tenantIsActive(v) && enc.matches(x.password(), v.getPasswordHash())).orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED));
         var rs = new HashSet<String>();
         var ps = new HashSet<String>();
         u.getRoles().forEach(r -> {
