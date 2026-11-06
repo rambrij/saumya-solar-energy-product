@@ -13,6 +13,8 @@ spring:
 app:
   jwt-secret: test-only-jwt-secret-that-is-long-enough-for-hmac-sha-256-and-more
   cors-origins: http://localhost:3000
+  seed:
+    enabled: true
 management:
   endpoints:
     web:

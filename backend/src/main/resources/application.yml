@@ -4,4 +4,8 @@ spring:
   jpa: { hibernate: { ddl-auto: validate }, open-in-view: false }
   flyway: { enabled: true }
 management.endpoints.web.exposure.include: health,info
-app: { jwt-secret: "${JWT_SECRET}", cors-origins: "${CORS_ORIGINS}" }
+app:
+  jwt-secret: "${JWT_SECRET}"
+  cors-origins: "${CORS_ORIGINS}"
+  seed:
+    enabled: ${SEED_DATA_ENABLED:false}
