@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/release-1-2-complete-implementation
+      - feature/release-3-operations
   pull_request:
     branches:
       - main
