@@ -23,6 +23,12 @@ public final class Models {
     
     public record Refresh(@NotBlank String refreshToken) {
     }
+
+    public record EmployeeCreate(
+            @NotBlank String name, @Email String email, @Size(min = 12) String password,
+            @NotBlank String roleName
+    ) {
+    }
     
     public record PasswordReset(@Email String email, String token, String newPassword) {
     }
