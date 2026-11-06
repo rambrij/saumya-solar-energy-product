@@ -18,4 +18,6 @@ public interface QuotationRepository extends JpaRepository<Quotation, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select q from Quotation q where q.id = :id and q.tenantId = :tenantId")
     Optional<Quotation> findByIdAndTenantIdForUpdate(@Param("id") UUID id, @Param("tenantId") UUID tenantId);
+
+    List<Quotation> findByQuoteGroupIdAndTenantIdOrderByRevisionAsc(UUID quoteGroupId, UUID tenantId);
 }
