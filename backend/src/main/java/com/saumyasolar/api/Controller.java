@@ -134,7 +134,14 @@ public class Controller {
     
     @PostMapping("/{type:tenants|categories|products|packages|customers|enquiries}")
     Object create(@PathVariable String type, @RequestBody Input x, Authentication a) {
-        return s.create(type, x, p(a));
+        var principal = p(a);
+        if ("tenants".equals(type)) {
+            if (!"PLATFORM".equals(principal.accountType()) || principal.permissions() == null
+                    || !principal.permissions().contains("PLATFORM_MANAGE"))
+                throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
+            return lifecycle.createTenant(x.name(), x.slug(), x.adminName(), x.adminEmail(), x.adminPassword());
+        }
+        return s.create(type, x, principal);
     }
     
     @PostMapping("/enquiries/{id}/convert")
