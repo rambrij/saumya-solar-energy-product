@@ -9,3 +9,8 @@ app:
   cors-origins: "${CORS_ORIGINS}"
   seed:
     enabled: ${SEED_DATA_ENABLED:false}
+  bootstrap:
+    platform-admin:
+      enabled: ${PLATFORM_BOOTSTRAP_ENABLED:false}
+      email: ${PLATFORM_BOOTSTRAP_EMAIL:}
+      password: ${PLATFORM_BOOTSTRAP_PASSWORD:}
