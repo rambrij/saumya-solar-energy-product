@@ -53,6 +53,51 @@ class Release12TenantIntegrationTest {
     }
 
     @Test
+    void platformCanProvisionTenantAndVendorAdminCanManageSalesEmployee() throws Exception {
+        var platformToken = accessToken("platform@saumya.local", "Platform@123");
+        var suffix = UUID.randomUUID().toString().replace("-", "");
+        var adminEmail = "admin-" + suffix + "@example.test";
+        var adminPassword = "VendorAdmin-Pass-2026";
+        var tenantBody = """
+                {"name":"New Vendor","slug":"vendor-%s","adminName":"New Vendor Admin","adminEmail":"%s","adminPassword":"%s"}
+                """.formatted(suffix, adminEmail, adminPassword);
+        var tenantResponse = mvc.perform(post("/api/v1/tenants")
+                        .header("Authorization", "Bearer " + platformToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(tenantBody))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var tenantId = json.readTree(tenantResponse).get("id").asText();
+
+        var vendorToken = accessToken(adminEmail, adminPassword);
+        var employeeEmail = "sales-" + suffix + "@example.test";
+        var employeeBody = """
+                {"name":"New Sales Executive","email":"%s","password":"SalesExec-Pass-2026","roleName":"SALES_EXECUTIVE"}
+                """.formatted(employeeEmail);
+        var employeeResponse = mvc.perform(post("/api/v1/users")
+                        .header("Authorization", "Bearer " + vendorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(employeeBody))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var employeeId = json.readTree(employeeResponse).get("id").asText();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/users/" + employeeId + "/enabled")
+                        .header("Authorization", "Bearer " + vendorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"active\":false}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"SalesExec-Pass-2026"}
+                                """.formatted(employeeEmail)))
+                .andExpect(status().isUnauthorized());
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/tenants/" + tenantId + "/status")
+                        .header("Authorization", "Bearer " + platformToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"SUSPENDED\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void customerRegistrationCreatesProfileAndCanOpenCustomerQuotationList() throws Exception {
         var email = "registered-" + UUID.randomUUID() + "@example.test";
         var body = """
