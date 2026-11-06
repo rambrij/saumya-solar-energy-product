@@ -85,7 +85,7 @@ Statuses describe the code currently present in this branch, not an assumption b
 | Vendor employee management | Partial | Partial | Implemented | `POST/GET /api/v1/users`; vendor admin can provision a same-tenant SALES_EXECUTIVE; list is tenant-filtered. Edit/disable and broader configurable role assignment remain absent. `V2__vendor_employee_management_permission.sql` grants USER_MANAGE to existing vendor admin roles. |
 | Platform/vendor/customer layouts | Partial | Partial | N/A | `frontend/src/main.tsx`; account-type-specific views exist, but they are compact conditional views rather than complete route/layout experiences. |
 | Tenant-context enforcement | Partial | Partial | Partial | Tenant ID comes from JWT principal and tenant-filtered repository methods; cross-reference checks added for categories, package products, assigned employees, customer/lead/survey references. More endpoint coverage and tenant-composite FK constraints are needed. |
-| Cross-tenant integration tests | Missing | N/A | N/A | Existing `Release2SecurityTest` only tests principal fields; no real HTTP/database negative tests for cross-tenant read/update/delete/ID guessing. |
+| Cross-tenant integration tests | Partial | N/A | N/A | `Release2SecurityTest` now includes service-level permission and cross-tenant category-reference negative tests. Real HTTP/database tests for cross-tenant read/update/delete/ID guessing are still missing. |
 | Product categories | Partial | Partial | Implemented | Entity/repository, tenant-filtered list and create form. Update/delete, uniqueness/validation UX and lifecycle screens absent. |
 | Products | Partial | Partial | Implemented | Entity/repository, category tenant check, create/list. No full update/delete UI; input validation and lifecycle controls incomplete. |
 | Configurable solar packages | Partial | Partial | Implemented | Package and package-item entities; API supports item composition and validates same-tenant active products. UI does not configure package items or optional components. |
@@ -139,7 +139,7 @@ docker compose build --no-cache
 docker compose up
 ```
 
-A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. Check the Actions tab for the run associated with the latest branch commit. A successful compile/build does not replace API integration, tenant-isolation, concurrency or full workflow tests.
+A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. The run for commit `3cbd0a4537df2f34b4b8917b8e284629be304340` completed successfully for backend `mvn clean verify` and frontend `npm run build`. Later authentication transaction hardening is being revalidated by the workflow on the current branch head. A successful compile/build does not replace API integration, tenant-isolation, concurrency or full workflow tests.
 
 ## Remaining release blockers
 
