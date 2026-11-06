@@ -17,7 +17,7 @@ public final class Models {
     }
     
     public record Register(
-            @NotBlank String storeSlug, @NotBlank String name, @Email String email, @Size(min = 8) String password
+            @NotBlank String storeSlug, @NotBlank String name, @Email String email, @Size(min = 12) String password
     ) {
     }
     
