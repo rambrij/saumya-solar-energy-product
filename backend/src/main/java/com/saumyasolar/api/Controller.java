@@ -3,6 +3,7 @@ package com.saumyasolar.api;
 import com.lowagie.text.Document;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.pdf.PdfWriter;
+import com.lowagie.text.pdf.PdfPTable;
 import com.saumyasolar.api.Models.*;
 import com.saumyasolar.domain.CustomerOrder;
 import com.saumyasolar.domain.Quotation;
@@ -10,6 +11,7 @@ import com.saumyasolar.domain.SalesLead;
 import com.saumyasolar.domain.SiteSurvey;
 import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.AppUserRepository;
+import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.repo.QuotationItemRepository;
 import com.saumyasolar.security.JwtService;
 import com.saumyasolar.security.Principal;
@@ -33,6 +35,7 @@ public class Controller {
     final JwtService jwt;
     final PasswordEncoder enc;
     final QuotationItemRepository items;
+    final CustomerProfileRepository customers;
     final QuotationRevisionService revisions;
     final AuthLifecycleService lifecycle;
     
@@ -42,6 +45,7 @@ public class Controller {
             JwtService j,
             PasswordEncoder e,
             QuotationItemRepository i,
+            CustomerProfileRepository customerProfiles,
             QuotationRevisionService r,
             AuthLifecycleService l
     ) {
@@ -50,6 +54,7 @@ public class Controller {
         jwt = j;
         enc = e;
         items = i;
+        customers = customerProfiles;
         revisions = r;
         lifecycle = l;
     }
@@ -210,8 +215,37 @@ public class Controller {
             var d = new Document();
             PdfWriter.getInstance(d, out);
             d.open();
-            d.add(new Paragraph("Saumya Solar Quotation " + q.getQuotationNumber() + " R" + q.getRevision()));
-            d.add(new Paragraph("Status: " + q.getStatus() + "  Total INR: " + q.getGrandTotal()));
+            d.add(new Paragraph("SAUMYA SOLAR — QUOTATION"));
+            d.add(new Paragraph("Quotation: " + q.getQuotationNumber() + "    Revision: " + q.getRevision()));
+            d.add(new Paragraph("Status: " + q.getStatus() + "    Valid until: " + q.getValidUntil()));
+            var customer = customers.findByIdAndTenantId(q.getCustomerId(), q.getTenantId()).orElse(null);
+            if (customer != null) {
+                d.add(new Paragraph("Customer: " + customer.getName()));
+                d.add(new Paragraph("Email: " + customer.getEmail() + "    Phone: " + customer.getPhone()));
+                d.add(new Paragraph("Address: " + customer.getAddress()));
+            }
+            d.add(new Paragraph(" "));
+            var table = new PdfPTable(new float[]{4, 1, 2, 1, 2});
+            table.setWidthPercentage(100);
+            table.addCell("Description");
+            table.addCell("Qty");
+            table.addCell("Unit price");
+            table.addCell("Tax %");
+            table.addCell("Line total");
+            var quoteLines = items.findByTenantIdOrderByIdDesc(q.getTenantId()).stream()
+                    .filter(line -> id.equals(line.getQuotationId())).toList();
+            for (var line : quoteLines) {
+                table.addCell(line.getDescription() == null ? "" : line.getDescription());
+                table.addCell(String.valueOf(line.getQuantity()));
+                table.addCell(String.valueOf(line.getUnitPrice()));
+                table.addCell(String.valueOf(line.getTaxPercent()));
+                table.addCell(String.valueOf(line.getLineTotal()));
+            }
+            d.add(table);
+            d.add(new Paragraph("Subtotal INR: " + q.getSubtotal()));
+            d.add(new Paragraph("Discount (" + q.getDiscountPercent() + "%) INR: " + q.getDiscountAmount()));
+            d.add(new Paragraph("Tax INR: " + q.getTaxAmount()));
+            d.add(new Paragraph("Grand total INR: " + q.getGrandTotal()));
             d.close();
             return out.toByteArray();
         }
