@@ -88,3 +88,5 @@ jobs:
         run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V10__global_identity_roles.sql
       - name: Apply V11 Release 3 operations migration
         run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V11__release3_operations.sql
+      - name: Apply V12 installation teams and ledger migration
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V12__installation_teams_checklists_and_inventory_dimensions.sql

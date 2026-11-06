@@ -29,16 +29,19 @@ function Customer({s,error}:any){
  const [quotes,setQuotes]=useState<any[]>([]);
  const [orders,setOrders]=useState<any[]>([]);
  const [enquiries,setEnquiries]=useState<any[]>([]);
+ const [installations,setInstallations]=useState<any[]>([]);
+ const [warranties,setWarranties]=useState<any[]>([]);
  const [busy,setBusy]=useState(false);
  const [tab,setTab]=useState('catalog');
  const load=async()=>{
   setBusy(true);
   try{
-   const [categories,products,packages,q,o,e]=await Promise.all([
+   const [categories,products,packages,q,o,e,i,w]=await Promise.all([
     api('/catalog-categories',{},s),api('/catalog-products',{},s),api('/catalog-packages',{},s),
-    api('/quotations',{},s),api('/customer-orders',{},s),api('/customer-enquiries',{},s)
+    api('/quotations',{},s),api('/customer-orders',{},s),api('/customer-enquiries',{},s),
+    api('/customer/installations',{},s),api('/customer/warranties',{},s)
    ]);
-   setCatalog({categories,products,packages});setQuotes(q||[]);setOrders(o||[]);setEnquiries(e||[]);
+   setCatalog({categories,products,packages});setQuotes(q||[]);setOrders(o||[]);setEnquiries(e||[]);setInstallations(i||[]);setWarranties(w||[]);
   }catch(err:any){error(err.message)}finally{setBusy(false)}
  };
  useEffect(()=>{void load()},[]);
@@ -48,13 +51,15 @@ function Customer({s,error}:any){
   catch(err:any){error(err.message)}
  };
  const decision=async(id:string,choice:'accept'|'reject')=>{try{await send(`/quotations/${id}/${choice}`,{},s);await load()}catch(err:any){error(err.message)}};
- return <><h1>Customer Portal</h1><div className="tabs">{['catalog','request','enquiries','quotations','customer-orders'].map(x=><button key={x} className={tab===x?'active':''} onClick={()=>setTab(x)}>{x==='customer-orders'?'My Orders':x==='request'?'Request a Quote':x==='catalog'?'Solar Catalogue':x==='enquiries'?'My Enquiries':'My Quotations'}</button>)}</div>
+ return <><h1>Customer Portal</h1><div className="tabs">{['catalog','request','enquiries','quotations','customer-orders','my-installations','warranties'].map(x=><button key={x} className={tab===x?'active':''} onClick={()=>setTab(x)}>{x==='customer-orders'?'My Orders':x==='my-installations'?'My Installations':x==='warranties'?'My Warranties':x==='request'?'Request a Quote':x==='catalog'?'Solar Catalogue':x==='enquiries'?'My Enquiries':'My Quotations'}</button>)}</div>
  {busy&&<p>Loading your solar workspace…</p>}
  {tab==='catalog'&&<><section className="card"><h2>Product categories</h2><div className="chips">{catalog.categories.map((x:any)=><span key={x.id}>{x.name}</span>)}</div></section><section className="card"><h2>Available products</h2>{catalog.products.length?catalog.products.map((x:any)=><article className="catalog-product" key={x.id}>{x.imageUrl&&<img src={x.imageUrl} alt={x.name} loading="lazy"/>}<div><b>{x.name}</b><small>{catalog.categories.find((v:any)=>v.id===x.categoryId)?.name||'Solar product'} · {x.sku} · {x.manufacturer||'Demo manufacturer'}</small><small>{x.technology||''} · {x.model||''} · Warranty {x.warrantyYears??'—'} years</small></div><div className="product-price"><strong>₹{(Number(x.price||0)*(1-Number(x.discountPercent||0)/100)).toLocaleString('en-IN',{maximumFractionDigits:2})}</strong>{Number(x.discountPercent||0)>0&&<><del>₹{Number(x.price).toLocaleString('en-IN')}</del><small>{x.discountPercent}% discount</small></>}</div></article>):<p>No products are published yet.</p>}</section><section className="card"><h2>Solar packages</h2>{catalog.packages.length?catalog.packages.map((x:any)=><article key={x.id}><div><b>{x.name}</b><small>{x.capacityKw} kW · {x.packageType}</small></div><strong>₹{x.basePrice}</strong></article>):<p>No packages are published yet.</p>}</section><button onClick={()=>setTab('request')}>Request a quotation</button></>}
  {tab==='request'&&<form className="card form" onSubmit={requestQuote}><h2>Request a Solar Quotation</h2><input name="propertyType" placeholder="Property type (Residential / Commercial)"/><input name="monthlyBill" type="number" min="0" step="0.01" placeholder="Monthly electricity bill (₹)"/><input name="requiredCapacityKw" type="number" min="0.1" step="0.1" placeholder="Required capacity (kW)"/><textarea name="message" placeholder="Roof type, roof area, location and requirements"/><button>Submit enquiry</button></form>}
  {tab==='enquiries'&&<section className="card"><h2>My Enquiries</h2>{enquiries.length?enquiries.map((x:any)=><article key={x.id}><div><b>{x.propertyType||'Solar enquiry'}</b><small>{x.status} · {x.createdAt||''}</small></div><span>{x.requiredCapacityKw||'—'} kW</span></article>):<p>You have not submitted an enquiry yet.</p>}</section>}
  {tab==='quotations'&&<section className="card"><h2>My Quotations</h2>{quotes.length?quotes.map((x:any)=><article key={x.id}><div><b>{x.quotationNumber}</b><small>Revision {x.revision} · {x.status} · Valid until {x.validUntil}</small></div><div className="actions"><strong>₹{x.grandTotal}</strong>{x.status==='SENT'&&<><button onClick={()=>decision(x.id,'accept')}>Accept</button><button onClick={()=>decision(x.id,'reject')}>Reject</button></>}</div></article>):<p>No quotations are available yet. Submit an enquiry to get started.</p>}</section>}
  {tab==='customer-orders'&&<section className="card"><h2>My Orders</h2>{orders.length?orders.map((x:any)=><article key={x.id}><div><b>{x.orderNumber}</b><small>{x.status}</small></div><strong>₹{x.total}</strong></article>):<p>No orders yet. Accepted quotations will appear here after conversion.</p>}</section>}
+ {tab==='my-installations'&&<section className="card"><h2>My Installations</h2>{installations.length?installations.map((x:any)=><article key={x.id}><div><b>{x.siteAddress}</b><small>{x.status} · Scheduled {x.scheduledAt}</small></div><span>{x.capacityKw||'—'} kW</span></article>):<p>No installation jobs have been scheduled for your orders yet.</p>}</section>}
+ {tab==='warranties'&&<section className="card"><h2>My Product Warranties</h2>{warranties.length?warranties.map((x:any)=><article key={x.id}><div><b>{catalog.products.find((p:any)=>p.id===x.productId)?.name||'Solar equipment'}</b><small>Serial: {x.serialNumber||'Not supplied'} · {x.status}</small></div><span>{x.startDate} to {x.endDate}</span></article>):<p>Warranties appear after installation commissioning and equipment registration.</p>}</section>}
  </>;
 }
 function Crud({title,s,error,tabs,forms}:any){const[tab,setTab]=useState(tabs[0]||'');const[data,setData]=useState<any[]>([]);const[lookups,setLookups]=useState<any>({});const[loading,setLoading]=useState(false);const[editing,setEditing]=useState<any>(null);const refreshLookups=async()=>{if(s.user.accountType==='VENDOR'){const rows=await Promise.all(['categories','customers','leads','surveys','products','packages','users','roles'].map(async x=>[x,await api('/'+x,{},s).catch(()=>[])] as const));setLookups(Object.fromEntries(rows))}};const load=async()=>{if(!tab)return;setLoading(true);try{if(tab==='operations'){setData([]);await refreshLookups();return}setData(await api('/'+tab,{},s)||[]);await refreshLookups()}catch(e:any){error(e.message)}finally{setLoading(false)}};useEffect(()=>{void load()},[tab]);

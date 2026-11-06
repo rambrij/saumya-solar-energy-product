@@ -222,6 +222,11 @@ public class AppService {
                 e.setName(x.name());
                 e.setDescription(x.description());
                 e.setPrice(x.price());
+                e.setPurchasePrice(BigDecimal.ZERO);
+                e.setDiscountPercent(BigDecimal.ZERO);
+                e.setReorderLevel(BigDecimal.ZERO);
+                e.setUnitOfMeasure("PCS");
+                e.setSerialized(false);
                 e.setTaxPercent(x.taxPercent() == null ? BigDecimal.ZERO : x.taxPercent());
                 e.setActive(true);
                 yield products.save(e);

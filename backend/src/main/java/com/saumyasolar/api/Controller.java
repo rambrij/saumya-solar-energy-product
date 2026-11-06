@@ -323,6 +323,8 @@ public class Controller {
     // Release 3: warehouse and immutable inventory ledger.
     @GetMapping("/warehouses") List<com.saumyasolar.domain.Warehouse> warehouses(Authentication a){return operations.warehouses(p(a));}
     @PostMapping("/warehouses") com.saumyasolar.domain.Warehouse createWarehouse(@Valid @RequestBody WarehouseInput x,Authentication a){return operations.createWarehouse(x,p(a));}
+    @PatchMapping("/warehouses/{id}") com.saumyasolar.domain.Warehouse updateWarehouse(@PathVariable UUID id,@Valid @RequestBody WarehouseInput x,Authentication a){return operations.updateWarehouse(id,x,p(a));}
+    @DeleteMapping("/warehouses/{id}") com.saumyasolar.domain.Warehouse archiveWarehouse(@PathVariable UUID id,Authentication a){return operations.archiveWarehouse(id,p(a));}
     @GetMapping("/inventory/balances") List<com.saumyasolar.domain.InventoryBalance> inventoryBalances(Authentication a){return operations.balances(p(a));}
     @GetMapping("/inventory/transactions") List<com.saumyasolar.domain.InventoryTransaction> inventoryLedger(Authentication a){return operations.ledger(p(a));}
     @PostMapping("/inventory/receipts") com.saumyasolar.domain.InventoryBalance inventoryReceipt(@Valid @RequestBody ReceiptInput x,Authentication a){return operations.receive(x,p(a));}

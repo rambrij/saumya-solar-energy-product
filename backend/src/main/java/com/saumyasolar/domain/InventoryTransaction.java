@@ -1,4 +1,4 @@
 package com.saumyasolar.domain;
 import jakarta.persistence.Column;import jakarta.persistence.Entity;import jakarta.persistence.Id;import jakarta.persistence.Table;import lombok.Getter;import lombok.NoArgsConstructor;import lombok.Setter;import java.math.BigDecimal;import java.time.Instant;import java.util.UUID;
 @Entity @Table(name="inventory_transaction") @Getter @Setter @NoArgsConstructor
-public class InventoryTransaction {@Id UUID id;UUID tenantId;UUID warehouseId;UUID productId;UUID orderId;UUID installationId;String type;BigDecimal quantityDelta;@Column(length=500) String reason;UUID actorId;Instant createdAt;}
+public class InventoryTransaction {@Id UUID id;UUID tenantId;UUID warehouseId;UUID productId;UUID orderId;UUID installationId;String type;BigDecimal quantityDelta;BigDecimal reservedDelta;BigDecimal damagedDelta;@Column(length=500) String reason;UUID actorId;Instant createdAt;}
