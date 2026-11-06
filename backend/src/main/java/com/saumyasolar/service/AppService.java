@@ -364,6 +364,7 @@ public class AppService {
         var l = leads.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
         requireEmployee(x.assignedUserId(), p.tenantId());
         var old = l.getStage();
+        var oldAssignee = l.getAssignedUserId();
         if (x.stage() != null && !java.util.Set.of("NEW", "CONTACTED", "SITE_VISIT_SCHEDULED", "SURVEY_COMPLETED", "QUOTATION_SENT", "NEGOTIATION", "WON", "LOST").contains(x.stage()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid lead stage");
         if (x.stage() != null && "LOST".equals(x.stage()) && (x.lostReason() == null || x.lostReason().isBlank()))
@@ -377,9 +378,33 @@ public class AppService {
         if (x.lostReason() != null) l.setLostReason(x.lostReason());
         leads.save(l);
         if (!Objects.equals(old, l.getStage())) history(l, old, l.getStage(), p.userId(), x.reason());
+        if (!Objects.equals(oldAssignee, l.getAssignedUserId()))
+            assignmentHistory(l, oldAssignee, l.getAssignedUserId(), p.userId(), x.reason());
         return l;
     }
     
+    private void assignmentHistory(SalesLead lead, UUID oldAssignee, UUID newAssignee, UUID actor, String reason) {
+        var history = new LeadHistory();
+        history.setId(UUID.randomUUID());
+        history.setTenantId(lead.getTenantId());
+        history.setLeadId(lead.getId());
+        history.setEventType("ASSIGNMENT");
+        history.setOldAssignedUserId(oldAssignee);
+        history.setNewAssignedUserId(newAssignee);
+        history.setActorId(actor);
+        history.setReason(reason);
+        history.setCreatedAt(Instant.now());
+        histories.save(history);
+    }
+
+    public List<LeadHistory> leadHistory(UUID leadId, Principal p) {
+        vendor(p);
+        requirePermission(p, "LEAD_MANAGE");
+        if (leads.findByIdAndTenantId(leadId, p.tenantId()).isEmpty())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found");
+        return histories.findByLeadIdAndTenantIdOrderByCreatedAtDesc(leadId, p.tenantId());
+    }
+
     void history(SalesLead l, String old, String now, UUID actor, String reason) {
         var h = new LeadHistory();
         h.setId(UUID.randomUUID());

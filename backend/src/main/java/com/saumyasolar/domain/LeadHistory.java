@@ -17,8 +17,11 @@ public class LeadHistory {
     UUID id;
     UUID tenantId;
     UUID leadId;
+    String eventType;
     String oldStage;
     String newStage;
+    UUID oldAssignedUserId;
+    UUID newAssignedUserId;
     UUID actorId;
     String reason;
     Instant createdAt;
