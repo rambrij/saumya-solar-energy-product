@@ -57,7 +57,7 @@ public final class Models {
     
     public record Line(
             UUID productId, UUID packageId, String description, int quantity, BigDecimal unitPrice,
-            BigDecimal taxPercent
+            BigDecimal taxPercent, Boolean optionalItem
     ) {
     }
     
