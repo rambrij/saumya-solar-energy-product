@@ -203,6 +203,11 @@ public class Controller {
         return s.order(id, key, p(a));
     }
     
+    @GetMapping("/quotations/{id}/revisions")
+    List<Quotation> quotationRevisions(@PathVariable UUID id, Authentication a) {
+        return s.quotationRevisions(id, p(a));
+    }
+
     @PostMapping("/quotations/{id}/revisions")
     QuoteView revise(@PathVariable UUID id, Authentication a) {
         return revisions.revise(id, p(a));
