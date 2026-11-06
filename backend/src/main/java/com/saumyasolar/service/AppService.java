@@ -283,11 +283,17 @@ public class AppService {
         var l = leads.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
         requireEmployee(x.assignedUserId(), p.tenantId());
         var old = l.getStage();
+        if (x.stage() != null && !java.util.Set.of("NEW", "CONTACTED", "SITE_VISIT_SCHEDULED", "SURVEY_COMPLETED", "QUOTATION_SENT", "NEGOTIATION", "WON", "LOST").contains(x.stage()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid lead stage");
+        if (x.stage() != null && "LOST".equals(x.stage()) && (x.lostReason() == null || x.lostReason().isBlank()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lost reason is required");
+        if (x.priority() != null && !java.util.Set.of("LOW", "MEDIUM", "HIGH").contains(x.priority()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid lead priority");
         if (x.stage() != null) l.setStage(x.stage());
         if (x.priority() != null) l.setPriority(x.priority());
         if (x.assignedUserId() != null) l.setAssignedUserId(x.assignedUserId());
-        l.setNextFollowUp(x.nextFollowUp());
-        l.setLostReason(x.lostReason());
+        if (x.nextFollowUp() != null) l.setNextFollowUp(x.nextFollowUp());
+        if (x.lostReason() != null) l.setLostReason(x.lostReason());
         leads.save(l);
         if (!Objects.equals(old, l.getStage())) history(l, old, l.getStage(), p.userId(), x.reason());
         return l;
@@ -326,6 +332,10 @@ public class AppService {
         e.setSanctionedLoadKw(x.sanctionedLoadKw());
         e.setNotes(x.notes());
         e.setStatus(x.status() == null ? "SCHEDULED" : x.status());
+        if (!java.util.Set.of("SCHEDULED", "COMPLETED", "CANCELLED").contains(e.getStatus()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid survey status");
+        if ("SCHEDULED".equals(e.getStatus()) && e.getScheduledAt() == null)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Scheduled date/time is required");
         if ("COMPLETED".equals(e.getStatus())) e.setCompletedAt(Instant.now());
         return surveys.save(e);
     }
@@ -400,7 +410,9 @@ public class AppService {
             i.setLineTotal(base);
             items.add(quoteItems.save(i));
             sub = sub.add(base);
-            tax = tax.add(base.multiply(taxPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+            var taxableBase = base.multiply(BigDecimal.valueOf(100).subtract(requestedDiscount))
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            tax = tax.add(taxableBase.multiply(taxPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
         }
         var disc = sub.multiply(q.getDiscountPercent()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         q.setSubtotal(sub);
