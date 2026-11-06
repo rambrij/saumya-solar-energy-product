@@ -340,6 +340,10 @@ class Release12TenantIntegrationTest {
                                 """.formatted(vendor.getId())))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var leadId = json.readTree(leadResponse).get("id").asText();
+        var leadHistory = mvc.perform(get("/api/v1/leads/" + leadId + "/history")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(leadHistory.contains("ASSIGNMENT"));
 
         var surveyResponse = mvc.perform(post("/api/v1/surveys")
                         .header("Authorization", "Bearer " + vendorToken)
