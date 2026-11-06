@@ -138,6 +138,16 @@ public class Controller {
         return s.list(type, p(a));
     }
     
+    @GetMapping("/tenant/settings")
+    Tenant tenantSettings(Authentication a) {
+        return s.tenantSettings(p(a));
+    }
+
+    @PatchMapping("/tenant/settings/discount-threshold")
+    Tenant discountThreshold(@RequestBody Input x, Authentication a) {
+        return s.updateDiscountApprovalThreshold(x.discountPercent(), p(a));
+    }
+
     @GetMapping("/roles")
     List<com.saumyasolar.domain.Role> employeeRoles(Authentication a) {
         return s.employeeRoles(p(a));
