@@ -64,6 +64,42 @@ function PackageForm({s,lookups,done,error}:any){
 }
 
 function SurveyForm({s,lookups,done,error}:any){const submit=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();const form=e.currentTarget;const f:any=Object.fromEntries(new FormData(form));['usableAreaSqft','sanctionedLoadKw'].forEach(k=>f[k]=f[k]?Number(f[k]):null);if(f.scheduledAt)f.scheduledAt=new Date(f.scheduledAt).toISOString();try{await send('/surveys',f,s);form.reset();await done()}catch(z:any){error(z.message)}};return <form className="card form" onSubmit={submit}><h2>Create Site Survey</h2><select name="leadId" required defaultValue=""><option value="" disabled>Select a lead</option>{(lookups.leads||[]).map((x:any)=><option key={x.id} value={x.id}>{x.enquiryId||x.id} · {x.stage}</option>)}</select>{!(lookups.leads||[]).length&&<p className="muted">No leads yet. Create an enquiry, then choose “Convert to Lead” in the Enquiries list before scheduling a survey.</p>}<input name="scheduledAt" type="datetime-local" required/><select name="assignedUserId" defaultValue={s.user.id}><option value={s.user.id}>Assign to me</option>{(lookups.users||[]).filter((u:any)=>u.id!==s.user.id).map((u:any)=><option key={u.id} value={u.id}>{u.name}</option>)}</select><input name="propertyType" placeholder="Property type"/><input name="roofType" placeholder="Roof type"/><input name="usableAreaSqft" placeholder="Usable area sqft"/><input name="shading" placeholder="Shading"/><input name="sanctionedLoadKw" placeholder="Sanctioned load kW"/><textarea name="notes" placeholder="Notes"/><select name="status"><option>SCHEDULED</option><option>COMPLETED</option></select><button>Save Survey</button></form>}
-function QuoteForm({s,lookups,done,error}:any){const submit=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();const form=e.currentTarget;const f:any=Object.fromEntries(new FormData(form));const product=(lookups.products||[]).find((x:any)=>x.id===f.productId);if(!product){error('Select a product');return}const payload={customerId:f.customerId,leadId:f.leadId||null,surveyId:f.surveyId||null,discountPercent:Number(f.discountPercent||0),validUntil:f.validUntil,items:[{productId:product.id,packageId:null,description:product.name,quantity:Number(f.quantity||1),unitPrice:Number(product.price),taxPercent:Number(product.taxPercent||0)}]};try{await send('/quotations',payload,s);form.reset();await done()}catch(z:any){error(z.message)}};return <form className="card form" onSubmit={submit}><h2>Create Quotation</h2><select name="customerId" required>{(lookups.customers||[]).map((x:any)=><option key={x.id} value={x.id}>{x.name}</option>)}</select><select name="leadId"><option value="">No lead</option>{(lookups.leads||[]).map((x:any)=><option key={x.id} value={x.id}>{x.id}</option>)}</select><select name="surveyId"><option value="">No survey</option>{(lookups.surveys||[]).map((x:any)=><option key={x.id} value={x.id}>{x.id} · {x.status}</option>)}</select><select name="productId" required>{(lookups.products||[]).map((x:any)=><option key={x.id} value={x.id}>{x.name} · ₹{x.price}</option>)}</select><input name="quantity" type="number" defaultValue="1" min="1"/><input name="discountPercent" type="number" defaultValue="0"/><input name="validUntil" type="date" required/><button>Create Quote</button></form>}
+function QuoteForm({s,lookups,done,error}:any){
+ const [kind,setKind]=useState('product');
+ const [catalogId,setCatalogId]=useState('');
+ const [quantity,setQuantity]=useState(1);
+ const [lines,setLines]=useState<any[]>([]);
+ const options=kind==='product'?(lookups.products||[]):(lookups.packages||[]);
+ const addLine=()=>{
+  if(!catalogId||quantity<1){error('Choose an active product/package and a positive quantity');return}
+  if(lines.some(x=>x.kind===kind&&x.id===catalogId)){error('This item is already in the quotation');return}
+  setLines(v=>[...v,{kind,id:catalogId,quantity}]);setCatalogId('');setQuantity(1);
+ };
+ const submit=async(e:React.FormEvent<HTMLFormElement>)=>{
+  e.preventDefault();const form=e.currentTarget;const f:any=Object.fromEntries(new FormData(form));
+  if(!lines.length){error('Add at least one product or package to the quotation');return}
+  const items=lines.map(line=>line.kind==='product'?{productId:line.id,packageId:null,quantity:line.quantity}:{productId:null,packageId:line.id,quantity:line.quantity});
+  const payload={customerId:f.customerId,leadId:f.leadId||null,surveyId:f.surveyId||null,discountPercent:Number(f.discountPercent||0),validUntil:f.validUntil,items};
+  try{await send('/quotations',payload,s);form.reset();setLines([]);await done()}catch(z:any){error(z.message)}
+ };
+ const label=(line:any)=>{const list=line.kind==='product'?(lookups.products||[]):(lookups.packages||[]);const item=list.find((x:any)=>x.id===line.id);return item?.name||line.id};
+ return <form className="card form" onSubmit={submit}>
+  <h2>Create Quotation</h2>
+  <label>Customer<select name="customerId" required defaultValue=""><option value="" disabled>Select customer</option>{(lookups.customers||[]).map((x:any)=><option key={x.id} value={x.id}>{x.name} · {x.email}</option>)}</select></label>
+  {!(lookups.customers||[]).length&&<p className="muted">No customers found. Create a customer or ask them to register for this vendor store.</p>}
+  <label>Lead (optional)<select name="leadId" defaultValue=""><option value="">No lead</option>{(lookups.leads||[]).map((x:any)=><option key={x.id} value={x.id}>{x.id} · {x.stage}</option>)}</select></label>
+  <label>Site survey (optional)<select name="surveyId" defaultValue=""><option value="">No survey</option>{(lookups.surveys||[]).map((x:any)=><option key={x.id} value={x.id}>{x.id} · {x.status}</option>)}</select></label>
+  <h3>Quotation items</h3>
+  <select value={kind} onChange={e=>{setKind(e.target.value);setCatalogId('')}}><option value="product">Product</option><option value="package">Solar package</option></select>
+  <select value={catalogId} onChange={e=>setCatalogId(e.target.value)}><option value="">Select {kind}</option>{options.filter((x:any)=>x.active).map((x:any)=><option key={x.id} value={x.id}>{x.name} · ₹{kind==='product'?x.price:x.basePrice}</option>)}</select>
+  {!options.filter((x:any)=>x.active).length&&<p className="muted">No active {kind}s. Add products under a category or configure a solar package first.</p>}
+  <input type="number" min="1" step="1" value={quantity} onChange={e=>setQuantity(Number(e.target.value))} aria-label="Quantity"/>
+  <button type="button" onClick={addLine}>Add quotation item</button>
+  {lines.map((line:any,i:number)=><article key={line.kind+line.id}><span>{label(line)} × {line.quantity}</span><button type="button" onClick={()=>setLines(v=>v.filter((_,j)=>i!==j))}>Remove</button></article>)}
+  <input name="discountPercent" type="number" min="0" max="100" step="0.01" defaultValue="0" placeholder="Discount %"/>
+  <input name="validUntil" type="date" required/>
+  <button>Create Quote</button>
+ </form>
+}
 async function downloadPdf(q:any,s:Session,error:any){try{const r=await fetch(`/api/v1/quotations/${q.id}/pdf`,{headers:{Authorization:`Bearer ${s.accessToken}`}});if(!r.ok)throw Error('PDF download failed');const u=URL.createObjectURL(await r.blob());const a=document.createElement('a');a.href=u;a.download=`${q.quotationNumber}.pdf`;a.click();URL.revokeObjectURL(u)}catch(e:any){error(e.message)}}
 createRoot(document.getElementById('root')!).render(<App/>);
