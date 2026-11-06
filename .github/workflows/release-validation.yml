@@ -1,4 +1,4 @@
-name: Release 1-2 validation
+name: Release 1-3 validation
 
 on:
   push:
@@ -85,3 +85,5 @@ jobs:
         run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V9__tenant_discount_approval_policy.sql
       - name: Apply V10 global identity roles migration
         run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V10__global_identity_roles.sql
+      - name: Apply V11 Release 3 operations migration
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V11__release3_operations.sql

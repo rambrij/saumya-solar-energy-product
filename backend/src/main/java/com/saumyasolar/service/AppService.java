@@ -37,6 +37,7 @@ public class AppService {
     final OrderItemRepository orderItems;
     final IdempotencyRecordRepository idem;
     final RoleRepository roles;
+    final OrderStatusHistoryRepository orderStatusHistory;
     
     public AppService(
             TenantRepository a,
@@ -74,6 +75,7 @@ public class AppService {
         orderItems = o;
         idem = p;
         this.roles = roles;
+        this.orderStatusHistory = orderStatusHistory;
     }
     
     void vendor(Principal p) {
@@ -509,6 +511,8 @@ public class AppService {
                 var product = products.findByIdAndTenantId(a.productId(), p.tenantId()).filter(Product::isActive)
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product is not active in this vendor"));
                 unitPrice = product.getPrice();
+                if(product.getDiscountPercent()!=null&&product.getDiscountPercent().signum()>0)
+                    unitPrice=unitPrice.multiply(BigDecimal.valueOf(100).subtract(product.getDiscountPercent())).divide(BigDecimal.valueOf(100),2,RoundingMode.HALF_UP);
                 taxPercent = product.getTaxPercent();
                 description = product.getName();
             } else if (a.packageId() != null) {
@@ -632,6 +636,7 @@ public class AppService {
         o.setTotal(q.getGrandTotal());
         o.setCreatedAt(Instant.now());
         orders.save(o);
+        var initialHistory=new OrderStatusHistory();initialHistory.setId(UUID.randomUUID());initialHistory.setTenantId(p.tenantId());initialHistory.setOrderId(o.getId());initialHistory.setOldStatus(null);initialHistory.setNewStatus("CONFIRMED");initialHistory.setReason("Order created from accepted quotation");initialHistory.setActorId(p.userId());initialHistory.setCreatedAt(Instant.now());orderStatusHistory.save(initialHistory);
         for (var qi : quoteItems.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(i -> i.getQuotationId().equals(qid)).toList()) {
             var i = new OrderItem();
             i.setId(UUID.randomUUID());

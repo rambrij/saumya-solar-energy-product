@@ -3,6 +3,7 @@ import jakarta.validation.constraints.*;import java.math.BigDecimal;import java.
 public final class OperationsModels{private OperationsModels(){}
 public record WarehouseInput(@NotBlank String code,@NotBlank String name,String address){}
 public record ReceiptInput(@NotNull UUID warehouseId,@NotNull UUID productId,@NotNull @DecimalMin("0.0001") BigDecimal quantity,@NotBlank String reason){}
+public record DamageInput(@NotNull UUID warehouseId,@NotNull UUID productId,@NotNull @DecimalMin("0.0001") BigDecimal quantity,@NotBlank String reason){}
 public record AdjustmentInput(@NotNull UUID warehouseId,@NotNull UUID productId,@NotNull @DecimalMin("0.0001") BigDecimal quantity,@NotNull @Pattern(regexp="INCREASE|DECREASE") String direction,@NotBlank String reason){}
 public record TransferInput(@NotNull UUID sourceWarehouseId,@NotNull UUID targetWarehouseId,@NotNull UUID productId,@NotNull @DecimalMin("0.0001") BigDecimal quantity,@NotBlank String reason){}
 public record ReservationInput(@NotNull UUID warehouseId,@NotBlank String reason){}

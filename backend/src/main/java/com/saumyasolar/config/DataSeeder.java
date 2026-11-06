@@ -12,7 +12,7 @@ public class DataSeeder {
  @Value("${app.seed.enabled:false}") boolean seedEnabled;
  private static final List<String> PERMISSIONS=List.of("PLATFORM_MANAGE","CATALOG_MANAGE","CATALOG_VIEW","DISCOUNT_POLICY_MANAGE","CUSTOMER_MANAGE","LEAD_MANAGE","SURVEY_MANAGE","QUOTATION_MANAGE","DISCOUNT_APPROVE","ORDER_CREATE","USER_VIEW","USER_MANAGE","INVENTORY_MANAGE","SERVICE_MANAGE","FINANCE_MANAGE","REPORT_VIEW");
  private static final List<String> CATEGORIES=List.of("Solar Panels","Inverters","Batteries","Mounting Structures","Cables","AC/DC Distribution Boxes","Solar Accessories");
- @Bean CommandLineRunner seedData(TenantRepository tenants,PermissionRepository permissions,RoleRepository roles,AppUserRepository users,CustomerProfileRepository customers,ProductCategoryRepository categories,ProductRepository products,PasswordEncoder encoder){
+ @Bean CommandLineRunner seedData(TenantRepository tenants,PermissionRepository permissions,RoleRepository roles,AppUserRepository users,CustomerProfileRepository customers,ProductCategoryRepository categories,ProductRepository products,WarehouseRepository warehouses,PasswordEncoder encoder){
   return args->{
    if(!seedEnabled) return;
    Tenant defaultTenant=tenants.findBySlug("saumya-solar").orElseGet(()->{Tenant t=new Tenant();t.setId(UUID.randomUUID());t.setName("Saumya Solar");t.setSlug("saumya-solar");t.setStatus("ACTIVE");return tenants.save(t);});
@@ -24,6 +24,7 @@ public class DataSeeder {
     Role admin=ensureRole(roles,tenant.getId(),"VENDOR_ADMIN");grant(admin,PERMISSIONS.stream().filter(x->!x.equals("PLATFORM_MANAGE")).toList(),pm);roles.save(admin);
     employeeRolePermissions().forEach((name,codes)->{Role role=ensureRole(roles,tenant.getId(),name);grant(role,codes,pm);roles.save(role);});
     for(String name:CATEGORIES)categories.findByNameAndTenantId(name,tenant.getId()).orElseGet(()->{ProductCategory x=new ProductCategory();x.setId(UUID.randomUUID());x.setTenantId(tenant.getId());x.setName(name);x.setDescription("Solar catalogue category");x.setActive(true);return categories.save(x);});
+    if(warehouses.findByTenantIdOrderByNameAsc(tenant.getId()).isEmpty()){Warehouse w=new Warehouse();w.setId(UUID.randomUUID());w.setTenantId(tenant.getId());w.setCode("MAIN");w.setName("Main Warehouse");w.setAddress("Primary stock location");w.setActive(true);w.setCreatedAt(java.time.Instant.now());warehouses.save(w);}
    }
    // Illustrative catalogue entries. Generic stock photographs are not manufacturer product images or certification evidence.
    seedDemoProducts(defaultTenant.getId(),categories,products);
