@@ -56,7 +56,8 @@ public class AppService {
             CustomerOrderRepository n,
             OrderItemRepository o,
             IdempotencyRecordRepository p,
-            RoleRepository roles
+            RoleRepository roles,
+            OrderStatusHistoryRepository orderStatusHistory
     ) {
         tenants = a;
         users = b;
