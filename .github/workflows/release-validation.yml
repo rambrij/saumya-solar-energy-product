@@ -79,3 +79,5 @@ jobs:
         run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V6__require_product_category.sql
       - name: Apply V7 catalogue read permission migration
         run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V7__catalogue_read_permission.sql
+      - name: Apply V8 lead assignment history migration
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V8__lead_assignment_history.sql
