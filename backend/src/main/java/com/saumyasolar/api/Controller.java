@@ -5,6 +5,8 @@ import com.lowagie.text.Paragraph;
 import com.lowagie.text.pdf.PdfWriter;
 import com.lowagie.text.pdf.PdfPTable;
 import com.saumyasolar.api.Models.*;
+import com.saumyasolar.api.OperationsModels.*;
+import com.saumyasolar.api.CatalogModels.*;
 import com.saumyasolar.domain.CustomerOrder;
 import com.saumyasolar.domain.Quotation;
 import com.saumyasolar.domain.SalesLead;
@@ -18,6 +20,8 @@ import com.saumyasolar.security.Principal;
 import com.saumyasolar.service.AppService;
 import com.saumyasolar.service.AuthLifecycleService;
 import com.saumyasolar.service.QuotationRevisionService;
+import com.saumyasolar.service.OperationsService;
+import com.saumyasolar.service.CatalogAdminService;
 import org.springframework.http.HttpStatus;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
@@ -38,6 +42,8 @@ public class Controller {
     final CustomerProfileRepository customers;
     final QuotationRevisionService revisions;
     final AuthLifecycleService lifecycle;
+    final OperationsService operations;
+    final CatalogAdminService catalog;
     
     Controller(
             AppService s,
@@ -47,7 +53,9 @@ public class Controller {
             QuotationItemRepository i,
             CustomerProfileRepository customerProfiles,
             QuotationRevisionService r,
-            AuthLifecycleService l
+            AuthLifecycleService l,
+            OperationsService operations,
+            CatalogAdminService catalog
     ) {
         this.s = s;
         users = u;
@@ -57,6 +65,8 @@ public class Controller {
         customers = customerProfiles;
         revisions = r;
         lifecycle = l;
+        this.operations = operations;
+        this.catalog = catalog;
     }
     
     Principal p(Authentication a) {
@@ -280,4 +290,53 @@ public class Controller {
             return out.toByteArray();
         }
     }
+
+    // Vendor catalogue administration. Delete operations are soft archives.
+    @PostMapping("/catalog/products")
+    com.saumyasolar.domain.Product createCatalogProduct(@Valid @RequestBody ProductInput x, Authentication a) { return catalog.createProduct(x,p(a)); }
+    @PatchMapping("/products/{id}")
+    com.saumyasolar.domain.Product updateProduct(@PathVariable UUID id,@Valid @RequestBody ProductInput x,Authentication a){return catalog.updateProduct(id,x,p(a));}
+    @DeleteMapping("/products/{id}")
+    com.saumyasolar.domain.Product archiveProduct(@PathVariable UUID id,Authentication a){return catalog.archiveProduct(id,p(a));}
+    @PatchMapping("/categories/{id}")
+    com.saumyasolar.domain.ProductCategory updateCategory(@PathVariable UUID id,@Valid @RequestBody CategoryInput x,Authentication a){return catalog.updateCategory(id,x,p(a));}
+    @DeleteMapping("/categories/{id}")
+    com.saumyasolar.domain.ProductCategory archiveCategory(@PathVariable UUID id,Authentication a){return catalog.archiveCategory(id,p(a));}
+    @PatchMapping("/customers/{id}")
+    com.saumyasolar.domain.CustomerProfile updateCustomer(@PathVariable UUID id,@Valid @RequestBody CustomerInput x,Authentication a){return catalog.updateCustomer(id,x,p(a));}
+    @DeleteMapping("/customers/{id}")
+    com.saumyasolar.domain.CustomerProfile archiveCustomer(@PathVariable UUID id,Authentication a){return catalog.archiveCustomer(id,p(a));}
+    @PatchMapping("/users/{id}")
+    UserView updateEmployee(@PathVariable UUID id,@Valid @RequestBody EmployeeUpdateInput x,Authentication a){
+        var u=catalog.updateEmployee(id,x,p(a));var rs=new HashSet<String>();var ps=new HashSet<String>();
+        u.getRoles().forEach(r->{rs.add(r.getName());r.getPermissions().forEach(v->ps.add(v.getCode()));});
+        return new UserView(u.getId(),u.getTenantId(),u.getName(),u.getEmail(),u.getAccountType(),rs,ps);
+    }
+    @DeleteMapping("/users/{id}")
+    UserView archiveEmployee(@PathVariable UUID id,Authentication a){
+        var actor=p(a);if(!"VENDOR".equals(actor.accountType())||actor.permissions()==null||!actor.permissions().contains("USER_MANAGE"))throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
+        if(actor.userId().equals(id))throw new org.springframework.web.server.ResponseStatusException(HttpStatus.CONFLICT,"You cannot disable your own account");
+        var u=lifecycle.setEmployeeEnabled(actor.tenantId(),actor.userId(),id,false);var rs=new HashSet<String>();var ps=new HashSet<String>();
+        u.getRoles().forEach(r->{rs.add(r.getName());r.getPermissions().forEach(v->ps.add(v.getCode()));});
+        return new UserView(u.getId(),u.getTenantId(),u.getName(),u.getEmail(),u.getAccountType(),rs,ps);
+    }
+    // Release 3: warehouse and immutable inventory ledger.
+    @GetMapping("/warehouses") List<com.saumyasolar.domain.Warehouse> warehouses(Authentication a){return operations.warehouses(p(a));}
+    @PostMapping("/warehouses") com.saumyasolar.domain.Warehouse createWarehouse(@Valid @RequestBody WarehouseInput x,Authentication a){return operations.createWarehouse(x,p(a));}
+    @GetMapping("/inventory/balances") List<com.saumyasolar.domain.InventoryBalance> inventoryBalances(Authentication a){return operations.balances(p(a));}
+    @GetMapping("/inventory/transactions") List<com.saumyasolar.domain.InventoryTransaction> inventoryLedger(Authentication a){return operations.ledger(p(a));}
+    @PostMapping("/inventory/receipts") com.saumyasolar.domain.InventoryBalance inventoryReceipt(@Valid @RequestBody ReceiptInput x,Authentication a){return operations.receive(x,p(a));}
+    @PostMapping("/inventory/adjustments") com.saumyasolar.domain.InventoryBalance inventoryAdjustment(@Valid @RequestBody AdjustmentInput x,Authentication a){return operations.adjust(x,p(a));}
+    @PostMapping("/inventory/transfers") Map<String,Object> inventoryTransfer(@Valid @RequestBody TransferInput x,Authentication a){return operations.transfer(x,p(a));}
+    @PostMapping("/orders/{id}/reserve") List<com.saumyasolar.domain.InventoryReservation> reserveOrder(@PathVariable UUID id,@Valid @RequestBody ReservationInput x,Authentication a){return operations.reserve(id,x,p(a));}
+    @PostMapping("/orders/{id}/release-reservation") List<com.saumyasolar.domain.InventoryReservation> releaseOrder(@PathVariable UUID id,@RequestBody Map<String,String> x,Authentication a){return operations.release(id,x.getOrDefault("reason","Reservation released"),p(a));}
+    @PostMapping("/orders/{id}/transition") CustomerOrder transitionOrder(@PathVariable UUID id,@Valid @RequestBody OrderTransitionInput x,Authentication a){return operations.transition(id,x,p(a));}
+    @GetMapping("/orders/{id}/history") List<com.saumyasolar.domain.OrderStatusHistory> orderHistory(@PathVariable UUID id,Authentication a){return operations.orderHistory(id,p(a));}
+    @GetMapping("/installations") List<com.saumyasolar.domain.InstallationJob> installations(Authentication a){return operations.installations(p(a));}
+    @PostMapping("/installations") com.saumyasolar.domain.InstallationJob createInstallation(@Valid @RequestBody InstallationInput x,Authentication a){return operations.createInstallation(x,p(a));}
+    @GetMapping("/installations/{id}/checklist") List<com.saumyasolar.domain.InstallationChecklistItem> installationChecklist(@PathVariable UUID id,Authentication a){return operations.checklist(id,p(a));}
+    @PatchMapping("/installations/{id}/checklist/{itemId}") com.saumyasolar.domain.InstallationChecklistItem updateChecklist(@PathVariable UUID id,@PathVariable UUID itemId,@RequestBody ChecklistUpdateInput x,Authentication a){return operations.updateChecklist(id,itemId,x,p(a));}
+    @PostMapping("/installations/{id}/reschedule") com.saumyasolar.domain.InstallationJob rescheduleInstallation(@PathVariable UUID id,@Valid @RequestBody RescheduleInput x,Authentication a){return operations.reschedule(id,x,p(a));}
+    @PostMapping("/installations/{id}/commission") com.saumyasolar.domain.InstallationJob commissionInstallation(@PathVariable UUID id,@Valid @RequestBody CommissionInput x,Authentication a){return operations.commission(id,x,p(a));}
+    @GetMapping("/warranties") List<com.saumyasolar.domain.Warranty> warranties(Authentication a){return operations.warranties(p(a));}
 }

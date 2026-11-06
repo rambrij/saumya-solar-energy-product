@@ -26,14 +26,26 @@ public class CatalogAdminService {
     private Product product(UUID id,UUID t){return products.findByIdAndTenantId(id,t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Product not found"));}
     private ProductCategory category(UUID id,UUID t){return categories.findByIdAndTenantId(id,t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Category not found"));}
     private CustomerProfile customer(UUID id,UUID t){return customers.findByIdAndTenantId(id,t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Customer not found"));}
+    private void secureUrl(String value,String field){if(value!=null&&!value.isBlank()&&!value.startsWith("https://"))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,field+" must use HTTPS");}
+    private void apply(Product e,ProductInput x){
+        e.setSku(x.sku().trim());e.setName(x.name().trim());e.setDescription(x.description());e.setManufacturer(x.manufacturer());
+        e.setModel(x.model());e.setTechnology(x.technology());e.setPrice(x.price());e.setPurchasePrice(x.purchasePrice());
+        e.setDiscountPercent(x.discountPercent());e.setTaxPercent(x.taxPercent());e.setWarrantyYears(x.warrantyYears());
+        e.setImageUrl(x.imageUrl());e.setDatasheetUrl(x.datasheetUrl());e.setReorderLevel(x.reorderLevel());
+        e.setUnitOfMeasure(x.unitOfMeasure());e.setHsnCode(x.hsnCode());e.setSerialized(Boolean.TRUE.equals(x.serialized()));e.setAttributesJson(x.attributesJson());
+    }
+    @Transactional public Product createProduct(ProductInput x,Principal p){
+        UUID t=tenant(p);require(p,"CATALOG_MANAGE");
+        if(categories.findByIdAndTenantId(x.categoryId(),t).filter(ProductCategory::isActive).isEmpty())throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Select an active category belonging to this vendor");
+        if(products.findByTenantIdOrderByIdDesc(t).stream().anyMatch(v->v.getSku().equalsIgnoreCase(x.sku())))throw new ResponseStatusException(HttpStatus.CONFLICT,"SKU already exists");
+        secureUrl(x.imageUrl(),"Image URL");secureUrl(x.datasheetUrl(),"Datasheet URL");
+        Product e=new Product();e.setId(UUID.randomUUID());e.setTenantId(t);e.setCategoryId(x.categoryId());apply(e,x);e.setActive(x.active()==null||x.active());return products.save(e);
+    }
     @Transactional public Product updateProduct(UUID id,ProductInput x,Principal p){
         UUID t=tenant(p);require(p,"CATALOG_MANAGE");Product e=product(id,t);
         if(categories.findByIdAndTenantId(x.categoryId(),t).filter(ProductCategory::isActive).isEmpty())throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Choose an active category from this vendor");
         products.findByTenantIdOrderByIdDesc(t).stream().filter(v->!v.getId().equals(id)&&v.getSku().equalsIgnoreCase(x.sku())).findAny().ifPresent(v->{throw new ResponseStatusException(HttpStatus.CONFLICT,"SKU already exists in this vendor");});
-        e.setCategoryId(x.categoryId());e.setSku(x.sku().trim());e.setName(x.name().trim());e.setDescription(x.description());
-        e.setManufacturer(x.manufacturer());e.setModel(x.model());e.setTechnology(x.technology());e.setPrice(x.price());e.setPurchasePrice(x.purchasePrice());
-        e.setDiscountPercent(x.discountPercent());e.setTaxPercent(x.taxPercent());e.setWarrantyYears(x.warrantyYears());e.setImageUrl(x.imageUrl());e.setDatasheetUrl(x.datasheetUrl());
-        e.setReorderLevel(x.reorderLevel());e.setUnitOfMeasure(x.unitOfMeasure());e.setHsnCode(x.hsnCode());e.setSerialized(Boolean.TRUE.equals(x.serialized()));e.setAttributesJson(x.attributesJson());
+        secureUrl(x.imageUrl(),"Image URL");secureUrl(x.datasheetUrl(),"Datasheet URL");apply(e,x);e.setCategoryId(x.categoryId());
         if(x.active()!=null)e.setActive(x.active());return products.save(e);
     }
     @Transactional public Product archiveProduct(UUID id,Principal p){UUID t=tenant(p);require(p,"CATALOG_MANAGE");Product e=product(id,t);e.setActive(false);return products.save(e);}
