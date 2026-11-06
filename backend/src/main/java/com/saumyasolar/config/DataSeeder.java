@@ -30,7 +30,7 @@ public class DataSeeder {
             t.setSlug("saumya-solar");
             t.setStatus("ACTIVE");
             tr.save(t);
-            var all = List.of("PLATFORM_MANAGE", "CATALOG_MANAGE", "CUSTOMER_MANAGE", "LEAD_MANAGE", "SURVEY_MANAGE", "QUOTATION_MANAGE", "DISCOUNT_APPROVE", "ORDER_CREATE", "USER_VIEW");
+            var all = List.of("PLATFORM_MANAGE", "CATALOG_MANAGE", "CUSTOMER_MANAGE", "LEAD_MANAGE", "SURVEY_MANAGE", "QUOTATION_MANAGE", "DISCOUNT_APPROVE", "ORDER_CREATE", "USER_VIEW", "USER_MANAGE");
             var pm = new HashMap<String, Permission>();
             for (var c : all) {
                 var p = new Permission();
