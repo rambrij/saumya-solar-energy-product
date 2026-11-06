@@ -66,7 +66,8 @@ class Release2SecurityTest {
                 mock(SalesLeadRepository.class), mock(LeadHistoryRepository.class),
                 mock(SiteSurveyRepository.class), mock(QuotationRepository.class),
                 mock(QuotationItemRepository.class), mock(CustomerOrderRepository.class),
-                mock(OrderItemRepository.class), mock(IdempotencyRecordRepository.class)
+                mock(OrderItemRepository.class), mock(IdempotencyRecordRepository.class),
+                mock(RoleRepository.class)
         );
     }
 
