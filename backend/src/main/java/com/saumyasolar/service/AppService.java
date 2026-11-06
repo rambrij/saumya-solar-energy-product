@@ -216,6 +216,7 @@ public class AppService {
                     pi.setPackageId(e.getId());
                     pi.setProductId(l.productId());
                     pi.setQuantity(l.quantity());
+                    pi.setOptionalItem(Boolean.TRUE.equals(l.optionalItem()));
                     packItems.save(pi);
                 }
                 yield e;
