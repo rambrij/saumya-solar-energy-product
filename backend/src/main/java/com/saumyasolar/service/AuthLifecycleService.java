@@ -113,6 +113,30 @@ public class AuthLifecycleService {
     }
     
     @Transactional
+    public AppUser createEmployee(UUID tenantId, String name, String email, String password, String roleName) {
+        if (tenantId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        if (name == null || name.isBlank() || email == null || email.isBlank()
+                || password == null || password.length() < 12)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name, email and a password of at least 12 characters are required");
+        if (!"SALES_EXECUTIVE".equals(roleName))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only the SALES_EXECUTIVE role can be provisioned through this endpoint");
+        if (users.findByEmailIgnoreCase(email).isPresent())
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email exists");
+        var role = roles.findByNameAndTenantId(roleName, tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role is not configured for this vendor"));
+        var u = new AppUser();
+        u.setId(UUID.randomUUID());
+        u.setTenantId(tenantId);
+        u.setName(name.trim());
+        u.setEmail(email.trim().toLowerCase());
+        u.setPasswordHash(encoder.encode(password));
+        u.setAccountType("VENDOR");
+        u.setEnabled(true);
+        u.getRoles().add(role);
+        return users.save(u);
+    }
+
+    @Transactional
     public AppUser register(String slug, String name, String email, String password) {
         var t = tenants.findBySlug(slug).filter(x -> "ACTIVE".equals(x.getStatus()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Active store not found"));
