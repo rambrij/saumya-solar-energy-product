@@ -20,4 +20,5 @@ public class CustomerProfile {
     String email;
     String phone;
     String address;
+    boolean active = true;
 }

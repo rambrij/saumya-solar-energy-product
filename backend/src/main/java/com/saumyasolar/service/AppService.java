@@ -637,6 +637,8 @@ public class AppService {
             i.setId(UUID.randomUUID());
             i.setTenantId(p.tenantId());
             i.setOrderId(o.getId());
+            i.setProductId(qi.getProductId());
+            i.setPackageId(qi.getPackageId());
             i.setDescription(qi.getDescription());
             i.setQuantity(qi.getQuantity());
             i.setUnitPrice(qi.getUnitPrice());
