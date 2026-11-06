@@ -73,3 +73,7 @@ jobs:
         run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V3__quotation_customer_decision_audit.sql
       - name: Apply V4 access-token revocation migration
         run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V4__user_access_token_version.sql
+      - name: Apply V5 role and solar catalogue bootstrap
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V5__permission_role_and_catalog_bootstrap.sql
+      - name: Apply V6 required product category migration
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V6__require_product_category.sql
