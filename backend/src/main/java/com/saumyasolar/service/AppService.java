@@ -460,6 +460,22 @@ public class AppService {
         return quotes.save(q);
     }
     
+    public java.util.List<Quotation> quotationRevisions(UUID id, Principal p) {
+        if (p.tenantId() == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        var quotation = quotes.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
+        if ("CUSTOMER".equals(p.accountType())) {
+            var customer = customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
+                    .filter(x -> p.userId().equals(x.getUserId())).findFirst()
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+            if (!customer.getId().equals(quotation.getCustomerId()))
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        } else {
+            vendor(p);
+            requirePermission(p, "QUOTATION_MANAGE");
+        }
+        return quotes.findByQuoteGroupIdAndTenantIdOrderByRevisionAsc(quotation.getQuoteGroupId(), p.tenantId());
+    }
+
     @Transactional
     public CustomerOrder order(UUID qid, String key, Principal p) {
         vendor(p);
