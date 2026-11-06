@@ -44,6 +44,8 @@ public class DataSeeder {
   Map.entry("SERVICE_ENGINEER",List.of("SURVEY_MANAGE","SERVICE_MANAGE")),
   Map.entry("ACCOUNTANT",List.of("FINANCE_MANAGE","REPORT_VIEW")),
   Map.entry("INSTALLER",List.of("SURVEY_MANAGE","SERVICE_MANAGE")),
+  Map.entry("TECHNICIAN",List.of("SURVEY_MANAGE","SERVICE_MANAGE")),
+  Map.entry("SERVICE_MANAGER",List.of("SURVEY_MANAGE","SERVICE_MANAGE","REPORT_VIEW")),
   Map.entry("OPERATIONS_MANAGER",List.of("ORDER_CREATE","SURVEY_MANAGE","INVENTORY_MANAGE","SERVICE_MANAGE","REPORT_VIEW")));
  }
  private static void seedDemoProducts(UUID tenantId,ProductCategoryRepository categories,ProductRepository products){
