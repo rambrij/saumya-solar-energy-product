@@ -8,4 +8,5 @@ public interface CustomerProfileRepository extends JpaRepository<CustomerProfile
  List<CustomerProfile> findByTenantIdOrderByIdDesc(UUID tenantId);
  Optional<CustomerProfile> findByIdAndTenantId(UUID id, UUID tenantId);
  Optional<CustomerProfile> findByTenantIdAndUserId(UUID tenantId, UUID userId);
+ Optional<CustomerProfile> findByTenantIdAndEmailIgnoreCase(UUID tenantId, String email);
 }
