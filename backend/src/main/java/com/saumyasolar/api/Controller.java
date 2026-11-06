@@ -132,12 +132,22 @@ public class Controller {
     }
     
     @GetMapping(
-            "/{type:tenants|users|categories|products|packages|customers|enquiries|leads|surveys|quotations|orders|customer-orders}"
+            "/{type:tenants|users|categories|products|packages|customers|enquiries|leads|surveys|quotations|orders|customer-orders|catalog-categories|catalog-products|catalog-packages|customer-enquiries}"
     )
     Object list(@PathVariable String type, Authentication a) {
         return s.list(type, p(a));
     }
     
+    @GetMapping("/roles")
+    List<com.saumyasolar.domain.Role> employeeRoles(Authentication a) {
+        return s.employeeRoles(p(a));
+    }
+
+    @PostMapping("/customer/enquiries")
+    com.saumyasolar.domain.Enquiry customerEnquiry(@RequestBody Input x, Authentication a) {
+        return s.createCustomerEnquiry(x, p(a));
+    }
+
     @PostMapping("/{type:tenants|categories|products|packages|customers|enquiries}")
     Object create(@PathVariable String type, @RequestBody Input x, Authentication a) {
         var principal = p(a);
