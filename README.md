@@ -2,7 +2,7 @@
 
 This branch is an incremental hardening and completion branch for the existing Release 1 identity/tenant foundation and Release 2 sales lifecycle. It preserves the existing Spring Boot, MySQL, React, and Docker Compose architecture.
 
-> **Validation honesty:** Commit `7b7610e09eb2ad76948800c54384fd36c6bd8e4a` passed backend Maven tests, frontend production build, and MySQL 8.4 migration validation through V9. The later dropdown-refresh frontend change is being revalidated by GitHub Actions. Release 1/2 still have the explicitly listed limitations below; this is not a production-readiness claim.
+> **Validation honesty:** Commit `7b7610e09eb2ad76948800c54384fd36c6bd8e4a` passed backend Maven tests, frontend production build, and MySQL 8.4 migration validation through V9. The dropdown-refresh frontend change at commit `1c14af5033b91476f7d7cdfbcfbecfa37ae19097` also passed all three CI jobs; the current branch head adds documentation only after that validation. Release 1/2 still have the explicitly listed limitations below; this is not a production-readiness claim.
 
 ## Technology
 
@@ -70,7 +70,6 @@ The current frontend is a compact role-aware portal, not a complete set of indep
 7. The customer can accept or reject a quotation visible in their tenant/customer scope.
 8. Vendor converts an accepted quotation to an order with an `Idempotency-Key`.
 
-The 10% threshold is currently hard-coded. A configurable discount policy is still required before production.
 
 ## Implementation matrix
 
@@ -83,8 +82,8 @@ Statuses describe the code currently present in this branch, not an assumption b
 | Access and refresh tokens | Implemented | Partial | Implemented | `JwtService`, `JwtFilter`, `AuthLifecycleService`, `refresh_token`; refresh rotates, reuse revokes remaining refresh sessions, and token-version checks invalidate stale access JWTs. Frontend automatic refresh/session-expiry UX and secure cookie storage remain outstanding. |
 | Logout and token revocation | Implemented | Implemented | Implemented | `POST /api/v1/auth/logout` revokes all refresh sessions and increments the user's token version; `JwtFilter` rejects previously issued access JWTs. Logout currently has global per-user session semantics. |
 | Password reset | Partial | Partial | Implemented | `PasswordResetToken`, forgot/reset endpoints and UI; single-use and expiry checks, reset revokes refresh sessions and invalidates access JWTs. Email delivery is absent; development reset token is returned by API. |
-| Roles and permissions | Partial | Partial | Implemented | `Role`, `Permission`, `SecurityConfig`, `AppService`; permission checks added to several vendor operations. Not all endpoints/actions are consistently permission-guarded; role administration is absent. |
-| Vendor employee management | Partial | Partial | Implemented | `POST/GET /api/v1/users` and `PATCH /api/v1/users/{id}/enabled`; vendor admin can provision, list and enable/disable same-tenant SALES_EXECUTIVE accounts. Edit and broader configurable role assignment remain absent. `V2__vendor_employee_management_permission.sql` grants USER_MANAGE to existing vendor admin roles. |
+| Roles and permissions | Partial | Implemented | Implemented | `Role`, `Permission`, `DataSeeder`, `GET /api/v1/roles`; tenant roles include SALES_EXECUTIVE, SALES_MANAGER, MANAGER, INVENTORY_MANAGER, SERVICE_ENGINEER, ACCOUNTANT, INSTALLER and OPERATIONS_MANAGER. Vendor Admin selects a role from the UI; privileged roles are excluded. Fine-grained role/permission administration UI and complete endpoint authorization review remain outstanding. |
+| Vendor employee management | Partial | Partial | Implemented | `POST/GET /api/v1/users`, `GET /api/v1/roles`, `PATCH /api/v1/users/{id}/enabled`; vendor admin can create employees with supported tenant roles and enable/disable same-tenant accounts. Profile editing, role changes after creation and employee invitation/email remain absent. |
 | Platform/vendor/customer layouts | Partial | Partial | N/A | `frontend/src/main.tsx`; account-type-specific views exist, but they are compact conditional views rather than complete route/layout experiences. |
 | Tenant-context enforcement | Partial | Partial | Partial | Tenant ID comes from authenticated user state; JWT filter rechecks account enabled state, tenant status and current role/permission data on every request. Tenant-filtered queries and cross-reference checks cover key sales references; remaining endpoints and tenant-composite FK constraints need broader coverage. |
 | Cross-tenant integration tests | Partial | N/A | Partial | `Release12TenantIntegrationTest` exercises HTTP authorization denial, foreign category reference rejection, tenant-filtered product reads, foreign employee assignment rejection and customer registration. H2 is used for the integration profile; update/delete/ID-guessing and MySQL migration integration coverage remain outstanding. |
@@ -151,7 +150,7 @@ docker compose build --no-cache
 docker compose up
 ```
 
-A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. The run for commit `7b7610e09eb2ad76948800c54384fd36c6bd8e4a` completed successfully for all three jobs: backend `mvn clean verify` (including H2-backed HTTP integration tests for registration, tenant provisioning, employee roles, category/product/package creation, customer enquiry, survey, quotation acceptance and idempotent order conversion), frontend `npm run build`, and V1–V9 migration application/verification on MySQL 8.4. A subsequent lookup-refresh frontend change is being revalidated on the current branch head.
+A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. The run for commit `7b7610e09eb2ad76948800c54384fd36c6bd8e4a` completed successfully for all three jobs: backend `mvn clean verify` (including H2-backed HTTP integration tests for registration, tenant provisioning, employee roles, category/product/package creation, customer enquiry, survey, quotation acceptance and idempotent order conversion), frontend `npm run build`, and V1–V9 migration application/verification on MySQL 8.4. The subsequent lookup-refresh frontend change at commit `1c14af5033b91476f7d7cdfbcfbecfa37ae19097` also passed all three CI jobs.
 
 ## Remaining release blockers
 
