@@ -8,6 +8,7 @@ import com.saumyasolar.domain.CustomerOrder;
 import com.saumyasolar.domain.Quotation;
 import com.saumyasolar.domain.SalesLead;
 import com.saumyasolar.domain.SiteSurvey;
+import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.AppUserRepository;
 import com.saumyasolar.repo.QuotationItemRepository;
 import com.saumyasolar.security.JwtService;
@@ -144,6 +145,29 @@ public class Controller {
         return s.create(type, x, principal);
     }
     
+    @PatchMapping("/tenants/{id}/status")
+    Tenant tenantStatus(@PathVariable UUID id, @RequestBody Input x, Authentication a) {
+        return s.updateTenantStatus(id, x.status(), p(a));
+    }
+
+    @PatchMapping("/users/{id}/enabled")
+    UserView employeeEnabled(@PathVariable UUID id, @RequestBody Input x, Authentication a) {
+        var actor = p(a);
+        if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
+                || actor.permissions() == null || !actor.permissions().contains("USER_MANAGE"))
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
+        if (x.active() == null)
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "active is required");
+        var u = lifecycle.setEmployeeEnabled(actor.tenantId(), actor.userId(), id, x.active());
+        var roleNames = new HashSet<String>();
+        var permissionCodes = new HashSet<String>();
+        u.getRoles().forEach(r -> {
+            roleNames.add(r.getName());
+            r.getPermissions().forEach(permission -> permissionCodes.add(permission.getCode()));
+        });
+        return new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), roleNames, permissionCodes);
+    }
+
     @PostMapping("/enquiries/{id}/convert")
     SalesLead convert(@PathVariable UUID id, @RequestBody Input x, Authentication a) {
         return s.convertLead(id, x, p(a));
