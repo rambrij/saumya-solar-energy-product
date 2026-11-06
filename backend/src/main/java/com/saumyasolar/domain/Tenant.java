@@ -18,5 +18,5 @@ public class Tenant {
     String name;
     String slug;
     String status;
-    BigDecimal discountApprovalThreshold;
+    BigDecimal discountApprovalThreshold = BigDecimal.TEN;
 }
