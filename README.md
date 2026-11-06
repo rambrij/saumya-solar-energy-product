@@ -94,13 +94,6 @@ download/accept it. Login as Vendor, convert to order twice with the same key an
 | Refresh/logout/password reset     | Implemented | API-ready   | Implemented | rotating refresh token, revocation, forgot/reset endpoints                      |
 | Cross-tenant tests                | Missing     | N/A         | N/A         | must be added before production claim                                           |
 
-### UI reset bug root cause
-
-The previous async submit handler referenced `event.currentTarget` after an `await`. React does not guarantee that the
-synthetic event's `currentTarget` remains available for asynchronous continuation, and a re-render/unmount can also
-invalidate it. The fixed handler captures `const form = event.currentTarget` synchronously before any asynchronous
-operation, then calls `form.reset()` only after a successful response. This also avoids modal/lifecycle races.
-
 ### Validation status
 
 Frontend `npm run build` is intended as the first executable check. Backend Maven and Docker must also pass in the
