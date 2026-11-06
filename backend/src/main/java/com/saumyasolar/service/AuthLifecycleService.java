@@ -50,14 +50,32 @@ public class AuthLifecycleService {
         return x.getToken();
     }
     
+    @Transactional
     public AppUser consumeRefresh(String token) {
-        var x = refresh.findByToken(token).filter(v -> !v.isRevoked() && v.getExpiresAt().isAfter(Instant.now())).orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        var x = refresh.findByToken(token)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        if (x.isRevoked()) {
+            refresh.findByUserIdAndRevokedFalse(x.getUserId()).forEach(session -> {
+                session.setRevoked(true);
+                refresh.save(session);
+            });
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token reuse detected; sessions revoked");
+        }
+        if (!x.getExpiresAt().isAfter(Instant.now())) {
+            x.setRevoked(true);
+            refresh.save(x);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token expired");
+        }
         x.setRevoked(true);
         refresh.save(x);
-        return users.findById(x.getUserId()).orElseThrow();
+        return users.findById(x.getUserId())
+                .filter(AppUser::isEnabled)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
     }
     
+    @Transactional
     public void logout(String token) {
+        if (token == null || token.isBlank()) return;
         refresh.findByToken(token).ifPresent(x -> {
             x.setRevoked(true);
             refresh.save(x);
@@ -82,15 +100,25 @@ public class AuthLifecycleService {
     public void reset(String token, String password) {
         var x = resets.findByToken(token).filter(v -> !v.isUsed() && v.getExpiresAt().isAfter(Instant.now())).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid token"));
         var u = users.findById(x.getUserId()).orElseThrow();
+        if (password == null || password.length() < 12)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password must contain at least 12 characters");
         u.setPasswordHash(encoder.encode(password));
         users.save(u);
         x.setUsed(true);
         resets.save(x);
+        refresh.findByUserIdAndRevokedFalse(u.getId()).forEach(session -> {
+            session.setRevoked(true);
+            refresh.save(session);
+        });
     }
     
     @Transactional
     public AppUser register(String slug, String name, String email, String password) {
-        var t = tenants.findBySlug(slug).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
+        var t = tenants.findBySlug(slug).filter(x -> "ACTIVE".equals(x.getStatus()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Active store not found"));
+        if (name == null || name.isBlank() || email == null || email.isBlank()
+                || password == null || password.length() < 12)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name, email and a password of at least 12 characters are required");
         if (users.findByEmailIgnoreCase(email).isPresent())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email exists");
         var u = new AppUser();
