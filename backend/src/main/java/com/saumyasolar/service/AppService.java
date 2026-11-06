@@ -142,6 +142,16 @@ public class AppService {
         };
     }
     
+    public Tenant updateTenantStatus(UUID tenantId, String status, Principal p) {
+        if (!"PLATFORM".equals(p.accountType()) || p.permissions() == null || !p.permissions().contains("PLATFORM_MANAGE"))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        if (!"ACTIVE".equals(status) && !"SUSPENDED".equals(status))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tenant status must be ACTIVE or SUSPENDED");
+        var tenant = tenants.findById(tenantId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
+        tenant.setStatus(status);
+        return tenants.save(tenant);
+    }
+
     public Object create(String type, Input x, Principal p) {
         if ("tenants".equals(type)) {
             if (!"PLATFORM".equals(p.accountType())) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
