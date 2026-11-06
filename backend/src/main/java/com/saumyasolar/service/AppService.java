@@ -289,6 +289,23 @@ public class AppService {
         };
     }
     
+    public Tenant tenantSettings(Principal p) {
+        vendor(p);
+        requirePermission(p, "DISCOUNT_POLICY_MANAGE");
+        return tenants.findById(p.tenantId()).orElseThrow();
+    }
+
+    public Tenant updateDiscountApprovalThreshold(BigDecimal threshold, Principal p) {
+        vendor(p);
+        requirePermission(p, "DISCOUNT_POLICY_MANAGE");
+        if (threshold == null || threshold.compareTo(BigDecimal.ZERO) < 0
+                || threshold.compareTo(new BigDecimal("100")) > 0)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Discount approval threshold must be between 0 and 100");
+        var tenant = tenants.findById(p.tenantId()).orElseThrow();
+        tenant.setDiscountApprovalThreshold(threshold);
+        return tenants.save(tenant);
+    }
+
     public List<Role> employeeRoles(Principal p) {
         vendor(p);
         requirePermission(p, "USER_MANAGE");
@@ -527,7 +544,10 @@ public class AppService {
         q.setDiscountAmount(disc);
         q.setTaxAmount(tax);
         q.setGrandTotal(sub.subtract(disc).add(tax));
-        q.setApprovalRequired(q.getDiscountPercent().compareTo(BigDecimal.TEN) > 0);
+        var approvalThreshold = tenants.findById(p.tenantId()).map(Tenant::getDiscountApprovalThreshold)
+                .orElse(BigDecimal.TEN);
+        if (approvalThreshold == null) approvalThreshold = BigDecimal.TEN;
+        q.setApprovalRequired(q.getDiscountPercent().compareTo(approvalThreshold) > 0);
         q.setStatus(q.isApprovalRequired() ? "PENDING_APPROVAL" : "DRAFT");
         quotes.save(q);
         return new QuoteView(q, items);
