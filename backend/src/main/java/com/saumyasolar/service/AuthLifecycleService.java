@@ -1,6 +1,7 @@
 package com.saumyasolar.service;
 
 import com.saumyasolar.domain.AppUser;
+import com.saumyasolar.domain.CustomerProfile;
 import com.saumyasolar.domain.PasswordResetToken;
 import com.saumyasolar.domain.RefreshToken;
 import com.saumyasolar.domain.Tenant;
@@ -25,6 +26,7 @@ public class AuthLifecycleService {
     final TenantRepository tenants;
     final RoleRepository roles;
     final PermissionRepository permissions;
+    final CustomerProfileRepository customerProfiles;
     final PasswordEncoder encoder;
     
     AuthLifecycleService(
@@ -34,6 +36,7 @@ public class AuthLifecycleService {
             TenantRepository t,
             RoleRepository rr,
             PermissionRepository permissions,
+            CustomerProfileRepository customerProfiles,
             PasswordEncoder e
     ) {
         refresh = r;
@@ -42,6 +45,7 @@ public class AuthLifecycleService {
         tenants = t;
         roles = rr;
         this.permissions = permissions;
+        this.customerProfiles = customerProfiles;
         encoder = e;
     }
     
@@ -212,6 +216,14 @@ public class AuthLifecycleService {
         u.setAccountType("CUSTOMER");
         u.setEnabled(true);
         u.getRoles().add(roles.findByNameAndTenantIdIsNull("CUSTOMER").orElseThrow());
-        return users.save(u);
+        var saved = users.save(u);
+        var profile = new CustomerProfile();
+        profile.setId(UUID.randomUUID());
+        profile.setTenantId(t.getId());
+        profile.setUserId(saved.getId());
+        profile.setName(saved.getName());
+        profile.setEmail(saved.getEmail());
+        customerProfiles.save(profile);
+        return saved;
     }
 }
