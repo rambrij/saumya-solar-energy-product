@@ -83,3 +83,5 @@ jobs:
         run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V8__lead_assignment_history.sql
       - name: Apply V9 tenant discount policy migration
         run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V9__tenant_discount_approval_policy.sql
+      - name: Apply V10 global identity roles migration
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V10__global_identity_roles.sql
