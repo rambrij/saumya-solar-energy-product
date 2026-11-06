@@ -78,13 +78,13 @@ Statuses describe the code currently present in this branch, not an assumption b
 |---|---|---|---|---|
 | Tenant and vendor management | Partial | Partial | Implemented | `Tenant`, `TenantRepository`, `POST/GET /api/v1/tenants`; platform permission required; tenant creation transaction provisions an initial tenant-scoped VENDOR_ADMIN and platform can activate/suspend tenants. Full tenant editing and broader management UI remain absent. |
 | Customer registration | Implemented | Partial | Implemented | `POST /api/v1/auth/register`, `AuthLifecycleService.register`, customer registration form; email verification and duplicate profile recovery are absent. |
-| Access and refresh tokens | Partial | Partial | Implemented | `JwtService`, `AuthLifecycleService`, `refresh_token`; access JWT is 2 hours; refresh rotates and reuse now revokes remaining refresh sessions. Access-token revocation/shorter lifetime and automated lifecycle tests remain outstanding. |
+| Access and refresh tokens | Partial | Partial | Implemented | `JwtService`, `JwtFilter`, `AuthLifecycleService`, `refresh_token`; refresh rotates and reuse revokes remaining refresh sessions. Every request reloads enabled user, tenant status and current role/permission data; individual access-token logout revocation and refresh UX remain outstanding. |
 | Logout and token revocation | Partial | Partial | Implemented | `POST /api/v1/auth/logout`; frontend now calls it before clearing local session. Existing access JWT remains usable until expiry. |
 | Password reset | Partial | Partial | Implemented | `PasswordResetToken`, forgot/reset endpoints and UI; single-use and expiry checks, reset revokes refresh sessions. Email delivery is absent; development reset token is returned by API. |
 | Roles and permissions | Partial | Partial | Implemented | `Role`, `Permission`, `SecurityConfig`, `AppService`; permission checks added to several vendor operations. Not all endpoints/actions are consistently permission-guarded; role administration is absent. |
 | Vendor employee management | Partial | Partial | Implemented | `POST/GET /api/v1/users` and `PATCH /api/v1/users/{id}/enabled`; vendor admin can provision, list and enable/disable same-tenant SALES_EXECUTIVE accounts. Edit and broader configurable role assignment remain absent. `V2__vendor_employee_management_permission.sql` grants USER_MANAGE to existing vendor admin roles. |
 | Platform/vendor/customer layouts | Partial | Partial | N/A | `frontend/src/main.tsx`; account-type-specific views exist, but they are compact conditional views rather than complete route/layout experiences. |
-| Tenant-context enforcement | Partial | Partial | Partial | Tenant ID comes from JWT principal and tenant-filtered repository methods; cross-reference checks added for categories, package products, assigned employees, customer/lead/survey references. More endpoint coverage and tenant-composite FK constraints are needed. |
+| Tenant-context enforcement | Partial | Partial | Partial | Tenant ID comes from authenticated user state; JWT filter rechecks account enabled state, tenant status and current role/permission data on every request. Tenant-filtered queries and cross-reference checks cover key sales references; remaining endpoints and tenant-composite FK constraints need broader coverage. |
 | Cross-tenant integration tests | Partial | N/A | Partial | `Release12TenantIntegrationTest` exercises HTTP authorization denial, foreign category reference rejection, tenant-filtered product reads, foreign employee assignment rejection and customer registration. H2 is used for the integration profile; update/delete/ID-guessing and MySQL migration integration coverage remain outstanding. |
 | Product categories | Partial | Partial | Implemented | Entity/repository, tenant-filtered list and create form. Update/delete, uniqueness/validation UX and lifecycle screens absent. |
 | Products | Partial | Partial | Implemented | Entity/repository, category tenant check, create/list. No full update/delete UI; input validation and lifecycle controls incomplete. |
@@ -93,7 +93,7 @@ Statuses describe the code currently present in this branch, not an assumption b
 | Enquiries and leads | Partial | Partial | Implemented | Enquiry create/list, one-time conversion, lead update/history. UI stage editing is prompt-based; search, full assignment form and history view are absent. |
 | Lead assignment | Partial | Partial | Implemented | Backend validates assigned employee belongs to tenant; UI does not provide a complete assignment/reassignment workflow or history screen. |
 | Site surveys | Partial | Partial | Implemented | Survey create/list and same-tenant lead/employee checks. Full edit, scheduling calendar, evidence/attachments and detailed completion workflow absent. |
-| Versioned quotations | Partial | Partial | Implemented | `QuotationRevisionService` clones revision line snapshots; server now derives product prices/tax from tenant catalogue. Revision history UI and full quote terms are absent. |
+| Versioned quotations | Partial | Partial | Implemented | `QuotationRevisionService` clones revision line snapshots; server derives product prices/tax from tenant catalogue; tenant-scoped `GET /quotations/{id}/revisions` and a history action exist. Full quote editing/terms and browser workflow tests remain absent. |
 | Discount approval | Partial | Partial | Implemented | Hard-coded >10% threshold and approval permission check. Configurable threshold/authority matrix and complete approval history are absent. |
 | Quotation PDF generation | Partial | Partial | N/A | Authenticated `GET /api/v1/quotations/{id}/pdf`; current PDF only contains quotation number, revision, status and total, not a complete customer-facing line-item/tax/terms document. |
 | Customer quotation acceptance/rejection | Implemented | Implemented | Implemented | Customer ownership, SENT state and validity are checked; decision actor/time are persisted by V3 migration against the exact quotation revision. Full browser workflow automation remains outstanding. |
@@ -108,6 +108,7 @@ Statuses describe the code currently present in this branch, not an assumption b
 - Added quotation action state checks and approval permission checks.
 - Bound idempotency keys to the quotation they originally created and guarded duplicate order creation.
 - Added refresh-token reuse detection and refresh-session revocation after password reset.
+- JWT requests revalidate enabled account, active tenant and current database roles/permissions; suspending a tenant invalidates existing access tokens for that tenant.
 - Added platform-only tenant creation that atomically provisions the initial tenant-scoped Vendor Admin, plus tenant activate/suspend controls.
 - Added vendor-admin-only employee provisioning and enable/disable for the SALES_EXECUTIVE role, with tenant scoping, password hashing and an additive Flyway permission migration.
 - Added customer registration and password-reset forms, plus lead assignment/follow-up and site-survey scheduling fields.
@@ -142,7 +143,7 @@ docker compose build --no-cache
 docker compose up
 ```
 
-A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. The run for commit `55e191395f3e011ad77126ce29fec32b4c938b2f` completed successfully for backend `mvn clean verify` (including H2-backed HTTP integration tests) and frontend `npm run build`. Subsequent customer-profile registration changes are being revalidated by the workflow on the current branch head. A successful compile/build does not replace API integration, tenant-isolation, concurrency or full workflow tests.
+A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. The run for commit `06e6c142ca4bd2b52a7ce2037eeb1a0dba579421` completed successfully for backend `mvn clean verify` (including H2-backed HTTP integration tests) and frontend `npm run build`. Subsequent JWT database revalidation changes are being revalidated by the workflow on the current branch head. A successful compile/build does not replace API integration, tenant-isolation, concurrency or full workflow tests.
 
 ## Remaining release blockers
 
