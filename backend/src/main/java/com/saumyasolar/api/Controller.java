@@ -323,12 +323,12 @@ public class Controller {
     // Release 3: warehouse and immutable inventory ledger.
     @GetMapping("/warehouses") List<com.saumyasolar.domain.Warehouse> warehouses(Authentication a){return operations.warehouses(p(a));}
     @PostMapping("/warehouses") com.saumyasolar.domain.Warehouse createWarehouse(@Valid @RequestBody WarehouseInput x,Authentication a){return operations.createWarehouse(x,p(a));}
-    @PatchMapping("/warehouses/{id}") com.saumyasolar.domain.Warehouse updateWarehouse(@PathVariable UUID id,@Valid @RequestBody WarehouseInput x,Authentication a){return operations.updateWarehouse(id,x,p(a));}
-    @DeleteMapping("/warehouses/{id}") com.saumyasolar.domain.Warehouse archiveWarehouse(@PathVariable UUID id,Authentication a){return operations.archiveWarehouse(id,p(a));}
     @GetMapping("/inventory/balances") List<com.saumyasolar.domain.InventoryBalance> inventoryBalances(Authentication a){return operations.balances(p(a));}
     @GetMapping("/inventory/transactions") List<com.saumyasolar.domain.InventoryTransaction> inventoryLedger(Authentication a){return operations.ledger(p(a));}
     @PostMapping("/inventory/receipts") com.saumyasolar.domain.InventoryBalance inventoryReceipt(@Valid @RequestBody ReceiptInput x,Authentication a){return operations.receive(x,p(a));}
     @PostMapping("/inventory/returns") com.saumyasolar.domain.InventoryBalance inventoryReturn(@Valid @RequestBody ReceiptInput x,Authentication a){return operations.returnStock(x,p(a));}
+    @PostMapping("/inventory/issues") com.saumyasolar.domain.InventoryBalance inventoryIssue(@Valid @RequestBody IssueInput x,Authentication a){return operations.issue(x,p(a));}
+    @GetMapping("/inventory/low-stock") List<Map<String,Object>> lowStock(Authentication a){return operations.lowStock(p(a));}
     @PostMapping("/inventory/damages") com.saumyasolar.domain.InventoryBalance inventoryDamage(@Valid @RequestBody DamageInput x,Authentication a){return operations.damage(x,p(a));}
     @PostMapping("/inventory/adjustments") com.saumyasolar.domain.InventoryBalance inventoryAdjustment(@Valid @RequestBody AdjustmentInput x,Authentication a){return operations.adjust(x,p(a));}
     @PostMapping("/inventory/transfers") Map<String,Object> inventoryTransfer(@Valid @RequestBody TransferInput x,Authentication a){return operations.transfer(x,p(a));}
@@ -336,6 +336,11 @@ public class Controller {
     @PostMapping("/orders/{id}/release-reservation") List<com.saumyasolar.domain.InventoryReservation> releaseOrder(@PathVariable UUID id,@RequestBody Map<String,String> x,Authentication a){return operations.release(id,x.getOrDefault("reason","Reservation released"),p(a));}
     @PostMapping("/orders/{id}/transition") CustomerOrder transitionOrder(@PathVariable UUID id,@Valid @RequestBody OrderTransitionInput x,Authentication a){return operations.transition(id,x,p(a));}
     @GetMapping("/orders/{id}/history") List<com.saumyasolar.domain.OrderStatusHistory> orderHistory(@PathVariable UUID id,Authentication a){return operations.orderHistory(id,p(a));}
+    @GetMapping("/installation-teams") List<com.saumyasolar.domain.InstallationTeam> installationTeams(Authentication a){return operations.teams(p(a));}
+    @PostMapping("/installation-teams") com.saumyasolar.domain.InstallationTeam createInstallationTeam(@Valid @RequestBody TeamInput x,Authentication a){return operations.createTeam(x,p(a));}
+    @GetMapping("/installation-checklist-templates") List<com.saumyasolar.domain.InstallationChecklistTemplate> checklistTemplates(Authentication a){return operations.checklistTemplates(p(a));}
+    @PostMapping("/installation-checklist-templates") com.saumyasolar.domain.InstallationChecklistTemplate createChecklistTemplate(@Valid @RequestBody ChecklistTemplateInput x,Authentication a){return operations.createChecklistTemplate(x,p(a));}
+    @DeleteMapping("/installation-checklist-templates/{id}") com.saumyasolar.domain.InstallationChecklistTemplate archiveChecklistTemplate(@PathVariable UUID id,Authentication a){return operations.archiveChecklistTemplate(id,p(a));}
     @GetMapping("/installations") List<com.saumyasolar.domain.InstallationJob> installations(Authentication a){return operations.installations(p(a));}
     @PostMapping("/installations") com.saumyasolar.domain.InstallationJob createInstallation(@Valid @RequestBody InstallationInput x,Authentication a){return operations.createInstallation(x,p(a));}
     @GetMapping("/installations/{id}/checklist") List<com.saumyasolar.domain.InstallationChecklistItem> installationChecklist(@PathVariable UUID id,Authentication a){return operations.checklist(id,p(a));}
@@ -344,4 +349,6 @@ public class Controller {
     @PostMapping("/installations/{id}/complete") com.saumyasolar.domain.InstallationJob completeInstallation(@PathVariable UUID id,@RequestBody Map<String,String> x,Authentication a){return operations.completeInstallation(id,x.getOrDefault("reason","Installation checklist completed"),p(a));}
     @PostMapping("/installations/{id}/commission") com.saumyasolar.domain.InstallationJob commissionInstallation(@PathVariable UUID id,@Valid @RequestBody CommissionInput x,Authentication a){return operations.commission(id,x,p(a));}
     @GetMapping("/warranties") List<com.saumyasolar.domain.Warranty> warranties(Authentication a){return operations.warranties(p(a));}
+    @GetMapping("/customer/installations") List<com.saumyasolar.domain.InstallationJob> myInstallations(Authentication a){return operations.customerInstallations(p(a));}
+    @GetMapping("/customer/warranties") List<com.saumyasolar.domain.Warranty> myWarranties(Authentication a){return operations.customerWarranties(p(a));}
 }

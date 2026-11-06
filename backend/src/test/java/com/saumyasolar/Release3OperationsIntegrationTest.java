@@ -45,6 +45,22 @@ class Release3OperationsIntegrationTest {
   String ledger=mvc.perform(get("/api/v1/inventory/transactions").header("Authorization","Bearer "+auth)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
   assertTrue(ledger.contains("RECEIPT"));assertTrue(ledger.contains("PO-TEST-001"));
  }
+ @Test void stockIssueDamageAndReturnPreserveSeparateLedgerDimensions() throws Exception {
+  String auth=token();var warehouse=warehouses.findByTenantIdOrderByNameAsc(tenantId).get(0);
+  Product product=products.findByTenantIdOrderByIdDesc(tenantId).stream().filter(p->"DEMO-PV-550".equals(p.getSku())).findFirst().orElseThrow();
+  String wh=warehouse.getId().toString(),pr=product.getId().toString();
+  mvc.perform(post("/api/v1/inventory/receipts").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content("{\"warehouseId\":\""+wh+"\",\"productId\":\""+pr+"\",\"quantity\":25,\"reason\":\"PO-25\"}")).andExpect(status().isOk());
+  mvc.perform(post("/api/v1/inventory/damages").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content("{\"warehouseId\":\""+wh+"\",\"productId\":\""+pr+"\",\"quantity\":2,\"reason\":\"Damaged during unloading\"}")).andExpect(status().isOk());
+  mvc.perform(post("/api/v1/inventory/issues").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content("{\"warehouseId\":\""+wh+"\",\"productId\":\""+pr+"\",\"quantity\":3,\"reason\":\"Internal use\"}")).andExpect(status().isOk());
+  mvc.perform(post("/api/v1/inventory/returns").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content("{\"warehouseId\":\""+wh+"\",\"productId\":\""+pr+"\",\"quantity\":1,\"reason\":\"Customer return\"}")).andExpect(status().isOk());
+  String response=mvc.perform(get("/api/v1/inventory/balances").header("Authorization","Bearer "+auth)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+  JsonNode row=java.util.stream.StreamSupport.stream(json.readTree(response).spliterator(),false).filter(x->x.get("warehouseId").asText().equals(wh)&&x.get("productId").asText().equals(pr)).findFirst().orElseThrow();
+  assertEquals(new BigDecimal("23"),new BigDecimal(row.get("onHand").asText()));
+  assertEquals(new BigDecimal("2"),new BigDecimal(row.get("damaged").asText()));
+  assertEquals(new BigDecimal("21"),new BigDecimal(row.get("onHand").asText()).subtract(new BigDecimal(row.get("reserved").asText())).subtract(new BigDecimal(row.get("damaged").asText())));
+  String ledger=mvc.perform(get("/api/v1/inventory/transactions").header("Authorization","Bearer "+auth)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+  assertTrue(ledger.contains("DAMAGE"));assertTrue(ledger.contains("ISSUE"));assertTrue(ledger.contains("RETURN"));
+ }
  @Test void vendorCannotReceiveStockForAnotherTenantsProduct() throws Exception {
   String auth=token();var foreign=otherTenant();ProductCategory category=new ProductCategory();category.setId(UUID.randomUUID());category.setTenantId(foreign.getId());category.setName("Foreign category");category.setActive(true);categories.save(category);
   Product product=new Product();product.setId(UUID.randomUUID());product.setTenantId(foreign.getId());product.setCategoryId(category.getId());product.setSku("FOREIGN-"+UUID.randomUUID());product.setName("Foreign product");product.setPrice(BigDecimal.TEN);product.setTaxPercent(BigDecimal.ZERO);product.setActive(true);products.save(product);
