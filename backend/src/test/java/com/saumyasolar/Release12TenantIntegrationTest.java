@@ -95,6 +95,11 @@ class Release12TenantIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"SUSPENDED\"}"))
                 .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(adminEmail, adminPassword)))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
