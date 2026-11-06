@@ -1,9 +1,5 @@
-ALTER TABLE product
- ADD COLUMN manufacturer VARCHAR(150) NULL, ADD COLUMN model VARCHAR(120) NULL, ADD COLUMN technology VARCHAR(120) NULL,
- ADD COLUMN purchase_price DECIMAL(19,2) NOT NULL DEFAULT 0, ADD COLUMN discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0,
- ADD COLUMN warranty_years INT NULL, ADD COLUMN image_url VARCHAR(1000) NULL, ADD COLUMN datasheet_url VARCHAR(1000) NULL,
- ADD COLUMN reorder_level DECIMAL(19,4) NOT NULL DEFAULT 0, ADD COLUMN unit_of_measure VARCHAR(30) NOT NULL DEFAULT 'PCS',
- ADD COLUMN hsn_code VARCHAR(40) NULL, ADD COLUMN serialized BOOLEAN NOT NULL DEFAULT FALSE;
+-- Release 3: Operations, inventory ledger, installation, commissioning and warranty.
+ALTER TABLE product ADD COLUMN manufacturer VARCHAR(150) NULL, ADD COLUMN model VARCHAR(120) NULL, ADD COLUMN technology VARCHAR(120) NULL, ADD COLUMN purchase_price DECIMAL(19,2) NOT NULL DEFAULT 0, ADD COLUMN discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0, ADD COLUMN warranty_years INT NULL, ADD COLUMN image_url VARCHAR(1000) NULL, ADD COLUMN datasheet_url VARCHAR(1000) NULL, ADD COLUMN reorder_level DECIMAL(19,4) NOT NULL DEFAULT 0, ADD COLUMN unit_of_measure VARCHAR(30) NOT NULL DEFAULT 'PCS', ADD COLUMN hsn_code VARCHAR(40) NULL, ADD COLUMN serialized BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE customer_profile ADD COLUMN active BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE order_item ADD COLUMN product_id BINARY(16) NULL, ADD COLUMN package_id BINARY(16) NULL;
 CREATE INDEX ix_order_item_order_product ON order_item(tenant_id,order_id,product_id);
