@@ -1,0 +1,2 @@
+package com.saumyasolar.repo;import com.saumyasolar.domain.Warranty;import org.springframework.data.jpa.repository.JpaRepository;import java.util.List;import java.util.UUID;
+public interface WarrantyRepository extends JpaRepository<Warranty,UUID>{List<Warranty> findByTenantIdOrderByStartDateDesc(UUID tenantId);}
