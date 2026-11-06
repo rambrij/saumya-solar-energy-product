@@ -182,6 +182,19 @@ public class AuthLifecycleService {
     }
 
     @Transactional
+    public AppUser setEmployeeEnabled(UUID tenantId, UUID actorId, UUID employeeId, boolean enabled) {
+        if (tenantId == null || employeeId == null || employeeId.equals(actorId))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot change this employee account");
+        var employee = users.findById(employeeId)
+                .filter(u -> tenantId.equals(u.getTenantId()) && "VENDOR".equals(u.getAccountType()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found in this vendor"));
+        if (employee.getRoles().stream().anyMatch(role -> "VENDOR_ADMIN".equals(role.getName())))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Vendor admin accounts cannot be disabled through this endpoint");
+        employee.setEnabled(enabled);
+        return users.save(employee);
+    }
+
+    @Transactional
     public AppUser register(String slug, String name, String email, String password) {
         var t = tenants.findBySlug(slug).filter(x -> "ACTIVE".equals(x.getStatus()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Active store not found"));
