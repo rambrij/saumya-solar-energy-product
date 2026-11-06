@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.UUID;
+import java.math.BigDecimal;
 @Entity
 @Getter
 @Setter
@@ -17,4 +18,5 @@ public class Tenant {
     String name;
     String slug;
     String status;
+    BigDecimal discountApprovalThreshold;
 }
