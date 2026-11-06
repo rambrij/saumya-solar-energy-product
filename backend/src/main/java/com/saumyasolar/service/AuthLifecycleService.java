@@ -93,6 +93,14 @@ public class AuthLifecycleService {
         refresh.findByToken(token).ifPresent(x -> {
             x.setRevoked(true);
             refresh.save(x);
+            users.findById(x.getUserId()).ifPresent(user -> {
+                user.setTokenVersion(user.getTokenVersion() + 1);
+                users.save(user);
+            });
+            refresh.findByUserIdAndRevokedFalse(x.getUserId()).forEach(session -> {
+                session.setRevoked(true);
+                refresh.save(session);
+            });
         });
     }
     
@@ -118,6 +126,7 @@ public class AuthLifecycleService {
         if (password == null || password.length() < 12)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password must contain at least 12 characters");
         u.setPasswordHash(encoder.encode(password));
+        u.setTokenVersion(u.getTokenVersion() + 1);
         users.save(u);
         x.setUsed(true);
         resets.save(x);
@@ -209,6 +218,7 @@ public class AuthLifecycleService {
         if (employee.getRoles().stream().anyMatch(role -> "VENDOR_ADMIN".equals(role.getName())))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Vendor admin accounts cannot be disabled through this endpoint");
         employee.setEnabled(enabled);
+        employee.setTokenVersion(employee.getTokenVersion() + 1);
         return users.save(employee);
     }
 
