@@ -1,0 +1,26 @@
+package com.saumyasolar.domain;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+@Entity
+@Getter
+@Setter
+@NoArgsConstructor
+public class SolarPackage {
+    @Id
+    UUID id;
+    UUID tenantId;
+    String code;
+    String name;
+    BigDecimal capacityKw;
+    String packageType;
+    BigDecimal basePrice;
+    Integer warrantyYears;
+    boolean active;
+}
