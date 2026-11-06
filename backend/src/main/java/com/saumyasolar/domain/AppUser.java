@@ -22,6 +22,7 @@ public class AppUser {
     String passwordHash;
     String accountType;
     boolean enabled;
+    int tokenVersion;
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_role",
