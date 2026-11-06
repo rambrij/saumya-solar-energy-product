@@ -82,7 +82,7 @@ Statuses describe the code currently present in this branch, not an assumption b
 | Logout and token revocation | Partial | Partial | Implemented | `POST /api/v1/auth/logout`; frontend now calls it before clearing local session. Existing access JWT remains usable until expiry. |
 | Password reset | Partial | Missing | Implemented | `PasswordResetToken`, forgot/reset endpoints; single-use and expiry checks, reset revokes refresh sessions. Email delivery and reset UI are absent; development reset token is returned by API. |
 | Roles and permissions | Partial | Partial | Implemented | `Role`, `Permission`, `SecurityConfig`, `AppService`; permission checks added to several vendor operations. Not all endpoints/actions are consistently permission-guarded; role administration is absent. |
-| Vendor employee management | Partial | Partial | Implemented | `AppUser`, `AppUserRepository`, `GET /api/v1/users`; lookup is tenant-filtered. Create/edit/disable/role-assignment workflow is missing. |
+| Vendor employee management | Partial | Partial | Implemented | `POST/GET /api/v1/users`; vendor admin can provision a same-tenant SALES_EXECUTIVE; list is tenant-filtered. Edit/disable and broader configurable role assignment remain absent. `V2__vendor_employee_management_permission.sql` grants USER_MANAGE to existing vendor admin roles. |
 | Platform/vendor/customer layouts | Partial | Partial | N/A | `frontend/src/main.tsx`; account-type-specific views exist, but they are compact conditional views rather than complete route/layout experiences. |
 | Tenant-context enforcement | Partial | Partial | Partial | Tenant ID comes from JWT principal and tenant-filtered repository methods; cross-reference checks added for categories, package products, assigned employees, customer/lead/survey references. More endpoint coverage and tenant-composite FK constraints are needed. |
 | Cross-tenant integration tests | Missing | N/A | N/A | Existing `Release2SecurityTest` only tests principal fields; no real HTTP/database negative tests for cross-tenant read/update/delete/ID guessing. |
@@ -108,6 +108,7 @@ Statuses describe the code currently present in this branch, not an assumption b
 - Added quotation action state checks and approval permission checks.
 - Bound idempotency keys to the quotation they originally created and guarded duplicate order creation.
 - Added refresh-token reuse detection and refresh-session revocation after password reset.
+- Added vendor-admin-only employee provisioning for the SALES_EXECUTIVE role, with tenant scoping, password hashing and an additive Flyway permission migration.
 - Rejected disabled accounts at login and applied DTO validation annotations in authentication controllers.
 - Frontend logout now calls the refresh-token logout endpoint before clearing the browser session.
 - Added a GitHub Actions workflow for Maven verification and frontend production build.
