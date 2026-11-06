@@ -87,6 +87,16 @@ public class AppService {
                 && "VENDOR".equals(u.getAccountType()) && u.isEnabled()).isEmpty())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee must belong to this vendor");
     }
+
+    private CustomerProfile requireCustomer(UUID id, UUID tenantId) {
+        return customers.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
+    }
+
+    private SalesLead requireLead(UUID id, UUID tenantId) {
+        return leads.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found"));
+    }
     
     public Object list(String type, Principal p) {
         if ("tenants".equals(type)) {
@@ -95,7 +105,9 @@ public class AppService {
         }
         if ("users".equals(type)) {
             vendor(p);
-            return users.findByTenantId(p.tenantId());
+            requirePermission(p, "USER_VIEW");
+            return users.findByTenantId(p.tenantId()).stream()
+                    .filter(u -> "VENDOR".equals(u.getAccountType())).toList();
         }
         if ("customer-orders".equals(type) && "CUSTOMER".equals(p.accountType())) {
             var c = customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(x -> p.userId().equals(x.getUserId())).findFirst().orElseThrow();
@@ -140,6 +152,12 @@ public class AppService {
             return tenants.save(t);
         }
         vendor(p);
+        switch (type) {
+            case "categories", "products", "packages" -> requirePermission(p, "CATALOG_MANAGE");
+            case "customers" -> requirePermission(p, "CUSTOMER_MANAGE");
+            case "enquiries" -> requirePermission(p, "LEAD_MANAGE");
+            default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
         return switch (type) {
             case "categories" -> {
                 var e = new ProductCategory();
@@ -181,6 +199,9 @@ public class AppService {
                     var pi = new PackageItem();
                     pi.setId(UUID.randomUUID());
                     pi.setTenantId(p.tenantId());
+                    if (l.productId() == null || products.findByIdAndTenantId(l.productId(), p.tenantId()).filter(Product::isActive).isEmpty())
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package items must reference active products in this vendor");
+                    if (l.quantity() < 1) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package item quantity must be positive");
                     pi.setPackageId(e.getId());
                     pi.setProductId(l.productId());
                     pi.setQuantity(l.quantity());
@@ -202,6 +223,7 @@ public class AppService {
                 var e = new Enquiry();
                 e.setId(UUID.randomUUID());
                 e.setTenantId(p.tenantId());
+                if (x.customerId() != null) requireCustomer(x.customerId(), p.tenantId());
                 e.setCustomerId(x.customerId());
                 e.setName(x.name());
                 e.setEmail(x.email());
@@ -300,6 +322,21 @@ public class AppService {
     @Transactional
     public QuoteView quote(Input x, Principal p) {
         vendor(p);
+        requirePermission(p, "QUOTATION_MANAGE");
+        requireCustomer(x.customerId(), p.tenantId());
+        if (x.leadId() != null && !requireLead(x.leadId(), p.tenantId()).getCustomerId().equals(x.customerId()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lead does not belong to the selected customer");
+        if (x.surveyId() != null) {
+            var survey = surveys.findByIdAndTenantId(x.surveyId(), p.tenantId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Survey not found in this vendor"));
+            if (x.leadId() == null || !x.leadId().equals(survey.getLeadId()))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Survey must belong to selected lead");
+        }
+        if (x.items() == null || x.items().isEmpty())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one quotation item is required");
+        var requestedDiscount = x.discountPercent() == null ? BigDecimal.ZERO : x.discountPercent();
+        if (requestedDiscount.compareTo(BigDecimal.ZERO) < 0 || requestedDiscount.compareTo(new BigDecimal("100")) > 0)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Discount must be between 0 and 100");
         var q = new Quotation();
         q.setId(UUID.randomUUID());
         q.setTenantId(p.tenantId());
@@ -309,7 +346,7 @@ public class AppService {
         q.setCustomerId(x.customerId());
         q.setLeadId(x.leadId());
         q.setSurveyId(x.surveyId());
-        q.setDiscountPercent(x.discountPercent() == null ? BigDecimal.ZERO : x.discountPercent());
+        q.setDiscountPercent(requestedDiscount);
         q.setValidUntil(x.validUntil() == null ? LocalDate.now().plusDays(30) : x.validUntil());
         q.setCreatedBy(p.userId());
         q.setCreatedAt(Instant.now());
@@ -317,21 +354,42 @@ public class AppService {
         BigDecimal sub = BigDecimal.ZERO, tax = BigDecimal.ZERO;
         var items = new ArrayList<QuotationItem>();
         for (var a : x.items()) {
-            var base = a.unitPrice().multiply(BigDecimal.valueOf(a.quantity()));
+            if (a.quantity() < 1) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Quantity must be positive");
+            BigDecimal unitPrice;
+            BigDecimal taxPercent;
+            String description;
+            if (a.productId() != null) {
+                var product = products.findByIdAndTenantId(a.productId(), p.tenantId()).filter(Product::isActive)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product is not active in this vendor"));
+                unitPrice = product.getPrice();
+                taxPercent = product.getTaxPercent();
+                description = product.getName();
+            } else if (a.packageId() != null) {
+                var solarPackage = packs.findByIdAndTenantId(a.packageId(), p.tenantId()).filter(SolarPackage::isActive)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package is not active in this vendor"));
+                unitPrice = solarPackage.getBasePrice();
+                taxPercent = BigDecimal.ZERO;
+                description = solarPackage.getName();
+            } else {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Each quotation item must reference a product or package");
+            }
+            if (unitPrice == null || taxPercent == null)
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Catalog price and tax must be configured");
+            var base = unitPrice.multiply(BigDecimal.valueOf(a.quantity()));
             var i = new QuotationItem();
             i.setId(UUID.randomUUID());
             i.setTenantId(p.tenantId());
             i.setQuotationId(q.getId());
             i.setProductId(a.productId());
             i.setPackageId(a.packageId());
-            i.setDescription(a.description());
+            i.setDescription(description);
             i.setQuantity(a.quantity());
-            i.setUnitPrice(a.unitPrice());
-            i.setTaxPercent(a.taxPercent());
+            i.setUnitPrice(unitPrice);
+            i.setTaxPercent(taxPercent);
             i.setLineTotal(base);
             items.add(quoteItems.save(i));
             sub = sub.add(base);
-            tax = tax.add(base.multiply(a.taxPercent()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+            tax = tax.add(base.multiply(taxPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
         }
         var disc = sub.multiply(q.getDiscountPercent()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         q.setSubtotal(sub);
@@ -344,16 +402,29 @@ public class AppService {
         return new QuoteView(q, items);
     }
     
+    @Transactional
     public Quotation action(UUID id, String action, Principal p) {
+        if (p.tenantId() == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         var q = quotes.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
         if ("CUSTOMER".equals(p.accountType())) {
             var c = customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(x -> p.userId().equals(x.getUserId())).findFirst().orElseThrow();
             if (!q.getCustomerId().equals(c.getId()) || !"SENT".equals(q.getStatus()) || q.getValidUntil().isBefore(LocalDate.now()))
                 throw new ResponseStatusException(HttpStatus.CONFLICT);
+            if (!"accept".equals(action) && !"reject".equals(action))
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN);
             q.setStatus("accept".equals(action) ? "ACCEPTED" : "REJECTED");
             return quotes.save(q);
         }
         vendor(p);
+        if ("approve".equals(action) || "reject-approval".equals(action)) {
+            requirePermission(p, "DISCOUNT_APPROVE");
+            if (!"PENDING_APPROVAL".equals(q.getStatus()) || !q.isApprovalRequired())
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Quotation is not awaiting approval");
+        } else {
+            requirePermission(p, "QUOTATION_MANAGE");
+        }
+        if ("send".equals(action) && !"DRAFT".equals(q.getStatus()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only a draft quotation can be sent");
         q.setStatus(switch (action) {
             case "approve" -> "DRAFT";
             case "reject-approval" -> "APPROVAL_REJECTED";
@@ -366,10 +437,21 @@ public class AppService {
     @Transactional
     public CustomerOrder order(UUID qid, String key, Principal p) {
         vendor(p);
+        requirePermission(p, "ORDER_CREATE");
+        if (key == null || key.isBlank() || key.length() > 120)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valid Idempotency-Key header is required");
         var old = idem.findByTenantIdAndOperationNameAndIdempotencyKey(p.tenantId(), "QUOTE_TO_ORDER", key);
-        if (old.isPresent()) return orders.findById(old.get().getResourceId()).orElseThrow();
+        if (old.isPresent()) {
+            var existing = orders.findByIdAndTenantId(old.get().getResourceId(), p.tenantId()).orElseThrow();
+            if (!qid.equals(existing.getQuotationId()))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key already belongs to another quotation");
+            return existing;
+        }
         var q = quotes.findByIdAndTenantId(qid, p.tenantId()).orElseThrow();
         if (!"ACCEPTED".equals(q.getStatus())) throw new ResponseStatusException(HttpStatus.CONFLICT);
+        var existingOrder = orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
+                .filter(o -> qid.equals(o.getQuotationId())).findFirst();
+        if (existingOrder.isPresent()) return existingOrder.get();
         var o = new CustomerOrder();
         o.setId(UUID.randomUUID());
         o.setTenantId(p.tenantId());
