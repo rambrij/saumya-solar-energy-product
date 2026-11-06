@@ -429,6 +429,7 @@ public class AppService {
         h.setId(UUID.randomUUID());
         h.setTenantId(l.getTenantId());
         h.setLeadId(l.getId());
+        h.setEventType("STAGE");
         h.setOldStage(old);
         h.setNewStage(now);
         h.setActorId(actor);
