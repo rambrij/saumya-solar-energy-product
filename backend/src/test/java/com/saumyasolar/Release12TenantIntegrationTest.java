@@ -101,7 +101,7 @@ class Release12TenantIntegrationTest {
                                 """.formatted(adminEmail, adminPassword)))
                 .andExpect(status().isUnauthorized());
         mvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + vendorToken))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isForbidden());
     }
 
     @Test
