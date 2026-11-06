@@ -86,6 +86,11 @@ public class AppService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing permission: " + code);
     }
 
+    private void requireAnyPermission(Principal p, String... codes) {
+        if (p.permissions() == null || java.util.Arrays.stream(codes).noneMatch(p.permissions()::contains))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing required catalogue permission");
+    }
+
     private void requireEmployee(UUID id, UUID tenantId) {
         if (id != null && users.findById(id).filter(u -> tenantId.equals(u.getTenantId())
                 && "VENDOR".equals(u.getAccountType()) && u.isEnabled()).isEmpty())
@@ -138,7 +143,7 @@ public class AppService {
         }
         vendor(p);
         switch (type) {
-            case "categories", "products", "packages" -> requirePermission(p, "CATALOG_MANAGE");
+            case "categories", "products", "packages" -> requireAnyPermission(p, "CATALOG_VIEW", "CATALOG_MANAGE");
             case "customers" -> requirePermission(p, "CUSTOMER_MANAGE");
             case "enquiries", "leads" -> requirePermission(p, "LEAD_MANAGE");
             case "surveys" -> requirePermission(p, "SURVEY_MANAGE");
