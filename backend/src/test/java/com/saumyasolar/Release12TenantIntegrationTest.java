@@ -69,6 +69,9 @@ class Release12TenantIntegrationTest {
         var tenantId = json.readTree(tenantResponse).get("id").asText();
 
         var vendorToken = accessToken(adminEmail, adminPassword);
+        var rolesResponse = mvc.perform(get("/api/v1/roles").header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(json.readTree(rolesResponse).toString().contains("MANAGER"));
         var employeeEmail = "sales-" + suffix + "@example.test";
         var employeeBody = """
                 {"name":"New Sales Executive","email":"%s","password":"SalesExec-Pass-2026","roleName":"SALES_EXECUTIVE"}
@@ -148,12 +151,28 @@ class Release12TenantIntegrationTest {
                 .anyMatch(profile -> customer.getId().equals(profile.getUserId())));
         mvc.perform(get("/api/v1/quotations").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/customer/enquiries")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"propertyType":"RESIDENTIAL","monthlyBill":4500,"requiredCapacityKw":3,"message":"Need rooftop solar quotation"}
+                                """))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/customer-enquiries").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/catalog-categories").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
     }
 
     @Test
-    void salesRoleCannotReadCatalogueWithoutPermission() throws Exception {
+    void salesRoleCanReadButCannotManageCatalogue() throws Exception {
         var token = accessToken("sales@saumya.local", "Sales@123");
         mvc.perform(get("/api/v1/products").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/categories")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Unauthorized category\"}"))
                 .andExpect(status().isForbidden());
     }
 
