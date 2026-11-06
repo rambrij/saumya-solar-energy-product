@@ -100,7 +100,8 @@ public class AppService {
     
     public Object list(String type, Principal p) {
         if ("tenants".equals(type)) {
-            if (!"PLATFORM".equals(p.accountType())) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+            if (!"PLATFORM".equals(p.accountType()) || p.permissions() == null || !p.permissions().contains("PLATFORM_MANAGE"))
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN);
             return tenants.findAll();
         }
         if ("users".equals(type)) {
