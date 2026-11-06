@@ -50,7 +50,7 @@ public class AuthLifecycleService {
         return x.getToken();
     }
     
-    @Transactional
+    @Transactional(dontRollbackOn = ResponseStatusException.class)
     public AppUser consumeRefresh(String token) {
         var x = refresh.findByToken(token)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
@@ -97,6 +97,7 @@ public class AuthLifecycleService {
         return out;
     }
     
+    @Transactional
     public void reset(String token, String password) {
         var x = resets.findByToken(token).filter(v -> !v.isUsed() && v.getExpiresAt().isAfter(Instant.now())).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid token"));
         var u = users.findById(x.getUserId()).orElseThrow();
