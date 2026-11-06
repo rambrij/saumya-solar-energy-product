@@ -34,7 +34,9 @@ Open:
 
 The optional `.`/start-clean.ps1` script and `docker compose down -v` remove the local MySQL volume. They permanently delete local development data. Do not use them when you need to retain local records.
 
-The Compose file contains development-only database credentials and JWT secret. Replace all of them before any shared or production deployment. Do not expose the Compose MySQL port to an untrusted network.
+The Compose file enables demo seeding with `SEED_DATA_ENABLED=true` for local development. Application default is false, so production does not create demo accounts. Production must use its own database/JWT/CORS secrets and must not enable demo seeding. Do not expose the Compose MySQL port to an untrusted network.
+
+For a new production database, run Flyway migrations first. Then bootstrap the first platform administrator once using deployment secrets: set `PLATFORM_BOOTSTRAP_ENABLED=true`, `PLATFORM_BOOTSTRAP_EMAIL`, and `PLATFORM_BOOTSTRAP_PASSWORD` (minimum 16 characters), start the backend, verify the account can sign in, and immediately set `PLATFORM_BOOTSTRAP_ENABLED=false` and remove the bootstrap password. The bootstrap is disabled by default and fails if the email already exists.
 
 ## Local demo accounts
 
@@ -150,7 +152,7 @@ docker compose build --no-cache
 docker compose up
 ```
 
-A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. The run for commit `7b7610e09eb2ad76948800c54384fd36c6bd8e4a` completed successfully for all three jobs: backend `mvn clean verify` (including H2-backed HTTP integration tests for registration, tenant provisioning, employee roles, category/product/package creation, customer enquiry, survey, quotation acceptance and idempotent order conversion), frontend `npm run build`, and V1–V9 migration application/verification on MySQL 8.4. The subsequent lookup-refresh frontend change at commit `1c14af5033b91476f7d7cdfbcfbecfa37ae19097` also passed all three CI jobs.
+A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. The run for commit `7b7610e09eb2ad76948800c54384fd36c6bd8e4a` completed successfully for all three jobs: backend `mvn clean verify` (including H2-backed HTTP integration tests for registration, tenant provisioning, employee roles, category/product/package creation, customer enquiry, survey, quotation acceptance and idempotent order conversion), frontend `npm run build`, and V1–V10 migration application/verification on MySQL 8.4. The subsequent lookup-refresh frontend change at commit `1c14af5033b91476f7d7cdfbcfbecfa37ae19097` also passed all three CI jobs.
 
 ## Remaining release blockers
 
