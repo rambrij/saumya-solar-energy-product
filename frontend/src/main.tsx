@@ -70,6 +70,7 @@ function QuoteForm({s,lookups,done,error}:any){
  const [quantity,setQuantity]=useState(1);
  const [lines,setLines]=useState<any[]>([]);
  const [leadId,setLeadId]=useState('');
+ const [customerId,setCustomerId]=useState('');
  const options=kind==='product'?(lookups.products||[]):(lookups.packages||[]);
  const selectedLead=(lookups.leads||[]).find((x:any)=>x.id===leadId);
  const surveyOptions=(lookups.surveys||[]).filter((x:any)=>leadId&&x.leadId===leadId);
@@ -88,9 +89,9 @@ function QuoteForm({s,lookups,done,error}:any){
  const label=(line:any)=>{const list=line.kind==='product'?(lookups.products||[]):(lookups.packages||[]);const item=list.find((x:any)=>x.id===line.id);return item?.name||line.id};
  return <form className="card form" onSubmit={submit}>
   <h2>Create Quotation</h2>
-  <label>Customer<select name="customerId" required defaultValue=""><option value="" disabled>Select customer</option>{(lookups.customers||[]).map((x:any)=><option key={x.id} value={x.id}>{x.name} · {x.email}</option>)}</select></label>
+  <label>Customer<select name="customerId" required value={customerId} onChange={e=>{setCustomerId(e.target.value);setLeadId('')}}><option value="" disabled>Select customer</option>{(lookups.customers||[]).map((x:any)=><option key={x.id} value={x.id}>{x.name} · {x.email}</option>)}</select></label>
   {!(lookups.customers||[]).length&&<p className="muted">No customers found. Create a customer or ask them to register for this vendor store.</p>}
-  <label>Lead (optional)<select name="leadId" value={leadId} onChange={e=>setLeadId(e.target.value)}><option value="">No lead</option>{(lookups.leads||[]).filter((x:any)=>!x.customerId||!f).map((x:any)=><option key={x.id} value={x.id}>{x.id} · {x.stage}</option>)}</select></label>
+  <label>Lead (optional)<select name="leadId" value={leadId} onChange={e=>setLeadId(e.target.value)}><option value="">No lead</option>{(lookups.leads||[]).filter((x:any)=>x.customerId===customerId).map((x:any)=><option key={x.id} value={x.id}>{x.id} · {x.stage}</option>)}</select></label>
   <label>Site survey (optional)<select name="surveyId" defaultValue=""><option value="">No survey</option>{surveyOptions.map((x:any)=><option key={x.id} value={x.id}>{x.id} · {x.status}</option>)}</select></label>
   {leadId&&!selectedLead?.customerId&&<p className="muted">This lead is not linked to a customer yet. Convert enquiries after adding a valid customer email, then refresh this form.</p>}
   <h3>Quotation items</h3>
