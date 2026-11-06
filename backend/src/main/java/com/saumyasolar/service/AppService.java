@@ -322,6 +322,19 @@ public class AppService {
         if (!"NEW".equals(q.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Enquiry already converted");
         requireEmployee(x.assignedUserId(), p.tenantId());
+        if (q.getCustomerId() == null) {
+            CustomerProfile customer = customers.findByTenantIdAndEmailIgnoreCase(p.tenantId(), q.getEmail())
+                    .orElseGet(() -> {
+                        var created = new CustomerProfile();
+                        created.setId(UUID.randomUUID());
+                        created.setTenantId(p.tenantId());
+                        created.setName(q.getName());
+                        created.setEmail(q.getEmail());
+                        created.setPhone(q.getPhone());
+                        return customers.save(created);
+                    });
+            q.setCustomerId(customer.getId());
+        }
         q.setStatus("CONVERTED");
         enquiries.save(q);
         var l = new SalesLead();
@@ -408,7 +421,7 @@ public class AppService {
         vendor(p);
         requirePermission(p, "QUOTATION_MANAGE");
         requireCustomer(x.customerId(), p.tenantId());
-        if (x.leadId() != null && !requireLead(x.leadId(), p.tenantId()).getCustomerId().equals(x.customerId()))
+        if (x.leadId() != null && !Objects.equals(requireLead(x.leadId(), p.tenantId()).getCustomerId(), x.customerId()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lead does not belong to the selected customer");
         if (x.surveyId() != null) {
             var survey = surveys.findByIdAndTenantId(x.surveyId(), p.tenantId())
