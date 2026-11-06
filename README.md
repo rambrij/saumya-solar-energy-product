@@ -78,9 +78,9 @@ Statuses describe the code currently present in this branch, not an assumption b
 |---|---|---|---|---|
 | Tenant and vendor management | Partial | Partial | Implemented | `Tenant`, `TenantRepository`, `POST/GET /api/v1/tenants`; platform permission required; tenant creation transaction provisions an initial tenant-scoped VENDOR_ADMIN and platform can activate/suspend tenants. Full tenant editing and broader management UI remain absent. |
 | Customer registration | Implemented | Partial | Implemented | `POST /api/v1/auth/register`, `AuthLifecycleService.register`, customer registration form; email verification and duplicate profile recovery are absent. |
-| Access and refresh tokens | Partial | Partial | Implemented | `JwtService`, `JwtFilter`, `AuthLifecycleService`, `refresh_token`; refresh rotates and reuse revokes remaining refresh sessions. Every request reloads enabled user, tenant status and current role/permission data; individual access-token logout revocation and refresh UX remain outstanding. |
-| Logout and token revocation | Partial | Partial | Implemented | `POST /api/v1/auth/logout`; frontend now calls it before clearing local session. Existing access JWT remains usable until expiry. |
-| Password reset | Partial | Partial | Implemented | `PasswordResetToken`, forgot/reset endpoints and UI; single-use and expiry checks, reset revokes refresh sessions. Email delivery is absent; development reset token is returned by API. |
+| Access and refresh tokens | Implemented | Partial | Implemented | `JwtService`, `JwtFilter`, `AuthLifecycleService`, `refresh_token`; refresh rotates, reuse revokes remaining refresh sessions, and token-version checks invalidate stale access JWTs. Frontend automatic refresh/session-expiry UX and secure cookie storage remain outstanding. |
+| Logout and token revocation | Implemented | Implemented | Implemented | `POST /api/v1/auth/logout` revokes all refresh sessions and increments the user's token version; `JwtFilter` rejects previously issued access JWTs. Logout currently has global per-user session semantics. |
+| Password reset | Partial | Partial | Implemented | `PasswordResetToken`, forgot/reset endpoints and UI; single-use and expiry checks, reset revokes refresh sessions and invalidates access JWTs. Email delivery is absent; development reset token is returned by API. |
 | Roles and permissions | Partial | Partial | Implemented | `Role`, `Permission`, `SecurityConfig`, `AppService`; permission checks added to several vendor operations. Not all endpoints/actions are consistently permission-guarded; role administration is absent. |
 | Vendor employee management | Partial | Partial | Implemented | `POST/GET /api/v1/users` and `PATCH /api/v1/users/{id}/enabled`; vendor admin can provision, list and enable/disable same-tenant SALES_EXECUTIVE accounts. Edit and broader configurable role assignment remain absent. `V2__vendor_employee_management_permission.sql` grants USER_MANAGE to existing vendor admin roles. |
 | Platform/vendor/customer layouts | Partial | Partial | N/A | `frontend/src/main.tsx`; account-type-specific views exist, but they are compact conditional views rather than complete route/layout experiences. |
@@ -107,7 +107,7 @@ Statuses describe the code currently present in this branch, not an assumption b
 - Added catalogue-derived quotation prices and tax instead of trusting browser-supplied price/tax values.
 - Added quotation action state checks and approval permission checks.
 - Bound idempotency keys to the quotation they originally created and guarded duplicate order creation.
-- Added refresh-token reuse detection and refresh-session revocation after password reset.
+- Added refresh-token reuse detection, refresh-session revocation and token-version-based access-token invalidation on logout/password reset/account disable.
 - JWT requests revalidate enabled account, active tenant and current database roles/permissions; suspending a tenant invalidates existing access tokens for that tenant.
 - Added platform-only tenant creation that atomically provisions the initial tenant-scoped Vendor Admin, plus tenant activate/suspend controls.
 - Added vendor-admin-only employee provisioning and enable/disable for the SALES_EXECUTIVE role, with tenant scoping, password hashing and an additive Flyway permission migration.
@@ -150,7 +150,7 @@ A GitHub Actions workflow is included at `.github/workflows/release-validation.y
 1. Complete authorization coverage for every controller action, including platform tenant operations and customer endpoints.
 2. Add vendor employee profile editing and configurable role assignment.
 3. Add registration, forgot/reset-password and session-expiry/refresh UX; deliver reset links through a configured email provider.
-4. Revoke or otherwise invalidate access tokens on logout/password reset; consider HttpOnly secure cookies for refresh tokens instead of localStorage.
+4. Move refresh tokens from localStorage to HttpOnly Secure SameSite cookies and implement automatic refresh/session-expiry UX; access tokens are currently invalidated globally per user on logout/password reset via token version.
 5. Add database-level tenant-composite constraints for all tenant-owned relationships.
 6. Add full CRUD and complete workflows for packages, leads, surveys and quotations.
 7. Make discount policy configurable and add approval history.
