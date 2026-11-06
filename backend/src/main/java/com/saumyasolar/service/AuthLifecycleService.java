@@ -3,6 +3,8 @@ package com.saumyasolar.service;
 import com.saumyasolar.domain.AppUser;
 import com.saumyasolar.domain.PasswordResetToken;
 import com.saumyasolar.domain.RefreshToken;
+import com.saumyasolar.domain.Tenant;
+import com.saumyasolar.domain.Permission;
 import com.saumyasolar.repo.*;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
@@ -22,6 +24,7 @@ public class AuthLifecycleService {
     final AppUserRepository users;
     final TenantRepository tenants;
     final RoleRepository roles;
+    final PermissionRepository permissions;
     final PasswordEncoder encoder;
     
     AuthLifecycleService(
@@ -30,6 +33,7 @@ public class AuthLifecycleService {
             AppUserRepository u,
             TenantRepository t,
             RoleRepository rr,
+            PermissionRepository permissions,
             PasswordEncoder e
     ) {
         refresh = r;
@@ -37,6 +41,7 @@ public class AuthLifecycleService {
         users = u;
         tenants = t;
         roles = rr;
+        this.permissions = permissions;
         encoder = e;
     }
     
@@ -113,6 +118,45 @@ public class AuthLifecycleService {
         });
     }
     
+    @Transactional
+    public Tenant createTenant(String name, String slug, String adminName, String adminEmail, String adminPassword) {
+        if (name == null || name.isBlank() || slug == null || !slug.matches("[a-z0-9]+(?:-[a-z0-9]+)*")
+                || adminName == null || adminName.isBlank() || adminEmail == null || adminEmail.isBlank()
+                || adminPassword == null || adminPassword.length() < 12)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tenant and initial vendor administrator details are required");
+        if (tenants.findBySlug(slug).isPresent())
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Tenant slug already exists");
+        if (users.findByEmailIgnoreCase(adminEmail).isPresent())
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Administrator email already exists");
+
+        var tenant = new Tenant();
+        tenant.setId(UUID.randomUUID());
+        tenant.setName(name.trim());
+        tenant.setSlug(slug);
+        tenant.setStatus("ACTIVE");
+        tenants.save(tenant);
+
+        var vendorAdmin = new com.saumyasolar.domain.Role();
+        vendorAdmin.setId(UUID.randomUUID());
+        vendorAdmin.setTenantId(tenant.getId());
+        vendorAdmin.setName("VENDOR_ADMIN");
+        permissions.findAll().stream().filter(permission -> !"PLATFORM_MANAGE".equals(permission.getCode()))
+                .forEach(vendorAdmin.getPermissions()::add);
+        roles.save(vendorAdmin);
+
+        var admin = new AppUser();
+        admin.setId(UUID.randomUUID());
+        admin.setTenantId(tenant.getId());
+        admin.setName(adminName.trim());
+        admin.setEmail(adminEmail.trim().toLowerCase());
+        admin.setPasswordHash(encoder.encode(adminPassword));
+        admin.setAccountType("VENDOR");
+        admin.setEnabled(true);
+        admin.getRoles().add(vendorAdmin);
+        users.save(admin);
+        return tenant;
+    }
+
     @Transactional
     public AppUser createEmployee(UUID tenantId, String name, String email, String password, String roleName) {
         if (tenantId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
