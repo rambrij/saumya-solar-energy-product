@@ -87,6 +87,22 @@ public class Controller {
         lifecycle.logout(x.refreshToken());
     }
     
+    @PostMapping("/users")
+    UserView createVendorEmployee(@Valid @RequestBody EmployeeCreate x, Authentication a) {
+        var actor = p(a);
+        if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
+                || actor.permissions() == null || !actor.permissions().contains("USER_MANAGE"))
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
+        var u = lifecycle.createEmployee(actor.tenantId(), x.name(), x.email(), x.password(), x.roleName());
+        var roleNames = new HashSet<String>();
+        var permissionCodes = new HashSet<String>();
+        u.getRoles().forEach(r -> {
+            roleNames.add(r.getName());
+            r.getPermissions().forEach(permission -> permissionCodes.add(permission.getCode()));
+        });
+        return new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), roleNames, permissionCodes);
+    }
+
     @PostMapping("/auth/register")
     Session register(@Valid @RequestBody Register x) {
         var u = lifecycle.register(x.storeSlug(), x.name(), x.email(), x.password());
