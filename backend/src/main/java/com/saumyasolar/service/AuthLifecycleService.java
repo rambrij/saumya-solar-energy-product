@@ -27,6 +27,7 @@ public class AuthLifecycleService {
     final RoleRepository roles;
     final PermissionRepository permissions;
     final CustomerProfileRepository customerProfiles;
+    final ProductCategoryRepository categories;
     final PasswordEncoder encoder;
     
     AuthLifecycleService(
@@ -37,6 +38,7 @@ public class AuthLifecycleService {
             RoleRepository rr,
             PermissionRepository permissions,
             CustomerProfileRepository customerProfiles,
+            ProductCategoryRepository categories,
             PasswordEncoder e
     ) {
         refresh = r;
@@ -46,6 +48,7 @@ public class AuthLifecycleService {
         roles = rr;
         this.permissions = permissions;
         this.customerProfiles = customerProfiles;
+        this.categories = categories;
         encoder = e;
     }
     
@@ -162,14 +165,8 @@ public class AuthLifecycleService {
                 .forEach(vendorAdmin.getPermissions()::add);
         roles.save(vendorAdmin);
 
-        var salesRole = new com.saumyasolar.domain.Role();
-        salesRole.setId(UUID.randomUUID());
-        salesRole.setTenantId(tenant.getId());
-        salesRole.setName("SALES_EXECUTIVE");
-        var salesPermissions = java.util.Set.of("CUSTOMER_MANAGE", "LEAD_MANAGE", "SURVEY_MANAGE", "QUOTATION_MANAGE");
-        permissions.findAll().stream().filter(permission -> salesPermissions.contains(permission.getCode()))
-                .forEach(salesRole.getPermissions()::add);
-        roles.save(salesRole);
+        provisionEmployeeRoles(tenant.getId());
+        seedCategories(tenant.getId());
 
         var admin = new AppUser();
         admin.setId(UUID.randomUUID());
@@ -190,8 +187,8 @@ public class AuthLifecycleService {
         if (name == null || name.isBlank() || email == null || email.isBlank()
                 || password == null || password.length() < 12)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name, email and a password of at least 12 characters are required");
-        if (!"SALES_EXECUTIVE".equals(roleName))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only the SALES_EXECUTIVE role can be provisioned through this endpoint");
+        if (roleName == null || !com.saumyasolar.config.DataSeeder.employeeRolePermissions().containsKey(roleName))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select a supported employee role");
         if (users.findByEmailIgnoreCase(email).isPresent())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email exists");
         var role = roles.findByNameAndTenantId(roleName, tenantId)
@@ -220,6 +217,38 @@ public class AuthLifecycleService {
         employee.setEnabled(enabled);
         employee.setTokenVersion(employee.getTokenVersion() + 1);
         return users.save(employee);
+    }
+
+    private void provisionEmployeeRoles(UUID tenantId) {
+        var permissionByCode = permissions.findAll().stream()
+                .collect(java.util.stream.Collectors.toMap(Permission::getCode, x -> x));
+        com.saumyasolar.config.DataSeeder.employeeRolePermissions().forEach((name, codes) -> {
+            var role = roles.findByNameAndTenantId(name, tenantId).orElseGet(() -> {
+                var created = new com.saumyasolar.domain.Role();
+                created.setId(UUID.randomUUID());
+                created.setTenantId(tenantId);
+                created.setName(name);
+                return created;
+            });
+            codes.stream().map(permissionByCode::get).filter(java.util.Objects::nonNull)
+                    .forEach(role.getPermissions()::add);
+            roles.save(role);
+        });
+    }
+
+    private void seedCategories(UUID tenantId) {
+        for (String name : java.util.List.of("Solar Panels", "Inverters", "Batteries", "Mounting Structures",
+                "Cables", "AC/DC Distribution Boxes", "Solar Accessories")) {
+            categories.findByNameAndTenantId(name, tenantId).orElseGet(() -> {
+                var category = new com.saumyasolar.domain.ProductCategory();
+                category.setId(UUID.randomUUID());
+                category.setTenantId(tenantId);
+                category.setName(name);
+                category.setDescription("Solar catalogue category");
+                category.setActive(true);
+                return categories.save(category);
+            });
+        }
     }
 
     @Transactional
