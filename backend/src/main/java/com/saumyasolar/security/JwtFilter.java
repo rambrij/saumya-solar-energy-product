@@ -35,8 +35,9 @@ public class JwtFilter extends OncePerRequestFilter {
             var user = users.findById(tokenPrincipal.userId()).filter(AppUser::isEnabled)
                     .orElseThrow(() -> new IllegalArgumentException("User is disabled or no longer exists"));
             if (!java.util.Objects.equals(user.getTenantId(), tokenPrincipal.tenantId())
-                    || !java.util.Objects.equals(user.getAccountType(), tokenPrincipal.accountType()))
-                throw new IllegalArgumentException("User security context changed");
+                    || !java.util.Objects.equals(user.getAccountType(), tokenPrincipal.accountType())
+                    || user.getTokenVersion() != tokenPrincipal.tokenVersion())
+                throw new IllegalArgumentException("User security context changed or token was revoked");
             if (user.getTenantId() != null && tenants.findById(user.getTenantId())
                     .filter(t -> "ACTIVE".equals(t.getStatus())).isEmpty())
                 throw new IllegalArgumentException("Tenant is suspended");
