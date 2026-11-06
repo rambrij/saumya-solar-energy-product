@@ -2,7 +2,7 @@
 
 This branch is an incremental hardening and completion branch for the existing Release 1 identity/tenant foundation and Release 2 sales lifecycle. It preserves the existing Spring Boot, MySQL, React, and Docker Compose architecture.
 
-> **Validation honesty:** Source changes are committed, but a successful Maven build, frontend build, database migration run, and end-to-end test run have not yet been observed for this branch. Do not treat any row below as production-ready solely because an entity, API, or screen exists.
+> **Validation honesty:** Commit `7b7610e09eb2ad76948800c54384fd36c6bd8e4a` passed backend Maven tests, frontend production build, and MySQL 8.4 migration validation through V9. The later dropdown-refresh frontend change is being revalidated by GitHub Actions. Release 1/2 still have the explicitly listed limitations below; this is not a production-readiness claim.
 
 ## Technology
 
@@ -53,17 +53,19 @@ Change or remove seeded credentials before deploying outside local development.
 
 - Platform account: platform tenant list and tenant creation with initial vendor-admin provisioning.
 - Vendor account: catalogue, customers, enquiries, leads, surveys, quotations, orders and employee lookup, subject to the permissions carried in the session.
-- Customer account: quotations and own orders.
+- Customer account: active catalogue categories/products/packages, request-a-quotation form, own enquiries, quotations with accept/reject actions, and own orders.
+- Vendor Admin employee creation: role choices include SALES_EXECUTIVE, SALES_MANAGER, MANAGER, INVENTORY_MANAGER, SERVICE_ENGINEER, ACCOUNTANT, INSTALLER and OPERATIONS_MANAGER. Privileged platform and vendor-admin roles cannot be assigned through the employee form.
+- Sales roles receive catalogue read permission separately from catalogue management permission.
 
 The current frontend is a compact role-aware portal, not a complete set of independently routed production layouts. Hiding a menu is not an authorization control; backend checks are required and remain authoritative.
 
 ## Business workflow supported by the current code
 
 1. Platform Admin creates a tenant and its initial Vendor Admin; the vendor creates categories, products, packages, customers and enquiries.
-2. Vendor converts an enquiry into a lead, assigns a same-tenant employee, and tracks lead stage/follow-up.
+2. Customer can browse the active tenant catalogue and submit an enquiry; vendor can also capture an enquiry. Vendor converts an enquiry into a lead, assigns a same-tenant employee, and tracks lead stage/follow-up and assignment history.
 3. Vendor schedules a site survey for a same-tenant lead.
 4. Vendor creates a quotation with a customer, optional lead/survey and catalogue line references.
-5. Discounts above the current 10% threshold enter pending approval; an authorized user approves or rejects.
+5. Each vendor configures its own discount approval threshold in Vendor Settings. Quotations above that threshold enter pending approval; a user with DISCOUNT_APPROVE approves or rejects.
 6. Vendor sends a draft quotation.
 7. The customer can accept or reject a quotation visible in their tenant/customer scope.
 8. Vendor converts an accepted quotation to an order with an `Idempotency-Key`.
@@ -86,15 +88,15 @@ Statuses describe the code currently present in this branch, not an assumption b
 | Platform/vendor/customer layouts | Partial | Partial | N/A | `frontend/src/main.tsx`; account-type-specific views exist, but they are compact conditional views rather than complete route/layout experiences. |
 | Tenant-context enforcement | Partial | Partial | Partial | Tenant ID comes from authenticated user state; JWT filter rechecks account enabled state, tenant status and current role/permission data on every request. Tenant-filtered queries and cross-reference checks cover key sales references; remaining endpoints and tenant-composite FK constraints need broader coverage. |
 | Cross-tenant integration tests | Partial | N/A | Partial | `Release12TenantIntegrationTest` exercises HTTP authorization denial, foreign category reference rejection, tenant-filtered product reads, foreign employee assignment rejection and customer registration. H2 is used for the integration profile; update/delete/ID-guessing and MySQL migration integration coverage remain outstanding. |
-| Product categories | Partial | Partial | Implemented | Entity/repository, tenant-filtered list and create form. Update/delete, uniqueness/validation UX and lifecycle screens absent. |
-| Products | Partial | Partial | Implemented | Entity/repository, category tenant check, create/list. No full update/delete UI; input validation and lifecycle controls incomplete. |
-| Configurable solar packages | Partial | Partial | Implemented | Package and package-item entities; API validates same-tenant active products and stores optional-item metadata. UI configures multiple product components and quantities; package edit/delete and optional-component editing remain absent. |
+| Product categories | Implemented | Implemented | Implemented | Tenant categories are seeded for every vendor: Solar Panels, Inverters, Batteries, Mounting Structures, Cables, AC/DC Distribution Boxes and Solar Accessories. Vendor can list/create categories; edit/delete UI remains absent. V5/V6 seed categories and make product category mandatory. |
+| Products | Partial | Implemented | Implemented | Product creation UI requires a category selector; backend requires an active category belonging to the same tenant and validates price/tax. Product update/delete, SKU editing and stock attributes remain absent. |
+| Configurable solar packages | Partial | Implemented | Implemented | UI supports multiple product components, positive quantities and optional components. Backend validates active same-tenant products and persists package items transactionally. Package edit/delete and detailed technical attributes remain absent. |
 | Customers | Partial | Partial | Implemented | Customer create/list and customer profiles exist. Search, update, detail, duplicate handling and complete customer self-service onboarding are absent. |
 | Enquiries and leads | Partial | Partial | Implemented | Enquiry create/list, one-time conversion, lead update/history. UI stage editing is prompt-based; search, full assignment form and history view are absent. |
-| Lead assignment | Partial | Partial | Implemented | Backend validates assigned employee belongs to tenant; UI does not provide a complete assignment/reassignment workflow or history screen. |
+| Lead assignment | Partial | Partial | Implemented | Same-tenant enabled employee validation, assignment/reassignment persistence and assignment history (`LeadHistory`, V8 migration, GET /leads/{id}/history). UI offers employee choices and a history view; assignment UI still uses a simple prompt. |
 | Site surveys | Partial | Partial | Implemented | Survey create/list and same-tenant lead/employee checks. Full edit, scheduling calendar, evidence/attachments and detailed completion workflow absent. |
 | Versioned quotations | Partial | Partial | Implemented | `QuotationRevisionService` clones revision line snapshots; server derives product prices/tax from tenant catalogue; tenant-scoped `GET /quotations/{id}/revisions` and a history action exist. Full quote editing/terms and browser workflow tests remain absent. |
-| Discount approval | Partial | Partial | Implemented | Hard-coded >10% threshold and approval permission check. Configurable threshold/authority matrix and complete approval history are absent. |
+| Discount approval | Partial | Implemented | Implemented | Tenant-specific threshold is stored on Tenant and configurable in Vendor Settings via GET/PATCH /tenant/settings; quotations above it require DISCOUNT_APPROVE. Multi-level approval matrix and approval audit history remain absent. V9 adds the threshold and permission. |
 | Quotation PDF generation | Partial | Partial | N/A | Authenticated `GET /api/v1/quotations/{id}/pdf`; current PDF only contains quotation number, revision, status and total, not a complete customer-facing line-item/tax/terms document. |
 | Customer quotation acceptance/rejection | Implemented | Implemented | Implemented | Customer ownership, SENT state and validity are checked; decision actor/time are persisted by V3 migration against the exact quotation revision. Full browser workflow automation remains outstanding. |
 | Idempotent quotation-to-order conversion | Partial | Partial | Implemented | Idempotency key is bound to its quotation, duplicate conversion is checked, unique DB constraints exist and a pessimistic quotation lock serializes concurrent conversion. Dedicated concurrency/retry integration tests remain outstanding. |
@@ -115,7 +117,13 @@ Statuses describe the code currently present in this branch, not an assumption b
 - Added configurable package component selection with per-product quantities.
 - Rejected disabled accounts at login and applied DTO validation annotations in authentication controllers.
 - Frontend logout now calls the refresh-token logout endpoint before clearing the browser session; the session type includes the optional refresh token returned by the authentication API.
-- Added a GitHub Actions workflow for Maven verification and frontend production build.
+- Added a GitHub Actions workflow for Maven verification, frontend production build and MySQL 8.4 migration validation through V9.
+- Added tenant-provisioned employee roles and a role selector; privileged roles are excluded.
+- Added idempotent solar category bootstrap and required product-category validation.
+- Added customer catalogue browsing, customer quotation requests, own enquiries, quotation decisions and own orders.
+- Refreshed vendor lookup dropdown data after create/convert actions so new leads, surveys, products and customers become selectable without reloading the page.
+- Added tenant-specific configurable discount approval thresholds and a Vendor Settings screen.
+- Added lead assignment audit fields, history API and a UI history view.
 
 These changes are a hardening step, not proof that every Release 1/2 acceptance criterion is complete.
 
@@ -143,7 +151,7 @@ docker compose build --no-cache
 docker compose up
 ```
 
-A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. The run for commit `29aba58005cbfc169f52c2d8f535e040379f4f32` completed successfully for all three jobs: backend `mvn clean verify` (including H2-backed HTTP integration tests), frontend `npm run build`, and V1–V4 migration application/verification on MySQL 8.4. The current branch head adds documentation only after that successful code validation. A successful compile/build does not replace API integration, tenant-isolation, concurrency or full workflow tests.
+A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. The run for commit `7b7610e09eb2ad76948800c54384fd36c6bd8e4a` completed successfully for all three jobs: backend `mvn clean verify` (including H2-backed HTTP integration tests for registration, tenant provisioning, employee roles, category/product/package creation, customer enquiry, survey, quotation acceptance and idempotent order conversion), frontend `npm run build`, and V1–V9 migration application/verification on MySQL 8.4. A subsequent lookup-refresh frontend change is being revalidated on the current branch head.
 
 ## Remaining release blockers
 
