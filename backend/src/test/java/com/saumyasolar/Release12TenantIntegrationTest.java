@@ -6,6 +6,7 @@ import com.saumyasolar.domain.AppUser;
 import com.saumyasolar.domain.Enquiry;
 import com.saumyasolar.domain.Product;
 import com.saumyasolar.domain.ProductCategory;
+import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.AppUserRepository;
 import com.saumyasolar.repo.EnquiryRepository;
@@ -41,6 +42,7 @@ class Release12TenantIntegrationTest {
     @Autowired ProductCategoryRepository categories;
     @Autowired ProductRepository products;
     @Autowired EnquiryRepository enquiries;
+    @Autowired CustomerProfileRepository customerProfiles;
 
     UUID vendorTenantId;
 
@@ -48,6 +50,24 @@ class Release12TenantIntegrationTest {
     void findSeedVendorTenant() {
         vendorTenantId = users.findByEmailIgnoreCase("admin@saumya.local")
                 .orElseThrow().getTenantId();
+    }
+
+    @Test
+    void customerRegistrationCreatesProfileAndCanOpenCustomerQuotationList() throws Exception {
+        var email = "registered-" + UUID.randomUUID() + "@example.test";
+        var body = """
+                {"storeSlug":"saumya-solar","name":"Registered Customer","email":"%s","password":"StrongPassphrase-2026"}
+                """.formatted(email);
+        var response = mvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var token = json.readTree(response).get("accessToken").asText();
+        var customer = users.findByEmailIgnoreCase(email).orElseThrow();
+        assertTrue(customerProfiles.findByTenantIdOrderByIdDesc(customer.getTenantId()).stream()
+                .anyMatch(profile -> customer.getId().equals(profile.getUserId())));
+        mvc.perform(get("/api/v1/quotations").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
     }
 
     @Test
