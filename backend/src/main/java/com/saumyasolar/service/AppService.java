@@ -437,6 +437,8 @@ public class AppService {
             if (!"accept".equals(action) && !"reject".equals(action))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN);
             q.setStatus("accept".equals(action) ? "ACCEPTED" : "REJECTED");
+            q.setDecisionBy(p.userId());
+            q.setDecisionAt(Instant.now());
             return quotes.save(q);
         }
         vendor(p);
