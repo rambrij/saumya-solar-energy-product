@@ -473,7 +473,7 @@ public class AppService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key already belongs to another quotation");
             return existing;
         }
-        var q = quotes.findByIdAndTenantId(qid, p.tenantId()).orElseThrow();
+        var q = quotes.findByIdAndTenantIdForUpdate(qid, p.tenantId()).orElseThrow();
         if (!"ACCEPTED".equals(q.getStatus())) throw new ResponseStatusException(HttpStatus.CONFLICT);
         var existingOrder = orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
                 .filter(o -> qid.equals(o.getQuotationId())).findFirst();
