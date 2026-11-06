@@ -77,3 +77,5 @@ jobs:
         run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V5__permission_role_and_catalog_bootstrap.sql
       - name: Apply V6 required product category migration
         run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V6__require_product_category.sql
+      - name: Apply V7 catalogue read permission migration
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V7__catalogue_read_permission.sql
