@@ -8,7 +8,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.util.*;
 @Configuration
 public class DataSeeder {
- private static final List<String> PERMISSIONS=List.of("PLATFORM_MANAGE","CATALOG_MANAGE","CUSTOMER_MANAGE","LEAD_MANAGE","SURVEY_MANAGE","QUOTATION_MANAGE","DISCOUNT_APPROVE","ORDER_CREATE","USER_VIEW","USER_MANAGE","INVENTORY_MANAGE","SERVICE_MANAGE","FINANCE_MANAGE","REPORT_VIEW");
+ private static final List<String> PERMISSIONS=List.of("PLATFORM_MANAGE","CATALOG_MANAGE","CATALOG_VIEW","CUSTOMER_MANAGE","LEAD_MANAGE","SURVEY_MANAGE","QUOTATION_MANAGE","DISCOUNT_APPROVE","ORDER_CREATE","USER_VIEW","USER_MANAGE","INVENTORY_MANAGE","SERVICE_MANAGE","FINANCE_MANAGE","REPORT_VIEW");
  private static final List<String> CATEGORIES=List.of("Solar Panels","Inverters","Batteries","Mounting Structures","Cables","AC/DC Distribution Boxes","Solar Accessories");
  @Bean CommandLineRunner seedData(TenantRepository tenants,PermissionRepository permissions,RoleRepository roles,AppUserRepository users,CustomerProfileRepository customers,ProductCategoryRepository categories,PasswordEncoder encoder){
   return args->{
@@ -30,8 +30,8 @@ public class DataSeeder {
   };
  }
  public static Map<String,List<String>> employeeRolePermissions(){return Map.ofEntries(
-  Map.entry("SALES_EXECUTIVE",List.of("CUSTOMER_MANAGE","LEAD_MANAGE","SURVEY_MANAGE","QUOTATION_MANAGE","ORDER_CREATE")),
-  Map.entry("SALES_MANAGER",List.of("CUSTOMER_MANAGE","LEAD_MANAGE","SURVEY_MANAGE","QUOTATION_MANAGE","DISCOUNT_APPROVE","ORDER_CREATE","REPORT_VIEW")),
+  Map.entry("SALES_EXECUTIVE",List.of("CATALOG_VIEW","CUSTOMER_MANAGE","LEAD_MANAGE","SURVEY_MANAGE","QUOTATION_MANAGE","ORDER_CREATE")),
+  Map.entry("SALES_MANAGER",List.of("CATALOG_VIEW","CUSTOMER_MANAGE","LEAD_MANAGE","SURVEY_MANAGE","QUOTATION_MANAGE","DISCOUNT_APPROVE","ORDER_CREATE","REPORT_VIEW")),
   Map.entry("MANAGER",List.of("CUSTOMER_MANAGE","LEAD_MANAGE","SURVEY_MANAGE","QUOTATION_MANAGE","DISCOUNT_APPROVE","ORDER_CREATE","REPORT_VIEW")),
   Map.entry("INVENTORY_MANAGER",List.of("CATALOG_MANAGE","INVENTORY_MANAGE","ORDER_CREATE")),
   Map.entry("SERVICE_ENGINEER",List.of("SURVEY_MANAGE","SERVICE_MANAGE")),
