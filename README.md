@@ -2,7 +2,7 @@
 
 This branch is an incremental hardening and completion branch for the existing Release 1 identity/tenant foundation and Release 2 sales lifecycle. It preserves the existing Spring Boot, MySQL, React, and Docker Compose architecture.
 
-> **Validation honesty:** Commit `7b7610e09eb2ad76948800c54384fd36c6bd8e4a` passed backend Maven tests, frontend production build, and MySQL 8.4 migration validation through V9. The dropdown-refresh frontend change at commit `1c14af5033b91476f7d7cdfbcfbecfa37ae19097` also passed all three CI jobs; the current branch head adds documentation only after that validation. Release 1/2 still have the explicitly listed limitations below; this is not a production-readiness claim.
+> **Validation honesty:** Commit `a833e33dc036f244e4d7ccf23f99f78222a5a019` passed backend Maven tests, frontend production build, and MySQL 8.4 migration validation through V10. The current branch head adds documentation only after that successful code validation. Release 1/2 still have the explicitly listed limitations below; this is not a production-readiness claim.
 
 ## Technology
 
@@ -152,7 +152,7 @@ docker compose build --no-cache
 docker compose up
 ```
 
-A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. The run for commit `7b7610e09eb2ad76948800c54384fd36c6bd8e4a` completed successfully for all three jobs: backend `mvn clean verify` (including H2-backed HTTP integration tests for registration, tenant provisioning, employee roles, category/product/package creation, customer enquiry, survey, quotation acceptance and idempotent order conversion), frontend `npm run build`, and V1–V10 migration application/verification on MySQL 8.4. The subsequent lookup-refresh frontend change at commit `1c14af5033b91476f7d7cdfbcfbecfa37ae19097` also passed all three CI jobs.
+A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. The run for commit `a833e33dc036f244e4d7ccf23f99f78222a5a019` completed successfully for all three jobs: backend `mvn clean verify` (including H2-backed HTTP integration tests for registration, tenant provisioning, employee roles, category/product/package creation, customer enquiry, survey, quotation acceptance and idempotent order conversion), frontend `npm run build`, and V1–V10 migration application/verification on MySQL 8.4.
 
 ## Remaining release blockers
 
