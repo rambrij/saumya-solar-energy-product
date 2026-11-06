@@ -51,7 +51,7 @@ Change or remove seeded credentials before deploying outside local development.
 
 ## Role navigation
 
-- Platform account: platform tenant list and tenant creation.
+- Platform account: platform tenant list and tenant creation with initial vendor-admin provisioning.
 - Vendor account: catalogue, customers, enquiries, leads, surveys, quotations, orders and employee lookup, subject to the permissions carried in the session.
 - Customer account: quotations and own orders.
 
@@ -59,7 +59,7 @@ The current frontend is a compact role-aware portal, not a complete set of indep
 
 ## Business workflow supported by the current code
 
-1. Vendor creates categories, products, packages, customers and enquiries.
+1. Platform Admin creates a tenant and its initial Vendor Admin; the vendor creates categories, products, packages, customers and enquiries.
 2. Vendor converts an enquiry into a lead, assigns a same-tenant employee, and tracks lead stage/follow-up.
 3. Vendor schedules a site survey for a same-tenant lead.
 4. Vendor creates a quotation with a customer, optional lead/survey and catalogue line references.
@@ -76,7 +76,7 @@ Statuses describe the code currently present in this branch, not an assumption b
 
 | Feature | Backend | Frontend | Database | Issues / evidence |
 |---|---|---|---|---|
-| Tenant and vendor management | Partial | Partial | Implemented | `Tenant`, `TenantRepository`, `POST/GET /api/v1/tenants`, `V1__complete_release2.sql`; tenant creation exists, but vendor-admin provisioning, edit/activation lifecycle and complete tenant management UI are absent. |
+| Tenant and vendor management | Partial | Partial | Implemented | `Tenant`, `TenantRepository`, `POST/GET /api/v1/tenants`; platform permission required and tenant creation transaction provisions an initial tenant-scoped VENDOR_ADMIN. Tenant edit/activation lifecycle and full management UI remain absent. |
 | Customer registration | Implemented | Missing | Implemented | `POST /api/v1/auth/register`, `AuthLifecycleService.register`, `app_user`, `customer_profile`; registration API exists, no registration UI or email verification. |
 | Access and refresh tokens | Partial | Partial | Implemented | `JwtService`, `AuthLifecycleService`, `refresh_token`; access JWT is 2 hours; refresh rotates and reuse now revokes remaining refresh sessions. Access-token revocation/shorter lifetime and automated lifecycle tests remain outstanding. |
 | Logout and token revocation | Partial | Partial | Implemented | `POST /api/v1/auth/logout`; frontend now calls it before clearing local session. Existing access JWT remains usable until expiry. |
@@ -108,6 +108,7 @@ Statuses describe the code currently present in this branch, not an assumption b
 - Added quotation action state checks and approval permission checks.
 - Bound idempotency keys to the quotation they originally created and guarded duplicate order creation.
 - Added refresh-token reuse detection and refresh-session revocation after password reset.
+- Added platform-only tenant creation that atomically provisions the initial tenant-scoped Vendor Admin.
 - Added vendor-admin-only employee provisioning for the SALES_EXECUTIVE role, with tenant scoping, password hashing and an additive Flyway permission migration.
 - Rejected disabled accounts at login and applied DTO validation annotations in authentication controllers.
 - Frontend logout now calls the refresh-token logout endpoint before clearing the browser session; the session type includes the optional refresh token returned by the authentication API.
@@ -144,7 +145,7 @@ A GitHub Actions workflow is included at `.github/workflows/release-validation.y
 ## Remaining release blockers
 
 1. Complete authorization coverage for every controller action, including platform tenant operations and customer endpoints.
-2. Add vendor-admin provisioning, vendor employee create/update/disable and role assignment.
+2. Add tenant activation/deactivation and vendor employee update/disable plus configurable role assignment.
 3. Add registration, forgot/reset-password and session-expiry/refresh UX; deliver reset links through a configured email provider.
 4. Revoke or otherwise invalidate access tokens on logout/password reset; consider HttpOnly secure cookies for refresh tokens instead of localStorage.
 5. Add database-level tenant-composite constraints for all tenant-owned relationships.
