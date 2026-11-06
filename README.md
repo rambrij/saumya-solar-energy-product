@@ -77,10 +77,10 @@ Statuses describe the code currently present in this branch, not an assumption b
 | Feature | Backend | Frontend | Database | Issues / evidence |
 |---|---|---|---|---|
 | Tenant and vendor management | Partial | Partial | Implemented | `Tenant`, `TenantRepository`, `POST/GET /api/v1/tenants`; platform permission required; tenant creation transaction provisions an initial tenant-scoped VENDOR_ADMIN and platform can activate/suspend tenants. Full tenant editing and broader management UI remain absent. |
-| Customer registration | Implemented | Missing | Implemented | `POST /api/v1/auth/register`, `AuthLifecycleService.register`, `app_user`, `customer_profile`; registration API exists, no registration UI or email verification. |
+| Customer registration | Implemented | Partial | Implemented | `POST /api/v1/auth/register`, `AuthLifecycleService.register`, customer registration form; email verification and duplicate profile recovery are absent. |
 | Access and refresh tokens | Partial | Partial | Implemented | `JwtService`, `AuthLifecycleService`, `refresh_token`; access JWT is 2 hours; refresh rotates and reuse now revokes remaining refresh sessions. Access-token revocation/shorter lifetime and automated lifecycle tests remain outstanding. |
 | Logout and token revocation | Partial | Partial | Implemented | `POST /api/v1/auth/logout`; frontend now calls it before clearing local session. Existing access JWT remains usable until expiry. |
-| Password reset | Partial | Missing | Implemented | `PasswordResetToken`, forgot/reset endpoints; single-use and expiry checks, reset revokes refresh sessions. Email delivery and reset UI are absent; development reset token is returned by API. |
+| Password reset | Partial | Partial | Implemented | `PasswordResetToken`, forgot/reset endpoints and UI; single-use and expiry checks, reset revokes refresh sessions. Email delivery is absent; development reset token is returned by API. |
 | Roles and permissions | Partial | Partial | Implemented | `Role`, `Permission`, `SecurityConfig`, `AppService`; permission checks added to several vendor operations. Not all endpoints/actions are consistently permission-guarded; role administration is absent. |
 | Vendor employee management | Partial | Partial | Implemented | `POST/GET /api/v1/users` and `PATCH /api/v1/users/{id}/enabled`; vendor admin can provision, list and enable/disable same-tenant SALES_EXECUTIVE accounts. Edit and broader configurable role assignment remain absent. `V2__vendor_employee_management_permission.sql` grants USER_MANAGE to existing vendor admin roles. |
 | Platform/vendor/customer layouts | Partial | Partial | N/A | `frontend/src/main.tsx`; account-type-specific views exist, but they are compact conditional views rather than complete route/layout experiences. |
@@ -88,7 +88,7 @@ Statuses describe the code currently present in this branch, not an assumption b
 | Cross-tenant integration tests | Partial | N/A | N/A | `Release2SecurityTest` now includes service-level permission and cross-tenant category-reference negative tests. Real HTTP/database tests for cross-tenant read/update/delete/ID guessing are still missing. |
 | Product categories | Partial | Partial | Implemented | Entity/repository, tenant-filtered list and create form. Update/delete, uniqueness/validation UX and lifecycle screens absent. |
 | Products | Partial | Partial | Implemented | Entity/repository, category tenant check, create/list. No full update/delete UI; input validation and lifecycle controls incomplete. |
-| Configurable solar packages | Partial | Partial | Implemented | Package and package-item entities; API supports item composition and validates same-tenant active products. UI does not configure package items or optional components. |
+| Configurable solar packages | Partial | Partial | Implemented | Package and package-item entities; API validates same-tenant active products and stores optional-item metadata. UI configures multiple product components and quantities; package edit/delete and optional-component editing remain absent. |
 | Customers | Partial | Partial | Implemented | Customer create/list and customer profiles exist. Search, update, detail, duplicate handling and complete customer self-service onboarding are absent. |
 | Enquiries and leads | Partial | Partial | Implemented | Enquiry create/list, one-time conversion, lead update/history. UI stage editing is prompt-based; search, full assignment form and history view are absent. |
 | Lead assignment | Partial | Partial | Implemented | Backend validates assigned employee belongs to tenant; UI does not provide a complete assignment/reassignment workflow or history screen. |
@@ -110,6 +110,8 @@ Statuses describe the code currently present in this branch, not an assumption b
 - Added refresh-token reuse detection and refresh-session revocation after password reset.
 - Added platform-only tenant creation that atomically provisions the initial tenant-scoped Vendor Admin, plus tenant activate/suspend controls.
 - Added vendor-admin-only employee provisioning and enable/disable for the SALES_EXECUTIVE role, with tenant scoping, password hashing and an additive Flyway permission migration.
+- Added customer registration and password-reset forms, plus lead assignment/follow-up and site-survey scheduling fields.
+- Added configurable package component selection with per-product quantities.
 - Rejected disabled accounts at login and applied DTO validation annotations in authentication controllers.
 - Frontend logout now calls the refresh-token logout endpoint before clearing the browser session; the session type includes the optional refresh token returned by the authentication API.
 - Added a GitHub Actions workflow for Maven verification and frontend production build.
