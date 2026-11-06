@@ -201,9 +201,16 @@ class Release12TenantIntegrationTest {
     @Test
     void productListDoesNotExposeAnotherTenantsProducts() throws Exception {
         var foreignTenant = newTenant();
+        var foreignCategory = new ProductCategory();
+        foreignCategory.setId(UUID.randomUUID());
+        foreignCategory.setTenantId(foreignTenant.getId());
+        foreignCategory.setName("Foreign category " + UUID.randomUUID());
+        foreignCategory.setActive(true);
+        categories.save(foreignCategory);
         var foreignProduct = new Product();
         foreignProduct.setId(UUID.randomUUID());
         foreignProduct.setTenantId(foreignTenant.getId());
+        foreignProduct.setCategoryId(foreignCategory.getId());
         foreignProduct.setSku("FOREIGN-" + UUID.randomUUID());
         foreignProduct.setName("Foreign product");
         foreignProduct.setPrice(BigDecimal.TEN);
