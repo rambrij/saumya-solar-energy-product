@@ -110,7 +110,7 @@ Statuses describe the code currently present in this branch, not an assumption b
 - Added refresh-token reuse detection and refresh-session revocation after password reset.
 - Added vendor-admin-only employee provisioning for the SALES_EXECUTIVE role, with tenant scoping, password hashing and an additive Flyway permission migration.
 - Rejected disabled accounts at login and applied DTO validation annotations in authentication controllers.
-- Frontend logout now calls the refresh-token logout endpoint before clearing the browser session.
+- Frontend logout now calls the refresh-token logout endpoint before clearing the browser session; the session type includes the optional refresh token returned by the authentication API.
 - Added a GitHub Actions workflow for Maven verification and frontend production build.
 
 These changes are a hardening step, not proof that every Release 1/2 acceptance criterion is complete.
