@@ -17,6 +17,7 @@ public class Product {
     @Id
     UUID id;
     UUID tenantId;
+    @Column(nullable = false)
     UUID categoryId;
     String sku;
     String name;
