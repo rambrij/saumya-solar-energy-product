@@ -148,6 +148,15 @@ public class AuthLifecycleService {
                 .forEach(vendorAdmin.getPermissions()::add);
         roles.save(vendorAdmin);
 
+        var salesRole = new com.saumyasolar.domain.Role();
+        salesRole.setId(UUID.randomUUID());
+        salesRole.setTenantId(tenant.getId());
+        salesRole.setName("SALES_EXECUTIVE");
+        var salesPermissions = java.util.Set.of("CUSTOMER_MANAGE", "LEAD_MANAGE", "SURVEY_MANAGE", "QUOTATION_MANAGE");
+        permissions.findAll().stream().filter(permission -> salesPermissions.contains(permission.getCode()))
+                .forEach(salesRole.getPermissions()::add);
+        roles.save(salesRole);
+
         var admin = new AppUser();
         admin.setId(UUID.randomUUID());
         admin.setTenantId(tenant.getId());
