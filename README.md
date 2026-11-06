@@ -85,7 +85,7 @@ Statuses describe the code currently present in this branch, not an assumption b
 | Vendor employee management | Partial | Partial | Implemented | `POST/GET /api/v1/users` and `PATCH /api/v1/users/{id}/enabled`; vendor admin can provision, list and enable/disable same-tenant SALES_EXECUTIVE accounts. Edit and broader configurable role assignment remain absent. `V2__vendor_employee_management_permission.sql` grants USER_MANAGE to existing vendor admin roles. |
 | Platform/vendor/customer layouts | Partial | Partial | N/A | `frontend/src/main.tsx`; account-type-specific views exist, but they are compact conditional views rather than complete route/layout experiences. |
 | Tenant-context enforcement | Partial | Partial | Partial | Tenant ID comes from JWT principal and tenant-filtered repository methods; cross-reference checks added for categories, package products, assigned employees, customer/lead/survey references. More endpoint coverage and tenant-composite FK constraints are needed. |
-| Cross-tenant integration tests | Partial | N/A | N/A | `Release2SecurityTest` now includes service-level permission and cross-tenant category-reference negative tests. Real HTTP/database tests for cross-tenant read/update/delete/ID guessing are still missing. |
+| Cross-tenant integration tests | Partial | N/A | Partial | `Release12TenantIntegrationTest` exercises HTTP authorization denial, foreign category reference rejection, tenant-filtered product reads, foreign employee assignment rejection and customer registration. H2 is used for the integration profile; update/delete/ID-guessing and MySQL migration integration coverage remain outstanding. |
 | Product categories | Partial | Partial | Implemented | Entity/repository, tenant-filtered list and create form. Update/delete, uniqueness/validation UX and lifecycle screens absent. |
 | Products | Partial | Partial | Implemented | Entity/repository, category tenant check, create/list. No full update/delete UI; input validation and lifecycle controls incomplete. |
 | Configurable solar packages | Partial | Partial | Implemented | Package and package-item entities; API validates same-tenant active products and stores optional-item metadata. UI configures multiple product components and quantities; package edit/delete and optional-component editing remain absent. |
@@ -96,8 +96,8 @@ Statuses describe the code currently present in this branch, not an assumption b
 | Versioned quotations | Partial | Partial | Implemented | `QuotationRevisionService` clones revision line snapshots; server now derives product prices/tax from tenant catalogue. Revision history UI and full quote terms are absent. |
 | Discount approval | Partial | Partial | Implemented | Hard-coded >10% threshold and approval permission check. Configurable threshold/authority matrix and complete approval history are absent. |
 | Quotation PDF generation | Partial | Partial | N/A | Authenticated `GET /api/v1/quotations/{id}/pdf`; current PDF only contains quotation number, revision, status and total, not a complete customer-facing line-item/tax/terms document. |
-| Customer quotation acceptance/rejection | Partial | Implemented | Implemented | Customer list is filtered to own customer profile; action checks owner, SENT state and validity. Acceptance actor/time/version audit fields and comprehensive tests are absent. |
-| Idempotent quotation-to-order conversion | Partial | Partial | Implemented | Idempotency record unique key and unique order quotation; same key cannot be reused for a different quotation and duplicate quotation conversion is checked. Concurrent race handling and concurrency tests remain outstanding. |
+| Customer quotation acceptance/rejection | Implemented | Implemented | Implemented | Customer ownership, SENT state and validity are checked; decision actor/time are persisted by V3 migration against the exact quotation revision. Full browser workflow automation remains outstanding. |
+| Idempotent quotation-to-order conversion | Partial | Partial | Implemented | Idempotency key is bound to its quotation, duplicate conversion is checked, unique DB constraints exist and a pessimistic quotation lock serializes concurrent conversion. Dedicated concurrency/retry integration tests remain outstanding. |
 
 ## Security hardening committed on this branch
 
@@ -142,7 +142,7 @@ docker compose build --no-cache
 docker compose up
 ```
 
-A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. The run for commit `3cbd0a4537df2f34b4b8917b8e284629be304340` completed successfully for backend `mvn clean verify` and frontend `npm run build`. Later authentication transaction hardening is being revalidated by the workflow on the current branch head. A successful compile/build does not replace API integration, tenant-isolation, concurrency or full workflow tests.
+A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. The run for commit `55e191395f3e011ad77126ce29fec32b4c938b2f` completed successfully for backend `mvn clean verify` (including H2-backed HTTP integration tests) and frontend `npm run build`. Subsequent customer-profile registration changes are being revalidated by the workflow on the current branch head. A successful compile/build does not replace API integration, tenant-isolation, concurrency or full workflow tests.
 
 ## Remaining release blockers
 
@@ -156,5 +156,5 @@ A GitHub Actions workflow is included at `.github/workflows/release-validation.y
 8. Generate complete quotation PDFs from immutable revision snapshots.
 9. Persist customer decision actor/time and accepted revision evidence.
 10. Make order conversion safe under concurrent requests with transactional locking/unique constraints and tests.
-11. Add integration tests for all four personas and cross-tenant negative cases.
+11. Extend integration tests to tenant update/delete and identifier-guessing cases, all four personas, quotation lifecycle and order-concurrency retries.
 12. Run and record Maven, frontend, Docker/MySQL migration and end-to-end workflow results before production sign-off.
