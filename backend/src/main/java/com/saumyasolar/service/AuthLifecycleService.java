@@ -49,6 +49,11 @@ public class AuthLifecycleService {
         encoder = e;
     }
     
+    public boolean tenantIsActive(AppUser user) {
+        if (user.getTenantId() == null) return "PLATFORM".equals(user.getAccountType());
+        return tenants.findById(user.getTenantId()).map(t -> "ACTIVE".equals(t.getStatus())).orElse(false);
+    }
+
     public String newRefresh(AppUser u) {
         var x = new RefreshToken();
         x.setId(UUID.randomUUID());
@@ -78,7 +83,7 @@ public class AuthLifecycleService {
         x.setRevoked(true);
         refresh.save(x);
         return users.findById(x.getUserId())
-                .filter(AppUser::isEnabled)
+                .filter(u -> u.isEnabled() && tenantIsActive(u))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
     }
     
