@@ -143,7 +143,7 @@ docker compose build --no-cache
 docker compose up
 ```
 
-A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. The run for commit `06e6c142ca4bd2b52a7ce2037eeb1a0dba579421` completed successfully for backend `mvn clean verify` (including H2-backed HTTP integration tests) and frontend `npm run build`. Subsequent JWT database revalidation changes are being revalidated by the workflow on the current branch head. A successful compile/build does not replace API integration, tenant-isolation, concurrency or full workflow tests.
+A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. The run for commit `29aba58005cbfc169f52c2d8f535e040379f4f32` completed successfully for all three jobs: backend `mvn clean verify` (including H2-backed HTTP integration tests), frontend `npm run build`, and V1–V4 migration application/verification on MySQL 8.4. The current branch head adds documentation only after that successful code validation. A successful compile/build does not replace API integration, tenant-isolation, concurrency or full workflow tests.
 
 ## Remaining release blockers
 
@@ -151,7 +151,7 @@ A GitHub Actions workflow is included at `.github/workflows/release-validation.y
 2. Add vendor employee profile editing and configurable role assignment.
 3. Add registration, forgot/reset-password and session-expiry/refresh UX; deliver reset links through a configured email provider.
 4. Move refresh tokens from localStorage to HttpOnly Secure SameSite cookies and implement automatic refresh/session-expiry UX; access tokens are currently invalidated globally per user on logout/password reset via token version.
-5. Add database-level tenant-composite constraints for all tenant-owned relationships.
+5. Add database-level tenant-composite constraints for all tenant-owned relationships; the V2–V4 migrations are validated against MySQL 8.4 in CI.
 6. Add full CRUD and complete workflows for packages, leads, surveys and quotations.
 7. Make discount policy configurable and add approval history.
 8. Generate complete quotation PDFs from immutable revision snapshots.
