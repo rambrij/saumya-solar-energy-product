@@ -105,6 +105,34 @@ class Release12TenantIntegrationTest {
     }
 
     @Test
+    void logoutRevokesAccessAndRefreshTokens() throws Exception {
+        var loginBody = """
+                {"email":"admin@saumya.local","password":"Admin@123"}
+                """;
+        var loginResponse = mvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON).content(loginBody))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var session = json.readTree(loginResponse);
+        var accessToken = session.get("accessToken").asText();
+        var refreshToken = session.get("refreshToken").asText();
+
+        mvc.perform(post("/api/v1/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(refreshToken)))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"refreshToken":"%s"}
+                                """.formatted(refreshToken)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void customerRegistrationCreatesProfileAndCanOpenCustomerQuotationList() throws Exception {
         var email = "registered-" + UUID.randomUUID() + "@example.test";
         var body = """
