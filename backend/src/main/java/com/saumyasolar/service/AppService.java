@@ -354,6 +354,8 @@ public class AppService {
         l.setCreatedAt(Instant.now());
         leads.save(l);
         history(l, null, "NEW", p.userId(), "Converted from enquiry");
+        if (l.getAssignedUserId() != null)
+            assignmentHistory(l, null, l.getAssignedUserId(), p.userId(), "Initial lead assignment");
         return l;
     }
     
