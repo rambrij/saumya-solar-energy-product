@@ -50,7 +50,8 @@ public final class Models {
             UUID assignedUserId, Instant nextFollowUp, String stage, String reason, String lostReason, UUID leadId,
             Instant scheduledAt, String roofType, BigDecimal usableAreaSqft, String shading,
             BigDecimal sanctionedLoadKw, String notes, String status, UUID surveyId, BigDecimal discountPercent,
-            LocalDate validUntil, List<Line> items, String slug
+            LocalDate validUntil, List<Line> items, String slug, String adminName, String adminEmail,
+            String adminPassword
     ) {
     }
     
