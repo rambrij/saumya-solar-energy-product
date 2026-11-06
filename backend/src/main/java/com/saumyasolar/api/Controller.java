@@ -192,6 +192,11 @@ public class Controller {
     SalesLead lead(@PathVariable UUID id, @RequestBody Input x, Authentication a) {
         return s.updateLead(id, x, p(a));
     }
+
+    @GetMapping("/leads/{id}/history")
+    List<com.saumyasolar.domain.LeadHistory> leadHistory(@PathVariable UUID id, Authentication a) {
+        return s.leadHistory(id, p(a));
+    }
     
     @PostMapping("/surveys")
     SiteSurvey survey(@RequestBody Input x, Authentication a) {
