@@ -21,9 +21,9 @@ public class Tenant {
     String slug;
     String status;
     BigDecimal discountApprovalThreshold = BigDecimal.TEN;
-    @Column(name = "created_at", insertable = false, updatable = false)
+    @Column(name = "created_at")
     Instant createdAt;
-    @Column(name = "updated_at", insertable = false)
+    @Column(name = "updated_at")
     Instant updatedAt;
     String gstin;
     String invoicePrefix = "INV";
