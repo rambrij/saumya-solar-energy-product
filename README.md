@@ -369,6 +369,7 @@ Before production migration, take a verified MySQL backup. Existing tenant recor
 
 ## Finance APIs and workflows
 
+- `GET /api/v1/finance/orders-awaiting-invoice`: finance-authorized eligible order selector.
 - `GET/POST /api/v1/invoices`: list invoices or issue an invoice from an eligible confirmed order milestone.
 - `GET /api/v1/invoices/{id}/items` and `GET /api/v1/invoices/{id}/pdf`: tenant/customer-authorized immutable invoice snapshots and PDF.
 - `POST /api/v1/invoices/{id}/void`: reason-required void; a paid invoice must be refunded first.
