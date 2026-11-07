@@ -91,6 +91,41 @@ class Release4AccessAndPackageTest {
     }
 
     @Test
+    void publicProductCatalogueShowsOnlyActiveProductsForTheRequestedActiveStore() throws Exception {
+        String vendor = token("admin@saumya.local", "Admin@123");
+        String categories = mvc.perform(get("/api/v1/categories").header("Authorization", "Bearer " + vendor))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String categoryId = json.readTree(categories).get(0).get("id").asText();
+        String activeSku = "PUBLIC-" + UUID.randomUUID();
+        mvc.perform(post("/api/v1/catalog/products").header("Authorization", "Bearer " + vendor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"categoryId":"%s","sku":"%s","name":"Public solar module","description":"High efficiency module",
+                                 "manufacturer":"Solar Brand","technology":"Mono PERC","price":12500,"purchasePrice":8000,
+                                 "discountPercent":0,"taxPercent":5,"reorderLevel":0,"active":true,
+                                 "attributesJson":"{\\"capacityKw\\":5}"}
+                                """.formatted(categoryId, activeSku)))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/catalog/products").header("Authorization", "Bearer " + vendor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"categoryId":"%s","sku":"HIDDEN-%s","name":"Inactive module","price":5000,
+                                 "purchasePrice":3000,"discountPercent":0,"taxPercent":5,"reorderLevel":0,"active":false}
+                                """.formatted(categoryId, UUID.randomUUID())))
+                .andExpect(status().isOk());
+
+        String catalogue = mvc.perform(get("/api/v1/public/saumya-solar/products"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        JsonNode rows = json.readTree(catalogue);
+        assertTrue(java.util.stream.StreamSupport.stream(rows.spliterator(), false)
+                .anyMatch(row -> activeSku.equals(row.get("sku").asText())));
+        assertFalse(catalogue.contains("Inactive module"));
+        assertFalse(catalogue.contains("purchasePrice"));
+        assertFalse(catalogue.contains("reorderLevel"));
+        mvc.perform(get("/api/v1/public/unknown-solar/products")).andExpect(status().isNotFound());
+    }
+
+    @Test
     void customerCanReadPublicPackagesAndVendorCanUploadPackageImage() throws Exception {
         String vendor = token("admin@saumya.local", "Admin@123");
         String categories = mvc.perform(get("/api/v1/categories").header("Authorization", "Bearer " + vendor))
