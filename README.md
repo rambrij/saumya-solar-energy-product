@@ -381,6 +381,16 @@ Invoice numbering uses a transactionally incremented per-tenant fiscal-year sequ
 
 **Statutory invoice warning:** this is a GST-ready data model and printable draft invoice, not a legal/tax compliance certification. Confirm vendor/customer GSTIN, place of supply, HSN/SAC, tax rate, invoice series, reverse-charge/e-invoice applicability and tax treatment with the vendor's accountant before statutory production use. The platform does not infer intra-state/inter-state treatment from incomplete address data.
 
+
+### Private service evidence storage (V22)
+
+- `POST /api/v1/service-requests/{ticketId}/attachments` with multipart field `file`.
+- `GET /api/v1/service-requests/{ticketId}/attachments` lists authorized evidence metadata.
+- `GET /api/v1/service-requests/{ticketId}/attachments/{attachmentId}` streams the file only after ticket ownership/assignment authorization.
+- JPEG, PNG, WebP and PDF are accepted; maximum size is 10 MB.
+- Files are stored outside the public `/uploads` resource handler. Docker Compose mounts `solar_private_service_attachments` at `/var/lib/saumya/private-service-attachments`.
+- Configure `SERVICE_ATTACHMENT_DIR` to a persistent private disk path in production. Do not map this directory to a public static web server.
+
 ## Payment gateway configuration
 
 Set `PAYMENT_WEBHOOK_SECRET` in the backend environment. The webhook signature is the lowercase/uppercase-insensitive hexadecimal HMAC-SHA256 of the exact raw request body. Keep this secret server-side only.
