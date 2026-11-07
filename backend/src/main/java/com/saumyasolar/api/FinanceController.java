@@ -51,7 +51,7 @@ public class FinanceController {
             PdfPTable table=new PdfPTable(new float[]{4,1,2,1,2,2});table.setWidthPercentage(100);
             for(String h:new String[]{"Description","Qty","HSN","Tax %","Taxable","Tax"})table.addCell(h);
             for(Object value:lines){var x=(com.saumyasolar.domain.InvoiceItem)value;table.addCell(safe(x.getDescription()));table.addCell(String.valueOf(x.getQuantity()));table.addCell(safe(x.getHsnCode()));table.addCell(String.valueOf(x.getTaxPercent()));table.addCell(String.valueOf(x.getTaxableAmount()));table.addCell(String.valueOf(x.getTaxAmount()));}
-            d.add(table);d.add(new Paragraph("Taxable subtotal: INR "+i.getSubtotal()));d.add(new Paragraph("Tax total: INR "+i.getTaxTotal()));d.add(new Paragraph("Grand total: INR "+i.getGrandTotal()));d.add(new Paragraph("Due date: "+safe(i.getDueDate())));d.close();
+            d.add(table);d.add(new Paragraph("Taxable subtotal: INR "+i.getSubtotal()));d.add(new Paragraph("Tax total: INR "+i.getTaxTotal()));d.add(new Paragraph("CGST: INR "+i.getCgstAmount()+" | SGST: INR "+i.getSgstAmount()+" | IGST: INR "+i.getIgstAmount()));d.add(new Paragraph("Grand total: INR "+i.getGrandTotal()));d.add(new Paragraph("Due date: "+safe(i.getDueDate())));d.close();
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=\\""+i.getInvoiceNumber()+".pdf\\"").body(out.toByteArray());
         }
     }
