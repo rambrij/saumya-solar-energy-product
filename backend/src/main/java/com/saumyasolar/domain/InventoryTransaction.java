@@ -26,6 +26,7 @@ public class InventoryTransaction {
     UUID productId;
     UUID orderId;
     UUID installationId;
+    UUID serviceRequestId;
     String type;
     BigDecimal quantityDelta;
     BigDecimal reservedDelta;
