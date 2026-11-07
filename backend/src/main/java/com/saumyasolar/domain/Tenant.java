@@ -25,4 +25,7 @@ public class Tenant {
     Instant createdAt;
     @Column(name = "updated_at")
     Instant updatedAt;
+    String gstin;
+    String invoicePrefix = "INV";
+    Integer serviceReopenDays;
 }
