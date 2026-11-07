@@ -11,6 +11,11 @@ management.endpoints.web.exposure.include: health,info
 app:
   jwt-secret: "${JWT_SECRET}"
   cors-origins: "${CORS_ORIGINS}"
+  payment:
+    webhook-secret: "${PAYMENT_WEBHOOK_SECRET:}"
+  service:
+    sla-check-interval-ms: ${SERVICE_SLA_CHECK_INTERVAL_MS:60000}
+    attachment-location: ${SERVICE_ATTACHMENT_DIR:./data/private-service-attachments}
   storage:
     location: ${UPLOAD_DIR:./data/uploads}
     public-base-url: ${PUBLIC_BASE_URL:}
