@@ -9,7 +9,7 @@ MySQL DDL is not fully transactional. The `tax_percent` column may already exist
 ## Code correction
 
 - V14 no longer creates database triggers and is now a compatibility marker.
-- V15 is a Flyway Java migration. It checks MySQL metadata and adds `tax_percent` only if it is missing.
+- V15 is an idempotent Flyway SQL migration. It checks `information_schema` and adds `tax_percent` only if it is missing.
 - Inventory ledger rows are append-only through JPA lifecycle guards. Corrections must be new compensating movements, not updates/deletes.
 - Database triggers are deliberately not required, so the application DB user does not need SUPER privileges.
 
