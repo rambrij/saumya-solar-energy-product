@@ -52,7 +52,12 @@ public class JwtFilter extends OncePerRequestFilter {
             p.roles().forEach(x -> a.add(new SimpleGrantedAuthority("ROLE_" + x)));
             p.permissions().forEach(x -> a.add(new SimpleGrantedAuthority(x)));
             SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(p, null, a));
-        } catch (Exception ignored) {
+        } catch (Exception invalidToken) {
+            SecurityContextHolder.clearContext();
+            s.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            s.setContentType("application/json");
+            s.getWriter().write("{\"status\":401,\"error\":\"Unauthorized\",\"detail\":\"Access token is invalid, expired, revoked, or no longer authorized. Please sign in again.\"}");
+            return;
         }
         c.doFilter(r, s);
     }
