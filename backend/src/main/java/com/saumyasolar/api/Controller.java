@@ -315,6 +315,11 @@ public class Controller {
         String imageUrl = packageImages.store(file);
         return s.updatePackageImage(id, imageUrl, p(a));
     }
+    @PostMapping("/public/{storeSlug}/enquiries")
+    com.saumyasolar.domain.Enquiry publicEnquiry(@PathVariable String storeSlug, @Valid @RequestBody Input x) {
+        return s.createPublicEnquiry(storeSlug, x);
+    }
+
     @GetMapping("/public/{storeSlug}/packages")
     List<com.saumyasolar.domain.SolarPackage> publicPackages(@PathVariable String storeSlug) {
         return s.publicPackages(storeSlug);
