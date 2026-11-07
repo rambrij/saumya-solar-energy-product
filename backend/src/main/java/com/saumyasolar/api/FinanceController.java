@@ -26,6 +26,7 @@ public class FinanceController {
     public FinanceController(FinanceService finance,ObjectMapper mapper){this.finance=finance;this.mapper=mapper;}
     private Principal principal(Authentication a){return (Principal)a.getPrincipal();}
 
+    @GetMapping("/finance/orders-awaiting-invoice") List<?> billableOrders(Authentication a){return finance.billableOrders(principal(a));}
     @GetMapping("/invoices")
     List<?> invoices(Authentication a){return finance.listInvoices(principal(a));}
     @PostMapping("/invoices")
