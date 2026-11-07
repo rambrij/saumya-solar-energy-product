@@ -59,12 +59,16 @@ public class FinanceController {
     @GetMapping(value="/payments/{id}/receipt.pdf",produces=MediaType.APPLICATION_PDF_VALUE)
     ResponseEntity<byte[]> paymentReceipt(@PathVariable UUID id,Authentication a)throws Exception {
         var payment=finance.getPayment(id,principal(a));
-        try(var out=new ByteArrayOutputStream()){Document d=new Document();PdfWriter.getInstance(d,out);d.open();
+        try(var out=new ByteArrayOutputStream()){
+            Document d=new Document();PdfWriter.getInstance(d,out);d.open();
             d.add(new Paragraph("SAUMYA SOLAR - PAYMENT RECEIPT"));
             d.add(new Paragraph("Payment reference: "+safe(payment.getReference()==null?payment.getProviderReference():payment.getReference())));
             d.add(new Paragraph("Amount: INR "+payment.getAmount()+" | Method: "+payment.getMethod()+" | Status: "+payment.getStatus()));
             d.add(new Paragraph("Paid at: "+payment.getPaidAt()));d.add(new Paragraph("Invoice: "+payment.getInvoiceId()));d.close();
-            return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=\"" + i.getInvoiceNumber() + ".pdf\"").body(out.toByteArray());
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=payment-receipt-"+payment.getId()+".pdf")
+                .body(out.toByteArray());
+        }
     }
     @PostMapping("/payments") Object recordPayment(@Valid @RequestBody ManualPayment x,Authentication a){return finance.recordPayment(x,principal(a));}
     @PostMapping("/payments/{id}/refund") Object refund(@PathVariable UUID id,@Valid @RequestBody RefundBody body,Authentication a){return finance.refund(new RefundCreate(id,body.amount(),body.reason()),principal(a));}
