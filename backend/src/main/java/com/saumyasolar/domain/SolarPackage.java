@@ -1,6 +1,6 @@
 package com.saumyasolar.domain;
 
-import jakarta.persistence.Entity;
+import jakarta.persistence.Column;\nimport jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -21,6 +21,6 @@ public class SolarPackage {
     BigDecimal capacityKw;
     String packageType;
     BigDecimal basePrice;
-    Integer warrantyYears;
+    Integer warrantyYears;\n    @Column(name = "image_url", length = 1024)\n    String imageUrl;
     boolean active;
 }
