@@ -92,3 +92,5 @@ jobs:
         run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V12__installation_teams_checklists_and_inventory_dimensions.sql
       - name: Apply V13 technician and service manager roles
         run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V13__technician_and_service_manager_roles.sql
+      - name: Apply V14 order tax snapshot and immutable inventory ledger
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V14__order_tax_snapshot_and_immutable_inventory_ledger.sql
