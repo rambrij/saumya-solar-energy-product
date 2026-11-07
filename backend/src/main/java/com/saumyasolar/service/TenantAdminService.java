@@ -59,7 +59,7 @@ public class TenantAdminService {
         var filtered = all.stream()
             .filter(t -> normalized == null || normalized.equals(t.getStatus()))
             .filter(t -> matchesSearch(t, search))
-            .toList();  .toList();
+            .toList();
         int from = Math.min(page*size, filtered.size()), to=Math.min(from+size,filtered.size());
         List<TenantRow> rows=filtered.subList(from,to).stream().map(this::row).toList();
         List<TenantRow> recent=all.stream().limit(5).map(this::row).toList();
