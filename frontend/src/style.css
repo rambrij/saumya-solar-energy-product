@@ -115,3 +115,7 @@ button.secondary{background:#e5eee8;color:#1c4935}
 .finance-service-shell .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .finance-service-shell a{color:#166534;text-decoration:underline;font-weight:600}
 @media(max-width:680px){.finance-service-shell .actions{width:100%}.finance-service-shell .actions button{flex:1}.finance-service-shell article{align-items:flex-start}}
+
+.service-attachments{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.service-attachments label{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:#475569}
+.service-attachments input[type=file]{max-width:240px;font-size:.78rem}
