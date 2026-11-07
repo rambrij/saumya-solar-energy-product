@@ -12,4 +12,19 @@ WHERE r.tenant_id IS NULL
   AND r.name = 'PLATFORM_SUPER_ADMIN';
 
 -- Existing packages remain valid and render the frontend fallback image.
-ALTER TABLE solar_package ADD COLUMN image_url VARCHAR(1024) NULL;
+-- Make the column addition safe if a DBA already added it during recovery.
+SET @package_image_column_exists = (
+    SELECT COUNT(*)
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'solar_package'
+      AND column_name = 'image_url'
+);
+SET @package_image_ddl = IF(
+    @package_image_column_exists = 0,
+    'ALTER TABLE solar_package ADD COLUMN image_url VARCHAR(1024) NULL',
+    'SELECT 1'
+);
+PREPARE package_image_stmt FROM @package_image_ddl;
+EXECUTE package_image_stmt;
+DEALLOCATE PREPARE package_image_stmt;
