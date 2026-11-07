@@ -108,7 +108,7 @@ class Release12TenantIntegrationTest {
                                 """.formatted(adminEmail, adminPassword)))
                 .andExpect(status().isUnauthorized());
         mvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + vendorToken))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -130,7 +130,7 @@ class Release12TenantIntegrationTest {
                                 """.formatted(refreshToken)))
                 .andExpect(status().isNoContent());
         mvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + accessToken))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
         mvc.perform(post("/api/v1/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
