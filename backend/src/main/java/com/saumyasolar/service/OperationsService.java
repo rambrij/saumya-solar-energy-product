@@ -54,10 +54,12 @@ private CustomerProfile customer(Principal p){if(!"CUSTOMER".equals(p.accountTyp
 CustomerProfile cp=customer(p);
 Product pr=products.findByIdAndTenantId(x.productId(),p.tenantId()).filter(Product::isActive).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Product is not available in this vendor catalogue"));
 BigDecimal discount=pr.getDiscountPercent()==null?BigDecimal.ZERO:pr.getDiscountPercent();
+if(pr.getPrice()==null||pr.getPrice().signum()<0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Product sale price configuration is invalid");
 if(discount.signum()<0||discount.compareTo(BigDecimal.valueOf(100))>0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Product discount configuration is invalid");
 BigDecimal unit=pr.getPrice().multiply(BigDecimal.valueOf(100).subtract(discount)).divide(BigDecimal.valueOf(100),2,java.math.RoundingMode.HALF_UP);
 BigDecimal base=unit.multiply(BigDecimal.valueOf(x.quantity()));
 BigDecimal taxPct=pr.getTaxPercent()==null?BigDecimal.ZERO:pr.getTaxPercent();
+if(taxPct.signum()<0||taxPct.compareTo(BigDecimal.valueOf(100))>0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Product GST configuration is invalid");
 BigDecimal tax=base.multiply(taxPct).divide(BigDecimal.valueOf(100),2,java.math.RoundingMode.HALF_UP);
 CustomerOrder o=new CustomerOrder();o.setId(UUID.randomUUID());o.setTenantId(p.tenantId());o.setQuotationId(null);o.setCustomerId(cp.getId());o.setOrderNumber("ORD-"+System.currentTimeMillis()+"-"+UUID.randomUUID().toString().substring(0,8).toUpperCase(Locale.ROOT));o.setStatus("PENDING_VENDOR_ACCEPTANCE");o.setTotal(base.add(tax));o.setCreatedAt(Instant.now());orders.save(o);
 OrderItem item=new OrderItem();item.setId(UUID.randomUUID());item.setTenantId(p.tenantId());item.setOrderId(o.getId());item.setProductId(pr.getId());item.setDescription(pr.getName()+" · "+pr.getSku());item.setQuantity(x.quantity());item.setUnitPrice(unit);item.setTaxPercent(taxPct);item.setLineTotal(base);orderItems.save(item);
