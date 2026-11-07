@@ -168,3 +168,45 @@ A GitHub Actions workflow is included at `.github/workflows/release-validation.y
 10. Make order conversion safe under concurrent requests with transactional locking/unique constraints and tests.
 11. Extend integration tests to tenant update/delete and identifier-guessing cases, all four personas, quotation lifecycle and order-concurrency retries.
 12. Run and record Maven, frontend, Docker/MySQL migration and end-to-end workflow results before production sign-off.
+
+## Release 3 --- Operations
+
+Release 3 code is present in this branch. The following table describes the implementation inspected and the hardening added in this change. A status of **Implemented (code)** is not a production sign-off: the automated validation gates below still need to pass in the target environment.
+
+| Feature | Backend | Frontend | Database | Evidence / remaining validation |
+|---|---|---|---|---|
+| Order state machine and history | Implemented (code) | Partial | Implemented | `OperationsService`, `Controller`, `customer_order`, `order_status_history`; validate every transition and role combination in integration tests. |
+| Direct customer product order | Added | Added | Existing order/order-item tables plus V14 tax snapshot | `POST /api/v1/customer/product-orders`; customer selects Order now; creates PENDING_VENDOR_ACCEPTANCE order. |
+| Vendor order acceptance/rejection | Added | Added | Existing order status/history tables | `POST /api/v1/orders/{id}/vendor-decision`; requires ORDER_CREATE and same-tenant order; decision reason is recorded. |
+| Warehouses | Implemented (code) | Partial | Implemented | `GET/POST /api/v1/warehouses`; update/archive service methods exist; UI create/list. |
+| Inventory balances and ledger | Implemented (code) | Implemented (code) | Implemented + V14 triggers | Receipts, returns, issues, damage, adjustment, transfer, reservations; V14 rejects UPDATE/DELETE on inventory_transaction. |
+| Concurrent stock reservation | Implemented (code) | Implemented (code) | Implemented | Warehouse and balance pessimistic locks; concurrency behavior still requires a MySQL Testcontainers race test. |
+| Installation planning and engineer assignment | Implemented (code) | Implemented (code) | Implemented | Same-tenant engineer/team validation; reservation required before schedule. |
+| Installation checklist | Implemented (code) | Implemented (code) | Implemented | Mandatory checklist and evidence fields; field execution advances the order to INSTALLATION_IN_PROGRESS. |
+| Commissioning | Implemented (code) | Implemented (code) | Implemented | Requires completed mandatory checklist, customer sign-off and commissioning notes. |
+| Warranty activation | Implemented (code) | Implemented (code) | Implemented | Commissioning activates warranty; optional package components are excluded from warranty quantity calculation. |
+| Detailed solar catalogue | Implemented (code) | Implemented (code) | Implemented | Demo products have technology, HSN, GST, discount, warranty, images, datasheet and JSON technical specifications. Values and generic image assets are illustrative, not manufacturer-certified. |
+
+### Direct customer ordering workflow
+
+1. Customer signs in to the selected vendor store and browses active catalogue products.
+2. Product page shows product description, manufacturer/model, technology, technical attributes, HSN, GST, discount, warranty, image and tax-inclusive display price.
+3. Customer selects **Order now**. The backend derives price, discount and GST from the tenant's active catalogue; browser-supplied pricing is never accepted.
+4. The order is persisted with status `PENDING_VENDOR_ACCEPTANCE` and an order-history event.
+5. Vendor users with `ORDER_CREATE` see pending customer orders in Operations → Orders.
+6. Vendor accepts (order becomes `CONFIRMED`) or rejects (order becomes `REJECTED`); the reason and actor are retained in order history.
+7. Accepted orders enter the existing inventory reservation and installation workflow. Rejected orders cannot reserve stock or be scheduled.
+8. Customer can see the resulting order in Customer Portal → My Orders.
+
+### Release 3 migration
+
+Flyway migration `V14__order_tax_snapshot_and_immutable_inventory_ledger.sql` adds an order-line GST snapshot and database triggers that reject inventory transaction updates and deletes. Apply migrations through Flyway; do not manually edit balances or ledger rows.
+
+### Known Release 3 validation limitations
+
+- This repository change has not been executed in a local Maven/Node/MySQL runtime in this session. Do not treat compilation, build, integration, concurrency, browser, or tenant-isolation checks as passed until CI reports green.
+- Add Testcontainers coverage for simultaneous reservation requests, missing/foreign tenant identifiers, vendor decision authorization, and direct order pricing/tax snapshots.
+- The product demo catalogue uses illustrative sample specifications and generic Unsplash images. Replace them with approved manufacturer datasheets, genuine product photography, confirmed HSN/GST classifications and supplier warranty terms before commercial publication.
+- Customer product ordering currently creates a single-product order with quantity one from the catalogue card. Multi-item cart, payment capture and order amendments belong to subsequent workflows/releases.
+- Inventory reservation expiry/background reconciliation is not yet implemented. Operations must release abandoned reservations explicitly using the authorized reservation-release endpoint.
+- Warranty dates currently begin on commissioning date and use product warranty years (minimum one year); manufacturer-specific warranty terms, registration evidence and pro-rata rules require configuration before production.
