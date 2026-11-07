@@ -440,7 +440,7 @@ class Release12TenantIntegrationTest {
                         .header("Authorization", "Bearer " + customerToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"productId":"%s","quantity":2,"unitPrice":0,"taxPercent":0}
+                                {"productId":"%s","quantity":2}
                                 """.formatted(productId)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var orderJson = json.readTree(orderResponse);
