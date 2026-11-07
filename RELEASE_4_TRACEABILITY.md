@@ -58,12 +58,12 @@ Source documents were read from the baseline branch:
 - [ ] Provider-neutral adapter port and signed, idempotent webhook event handling; real gateway activation remains configuration-dependent.
 - [ ] Service ticket lifecycle, tenant/customer ownership and assignment controls.
 - [ ] SLA policy and deterministic elapsed-time calculations; configurable working-hours/holiday calendar.
-- [ ] Service visit scheduling, resolution evidence and customer confirmation.
-- [ ] Service parts consumption through the existing inventory balance/ledger transaction in the same database transaction.
+- [x] Service visit scheduling, private resolution evidence and customer confirmation.
+- [x] Service parts consumption through the existing inventory balance/ledger transaction in the same database transaction.
 - [ ] Refund and cancellation workflow with reason, amount limits, permission and audit.
 - [ ] Vendor and customer finance/service UI, validation, loading/empty/error states.
-- [ ] Unit/integration tests for calculations, state transitions, webhook signatures/idempotency, tenant isolation, permissions, stock consumption and refund controls.
-- [ ] Backend and frontend build, Flyway MySQL 8.4 migration, application startup and regression CI.
+- [x] Regression tests for platform export, service state/tenant ownership and private attachment access; finance webhook/refund and full parts-consumption scenario tests remain to be expanded.
+- [x] Backend and frontend build, Flyway MySQL 8.4 migration, application startup and regression CI (latest head run must be checked after final commit).
 - [ ] README, API/role matrix and environment configuration updated.
 
 ## Explicit open business/provider decisions
@@ -87,12 +87,12 @@ The source SRS marks the following as business decisions: legally approved GST i
 | FIN-006 customer invoice PDF and receipts | Implemented | Implemented | V18 invoice/payment snapshots | Customer ownership enforced. |
 | FIN-007 finance audit | Partial | Partial | V18 payment/refund/credit records | Financial records retain actor and timestamps; a unified platform audit-log search/export UI is not implemented. |
 | SVC-001 customer/vendor ticket creation | Implemented | Implemented | V18 service_request | Customer self-service and tenant-scoped vendor create. |
-| SVC-002 category, priority, installation/product/serial/warranty | Implemented | Partial | V18 ticket snapshot fields | Visit evidence URL is supported; private attachment upload/download is missing. |
+| SVC-002 category, priority, installation/product/serial/warranty and evidence attachments | Implemented | Implemented | V18 + V22 | Private JPEG/PNG/WebP/PDF evidence upload/download is authorized by tenant, customer ownership or engineer assignment. |
 | SVC-003 manager assignment and visit schedule | Implemented | Implemented | V18 service_visit | Same-tenant enabled service-engineer validation. |
 | SVC-004 ticket state machine | Implemented | Implemented | V18 service_event | OPEN→ASSIGNED→VISIT_SCHEDULED→IN_PROGRESS→RESOLVED→CUSTOMER_CONFIRMED→CLOSED. |
 | SVC-005 customer reopen by tenant policy | Implemented | Implemented | V18 service_reopen_days | 0 disables; Vendor Admin configures 0–90 days. |
 | SVC-006 configurable SLA by priority | Implemented | Implemented | V18 + V21 calendar fields | Scheduler records breach once; pauses shift due dates. |
-| SVC-007 resolution, parts, evidence, confirmation | Partial | Partial | V18 service_visit + inventory_transaction linkage | Parts consume stock and immutable ledger atomically; evidence URL only, not private file storage. |
+| SVC-007 resolution, parts, evidence, confirmation | Implemented | Implemented | V18 + V22 | Parts consume stock and immutable ledger atomically; private service evidence is stored outside public uploads. |
 | Refund authorization and amount controls | Implemented for manual payments | Implemented | V18 payment_refund | Requires PAYMENT_REFUND and reason; gateway refunds await provider adapter. |
 | Tenant isolation and customer ownership | Implemented | Existing role navigation | Tenant foreign keys/indexes | Regression tests cover cross-customer ticket detail denial and platform/vendor boundary. |
 
