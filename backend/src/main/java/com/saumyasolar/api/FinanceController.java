@@ -52,7 +52,7 @@ public class FinanceController {
             for(String h:new String[]{"Description","Qty","HSN","Tax %","Taxable","Tax"})table.addCell(h);
             for(Object value:lines){var x=(com.saumyasolar.domain.InvoiceItem)value;table.addCell(safe(x.getDescription()));table.addCell(String.valueOf(x.getQuantity()));table.addCell(safe(x.getHsnCode()));table.addCell(String.valueOf(x.getTaxPercent()));table.addCell(String.valueOf(x.getTaxableAmount()));table.addCell(String.valueOf(x.getTaxAmount()));}
             d.add(table);d.add(new Paragraph("Taxable subtotal: INR "+i.getSubtotal()));d.add(new Paragraph("Tax total: INR "+i.getTaxTotal()));d.add(new Paragraph("CGST: INR "+i.getCgstAmount()+" | SGST: INR "+i.getSgstAmount()+" | IGST: INR "+i.getIgstAmount()));d.add(new Paragraph("Grand total: INR "+i.getGrandTotal()));d.add(new Paragraph("Due date: "+safe(i.getDueDate())));d.close();
-            return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=\\""+i.getInvoiceNumber()+".pdf\\"").body(out.toByteArray());
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=\"" + i.getInvoiceNumber() + ".pdf\"").body(out.toByteArray());
         }
     }
     @GetMapping("/payments") List<?> payments(Authentication a){return finance.listPayments(principal(a));}
@@ -64,7 +64,7 @@ public class FinanceController {
             d.add(new Paragraph("Payment reference: "+safe(payment.getReference()==null?payment.getProviderReference():payment.getReference())));
             d.add(new Paragraph("Amount: INR "+payment.getAmount()+" | Method: "+payment.getMethod()+" | Status: "+payment.getStatus()));
             d.add(new Paragraph("Paid at: "+payment.getPaidAt()));d.add(new Paragraph("Invoice: "+payment.getInvoiceId()));d.close();
-            return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=payment-receipt-"+payment.getId()+".pdf").body(out.toByteArray());}
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=\"" + i.getInvoiceNumber() + ".pdf\"").body(out.toByteArray());
     }
     @PostMapping("/payments") Object recordPayment(@Valid @RequestBody ManualPayment x,Authentication a){return finance.recordPayment(x,principal(a));}
     @PostMapping("/payments/{id}/refund") Object refund(@PathVariable UUID id,@Valid @RequestBody RefundBody body,Authentication a){return finance.refund(new RefundCreate(id,body.amount(),body.reason()),principal(a));}
