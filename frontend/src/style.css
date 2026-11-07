@@ -153,3 +153,66 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .customer-catalog .catalog-product:last-child{border-bottom:0}
 @media(max-width:760px){main{padding:20px 12px}.table-toolbar input{max-width:none;width:100%}.management-list>article{align-items:flex-start}.management-list .actions{width:100%;justify-content:flex-start}.management-list .actions button{flex:1}.platform-shell{padding-inline:10px}.table-wrap{max-width:100%}}
 @media(max-width:440px){.actions{width:100%}.actions button{flex:1}.tabs{overflow-x:auto;flex-wrap:nowrap}.tabs button{white-space:nowrap}}
+
+/* Consistent module header and data-table system */
+.vendor-module-page{display:flex;flex-direction:column;gap:16px;min-width:0}
+.module-tabs{padding:5px 0 13px;border-bottom:1px solid #e1eae3;overflow-x:auto;flex-wrap:nowrap}
+.module-tabs button{white-space:nowrap}
+.management-heading{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin:0 0 16px;padding:20px 22px;background:linear-gradient(110deg,#fff,#f4faf5);border:1px solid #dfeae2;border-radius:14px}
+.management-heading h1{margin:0;font-size:clamp(1.55rem,3vw,2rem);color:#173d2d}
+.management-heading .eyebrow{margin:0 0 7px}
+.management-heading .muted{margin:6px 0 0;color:#65796d}
+.management-heading>button{margin-left:auto;min-width:150px}
+.module-create-form{max-width:none;width:100%;grid-template-columns:repeat(2,minmax(0,1fr));align-items:end}
+.module-create-form h2,.module-create-form .form-actions{grid-column:1/-1}
+.module-create-form label{min-width:0}
+.module-create-form input,.module-create-form select,.module-create-form textarea{width:100%;min-width:0}
+.form-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.table-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.table-controls input,.table-controls select{min-width:190px;padding:11px 12px;border:1px solid #cbd9cf;border-radius:9px;background:white;font:inherit}
+.management-table-wrap{width:100%;overflow-x:auto;border:1px solid #e2ebe4;border-radius:12px;background:white}
+.management-table{width:100%;min-width:850px;border-collapse:separate;border-spacing:0;table-layout:auto}
+.management-table thead th{position:sticky;top:0;background:#f2f7f3;color:#496253;font-size:.76rem;letter-spacing:.045em;text-transform:uppercase;text-align:left;white-space:nowrap;padding:0 13px;border-bottom:1px solid #dce8df}
+.management-table tbody td{padding:13px;border-bottom:1px solid #edf2ee;color:#314d3c;vertical-align:middle;max-width:280px;overflow-wrap:anywhere}
+.management-table tbody tr:last-child td{border-bottom:0}
+.management-table tbody tr:hover{background:#f9fcfa}
+.management-table th:first-child,.management-table td:first-child{padding-left:17px}
+.management-table .sort-button{display:inline-flex;align-items:center;gap:7px;padding:13px 0;background:transparent;color:inherit;font:inherit;text-transform:inherit;letter-spacing:inherit}
+.management-table .sort-button span{color:#16804a}
+.management-table .actions-heading{text-align:right;padding-right:17px}
+.management-table .table-actions{min-width:190px;text-align:right}
+.management-table .table-actions .actions{justify-content:flex-end;flex-wrap:wrap}
+.management-table .table-actions button{padding:7px 10px;font-size:.82rem}
+.management-table .status-pill{white-space:nowrap;text-transform:capitalize}
+.table-pagination{border-top:1px solid #edf2ee;margin-top:0;padding:15px 3px 2px}
+.table-pagination>span{font-size:.9rem}
+.table-pagination .actions{align-items:center}
+.table-pagination .actions span{font-size:.88rem;color:#64766a;min-width:82px;text-align:center}
+.management-list{padding:20px;overflow:hidden}
+.management-list .table-toolbar{align-items:flex-end}
+.management-list .table-toolbar h2{font-size:1.15rem}
+.status-pill.active,.status-pill.enabled{background:#dcfce7;color:#166534}
+.status-pill.inactive,.status-pill.disabled{background:#f1f5f9;color:#475569}
+.status-pill.suspended,.status-pill.rejected,.status-pill.cancelled,.status-pill.failed{background:#fee2e2;color:#991b1b}
+.status-pill.pending,.status-pill.pending_approval,.status-pill.draft{background:#fef3c7;color:#92400e}
+.status-pill.sent,.status-pill.confirmed,.status-pill.accepted,.status-pill.paid{background:#dbeafe;color:#1e40af}
+/* Public information sections complement the existing package/enquiry workflows */
+.public-nav>div:nth-child(2){align-items:center}
+.public-nav a{white-space:nowrap}
+.public-about{display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center}
+.public-about-copy h2,.public-detail-section h2{font-size:clamp(2rem,3.5vw,3rem);letter-spacing:-.035em;line-height:1.12;margin:12px 0}
+.public-about-copy p,.public-detail-section p{color:#5e7366;line-height:1.8}
+.public-about-points{display:grid;gap:12px}
+.public-about-points article{padding:20px;border:1px solid #e0ebe3;border-radius:13px;background:#fff}
+.public-about-points b,.public-about-points span{display:block}
+.public-about-points span{margin-top:6px;color:#65786c;line-height:1.6}
+.public-detail-section{display:grid;grid-template-columns:1fr 1fr;gap:42px;align-items:center}
+.public-detail-section>img{width:100%;height:360px;object-fit:cover;border-radius:20px;box-shadow:0 15px 40px #173d2d16}
+.public-detail-section ul{padding-left:21px;color:#526b5c;line-height:1.85}
+.public-detail-section li{padding:3px 0}
+.public-footer strong{font-size:1.05rem;letter-spacing:.01em}
+.brand-home{flex:0 0 auto}
+header .brand-home img{width:220px;max-width:48vw}
+@media(max-width:900px){.public-nav{gap:12px}.public-nav>div:nth-child(2){gap:12px}.public-nav a{font-size:.86rem}}
+@media(max-width:760px){.management-heading{align-items:flex-start;padding:17px}.management-heading>button{width:100%;margin-left:0}.module-create-form{grid-template-columns:1fr}.module-create-form h2,.module-create-form .form-actions{grid-column:auto}.table-controls{width:100%}.table-controls input,.table-controls select{flex:1;min-width:140px}.management-list{padding:14px}.management-table{min-width:780px}.public-about,.public-detail-section{grid-template-columns:1fr;gap:24px}.public-detail-section>img{height:260px}.public-nav>div:nth-child(2){order:3;width:100%;overflow-x:auto;justify-content:flex-start;padding-bottom:4px}.public-nav .nav-actions{margin-left:auto}}
+@media(max-width:460px){.table-pagination{align-items:flex-start}.table-pagination .actions{width:100%;justify-content:space-between}.management-heading h1{font-size:1.55rem}.public-nav a{font-size:.82rem}.public-detail-section>img{height:210px}}
