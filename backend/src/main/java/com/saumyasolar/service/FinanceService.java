@@ -58,6 +58,14 @@ public class FinanceService {
     private ServiceRequest ticket(UUID id,UUID tenant){return tickets.findByIdAndTenantId(id,tenant).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Service ticket not found"));}
     private void financeAccess(Principal p){vendorTenant(p);permission(p,"FINANCE_MANAGE");}
     private String fiscalYear(LocalDate date){int year=date.getYear();return date.getMonthValue()>=4?year+"-"+String.valueOf(year+1).substring(2):year-1+"-"+String.valueOf(year).substring(2);}
+    public List<CustomerOrder> billableOrders(Principal p){
+        financeAccess(p);
+        Set<String> eligible=Set.of("CONFIRMED","PAYMENT_PENDING","PAYMENT_PARTIAL","PAID","MATERIAL_RESERVED","INSTALLATION_SCHEDULED","INSTALLATION_IN_PROGRESS","INSTALLED","COMMISSIONED","CLOSED");
+        return orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
+            .filter(o->eligible.contains(o.getStatus()))
+            .filter(o->invoices.findByOrderIdAndTenantId(o.getId(),p.tenantId()).isEmpty())
+            .toList();
+    }
     @Transactional
     public Invoice createInvoice(InvoiceCreate input,Principal p){
         UUID tenant=vendorTenant(p);permission(p,"FINANCE_MANAGE");
