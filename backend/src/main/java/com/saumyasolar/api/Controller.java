@@ -5,6 +5,7 @@ import com.lowagie.text.Paragraph;
 import com.lowagie.text.pdf.PdfWriter;
 import com.lowagie.text.pdf.PdfPTable;
 import com.saumyasolar.api.Models.*;
+import com.saumyasolar.api.TenantCreate;
 import com.saumyasolar.api.OperationsModels.*;
 import com.saumyasolar.api.CatalogModels.*;
 import com.saumyasolar.domain.CustomerOrder;
@@ -22,6 +23,8 @@ import com.saumyasolar.service.AuthLifecycleService;
 import com.saumyasolar.service.QuotationRevisionService;
 import com.saumyasolar.service.OperationsService;
 import com.saumyasolar.service.CatalogAdminService;
+import com.saumyasolar.service.PackageImageStorageService;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.http.HttpStatus;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
@@ -44,6 +47,7 @@ public class Controller {
     final AuthLifecycleService lifecycle;
     final OperationsService operations;
     final CatalogAdminService catalog;
+    final PackageImageStorageService packageImages;
     
     Controller(
             AppService s,
@@ -55,7 +59,8 @@ public class Controller {
             QuotationRevisionService r,
             AuthLifecycleService l,
             OperationsService operations,
-            CatalogAdminService catalog
+            CatalogAdminService catalog,
+            PackageImageStorageService packageImages
     ) {
         this.s = s;
         users = u;
@@ -67,6 +72,7 @@ public class Controller {
         lifecycle = l;
         this.operations = operations;
         this.catalog = catalog;
+        this.packageImages = packageImages;
     }
     
     Principal p(Authentication a) {
@@ -148,12 +154,12 @@ public class Controller {
         return s.list(type, p(a));
     }
     
-    @GetMapping("/tenant/settings")
+    @GetMapping({"/tenant/settings", "/settings"})
     Tenant tenantSettings(Authentication a) {
         return s.tenantSettings(p(a));
     }
 
-    @PatchMapping("/tenant/settings/discount-threshold")
+    @PatchMapping({"/tenant/settings/discount-threshold", "/settings/discount-threshold"})
     Tenant discountThreshold(@RequestBody Input x, Authentication a) {
         return s.updateDiscountApprovalThreshold(x.discountPercent(), p(a));
     }
@@ -168,16 +174,20 @@ public class Controller {
         return s.createCustomerEnquiry(x, p(a));
     }
 
-    @PostMapping("/{type:tenants|categories|products|packages|customers|enquiries}")
-    Object create(@PathVariable String type, @RequestBody Input x, Authentication a) {
+    @PostMapping("/tenants")
+    Tenant createTenant(@Valid @RequestBody TenantCreate x, Authentication a) {
         var principal = p(a);
-        if ("tenants".equals(type)) {
-            if (!"PLATFORM".equals(principal.accountType()) || principal.permissions() == null
-                    || !principal.permissions().contains("PLATFORM_MANAGE"))
-                throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
-            return lifecycle.createTenant(x.name(), x.slug(), x.adminName(), x.adminEmail(), x.adminPassword());
-        }
-        return s.create(type, x, principal);
+        if (!"PLATFORM".equals(principal.accountType()) || principal.roles() == null
+                || !principal.roles().contains("PLATFORM_SUPER_ADMIN") || principal.permissions() == null
+                || !principal.permissions().contains("PLATFORM_MANAGE"))
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Platform Super Admin permission is required");
+        return lifecycle.createTenant(x.name(), x.slug(), x.adminName(), x.adminEmail(), x.adminPassword());
+    }
+
+    @PostMapping("/{type:categories|products|packages|customers|enquiries}")
+    Object create(@PathVariable String type, @RequestBody Input x, Authentication a) {
+        return s.create(type, x, p(a));
     }
     
     @PatchMapping("/tenants/{id}/status")
@@ -289,6 +299,24 @@ public class Controller {
             d.close();
             return out.toByteArray();
         }
+    }
+
+    @PatchMapping("/packages/{id}")
+    com.saumyasolar.domain.SolarPackage updateSolarPackage(@PathVariable UUID id, @Valid @RequestBody PackageInput x, Authentication a) {
+        return s.updateSolarPackage(id, x, p(a));
+    }
+    @DeleteMapping("/packages/{id}")
+    com.saumyasolar.domain.SolarPackage archiveSolarPackage(@PathVariable UUID id, Authentication a) {
+        return s.archiveSolarPackage(id, p(a));
+    }
+    @PostMapping(value = "/packages/{id}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    com.saumyasolar.domain.SolarPackage uploadPackageImage(@PathVariable UUID id, @RequestPart("file") MultipartFile file, Authentication a) {
+        String imageUrl = packageImages.store(file);
+        return s.updatePackageImage(id, imageUrl, p(a));
+    }
+    @GetMapping("/public/{storeSlug}/packages")
+    List<com.saumyasolar.domain.SolarPackage> publicPackages(@PathVariable String storeSlug) {
+        return s.publicPackages(storeSlug);
     }
 
     // Vendor catalogue administration. Delete operations are soft archives.
