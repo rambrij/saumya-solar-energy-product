@@ -64,7 +64,7 @@ Source documents were read from the baseline branch:
 - [ ] Vendor and customer finance/service UI, validation, loading/empty/error states.
 - [x] Regression tests for platform export, service state/tenant ownership and private attachment access; finance webhook/refund and full parts-consumption scenario tests remain to be expanded.
 - [x] Backend and frontend build, Flyway MySQL 8.4 migration, application startup and regression CI (latest head run must be checked after final commit).
-- [ ] README, API/role matrix and environment configuration updated.
+- [x] README, API/role matrix and environment configuration updated.
 
 ## Explicit open business/provider decisions
 
@@ -91,7 +91,7 @@ The source SRS marks the following as business decisions: legally approved GST i
 | SVC-003 manager assignment and visit schedule | Implemented | Implemented | V18 service_visit | Same-tenant enabled service-engineer validation. |
 | SVC-004 ticket state machine | Implemented | Implemented | V18 service_event | OPEN→ASSIGNED→VISIT_SCHEDULED→IN_PROGRESS→RESOLVED→CUSTOMER_CONFIRMED→CLOSED. |
 | SVC-005 customer reopen by tenant policy | Implemented | Implemented | V18 service_reopen_days | 0 disables; Vendor Admin configures 0–90 days. |
-| SVC-006 configurable SLA by priority | Implemented | Implemented | V18 + V21 calendar fields | Scheduler records breach once; pauses shift due dates. |
+| SVC-006 configurable SLA by priority, pause and breach | Partial | Partial | V18 + V21 calendar fields | Configurable calendar, pause/resume and one-time breach events exist; outbound escalation notifications and escalation policies remain open. |
 | SVC-007 resolution, parts, evidence, confirmation | Implemented | Implemented | V18 + V22 | Parts consume stock and immutable ledger atomically; private service evidence is stored outside public uploads. |
 | Refund authorization and amount controls | Implemented for manual payments | Implemented | V18 payment_refund | Requires PAYMENT_REFUND and reason; gateway refunds await provider adapter. |
 | Tenant isolation and customer ownership | Implemented | Existing role navigation | Tenant foreign keys/indexes | Regression tests cover cross-customer ticket detail denial and platform/vendor boundary. |
@@ -101,7 +101,7 @@ The source SRS marks the following as business decisions: legally approved GST i
 The branch workflow is configured to run:
 - Maven compile and full backend tests
 - React TypeScript/production build
-- V1–V21 Flyway migration sequence on MySQL 8.4
+- V1–V22 Flyway migration sequence on MySQL 8.4
 - Spring Boot startup with Hibernate schema validation against MySQL 8.4
 
 Do not treat this release as production-complete until the latest PR run reports all jobs green and the remaining decisions/limitations above are resolved.
