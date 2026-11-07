@@ -12,6 +12,8 @@ import com.saumyasolar.repo.AppUserRepository;
 import com.saumyasolar.repo.EnquiryRepository;
 import com.saumyasolar.repo.ProductCategoryRepository;
 import com.saumyasolar.repo.ProductRepository;
+import com.saumyasolar.repo.CustomerOrderRepository;
+import com.saumyasolar.repo.OrderItemRepository;
 import com.saumyasolar.repo.TenantRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,6 +45,8 @@ class Release12TenantIntegrationTest {
     @Autowired ProductRepository products;
     @Autowired EnquiryRepository enquiries;
     @Autowired CustomerProfileRepository customerProfiles;
+    @Autowired CustomerOrderRepository customerOrders;
+    @Autowired OrderItemRepository orderItems;
 
     UUID vendorTenantId;
 
@@ -413,5 +417,54 @@ class Release12TenantIntegrationTest {
         tenant.setSlug("test-" + UUID.randomUUID().toString().replace("-", ""));
         tenant.setStatus("ACTIVE");
         return tenants.save(tenant);
+    }
+
+    @Test
+    void customerCanPlaceProductOrderAndVendorMustAcceptIt() throws Exception {
+        var email = "direct-order-" + UUID.randomUUID() + "@example.test";
+        var registration = mvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"storeSlug":"saumya-solar","name":"Direct Order Customer","email":"%s","password":"StrongPassphrase-2026"}
+                                """.formatted(email)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var customerToken = json.readTree(registration).get("accessToken").asText();
+        var catalogue = mvc.perform(get("/api/v1/catalog-products")
+                        .header("Authorization", "Bearer " + customerToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var productsJson = json.readTree(catalogue);
+        assertTrue(productsJson.size() > 0, "Demo catalogue should contain at least one active product");
+        var product = productsJson.get(0);
+        var productId = product.get("id").asText();
+        var orderResponse = mvc.perform(post("/api/v1/customer/product-orders")
+                        .header("Authorization", "Bearer " + customerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"productId":"%s","quantity":2,"unitPrice":0,"taxPercent":0}
+                                """.formatted(productId)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var orderJson = json.readTree(orderResponse);
+        assertEquals("PENDING_VENDOR_ACCEPTANCE", orderJson.get("status").asText());
+        var orderId = UUID.fromString(orderJson.get("id").asText());
+        var persistedOrder = customerOrders.findByIdAndTenantId(orderId, vendorTenantId).orElseThrow();
+        var line = orderItems.findByTenantIdOrderByIdDesc(vendorTenantId).stream()
+                .filter(item -> orderId.equals(item.getOrderId())).findFirst().orElseThrow();
+        assertEquals(2, line.getQuantity());
+        assertNotNull(line.getTaxPercent());
+        assertTrue(persistedOrder.getTotal().compareTo(BigDecimal.ZERO) > 0);
+
+        var vendorToken = accessToken("sales@saumya.local", "Sales@123");
+        mvc.perform(post("/api/v1/orders/" + orderId + "/vendor-decision")
+                        .header("Authorization", "Bearer " + vendorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"decision":"ACCEPT","reason":"Stock and delivery slot confirmed"}
+                                """))
+                .andExpect(status().isOk());
+        assertEquals("CONFIRMED", customerOrders.findByIdAndTenantId(orderId, vendorTenantId).orElseThrow().getStatus());
+        var customerOrdersJson = mvc.perform(get("/api/v1/customer-orders")
+                        .header("Authorization", "Bearer " + customerToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(json.readTree(customerOrdersJson).toString().contains(orderId.toString()));
     }
 }
