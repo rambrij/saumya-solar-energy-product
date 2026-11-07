@@ -462,7 +462,7 @@ class Release12TenantIntegrationTest {
                                 """))
                 .andExpect(status().isOk());
         assertEquals("CONFIRMED", customerOrders.findByIdAndTenantId(orderId, vendorTenantId).orElseThrow().getStatus());
-        var customerOrdersJson = mvc.perform(get("/api/v1/customer-orders")
+        var customerOrdersJson = mvc.perform(get("/api/v1/customer/product-orders")
                         .header("Authorization", "Bearer " + customerToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertTrue(json.readTree(customerOrdersJson).toString().contains(orderId.toString()));
