@@ -2,14 +2,14 @@ import React,{useEffect,useMemo,useState}from'react';
 
 type SolarPackage={id:string;name:string;code:string;capacityKw:number;packageType:string;basePrice:number;warrantyYears?:number;imageUrl?:string|null;active:boolean};
 type PublicProduct={id:string;sku:string;name:string;description?:string|null;categoryId:string;categoryName:string;manufacturer?:string|null;model?:string|null;technology?:string|null;price:number;discountPercent?:number;taxPercent?:number;warrantyYears?:number|null;imageUrl?:string|null;datasheetUrl?:string|null;unitOfMeasure?:string|null;serialized?:boolean;attributesJson?:string|null};
-const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\\/+$/,'');
+const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
 const placeholder='https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&w=1200&q=80';
 const money=(value:number)=>'₹'+Number(value||0).toLocaleString('en-IN',{maximumFractionDigits:2});
 const asset=(value?:string|null)=>!value?placeholder:value.startsWith('/')?API_BASE+value:value;
 function capacity(product:PublicProduct){try{const a=JSON.parse(product.attributesJson||'{}');const v=a.capacityKw??a.capacityKW??a.capacity??a.systemCapacityKw;if(v!==undefined)return String(v).toLowerCase().includes('kw')?String(v):String(v)+' kW'}catch{}return product.technology||''}
 export default function PublicHome({onLogin,onRegister}: {onLogin:()=>void;onRegister:()=>void}) {
  const storeSlug=import.meta.env.VITE_PUBLIC_STORE_SLUG||'saumya-solar';
- const path=window.location.pathname.replace(/\\/+$/,'')||'/';
+ const path=window.location.pathname.replace(/\/+$/,'')||'/';
  const productDetailId=path.startsWith('/products/')?decodeURIComponent(path.slice('/products/'.length)):null;
  const page=productDetailId?'product-detail':path==='/products'?'products':path==='/packages'?'packages':path==='/about'?'about':path==='/mounting-structures'?'mounting-structures':path==='/solar-technology'?'solar-technology':path==='/contact'?'contact':'home';
  const [menuOpen,setMenuOpen]=useState(false);
