@@ -473,3 +473,16 @@ The Release 4 CI workflow validates backend tests, frontend build, V1–V21 migr
 7. **Platform inactive state:** current lifecycle supports ACTIVE/SUSPENDED. Inactive count/filter is retained for reporting compatibility but no separate INACTIVE transition is introduced.
 8. **Release 5:** reporting/export center beyond platform tenant exports, audit search UI, dashboards, CMS/blog and notification provider management remain outside this Release 4 branch.
 
+## Public storefront routes and product catalogue
+
+The React public storefront uses the shared navigation/header/footer with separate paths:
+
+- `/` — home
+- `/products` — public product catalogue with search, category, brand, capacity and price filters
+- `/products/{productId}` — public product details
+- `/packages` — active published solar packages
+- `/about`, `/mounting-structures`, `/solar-technology`, `/contact` — individual information/contact pages
+
+Public product data is read from `GET /api/v1/public/{storeSlug}/products`. The endpoint resolves only an active tenant store, returns only active products whose category is active in that same tenant, and intentionally omits internal purchase-price and reorder-level fields. It is covered by the public-catalogue integration test. The endpoint is public like the existing public package/enquiry routes; vendor catalogue management APIs remain authenticated and permission-protected.
+
+The Nginx SPA configuration serves `index.html` for unknown frontend paths so direct navigation and refreshes on public routes work. Configure `VITE_PUBLIC_STORE_SLUG` to the intended public store slug and `VITE_API_BASE_URL` when the API is hosted separately.
