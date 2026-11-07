@@ -141,6 +141,7 @@ public class AuthLifecycleService {
     
     @Transactional
     public Tenant createTenant(String name, String slug, String adminName, String adminEmail, String adminPassword) {
+        slug = normalizeSlug(slug == null || slug.isBlank() ? name : slug);
         if (name == null || name.isBlank() || slug == null || !slug.matches("[a-z0-9]+(?:-[a-z0-9]+)*")
                 || adminName == null || adminName.isBlank() || adminEmail == null || adminEmail.isBlank()
                 || adminPassword == null || adminPassword.length() < 12)
@@ -251,10 +252,22 @@ public class AuthLifecycleService {
         }
     }
 
+    private String normalizeSlug(String value) {
+        if (value == null) return null;
+        return value.trim().toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
+    }
+
     @Transactional
     public AppUser register(String slug, String name, String email, String password) {
-        var t = tenants.findBySlug(slug).filter(x -> "ACTIVE".equals(x.getStatus()))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Active store not found"));
+        String normalizedSlug = normalizeSlug(slug);
+        var store = tenants.findBySlug(normalizedSlug);
+        if (store.isEmpty() && slug != null && !slug.isBlank()) {
+            store = tenants.findByNameIgnoreCase(slug.trim());
+        }
+        var t = store.filter(x -> "ACTIVE".equals(x.getStatus()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "No active store matches '" + slug + "'. Enter the vendor store slug or exact store name."));
         if (name == null || name.isBlank() || email == null || email.isBlank()
                 || password == null || password.length() < 12)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name, email and a password of at least 12 characters are required");
