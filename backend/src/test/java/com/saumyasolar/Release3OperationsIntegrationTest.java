@@ -58,7 +58,7 @@ class Release3OperationsIntegrationTest {
   assertTrue(ledger.contains("RECEIPT"));assertTrue(ledger.contains("PO-TEST-001"));
  }
  @Test void stockIssueDamageAndReturnPreserveSeparateLedgerDimensions() throws Exception {
-  String auth=token();var warehouse=warehouses.findByTenantIdOrderByNameAsc(tenantId).get(0);
+  String auth=token();Warehouse warehouse=new Warehouse();warehouse.setId(UUID.randomUUID());warehouse.setTenantId(tenantId);warehouse.setCode("DIM-"+UUID.randomUUID());warehouse.setName("Ledger dimensions test warehouse");warehouse.setActive(true);warehouse.setCreatedAt(java.time.Instant.now());warehouse=warehouses.save(warehouse);
   Product product=products.findByTenantIdOrderByIdDesc(tenantId).stream().filter(p->"DEMO-PV-550".equals(p.getSku())).findFirst().orElseThrow();
   String wh=warehouse.getId().toString(),pr=product.getId().toString();
   mvc.perform(post("/api/v1/inventory/receipts").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content("{\"warehouseId\":\""+wh+"\",\"productId\":\""+pr+"\",\"quantity\":25,\"reason\":\"PO-25\"}")).andExpect(status().isOk());
