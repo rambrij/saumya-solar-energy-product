@@ -3,10 +3,17 @@ spring:
   datasource: { url: "${DB_URL}", username: "${DB_USER}", password: "${DB_PASSWORD}" }
   jpa: { hibernate: { ddl-auto: validate }, open-in-view: false }
   flyway: { enabled: true }
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
 management.endpoints.web.exposure.include: health,info
 app:
   jwt-secret: "${JWT_SECRET}"
   cors-origins: "${CORS_ORIGINS}"
+  storage:
+    location: ${UPLOAD_DIR:./data/uploads}
+    public-base-url: ${PUBLIC_BASE_URL:}
   seed:
     enabled: ${SEED_DATA_ENABLED:false}
   bootstrap:
