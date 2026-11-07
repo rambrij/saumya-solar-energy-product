@@ -28,8 +28,14 @@ class Release4FinanceServiceAndPlatformTest {
         String platform=token("platform@saumya.local","Platform@123");
         mvc.perform(get("/api/v1/platform/tenants").header("Authorization","Bearer "+platform).param("status","ACTIVE").param("page","0").param("size","20"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.total").isNumber()).andExpect(jsonPath("$.active").isNumber()).andExpect(jsonPath("$.items").isArray());
-        mvc.perform(get("/api/v1/platform/tenants/export").header("Authorization","Bearer "+platform).param("status","ACTIVE"))
-            .andExpect(status().isOk()).andExpect(header().string("Content-Disposition",org.hamcrest.Matchers.containsString("tenants-active-"))).andExpect(content().contentTypeCompatibleWith("text/csv"));
+        String csv=mvc.perform(get("/api/v1/platform/tenants/export").header("Authorization","Bearer "+platform).param("status","ACTIVE"))
+            .andExpect(status().isOk()).andExpect(header().string("Content-Disposition",org.hamcrest.Matchers.containsString("tenants-active-"))).andExpect(content().contentTypeCompatibleWith("text/csv"))
+            .andReturn().getResponse().getContentAsString();
+        assertTrue(csv.startsWith("Tenant Name,Tenant Slug,Administrator Name"));
+        assertTrue(csv.contains("platform@saumya.local") || csv.contains("admin@saumya.local"));
+        String emptyCsv=mvc.perform(get("/api/v1/platform/tenants/export").header("Authorization","Bearer "+platform).param("status","ACTIVE").param("search","no-tenant-can-match-this"))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertEquals(1,emptyCsv.lines().count(),"Empty exports retain the CSV header and no fabricated rows");
         mvc.perform(get("/api/v1/platform/tenants/export.xlsx").header("Authorization","Bearer "+platform))
             .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
         mvc.perform(get("/api/v1/platform/tenants/export.pdf").header("Authorization","Bearer "+platform))
