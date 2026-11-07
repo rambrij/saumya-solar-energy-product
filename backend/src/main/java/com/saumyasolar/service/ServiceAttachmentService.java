@@ -60,6 +60,6 @@ public class ServiceAttachmentService {
         if(type.equals("image/png"))return b.length>=8&&(b[0]&255)==137&&b[1]=='P'&&b[2]=='N'&&b[3]=='G';
         return b.length>=12&&b[0]=='R'&&b[1]=='I'&&b[2]=='F'&&b[3]=='F'&&b[8]=='W'&&b[9]=='E'&&b[10]=='B'&&b[11]=='P';
     }
-    private String safeName(String value){if(value==null||value.isBlank())return "service-evidence";String name=Path.of(value).getFileName().toString().replaceAll("[^A-Za-z0-9._-]","_");return name.length()>200?name.substring(name.length()-200):name;}
+    private String safeName(String value){if(value==null||value.isBlank())return "service-evidence";String normalized=value.replace("\\","/");String name=normalized.substring(normalized.lastIndexOf('/')+1).replaceAll("[^A-Za-z0-9._-]","_");return name.length()>200?name.substring(name.length()-200):name;}
     public record Download(ServiceAttachment attachment,byte[] content){}
 }
