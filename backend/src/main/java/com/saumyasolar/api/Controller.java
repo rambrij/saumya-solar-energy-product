@@ -311,6 +311,7 @@ public class Controller {
     }
     @PostMapping(value = "/packages/{id}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     com.saumyasolar.domain.SolarPackage uploadPackageImage(@PathVariable UUID id, @RequestPart("file") MultipartFile file, Authentication a) {
+        s.assertPackageManageAccess(id, p(a));
         String imageUrl = packageImages.store(file);
         return s.updatePackageImage(id, imageUrl, p(a));
     }
