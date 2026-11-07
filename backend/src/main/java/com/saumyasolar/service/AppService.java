@@ -310,6 +310,32 @@ public class AppService {
                 .filter(SolarPackage::isActive).toList();
     }
 
+    @Transactional
+    public Enquiry createPublicEnquiry(String storeSlug, Input input) {
+        String normalized = storeSlug == null ? "" : storeSlug.trim().toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
+        Tenant tenant = tenants.findBySlug(normalized)
+                .filter(value -> "ACTIVE".equals(value.getStatus()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Active store not found"));
+        if (input.name() == null || input.name().isBlank() || input.email() == null
+                || !input.email().matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
+                || input.phone() == null || input.phone().isBlank())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name, valid email and phone are required.");
+        Enquiry enquiry = new Enquiry();
+        enquiry.setId(UUID.randomUUID());
+        enquiry.setTenantId(tenant.getId());
+        enquiry.setName(input.name().trim());
+        enquiry.setEmail(input.email().trim().toLowerCase(java.util.Locale.ROOT));
+        enquiry.setPhone(input.phone().trim());
+        enquiry.setPropertyType(input.propertyType());
+        enquiry.setMonthlyBill(input.monthlyBill());
+        enquiry.setRequiredCapacityKw(input.requiredCapacityKw());
+        enquiry.setMessage(input.message());
+        enquiry.setStatus("NEW");
+        enquiry.setCreatedAt(Instant.now());
+        return enquiries.save(enquiry);
+    }
+
     private UUID requirePackageManager(Principal p) {
         vendor(p);
         requirePermission(p, "CATALOG_MANAGE");
