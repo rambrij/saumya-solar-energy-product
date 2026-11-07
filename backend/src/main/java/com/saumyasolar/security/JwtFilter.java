@@ -30,7 +30,7 @@ public class JwtFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
-        return path.startsWith("/api/v1/auth/") || path.startsWith("/api/v1/public/") || path.startsWith("/uploads/");
+        return path.startsWith("/api/v1/auth/") || path.startsWith("/api/v1/public/") || path.startsWith("/api/v1/payment-webhooks/") || path.startsWith("/uploads/");
     }
 
     protected void doFilterInternal(HttpServletRequest r, HttpServletResponse s, FilterChain c)
