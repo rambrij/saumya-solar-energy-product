@@ -93,7 +93,7 @@ CREATE TABLE service_visit(
  engineer_id BINARY(16) NOT NULL, scheduled_at TIMESTAMP(6) NOT NULL, started_at TIMESTAMP(6),
  completed_at TIMESTAMP(6), engineer_notes VARCHAR(4000), resolution VARCHAR(2000),
  evidence_url VARCHAR(1000), customer_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
- customer_confirmed_at TIMESTAMP(6),
+ customer_confirmed_at TIMESTAMP(6), parts_consumed_json JSON NULL,
  CONSTRAINT fk_service_visit_request FOREIGN KEY(service_request_id) REFERENCES service_request(id),
  CONSTRAINT fk_service_visit_tenant FOREIGN KEY(tenant_id) REFERENCES tenant(id),
  CONSTRAINT fk_service_visit_engineer FOREIGN KEY(engineer_id) REFERENCES app_user(id),
