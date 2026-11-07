@@ -76,7 +76,7 @@ CREATE TABLE service_request(
  category VARCHAR(50) NOT NULL, priority VARCHAR(20) NOT NULL, description VARCHAR(4000) NOT NULL,
  warranty_status VARCHAR(30) NOT NULL, status VARCHAR(30) NOT NULL, assigned_engineer_id BINARY(16),
  response_due_at TIMESTAMP(6), resolution_due_at TIMESTAMP(6), first_responded_at TIMESTAMP(6),
- resolved_at TIMESTAMP(6), customer_confirmed_at TIMESTAMP(6), closed_at TIMESTAMP(6),
+ resolved_at TIMESTAMP(6), customer_confirmed_at TIMESTAMP(6), parts_consumed_json JSON NULL, closed_at TIMESTAMP(6),
  paused_seconds BIGINT NOT NULL DEFAULT 0, sla_paused_at TIMESTAMP(6), response_breached_at TIMESTAMP(6), resolution_breached_at TIMESTAMP(6), resolution_notes VARCHAR(2000),
  created_at TIMESTAMP(6) NOT NULL, updated_at TIMESTAMP(6) NOT NULL,
  UNIQUE KEY uq_service_ticket_tenant_number(tenant_id,ticket_number),
