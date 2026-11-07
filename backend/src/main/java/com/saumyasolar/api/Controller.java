@@ -320,6 +320,12 @@ public class Controller {
         u.getRoles().forEach(r->{rs.add(r.getName());r.getPermissions().forEach(v->ps.add(v.getCode()));});
         return new UserView(u.getId(),u.getTenantId(),u.getName(),u.getEmail(),u.getAccountType(),rs,ps);
     }
+    @PostMapping("/customer/product-orders")
+    CustomerOrder createCustomerProductOrder(@Valid @RequestBody CustomerProductOrderInput x,Authentication a){return operations.createCustomerProductOrder(x,p(a));}
+    @GetMapping("/customer/product-orders")
+    List<CustomerOrder> customerProductOrders(Authentication a){return operations.customerOrders(p(a));}
+    @PostMapping("/orders/{id}/vendor-decision")
+    CustomerOrder vendorOrderDecision(@PathVariable UUID id,@Valid @RequestBody OrderDecisionInput x,Authentication a){return operations.decideCustomerOrder(id,x,p(a));}
     // Release 3: warehouse and immutable inventory ledger.
     @GetMapping("/warehouses") List<com.saumyasolar.domain.Warehouse> warehouses(Authentication a){return operations.warehouses(p(a));}
     @PostMapping("/warehouses") com.saumyasolar.domain.Warehouse createWarehouse(@Valid @RequestBody WarehouseInput x,Authentication a){return operations.createWarehouse(x,p(a));}
