@@ -18,7 +18,7 @@ public final class FinanceModels {
     public record WebhookEvent(@NotBlank String eventId,@NotBlank String paymentReference,
         @NotNull @DecimalMin("0.01") BigDecimal amount,@NotBlank @Pattern(regexp="SUCCEEDED|FAILED") String status) {}
     public record ServiceCreate(@NotBlank String category,@NotBlank @Pattern(regexp="LOW|MEDIUM|HIGH|CRITICAL") String priority,
-        @NotBlank @Size(max=4000) String description,UUID installationId,UUID productId,@Size(max=150) String serialNumber) {}
+        @NotBlank @Size(max=4000) String description,UUID customerId,UUID installationId,UUID productId,@Size(max=150) String serialNumber) {}
     public record ServiceAssign(@NotNull UUID engineerId,@NotBlank String reason) {}
     public record ServiceVisitCreate(@NotNull UUID engineerId,@NotNull Instant scheduledAt,@NotBlank String reason) {}
     public record ServicePart(@NotNull UUID warehouseId,@NotNull UUID productId,@NotNull @DecimalMin("0.0001") BigDecimal quantity,@NotBlank String reason) {}
