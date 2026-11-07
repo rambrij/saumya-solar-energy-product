@@ -123,6 +123,10 @@ jobs:
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V20__invoice_credit_notes_and_tax_breakdown.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='credit_note'")" = "1"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='invoice' AND column_name IN ('cgst_amount','sgst_amount','igst_amount')")" = "3"
+      - name: Apply V21 service business calendar
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V21__service_business_calendar_and_reopen_policy.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='service_sla_policy' AND column_name='working_days_json'")" = "1"
 
   mysql-app-startup:
     name: Start Spring Boot against MySQL 8.4
