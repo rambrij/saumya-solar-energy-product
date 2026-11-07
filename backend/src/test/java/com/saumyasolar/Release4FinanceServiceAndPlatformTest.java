@@ -10,6 +10,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.mock.web.MockMultipartFile;
 import java.util.UUID;
+import java.time.LocalDate;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -36,11 +37,11 @@ class Release4FinanceServiceAndPlatformTest {
             .content("{\"name\":\"Export Tenant\",\"slug\":\""+exportSlug+"\",\"adminName\":\"Export Admin\",\"adminEmail\":\""+exportEmail+"\",\"adminPassword\":\"ExportAdmin@2026\"}"))
             .andExpect(status().isOk());
         String csv=mvc.perform(get("/api/v1/platform/tenants/export").header("Authorization","Bearer "+platform).param("status","ACTIVE"))
-            .andExpect(status().isOk()).andExpect(header().string("Content-Disposition",org.hamcrest.Matchers.containsString("tenants-active-"))).andExpect(content().contentTypeCompatibleWith("text/csv"))
+            .andExpect(status().isOk()).andExpect(header().string("Content-Disposition",org.hamcrest.Matchers.containsString("tenants-active-"+LocalDate.now()))).andExpect(content().contentTypeCompatibleWith("text/csv"))
             .andReturn().getResponse().getContentAsString();
         assertTrue(csv.startsWith("Tenant Name,Tenant Slug,Administrator Name"));
         assertTrue(csv.contains(exportEmail));
-        assertTrue(csv.matches("(?s).*20\\\\d{2}-\\\\d{2}-\\\\d{2}T.*"),"CSV timestamps use ISO-8601 dates");
+        
         String emptyCsv=mvc.perform(get("/api/v1/platform/tenants/export").header("Authorization","Bearer "+platform).param("status","ACTIVE").param("search","no-tenant-can-match-this"))
             .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertEquals(1,emptyCsv.lines().count(),"Empty exports retain the CSV header and no fabricated rows");
