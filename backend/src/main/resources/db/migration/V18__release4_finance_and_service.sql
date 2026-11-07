@@ -101,7 +101,7 @@ CREATE TABLE service_visit(
 );
 CREATE TABLE service_event(
  id BINARY(16) PRIMARY KEY, tenant_id BINARY(16) NOT NULL, service_request_id BINARY(16) NOT NULL,
- actor_id BINARY(16) NOT NULL, event_type VARCHAR(40) NOT NULL, old_status VARCHAR(30), new_status VARCHAR(30),
+ actor_id BINARY(16) NULL, event_type VARCHAR(40) NOT NULL, old_status VARCHAR(30), new_status VARCHAR(30),
  reason VARCHAR(2000), occurred_at TIMESTAMP(6) NOT NULL,
  CONSTRAINT fk_service_event_request FOREIGN KEY(service_request_id) REFERENCES service_request(id),
  CONSTRAINT fk_service_event_tenant FOREIGN KEY(tenant_id) REFERENCES tenant(id),
