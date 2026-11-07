@@ -3,14 +3,13 @@ package com.saumyasolar.api;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 
 public final class FinanceModels {
     private FinanceModels() {}
-    public record InvoiceCreate(@NotNull UUID orderId, LocalDate dueDate, String taxTreatment) {}
+    public record InvoiceCreate(@NotNull UUID orderId, java.time.LocalDate dueDate, String taxTreatment) {}
     public record CreditNoteCreate(@NotNull @DecimalMin("0.01") BigDecimal amount,@NotBlank @Size(max=500) String reason) {}
     public record ManualPayment(@NotNull UUID invoiceId,@NotNull @DecimalMin("0.01") BigDecimal amount,
         @NotBlank @Pattern(regexp="CASH|BANK_TRANSFER|UPI|CHEQUE|CARD|OTHER") String method,
@@ -27,6 +26,6 @@ public final class FinanceModels {
     public record ServiceResolve(@NotBlank String resolution) {}
     public record SlaPolicyInput(@NotBlank @Pattern(regexp="LOW|MEDIUM|HIGH|CRITICAL") String priority,
         @Min(1) int responseMinutes,@Min(1) int resolutionMinutes,@NotBlank String timeZone,
-        LocalTime businessStart,LocalTime businessEnd,@Size(max=4000) String holidaysJson) {}
-    public record ServiceTicketView(Object ticket, boolean responseBreached, boolean resolutionBreached, List<?> visits, List<?> history) {}
+        LocalTime businessStart,LocalTime businessEnd,@Size(max=4000) String holidaysJson,@Size(max=1000) String workingDaysJson) {}
+    public record ServiceReopenPolicyInput(@Min(0) @Max(90) int reopenDays) {}
 }
