@@ -176,6 +176,7 @@ public class AppService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tenant status must be ACTIVE or SUSPENDED");
         var tenant = tenants.findById(tenantId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
         tenant.setStatus(status);
+        tenant.setUpdatedAt(Instant.now());
         return tenants.save(tenant);
     }
 
