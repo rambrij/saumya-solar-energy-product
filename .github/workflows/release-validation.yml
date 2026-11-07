@@ -94,6 +94,11 @@ jobs:
         run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V13__technician_and_service_manager_roles.sql
       - name: Apply V14 order tax snapshot and immutable inventory ledger
         run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V14__order_tax_snapshot_and_immutable_inventory_ledger.sql
+      - name: Apply idempotent V15 tax snapshot column migration twice
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V15__ensure_order_tax_snapshot_column.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V15__ensure_order_tax_snapshot_column.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='order_item' AND column_name='tax_percent'")" = "1"
 
   mysql-app-startup:
     name: Start Spring Boot against MySQL 8.4
