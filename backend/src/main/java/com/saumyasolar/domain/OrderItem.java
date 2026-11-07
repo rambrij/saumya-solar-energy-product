@@ -22,5 +22,6 @@ public class OrderItem {
     String description;
     int quantity;
     BigDecimal unitPrice;
+    BigDecimal taxPercent;
     BigDecimal lineTotal;
 }
