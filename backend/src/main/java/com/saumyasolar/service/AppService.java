@@ -653,6 +653,7 @@ public class AppService {
             i.setDescription(qi.getDescription());
             i.setQuantity(qi.getQuantity());
             i.setUnitPrice(qi.getUnitPrice());
+            i.setTaxPercent(qi.getTaxPercent());
             i.setLineTotal(qi.getLineTotal());
             orderItems.save(i);
         }
