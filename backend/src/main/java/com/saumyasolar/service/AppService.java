@@ -2,6 +2,7 @@ package com.saumyasolar.service;
 
 import com.saumyasolar.api.Models.Input;
 import com.saumyasolar.api.Models.QuoteView;
+import com.saumyasolar.api.PackageInput;
 import com.saumyasolar.domain.*;
 import com.saumyasolar.repo.*;
 import com.saumyasolar.security.Principal;
@@ -249,6 +250,7 @@ public class AppService {
                 e.setPackageType(x.packageType());
                 e.setBasePrice(x.basePrice());
                 e.setWarrantyYears(x.warrantyYears());
+                e.setImageUrl(x.imageUrl());
                 e.setActive(true);
                 packs.save(e);
                 if (x.items() != null) for (var l : x.items()) {
@@ -297,6 +299,95 @@ public class AppService {
         };
     }
     
+    public List<SolarPackage> publicPackages(String storeSlug) {
+        String normalized = storeSlug == null ? "" : storeSlug.trim().toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
+        var tenant = tenants.findBySlug(normalized)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
+        if (!"ACTIVE".equals(tenant.getStatus()))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Store is not available");
+        return packs.findByTenantIdOrderByIdDesc(tenant.getId()).stream()
+                .filter(SolarPackage::isActive).toList();
+    }
+
+    private UUID requirePackageManager(Principal p) {
+        vendor(p);
+        requirePermission(p, "CATALOG_MANAGE");
+        return p.tenantId();
+    }
+
+    public void assertPackageManageAccess(UUID id, Principal p) {
+        UUID tenantId = requirePackageManager(p);
+        if (packs.findByIdAndTenantId(id, tenantId).isEmpty())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Solar package not found");
+    }
+
+    @Transactional
+    public SolarPackage updatePackageImage(UUID id, String imageUrl, Principal p) {
+        UUID tenantId = requirePackageManager(p);
+        SolarPackage pack = packs.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Solar package not found"));
+        pack.setImageUrl(imageUrl);
+        return packs.save(pack);
+    }
+
+    @Transactional
+    public SolarPackage updateSolarPackage(UUID id, PackageInput x, Principal p) {
+        UUID tenantId = requirePackageManager(p);
+        SolarPackage pack = packs.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Solar package not found"));
+        packs.findByTenantIdOrderByIdDesc(tenantId).stream()
+                .filter(other -> !other.getId().equals(id) && other.getCode().equalsIgnoreCase(x.code()))
+                .findAny().ifPresent(other -> { throw new ResponseStatusException(HttpStatus.CONFLICT, "Package code already exists"); });
+        validatePackageItems(x.items(), tenantId);
+        pack.setCode(x.code().trim());
+        pack.setName(x.name().trim());
+        pack.setCapacityKw(x.capacityKw());
+        pack.setPackageType(x.packageType());
+        pack.setBasePrice(x.basePrice());
+        pack.setWarrantyYears(x.warrantyYears());
+        if (x.imageUrl() != null && !x.imageUrl().isBlank()) {
+            if (!x.imageUrl().startsWith("https://") && !x.imageUrl().startsWith("/uploads/"))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package image must use HTTPS or the managed /uploads path");
+            pack.setImageUrl(x.imageUrl());
+        }
+        if (x.active() != null) pack.setActive(x.active());
+        packs.save(pack);
+        packItems.findByTenantIdOrderByIdDesc(tenantId).stream()
+                .filter(item -> id.equals(item.getPackageId())).toList().forEach(packItems::delete);
+        for (PackageInput.Item item : x.items()) {
+            PackageItem row = new PackageItem();
+            row.setId(UUID.randomUUID());
+            row.setTenantId(tenantId);
+            row.setPackageId(id);
+            row.setProductId(item.productId());
+            row.setQuantity(item.quantity());
+            row.setOptionalItem(Boolean.TRUE.equals(item.optionalItem()));
+            packItems.save(row);
+        }
+        return pack;
+    }
+
+    private void validatePackageItems(List<PackageInput.Item> items, UUID tenantId) {
+        if (items == null || items.isEmpty())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Add at least one package component");
+        for (PackageInput.Item item : items) {
+            if (item.productId() == null || item.quantity() == null || item.quantity() < 1)
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Every package component needs an active product and positive quantity");
+            if (products.findByIdAndTenantId(item.productId(), tenantId).filter(Product::isActive).isEmpty())
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package components must use active products from this vendor");
+        }
+    }
+
+    @Transactional
+    public SolarPackage archiveSolarPackage(UUID id, Principal p) {
+        UUID tenantId = requirePackageManager(p);
+        SolarPackage pack = packs.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Solar package not found"));
+        pack.setActive(false);
+        return packs.save(pack);
+    }
+
     public Tenant tenantSettings(Principal p) {
         vendor(p);
         requirePermission(p, "DISCOUNT_POLICY_MANAGE");
