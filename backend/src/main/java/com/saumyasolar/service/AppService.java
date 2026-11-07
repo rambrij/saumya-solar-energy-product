@@ -317,18 +317,22 @@ public class AppService {
         var tenant = tenants.findBySlug(normalized)
                 .filter(value -> "ACTIVE".equals(value.getStatus()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Active store not found"));
+        var activeCategories = cats.findByTenantIdOrderByIdDesc(tenant.getId()).stream()
+                .filter(ProductCategory::isActive)
+                .collect(java.util.stream.Collectors.toMap(ProductCategory::getId, category -> category));
         return products.findByTenantIdOrderByIdDesc(tenant.getId()).stream()
                 .filter(Product::isActive)
-                .map(product -> cats.findByIdAndTenantId(product.getCategoryId(), tenant.getId())
-                        .filter(ProductCategory::isActive)
-                        .map(category -> new com.saumyasolar.api.CatalogModels.PublicProductView(
-                                product.getId(), product.getSku(), product.getName(), product.getDescription(),
-                                product.getCategoryId().toString(), category.getName(), product.getManufacturer(),
-                                product.getModel(), product.getTechnology(), product.getPrice(),
-                                product.getDiscountPercent(), product.getTaxPercent(), product.getWarrantyYears(),
-                                product.getImageUrl(), product.getDatasheetUrl(), product.getUnitOfMeasure(),
-                                product.isSerialized(), product.getAttributesJson()))
-                        .orElse(null))
+                .map(product -> {
+                    ProductCategory category = activeCategories.get(product.getCategoryId());
+                    if (category == null) return null;
+                    return new com.saumyasolar.api.CatalogModels.PublicProductView(
+                            product.getId(), product.getSku(), product.getName(), product.getDescription(),
+                            product.getCategoryId().toString(), category.getName(), product.getManufacturer(),
+                            product.getModel(), product.getTechnology(), product.getPrice(),
+                            product.getDiscountPercent(), product.getTaxPercent(), product.getWarrantyYears(),
+                            product.getImageUrl(), product.getDatasheetUrl(), product.getUnitOfMeasure(),
+                            product.isSerialized(), product.getAttributesJson());
+                })
                 .filter(Objects::nonNull)
                 .toList();
     }
