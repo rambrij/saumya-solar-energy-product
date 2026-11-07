@@ -411,6 +411,11 @@ public class Controller {
         return s.publicPackages(storeSlug);
     }
 
+    @GetMapping("/public/{storeSlug}/products")
+    List<PublicProductView> publicProducts(@PathVariable String storeSlug) {
+        return s.publicProducts(storeSlug);
+    }
+
     // Vendor catalogue administration. Delete operations are soft archives.
     @PostMapping("/catalog/products")
     com.saumyasolar.domain.Product createCatalogProduct(@Valid @RequestBody ProductInput x, Authentication a) { return catalog.createProduct(x,p(a)); }
