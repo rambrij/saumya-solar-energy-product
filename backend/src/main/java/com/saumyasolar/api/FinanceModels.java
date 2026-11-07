@@ -11,6 +11,7 @@ import java.util.UUID;
 public final class FinanceModels {
     private FinanceModels() {}
     public record InvoiceCreate(@NotNull UUID orderId, LocalDate dueDate, String taxTreatment) {}
+    public record CreditNoteCreate(@NotNull @DecimalMin("0.01") BigDecimal amount,@NotBlank @Size(max=500) String reason) {}
     public record ManualPayment(@NotNull UUID invoiceId,@NotNull @DecimalMin("0.01") BigDecimal amount,
         @NotBlank @Pattern(regexp="CASH|BANK_TRANSFER|UPI|CHEQUE|CARD|OTHER") String method,
         @Size(max=150) String reference,@NotNull Instant paidAt) {}
