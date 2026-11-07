@@ -101,7 +101,7 @@ class Release4FinanceServiceAndPlatformTest {
         mvc.perform(get("/api/v1/service-sla-policies").header("Authorization","Bearer "+customer)).andExpect(status().isForbidden());
     }
     @Test void signedPaymentWebhookIsAuthenticatedAndDuplicateEventsAreIdempotent()throws Exception{
-        String raw="{\\"eventId\\":\\"evt-release4-test-1\\",\\"paymentReference\\":\\"unmatched-provider-ref\\",\\"amount\\":100.00,\\"status\\":\\"SUCCEEDED\\"}";
+        String raw="{\"eventId\":\"evt-release4-test-1\",\"paymentReference\":\"unmatched-provider-ref\",\"amount\":100.00,\"status\":\"SUCCEEDED\"}";
         Mac mac=Mac.getInstance("HmacSHA256");mac.init(new SecretKeySpec("test-webhook-secret".getBytes(StandardCharsets.UTF_8),"HmacSHA256"));
         String signature=HexFormat.of().formatHex(mac.doFinal(raw.getBytes(StandardCharsets.UTF_8)));
         mvc.perform(post("/api/v1/payment-webhooks/test-provider").header("X-Payment-Signature",signature).contentType(MediaType.APPLICATION_JSON).content(raw))
