@@ -10,12 +10,12 @@ import java.util.*;
 @Configuration
 public class DataSeeder {
  @Value("${app.seed.enabled:false}") boolean seedEnabled;
- private static final List<String> PERMISSIONS=List.of("PLATFORM_MANAGE","CATALOG_MANAGE","CATALOG_VIEW","DISCOUNT_POLICY_MANAGE","CUSTOMER_MANAGE","LEAD_MANAGE","SURVEY_MANAGE","QUOTATION_MANAGE","DISCOUNT_APPROVE","ORDER_CREATE","USER_VIEW","USER_MANAGE","INVENTORY_MANAGE","SERVICE_MANAGE","FINANCE_MANAGE","REPORT_VIEW");
+ private static final List<String> PERMISSIONS=List.of("PLATFORM_MANAGE","CATALOG_MANAGE","CATALOG_VIEW","DISCOUNT_POLICY_MANAGE","CUSTOMER_MANAGE","LEAD_MANAGE","SURVEY_MANAGE","QUOTATION_MANAGE","DISCOUNT_APPROVE","ORDER_CREATE","USER_VIEW","USER_MANAGE","INVENTORY_MANAGE","SERVICE_MANAGE","FINANCE_MANAGE","PAYMENT_REFUND","REPORT_VIEW");
  private static final List<String> CATEGORIES=List.of("Solar Panels","Inverters","Batteries","Mounting Structures","Cables","AC/DC Distribution Boxes","Solar Accessories");
  @Bean CommandLineRunner seedData(TenantRepository tenants,PermissionRepository permissions,RoleRepository roles,AppUserRepository users,CustomerProfileRepository customers,ProductCategoryRepository categories,ProductRepository products,WarehouseRepository warehouses,InstallationChecklistTemplateRepository checklistTemplates,PasswordEncoder encoder){
   return args->{
    if(!seedEnabled) return;
-   Tenant defaultTenant=tenants.findBySlug("saumya-solar").orElseGet(()->{Tenant t=new Tenant();t.setId(UUID.randomUUID());t.setName("Saumya Solar");t.setSlug("saumya-solar");t.setStatus("ACTIVE");return tenants.save(t);});
+   Tenant defaultTenant=tenants.findBySlug("saumya-solar").orElseGet(()->{Tenant t=new Tenant();t.setId(UUID.randomUUID());t.setName("Saumya Solar");t.setSlug("saumya-solar");t.setStatus("ACTIVE");t.setCreatedAt(java.time.Instant.now());t.setUpdatedAt(java.time.Instant.now());return tenants.save(t);});
    Map<String,Permission> pm=new HashMap<>();
    for(String code:PERMISSIONS){Permission p=permissions.findByCode(code).orElseGet(()->{Permission x=new Permission();x.setId(UUID.randomUUID());x.setCode(code);return permissions.save(x);});pm.put(code,p);}
    Role platform=ensureRole(roles,null,"PLATFORM_SUPER_ADMIN");grant(platform,List.of("PLATFORM_MANAGE"),pm);roles.save(platform);
@@ -42,7 +42,7 @@ public class DataSeeder {
   Map.entry("MANAGER",List.of("CATALOG_VIEW","CUSTOMER_MANAGE","LEAD_MANAGE","SURVEY_MANAGE","QUOTATION_MANAGE","DISCOUNT_APPROVE","ORDER_CREATE","REPORT_VIEW")),
   Map.entry("INVENTORY_MANAGER",List.of("CATALOG_MANAGE","INVENTORY_MANAGE","ORDER_CREATE")),
   Map.entry("SERVICE_ENGINEER",List.of("SURVEY_MANAGE","SERVICE_MANAGE")),
-  Map.entry("ACCOUNTANT",List.of("FINANCE_MANAGE","REPORT_VIEW")),
+  Map.entry("ACCOUNTANT",List.of("FINANCE_MANAGE","PAYMENT_REFUND","REPORT_VIEW")),
   Map.entry("INSTALLER",List.of("SURVEY_MANAGE","SERVICE_MANAGE")),
   Map.entry("TECHNICIAN",List.of("SURVEY_MANAGE","SERVICE_MANAGE")),
   Map.entry("SERVICE_MANAGER",List.of("SURVEY_MANAGE","SERVICE_MANAGE","REPORT_VIEW")),

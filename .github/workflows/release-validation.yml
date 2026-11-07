@@ -1,13 +1,15 @@
-name: Release 1-3 validation
+name: Release 1-4 validation
 
 on:
   push:
     branches:
       - feature/release-1-2-complete-implementation
       - feature/release-3-operations
+      - feature/release-4-finance-and-service
   pull_request:
     branches:
       - main
+      - feature/release-3-operations
 
 permissions:
   contents: read
@@ -104,6 +106,31 @@ jobs:
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V16__repair_platform_permission_and_package_images.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='solar_package' AND column_name='image_url'")" = "1"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role_permission rp JOIN role r ON r.id=rp.role_id JOIN permission p ON p.id=rp.permission_id WHERE r.name='PLATFORM_SUPER_ADMIN' AND p.code='PLATFORM_MANAGE'")" = "1"
+      - name: Apply V17 tenant dashboard timestamps
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V17__tenant_admin_dashboard_audit_timestamps.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='tenant' AND column_name IN ('created_at','updated_at')")" = "2"
+      - name: Apply V18 finance and service schema
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V18__release4_finance_and_service.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name IN ('invoice','invoice_item','payment','payment_webhook_event','payment_refund','service_request','service_visit','service_sla_policy','service_event','invoice_sequence')")" = "10"
+      - name: Apply V19 refund permission
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V19__finance_refund_permissions.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role_permission rp JOIN role r ON r.id=rp.role_id JOIN permission p ON p.id=rp.permission_id WHERE r.name='ACCOUNTANT' AND p.code='PAYMENT_REFUND'")" = "1"
+      - name: Apply V20 credit note and tax breakdown
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V20__invoice_credit_notes_and_tax_breakdown.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='credit_note'")" = "1"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='invoice' AND column_name IN ('cgst_amount','sgst_amount','igst_amount')")" = "3"
+      - name: Apply V21 service business calendar
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V21__service_business_calendar_and_reopen_policy.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='service_sla_policy' AND column_name='working_days_json'")" = "1"
+      - name: Apply V22 private service attachments
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V22__private_service_attachments.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='service_attachment'")" = "1"
 
   mysql-app-startup:
     name: Start Spring Boot against MySQL 8.4

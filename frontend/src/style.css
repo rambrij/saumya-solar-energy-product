@@ -89,3 +89,33 @@ button.secondary{background:#e5eee8;color:#1c4935}
 .settings-state{max-width:620px}
 .public-enquiry-form input:focus,.public-enquiry-form select:focus,.public-enquiry-form textarea:focus{outline:2px solid #56a879;outline-offset:1px}
 @media(max-width:760px){.public-nav{position:static;flex-wrap:wrap}.public-nav>div:nth-child(2){order:3;width:100%;justify-content:space-between;gap:10px}.solar-hero,.benefits-section,.contact-section{grid-template-columns:1fr}.hero-image img{height:270px}.public-section{padding-top:52px;padding-bottom:52px}.customer-package-card{grid-template-columns:90px 1fr!important}.customer-package-card img{width:90px;height:82px}.customer-package-card strong{grid-column:2}.public-enquiry-form{grid-template-columns:1fr}.public-enquiry-form>*{grid-column:1!important}}
+
+.brand-home{display:inline-flex;align-items:center;background:transparent;border:0;padding:0;cursor:pointer}
+.brand-home:focus-visible{outline:3px solid #f59e0b;outline-offset:4px;border-radius:8px}
+.platform-shell{max-width:1280px;margin:0 auto;padding:24px 16px 56px}
+.platform-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:12px 0 20px}
+.platform-heading h1{margin:0}.platform-heading h2{margin:0}
+.eyebrow{font-size:.75rem;letter-spacing:.12em;font-weight:700;color:#16804a;margin:0 0 8px}
+.platform-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:18px 0}
+.platform-stats .card{display:flex;flex-direction:column;gap:8px;margin:0}
+.platform-stats small{color:#64748b}.platform-stats strong{font-size:2rem;color:#14532d}
+.platform-filters{display:grid;grid-template-columns:minmax(220px,1fr) 200px;gap:12px;margin:16px 0}
+.platform-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:18px;flex-wrap:wrap}
+.status-pill{display:inline-block;padding:4px 9px;border-radius:999px;background:#e2e8f0;color:#334155;font-size:.78rem;font-weight:700}
+.status-pill.active{background:#dcfce7;color:#166534}.status-pill.suspended{background:#fee2e2;color:#991b1b}.status-pill.inactive{background:#f1f5f9;color:#475569}
+.empty-state{padding:30px 12px;text-align:center;color:#64748b}
+@media(max-width:760px){.platform-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.platform-filters{grid-template-columns:1fr}.platform-heading{align-items:flex-start}.table-wrap{overflow-x:auto}.platform-shell{padding:16px 10px 36px}}
+
+.finance-service-shell{display:flex;flex-direction:column;gap:16px;margin:16px 0 30px}
+.finance-service-shell .card{margin:0}
+.finance-service-shell .form small{display:block;color:#64748b;line-height:1.5}
+.finance-service-shell article{align-items:center;gap:12px;flex-wrap:wrap}
+.finance-service-shell article>div:first-child{min-width:220px;flex:1}
+.finance-service-shell article small{display:block;color:#64748b;margin-top:4px}
+.finance-service-shell .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.finance-service-shell a{color:#166534;text-decoration:underline;font-weight:600}
+@media(max-width:680px){.finance-service-shell .actions{width:100%}.finance-service-shell .actions button{flex:1}.finance-service-shell article{align-items:flex-start}}
+
+.service-attachments{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.service-attachments label{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:#475569}
+.service-attachments input[type=file]{max-width:240px;font-size:.78rem}

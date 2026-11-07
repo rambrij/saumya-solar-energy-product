@@ -323,3 +323,153 @@ New regression coverage is in `backend/src/test/java/com/saumyasolar/Release4Acc
 | Customer | `customer@saumya.local` | `Customer@123` | Own customer workspace; no vendor settings or package administration |
 
 These are disposable local-only seeded accounts. Do not enable demo seeding or use these credentials in production.
+
+
+---
+
+# Release 4 — Platform Administration, Finance and Service
+
+This branch is stacked on `feature/release-3-operations`. Requirement-level status and source references are maintained in [RELEASE_4_TRACEABILITY.md](RELEASE_4_TRACEABILITY.md).
+
+## Platform Super Admin dashboard
+
+After platform login, the existing account-type dispatch opens the Platform Dashboard rather than a tenant-creation form. The logo reloads the application root and the authenticated account type dispatches to its own home (Platform, Vendor or Customer); public visitors return to the public landing page.
+
+The platform dashboard includes:
+- Total, active, inactive and suspended tenant counters. The current tenant lifecycle persists `ACTIVE` and `SUSPENDED`; inactive is shown as zero unless that state is introduced in a future lifecycle migration.
+- Recently created tenants and a searchable, paginated tenant directory.
+- Tenant administrator name/email from the tenant's `VENDOR_ADMIN` user role.
+- View, edit display name, activate and suspend actions.
+- A separate Create Tenant workflow. On success it returns to the dashboard and refreshes the directory.
+- CSV, XLSX and PDF downloads use the active search and status filters.
+
+Platform APIs (all require `PLATFORM_SUPER_ADMIN` plus `PLATFORM_MANAGE`):
+- `GET /api/v1/platform/tenants?search=&status=ALL&page=0&size=20`
+- `GET /api/v1/platform/tenants/{id}`
+- `PATCH /api/v1/platform/tenants/{id}` — display name only. Slug and initial administrator identity are immutable through this endpoint.
+- `GET /api/v1/platform/tenants/export?search=&status=ALL` (CSV)
+- `GET /api/v1/platform/tenants/export.xlsx?search=&status=ALL`
+- `GET /api/v1/platform/tenants/export.pdf?search=&status=ALL`
+- Existing `POST /api/v1/tenants` and `PATCH /api/v1/tenants/{id}/status` retain their platform-only guards.
+
+## Release 4 database migrations
+
+Flyway applies these forward-only migrations; do not edit previously deployed migrations:
+
+| Migration | Purpose |
+|---|---|
+| V17 | Tenant created/updated timestamps and status index |
+| V18 | Invoice snapshots, fiscal-year invoice sequence, payments, webhook event deduplication, refunds, service requests, visits, SLA policies and service history; GSTIN and reopen policy configuration |
+| V19 | `PAYMENT_REFUND` permission for Vendor Admin and Accountant |
+| V20 | Invoice CGST/SGST/IGST component amounts and immutable credit-note records |
+| V21 | Configurable SLA working-day calendar |
+| V22 | Private tenant-authorized service evidence attachments |
+
+Before production migration, take a verified MySQL backup. Existing tenant records receive timestamps from the migration defaults. No table is dropped.
+
+## Finance APIs and workflows
+
+- `GET /api/v1/finance/orders-awaiting-invoice`: finance-authorized eligible order selector.
+- `GET/POST /api/v1/invoices`: list invoices or issue an invoice from an eligible confirmed order milestone.
+- `GET /api/v1/invoices/{id}/items` and `GET /api/v1/invoices/{id}/pdf`: tenant/customer-authorized immutable invoice snapshots and PDF.
+- `POST /api/v1/invoices/{id}/void`: reason-required void; a paid invoice must be refunded first.
+- `POST /api/v1/invoices/{id}/credit-notes` and `GET /api/v1/invoices/{id}/credit-notes`: issue/query bounded credit notes.
+- `GET/POST /api/v1/payments`: list payments and record offline/manual payment against an invoice. Overpayments are rejected.
+- `GET /api/v1/payments/{id}/receipt.pdf`: authorized receipt download.
+- `POST /api/v1/payments/{id}/refund` and `GET /api/v1/refunds`: audited manual refunds; `PAYMENT_REFUND` is required.
+- `POST /api/v1/payment-webhooks/{provider}`: unauthenticated only at the JWT layer, but HMAC-SHA256 signed with `X-Payment-Signature`. Provider/event ID is unique and duplicate callbacks are idempotently acknowledged.
+
+Invoice numbering uses a transactionally incremented per-tenant fiscal-year sequence (India financial-year boundary: 1 April) and tenant invoice prefix. Invoice items snapshot description, HSN, quantity, unit price, tax rate, taxable amount and tax amount. Tax treatment may be `IGST`, `CGST_SGST` or `UNSPECIFIED`; the PDF carries the GSTIN fields and component totals available in the source records.
+
+**Statutory invoice warning:** this is a GST-ready data model and printable draft invoice, not a legal/tax compliance certification. Confirm vendor/customer GSTIN, place of supply, HSN/SAC, tax rate, invoice series, reverse-charge/e-invoice applicability and tax treatment with the vendor's accountant before statutory production use. The platform does not infer intra-state/inter-state treatment from incomplete address data.
+
+
+### Private service evidence storage (V22)
+
+- `POST /api/v1/service-requests/{ticketId}/attachments` with multipart field `file`.
+- `GET /api/v1/service-requests/{ticketId}/attachments` lists authorized evidence metadata.
+- `GET /api/v1/service-requests/{ticketId}/attachments/{attachmentId}` streams the file only after ticket ownership/assignment authorization.
+- JPEG, PNG, WebP and PDF are accepted; maximum size is 10 MB.
+- Files are stored outside the public `/uploads` resource handler. Docker Compose mounts `solar_private_service_attachments` at `/var/lib/saumya/private-service-attachments`.
+- Configure `SERVICE_ATTACHMENT_DIR` to a persistent private disk path in production. Do not map this directory to a public static web server.
+
+## Payment gateway configuration
+
+Set `PAYMENT_WEBHOOK_SECRET` in the backend environment. The webhook signature is the lowercase/uppercase-insensitive hexadecimal HMAC-SHA256 of the exact raw request body. Keep this secret server-side only.
+
+A provider-neutral `PaymentGatewayAdapter` port defines create, webhook verification, status lookup and refund operations. No real gateway was selected in the requirements, so no Razorpay/PayU/Stripe credentials, checkout flow or provider-specific behavior is fabricated. Current usable payments are manual/offline records; gateway webhook processing updates a pre-existing provider payment record and is not a substitute for gateway checkout integration. Gateway refunds remain disabled until a selected provider adapter is configured.
+
+## Service management APIs and workflows
+
+- `GET/POST /api/v1/service-requests`: vendor service workspace list/create and customer-owned self-service create/list.
+- `GET /api/v1/service-requests/{id}`: tenant/customer-owned ticket details.
+- `POST /api/v1/service-requests/{id}/assign`: Service Manager/Vendor Admin assigns an enabled same-tenant engineer.
+- `POST /api/v1/service-requests/{id}/visits`: schedule a future visit for the assigned engineer.
+- `POST /api/v1/service-requests/{id}/visits/{visitId}/start` and `/complete`: engineer field execution and resolution.
+- `POST /api/v1/service-requests/{id}/confirm`: customer confirmation.
+- `POST /api/v1/service-requests/{id}/close`: manager closure after customer confirmation.
+- `POST /api/v1/service-requests/{id}/reopen`: customer reopen within the vendor-configured window.
+- `GET /api/v1/service-requests/{id}/visits` and `/history`: visit and append-only lifecycle history.
+- `GET/POST /api/v1/service-sla-policies`: configure priority response/resolution minutes, IANA timezone, business hours, working weekdays and holiday dates.
+- `POST /api/v1/service-requests/{id}/sla/pause` and `/resume`: reason-required SLA pause and deadline adjustment.
+- `POST /api/v1/service-settings/reopen-policy`: Vendor Admin configures 0–90 reopen days (zero disables reopen).
+- `GET /api/v1/service-customers` and `/service-engineers`: service-permission-scoped tenant lookups.
+
+Service ticket states follow `OPEN → ASSIGNED → VISIT_SCHEDULED → IN_PROGRESS → RESOLVED → CUSTOMER_CONFIRMED → CLOSED`. A customer may reopen a closed ticket only when the tenant has enabled a reopen window. Ticket creation snapshots active warranty status when the product/serial can be matched. Service parts are consumed inside the visit-completion transaction using a row-locked inventory balance and a new immutable `SERVICE_CONSUMPTION` inventory transaction linked to the ticket.
+
+SLA deadlines are calculated from configured timezone, business start/end, working weekdays and holiday dates. If business hours are not configured, the SLA is elapsed 24×7 minutes. A scheduled worker records each response/resolution breach once. Paused intervals extend deadlines.
+
+## Role and endpoint matrix
+
+| Role | Finance | Service |
+|---|---|---|
+| Platform Super Admin | No vendor invoice/payment data access | No vendor service-ticket access |
+| Vendor Admin | Invoice issue/void/credit note, manual payment/refund, reports | Full tenant service administration, assignment, SLA and reopen policy |
+| Accountant | Finance operations and refunds when mapped with `FINANCE_MANAGE` / `PAYMENT_REFUND` | No service access unless explicitly granted |
+| Service Manager | No finance unless separately granted | Tenant tickets, assignment, visits, closure, SLA and policy |
+| Service Engineer / Technician / Installer | No finance unless separately granted | Assigned tickets, visits, field notes, resolution and parts |
+| Customer | Own invoices, payments, receipts and credit notes | Own ticket creation, tracking, confirmation and policy-allowed reopen |
+
+All vendor-side operations derive tenant ID from the authenticated principal. Customer reads additionally verify the customer's own profile/order relationship. Platform endpoints never expose vendor finance or service records.
+
+## Local setup and verification
+
+Use the existing setup steps above, then:
+
+```bash
+git checkout feature/release-4-finance-and-service
+git pull origin feature/release-4-finance-and-service
+docker compose up --build -d
+```
+
+Backend:
+```bash
+cd backend
+mvn --batch-mode clean verify
+```
+
+Frontend:
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+Configure the backend environment:
+- `PAYMENT_WEBHOOK_SECRET`: required before accepting payment provider callbacks.
+- `SERVICE_SLA_CHECK_INTERVAL_MS`: optional; defaults to 60000 milliseconds.
+- `DB_URL`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`, `CORS_ORIGINS`: existing required runtime settings.
+
+The Release 4 CI workflow validates backend tests, frontend build, V1–V21 migrations on MySQL 8.4 and Spring Boot startup/schema validation. See the draft stacked PR for the live run status.
+
+## Known Release 4 limitations / decisions still required
+
+1. **Gateway provider not selected:** provider adapter contract and signed event processing exist; no real hosted checkout, gateway payment creation, settlement reconciliation or gateway refund implementation is enabled.
+2. **GST statutory configuration:** GSTIN and tax components are snapshotted, but place-of-supply rules, statutory invoice fields/e-invoice/IRN, reverse charge and legally approved invoice numbering must be confirmed by the business/accountant.
+3. **Service attachments:** visit evidence URL is persisted, but a private, tenant-authorized upload/download service for customer photos/documents is not yet implemented. Do not place private service evidence in the public `/uploads` folder.
+4. **SLA notifications/escalation:** breach events are persisted and exposed in ticket history; outbound email/SMS/push escalation templates and provider integration remain future work.
+5. **SLA calendar policy:** working days, holidays and timezone are configurable; tenant owners must supply their actual calendar. The default weekday set is Monday–Friday only when a business-hour window is configured.
+6. **Invoice delivery:** PDFs are downloadable; automated email sending and delivery tracking require an approved mail provider/configuration.
+7. **Platform inactive state:** current lifecycle supports ACTIVE/SUSPENDED. Inactive count/filter is retained for reporting compatibility but no separate INACTIVE transition is introduced.
+8. **Release 5:** reporting/export center beyond platform tenant exports, audit search UI, dashboards, CMS/blog and notification provider management remain outside this Release 4 branch.
+

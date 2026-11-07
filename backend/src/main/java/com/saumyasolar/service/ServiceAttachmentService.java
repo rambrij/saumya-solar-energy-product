@@ -1,0 +1,65 @@
+package com.saumyasolar.service;
+
+import com.saumyasolar.domain.ServiceAttachment;
+import com.saumyasolar.repo.ServiceAttachmentRepository;
+import com.saumyasolar.security.Principal;
+import jakarta.transaction.Transactional;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.io.IOException;
+import java.nio.file.*;
+import java.time.Instant;
+import java.util.*;
+
+@Service
+public class ServiceAttachmentService {
+    private static final long MAX_SIZE=10L*1024*1024;
+    private final Path root;
+    private final ServiceAttachmentRepository attachments;
+    private final FinanceService finance;
+    public ServiceAttachmentService(@Value("${app.service.attachment-location:./data/private-service-attachments}") String location,
+            ServiceAttachmentRepository attachments,FinanceService finance){
+        this.root=Path.of(location).toAbsolutePath().normalize();this.attachments=attachments;this.finance=finance;
+    }
+    @Transactional
+    public ServiceAttachment upload(UUID ticketId,MultipartFile file,Principal p){
+        finance.getTicket(ticketId,p);
+        if(file==null||file.isEmpty())throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Choose an attachment file");
+        if(file.getSize()>MAX_SIZE)throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,"Service attachments must be 10 MB or smaller");
+        String type=file.getContentType()==null?"":file.getContentType().toLowerCase(Locale.ROOT);
+        if(!Set.of("image/jpeg","image/png","image/webp","application/pdf").contains(type))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Only JPEG, PNG, WebP and PDF service evidence is supported");
+        try{
+            byte[] bytes=file.getBytes();if(!valid(bytes,type))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Uploaded file signature does not match its content type");
+            String ext=switch(type){case "image/jpeg"->".jpg";case "image/png"->".png";case "image/webp"->".webp";default->".pdf";};
+            String key=UUID.randomUUID()+ext;Files.createDirectories(root);Path target=root.resolve(key).normalize();
+            if(!target.startsWith(root))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Invalid attachment path");
+            Files.write(target,bytes,StandardOpenOption.CREATE_NEW);
+            try{
+                ServiceAttachment a=new ServiceAttachment();a.setId(UUID.randomUUID());a.setTenantId(p.tenantId());a.setServiceRequestId(ticketId);
+                a.setOriginalName(safeName(file.getOriginalFilename()));a.setStorageKey(key);a.setContentType(type);a.setSizeBytes(bytes.length);
+                a.setUploadedBy(p.userId());a.setCreatedAt(Instant.now());return attachments.save(a);
+            }catch(RuntimeException ex){Files.deleteIfExists(target);throw ex;}
+        }catch(IOException ex){throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,"Unable to store service attachment",ex);}
+    }
+    public List<ServiceAttachment> list(UUID ticketId,Principal p){finance.getTicket(ticketId,p);return attachments.findByTenantIdAndServiceRequestIdOrderByCreatedAtAsc(p.tenantId(),ticketId);}
+    public Download download(UUID ticketId,UUID attachmentId,Principal p){
+        finance.getTicket(ticketId,p);
+        ServiceAttachment a=attachments.findByIdAndTenantIdAndServiceRequestId(attachmentId,p.tenantId(),ticketId)
+            .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Service attachment not found"));
+        try{Path file=root.resolve(a.getStorageKey()).normalize();if(!file.startsWith(root)||!Files.isRegularFile(file))throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Service attachment file not found");return new Download(a,Files.readAllBytes(file));}
+        catch(IOException ex){throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,"Unable to read service attachment",ex);}
+    }
+    private boolean valid(byte[] b,String type){
+        if(type.equals("application/pdf"))return b.length>=5&&b[0]=='%'&&b[1]=='P'&&b[2]=='D'&&b[3]=='F'&&b[4]=='-';
+        if(type.equals("image/jpeg"))return b.length>=3&&(b[0]&255)==255&&(b[1]&255)==216&&(b[2]&255)==255;
+        if(type.equals("image/png"))return b.length>=8&&(b[0]&255)==137&&b[1]=='P'&&b[2]=='N'&&b[3]=='G';
+        return b.length>=12&&b[0]=='R'&&b[1]=='I'&&b[2]=='F'&&b[3]=='F'&&b[8]=='W'&&b[9]=='E'&&b[10]=='B'&&b[11]=='P';
+    }
+    private String safeName(String value){if(value==null||value.isBlank())return "service-evidence";String normalized=value.replace("\\","/");String name=normalized.substring(normalized.lastIndexOf('/')+1).replaceAll("[^A-Za-z0-9._-]","_");return name.length()>200?name.substring(name.length()-200):name;}
+    public record Download(ServiceAttachment attachment,byte[] content){}
+}

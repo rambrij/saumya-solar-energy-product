@@ -24,6 +24,13 @@ import com.saumyasolar.service.QuotationRevisionService;
 import com.saumyasolar.service.OperationsService;
 import com.saumyasolar.service.CatalogAdminService;
 import com.saumyasolar.service.PackageImageStorageService;
+import com.saumyasolar.service.TenantAdminService;
+import com.saumyasolar.api.TenantAdminModels.TenantUpdate;
+import com.saumyasolar.api.TenantAdminModels.TenantPage;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import java.time.LocalDate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.http.HttpStatus;
 import jakarta.validation.Valid;
@@ -48,6 +55,7 @@ public class Controller {
     final OperationsService operations;
     final CatalogAdminService catalog;
     final PackageImageStorageService packageImages;
+    final TenantAdminService tenantAdmin;
     
     Controller(
             AppService s,
@@ -60,7 +68,8 @@ public class Controller {
             AuthLifecycleService l,
             OperationsService operations,
             CatalogAdminService catalog,
-            PackageImageStorageService packageImages
+            PackageImageStorageService packageImages,
+            TenantAdminService tenantAdmin
     ) {
         this.s = s;
         users = u;
@@ -73,6 +82,7 @@ public class Controller {
         this.operations = operations;
         this.catalog = catalog;
         this.packageImages = packageImages;
+        this.tenantAdmin = tenantAdmin;
     }
     
     Principal p(Authentication a) {
@@ -172,6 +182,82 @@ public class Controller {
     @PostMapping("/customer/enquiries")
     com.saumyasolar.domain.Enquiry customerEnquiry(@RequestBody Input x, Authentication a) {
         return s.createCustomerEnquiry(x, p(a));
+    }
+
+    @GetMapping("/platform/tenants")
+    TenantPage platformTenants(@RequestParam(defaultValue="") String search,
+                               @RequestParam(defaultValue="ALL") String status,
+                               @RequestParam(defaultValue="0") int page,
+                               @RequestParam(defaultValue="20") int size,
+                               Authentication a) {
+        return tenantAdmin.page(p(a), search, status, page, size);
+    }
+
+    @GetMapping("/platform/tenants/{id}")
+    com.saumyasolar.api.TenantAdminModels.TenantRow platformTenant(@PathVariable UUID id, Authentication a) {
+        return tenantAdmin.get(id, p(a));
+    }
+
+    @PatchMapping("/platform/tenants/{id}")
+    com.saumyasolar.api.TenantAdminModels.TenantRow updatePlatformTenant(@PathVariable UUID id,
+            @Valid @RequestBody TenantUpdate input, Authentication a) {
+        return tenantAdmin.update(id, input, p(a));
+    }
+
+    @GetMapping(value="/platform/tenants/export", produces="text/csv")
+    ResponseEntity<byte[]> exportTenantsCsv(@RequestParam(defaultValue="") String search,
+            @RequestParam(defaultValue="ALL") String status, Authentication a) {
+        var rows=tenantAdmin.exportRows(p(a),search,status);
+        StringBuilder csv=new StringBuilder("Tenant Name,Tenant Slug,Administrator Name,Administrator Email,Status,Created Date,Updated Date\\r\\n");
+        for(var x:rows) csv.append(csv(x.name())).append(',').append(csv(x.slug())).append(',')
+            .append(csv(x.administratorName())).append(',').append(csv(x.administratorEmail())).append(',')
+            .append(csv(x.status())).append(',').append(csv(x.createdAt())).append(',')
+            .append(csv(x.updatedAt())).append("\\r\\n");
+        return export(csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+            "text/csv; charset=UTF-8", "tenants-"+status.toLowerCase(Locale.ROOT)+"-"+LocalDate.now()+".csv");
+    }
+
+    @GetMapping(value="/platform/tenants/export.xlsx", produces="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    ResponseEntity<byte[]> exportTenantsExcel(@RequestParam(defaultValue="") String search,
+            @RequestParam(defaultValue="ALL") String status, Authentication a) throws Exception {
+        var rows=tenantAdmin.exportRows(p(a),search,status);
+        try(var workbook=new XSSFWorkbook();var out=new ByteArrayOutputStream()) {
+            var sheet=workbook.createSheet("Tenants");
+            String[] headers={"Tenant Name","Tenant Slug","Administrator Name","Administrator Email","Status","Created Date","Updated Date"};
+            var header=sheet.createRow(0);for(int i=0;i<headers.length;i++)header.createCell(i).setCellValue(headers[i]);
+            int n=1;for(var x:rows){var row=sheet.createRow(n++);String[] values={x.name(),x.slug(),x.administratorName(),x.administratorEmail(),x.status(),String.valueOf(x.createdAt()),String.valueOf(x.updatedAt())};for(int i=0;i<values.length;i++)row.createCell(i).setCellValue(values[i]==null?"":values[i]);}
+            for(int i=0;i<headers.length;i++)sheet.autoSizeColumn(i);
+            workbook.write(out);
+            return export(out.toByteArray(),"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "tenants-"+status.toLowerCase(Locale.ROOT)+"-"+LocalDate.now()+".xlsx");
+        }
+    }
+
+    @GetMapping(value="/platform/tenants/export.pdf", produces=MediaType.APPLICATION_PDF_VALUE)
+    ResponseEntity<byte[]> exportTenantsPdf(@RequestParam(defaultValue="") String search,
+            @RequestParam(defaultValue="ALL") String status, Authentication a) throws Exception {
+        var rows=tenantAdmin.exportRows(p(a),search,status);
+        try(var out=new ByteArrayOutputStream()) {
+            var doc=new Document();PdfWriter.getInstance(doc,out);doc.open();
+            doc.add(new Paragraph("Saumya Solar - Tenant Report"));
+            doc.add(new Paragraph("Status: "+status+" | Search: "+search+" | Generated: "+LocalDate.now()));
+            var table=new PdfPTable(new float[]{2,2,2,3,1,2,2});table.setWidthPercentage(100);
+            for(String h:new String[]{"Tenant","Slug","Administrator","Admin Email","Status","Created","Updated"})table.addCell(h);
+            for(var x:rows){table.addCell(safe(x.name()));table.addCell(safe(x.slug()));table.addCell(safe(x.administratorName()));table.addCell(safe(x.administratorEmail()));table.addCell(safe(x.status()));table.addCell(safe(x.createdAt()));table.addCell(safe(x.updatedAt()));}
+            doc.add(table);doc.close();
+            return export(out.toByteArray(),MediaType.APPLICATION_PDF_VALUE,
+                "tenants-"+status.toLowerCase(Locale.ROOT)+"-"+LocalDate.now()+".pdf");
+        }
+    }
+
+    private static String csv(Object value) {
+        String v=value==null?"":String.valueOf(value);
+        return "\"" + v.replace("\"","\"\"") + "\"";
+    }
+    private static String safe(Object value){return value==null?"":String.valueOf(value);}
+    private static ResponseEntity<byte[]> export(byte[] bytes,String type,String filename) {
+        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=\"" + filename + "\"")
+            .header(HttpHeaders.CONTENT_TYPE,type).body(bytes);
     }
 
     @PostMapping("/tenants")

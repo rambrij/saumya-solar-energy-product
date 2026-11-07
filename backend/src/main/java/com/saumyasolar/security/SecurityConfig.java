@@ -43,7 +43,7 @@ public class SecurityConfig {
                                 HttpStatus.FORBIDDEN.value(), "You do not have permission to access this resource")))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/v1/auth/**", "/api/v1/public/**", "/uploads/**",
+                        .requestMatchers("/api/v1/auth/**", "/api/v1/public/**", "/api/v1/payment-webhooks/**", "/uploads/**",
                                 "/actuator/health", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
@@ -55,7 +55,7 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(Arrays.stream(origins.split(","))
                 .map(String::trim).filter(value -> !value.isEmpty()).distinct().toList());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Idempotency-Key"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Idempotency-Key", "X-Payment-Signature"));
         configuration.setExposedHeaders(List.of("Location", "Content-Disposition"));
         configuration.setAllowCredentials(false);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
