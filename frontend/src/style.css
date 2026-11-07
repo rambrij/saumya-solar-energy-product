@@ -105,3 +105,13 @@ button.secondary{background:#e5eee8;color:#1c4935}
 .status-pill.active{background:#dcfce7;color:#166534}.status-pill.suspended{background:#fee2e2;color:#991b1b}.status-pill.inactive{background:#f1f5f9;color:#475569}
 .empty-state{padding:30px 12px;text-align:center;color:#64748b}
 @media(max-width:760px){.platform-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.platform-filters{grid-template-columns:1fr}.platform-heading{align-items:flex-start}.table-wrap{overflow-x:auto}.platform-shell{padding:16px 10px 36px}}
+
+.finance-service-shell{display:flex;flex-direction:column;gap:16px;margin:16px 0 30px}
+.finance-service-shell .card{margin:0}
+.finance-service-shell .form small{display:block;color:#64748b;line-height:1.5}
+.finance-service-shell article{align-items:center;gap:12px;flex-wrap:wrap}
+.finance-service-shell article>div:first-child{min-width:220px;flex:1}
+.finance-service-shell article small{display:block;color:#64748b;margin-top:4px}
+.finance-service-shell .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.finance-service-shell a{color:#166534;text-decoration:underline;font-weight:600}
+@media(max-width:680px){.finance-service-shell .actions{width:100%}.finance-service-shell .actions button{flex:1}.finance-service-shell article{align-items:flex-start}}
