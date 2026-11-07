@@ -51,7 +51,7 @@ public final class Models {
             Instant scheduledAt, String roofType, BigDecimal usableAreaSqft, String shading,
             BigDecimal sanctionedLoadKw, String notes, String status, UUID surveyId, BigDecimal discountPercent,
             LocalDate validUntil, List<Line> items, String slug, String adminName, String adminEmail,
-            String adminPassword
+            String adminPassword, String imageUrl
     ) {
     }
     
