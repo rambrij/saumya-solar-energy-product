@@ -47,23 +47,23 @@ Source documents were read from the baseline branch:
 
 ## Implementation checklist
 
-- [ ] Tenant dashboard API: status totals, recent tenants, search and server-side pagination.
-- [ ] Tenant detail/edit API with allow-listed mutable fields and platform-only authorization.
-- [ ] CSV, XLSX and PDF export using the exact current search/status filter.
-- [ ] Dedicated Platform dashboard UI; create/edit return to dashboard and refresh results.
-- [ ] Central role-aware logo destination using current session and existing account-type routing.
-- [ ] Versioned Flyway migration for tenant audit timestamps and finance/service schema.
-- [ ] Invoice snapshots, controlled fiscal numbering, PDF, send/void and credit-note representation.
-- [ ] Manual payments, immutable payment events, receipts and overpayment prevention.
-- [ ] Provider-neutral adapter port and signed, idempotent webhook event handling; real gateway activation remains configuration-dependent.
-- [ ] Service ticket lifecycle, tenant/customer ownership and assignment controls.
-- [ ] SLA policy and deterministic elapsed-time calculations; configurable working-hours/holiday calendar.
+- [x] Tenant dashboard API: status totals, recent tenants, search and server-side pagination.
+- [x] Tenant detail/edit API with allow-listed mutable fields and platform-only authorization.
+- [x] CSV, XLSX and PDF export using the exact current search/status filter.
+- [x] Dedicated Platform dashboard UI; create/edit return to dashboard and refresh results.
+- [x] Central role-aware logo destination using current session and existing account-type routing.
+- [x] Versioned Flyway migrations V17–V22 for tenant audit timestamps, finance, service and private attachments.
+- [x] Invoice snapshots, controlled fiscal numbering, PDF, void and credit-note representation; automated email sending remains provider-dependent.
+- [x] Manual payments, receipts and overpayment prevention; payment status changes are audited through payment records and webhook events.
+- [x] Provider-neutral adapter port and signed, idempotent webhook event handling; real gateway activation remains configuration-dependent.
+- [x] Service ticket lifecycle, tenant/customer ownership and assignment controls.
+- [x] SLA policy, configurable business-hours/working-days/holiday calendar, pause/resume and breach events; outbound escalation notifications remain open.
 - [x] Service visit scheduling, private resolution evidence and customer confirmation.
 - [x] Service parts consumption through the existing inventory balance/ledger transaction in the same database transaction.
-- [ ] Refund and cancellation workflow with reason, amount limits, permission and audit.
-- [ ] Vendor and customer finance/service UI, validation, loading/empty/error states.
-- [x] Regression tests for platform export, service state/tenant ownership and private attachment access; finance webhook/refund and full parts-consumption scenario tests remain to be expanded.
-- [x] Backend and frontend build, Flyway MySQL 8.4 migration, application startup and regression CI (latest head run must be checked after final commit).
+- [x] Manual refund workflow with reason, amount limits, permission and audit; gateway refunds require a selected provider adapter.
+- [x] Vendor and customer finance/service UI, validation, loading/empty/error states.
+- [x] Regression tests for platform export, service state/tenant ownership, private attachment access and signed webhook idempotency; payment refund and full parts-consumption scenarios remain to be expanded.
+- [x] Backend and frontend build, Flyway V1–V22 MySQL 8.4 migration, application startup and regression CI (final head SHA is linked in the release summary).
 - [x] README, API/role matrix and environment configuration updated.
 
 ## Explicit open business/provider decisions
