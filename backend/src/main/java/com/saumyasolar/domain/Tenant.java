@@ -1,13 +1,15 @@
 package com.saumyasolar.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
+import java.time.Instant;
 import java.util.UUID;
 import java.math.BigDecimal;
+
 @Entity
 @Getter
 @Setter
@@ -19,4 +21,8 @@ public class Tenant {
     String slug;
     String status;
     BigDecimal discountApprovalThreshold = BigDecimal.TEN;
+    @Column(name = "created_at", insertable = false, updatable = false)
+    Instant createdAt;
+    @Column(name = "updated_at")
+    Instant updatedAt;
 }
