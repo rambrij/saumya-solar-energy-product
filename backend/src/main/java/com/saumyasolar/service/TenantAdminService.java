@@ -64,6 +64,12 @@ public class TenantAdminService {
             all.stream().filter(t->"INACTIVE".equals(t.getStatus())).count(),
             all.stream().filter(t->"SUSPENDED".equals(t.getStatus())).count(),recent,rows);
     }
+    public List<TenantRow> exportRows(Principal p, String search, String status) {
+        TenantPage first=page(p,search,status,0,100);
+        java.util.ArrayList<TenantRow> result=new java.util.ArrayList<>(first.items());
+        for(int n=1;n<first.totalPages();n++) result.addAll(page(p,search,status,n,100).items());
+        return List.copyOf(result);
+    }
     public TenantRow get(UUID id, Principal p) {
         authorize(p);
         return row(tenants.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found")));
