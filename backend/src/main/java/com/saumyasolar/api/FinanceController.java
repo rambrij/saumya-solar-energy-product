@@ -10,6 +10,7 @@ import com.saumyasolar.domain.Invoice;
 import com.saumyasolar.security.Principal;
 import com.saumyasolar.service.FinanceService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.*;
 import org.springframework.http.*;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -31,6 +32,8 @@ public class FinanceController {
     Invoice createInvoice(@Valid @RequestBody InvoiceCreate x,Authentication a){return finance.createInvoice(x,principal(a));}
     @GetMapping("/invoices/{id}/items")
     List<?> invoiceItems(@PathVariable UUID id,Authentication a){return finance.invoiceLines(id,principal(a));}
+    @PostMapping("/invoices/{id}/credit-notes") Object creditNote(@PathVariable UUID id,@Valid @RequestBody CreditNoteCreate x,Authentication a){return finance.createCreditNote(id,x,principal(a));}
+    @GetMapping("/invoices/{id}/credit-notes") List<?> creditNotes(@PathVariable UUID id,Authentication a){return finance.creditNotes(id,principal(a));}
     @PostMapping("/invoices/{id}/void")
     Invoice voidInvoice(@PathVariable UUID id,@RequestBody Map<String,String> body,Authentication a){return finance.voidInvoice(id,body.get("reason"),principal(a));}
     @GetMapping(value="/invoices/{id}/pdf",produces=MediaType.APPLICATION_PDF_VALUE)
@@ -53,9 +56,19 @@ public class FinanceController {
         }
     }
     @GetMapping("/payments") List<?> payments(Authentication a){return finance.listPayments(principal(a));}
+    @GetMapping(value="/payments/{id}/receipt.pdf",produces=MediaType.APPLICATION_PDF_VALUE)
+    ResponseEntity<byte[]> paymentReceipt(@PathVariable UUID id,Authentication a)throws Exception {
+        var payment=finance.getPayment(id,principal(a));
+        try(var out=new ByteArrayOutputStream()){Document d=new Document();PdfWriter.getInstance(d,out);d.open();
+            d.add(new Paragraph("SAUMYA SOLAR - PAYMENT RECEIPT"));
+            d.add(new Paragraph("Payment reference: "+safe(payment.getReference()==null?payment.getProviderReference():payment.getReference())));
+            d.add(new Paragraph("Amount: INR "+payment.getAmount()+" | Method: "+payment.getMethod()+" | Status: "+payment.getStatus()));
+            d.add(new Paragraph("Paid at: "+payment.getPaidAt()));d.add(new Paragraph("Invoice: "+payment.getInvoiceId()));d.close();
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_PDF).header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=payment-receipt-"+payment.getId()+".pdf").body(out.toByteArray());}
+    }
     @PostMapping("/payments") Object recordPayment(@Valid @RequestBody ManualPayment x,Authentication a){return finance.recordPayment(x,principal(a));}
     @PostMapping("/payments/{id}/refund") Object refund(@PathVariable UUID id,@Valid @RequestBody RefundBody body,Authentication a){return finance.refund(new RefundCreate(id,body.amount(),body.reason()),principal(a));}
-    public record RefundBody(java.math.BigDecimal amount,String reason){}
+    public record RefundBody(@NotNull @DecimalMin("0.01") java.math.BigDecimal amount,@NotBlank @Size(max=500) String reason){}
     @GetMapping("/refunds") List<?> refunds(Authentication a){return finance.listRefunds(principal(a));}
 
     @PostMapping("/payment-webhooks/{provider}")
