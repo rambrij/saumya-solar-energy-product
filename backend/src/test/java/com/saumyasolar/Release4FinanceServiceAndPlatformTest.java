@@ -29,11 +29,16 @@ class Release4FinanceServiceAndPlatformTest {
         String platform=token("platform@saumya.local","Platform@123");
         mvc.perform(get("/api/v1/platform/tenants").header("Authorization","Bearer "+platform).param("status","ACTIVE").param("page","0").param("size","20"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.total").isNumber()).andExpect(jsonPath("$.active").isNumber()).andExpect(jsonPath("$.items").isArray());
+        String exportSlug="export-"+UUID.randomUUID().toString().substring(0,8);
+        String exportEmail="export-"+UUID.randomUUID()+"@example.test";
+        mvc.perform(post("/api/v1/tenants").header("Authorization","Bearer "+platform).contentType(MediaType.APPLICATION_JSON)
+            .content("{\\"name\\":\\"Export Tenant\\",\\"slug\\":\\""+exportSlug+"\\",\\"adminName\\":\\"Export Admin\\",\\"adminEmail\\":\\""+exportEmail+"\\",\\"adminPassword\\":\\"ExportAdmin@2026\\"}"))
+            .andExpect(status().isOk());
         String csv=mvc.perform(get("/api/v1/platform/tenants/export").header("Authorization","Bearer "+platform).param("status","ACTIVE"))
             .andExpect(status().isOk()).andExpect(header().string("Content-Disposition",org.hamcrest.Matchers.containsString("tenants-active-"))).andExpect(content().contentTypeCompatibleWith("text/csv"))
             .andReturn().getResponse().getContentAsString();
         assertTrue(csv.startsWith("Tenant Name,Tenant Slug,Administrator Name"));
-        assertTrue(csv.contains("platform@saumya.local") || csv.contains("admin@saumya.local"));
+        assertTrue(csv.contains(exportEmail));
         assertTrue(csv.matches("(?s).*20\\\\d{2}-\\\\d{2}-\\\\d{2}T.*"),"CSV timestamps use ISO-8601 dates");
         String emptyCsv=mvc.perform(get("/api/v1/platform/tenants/export").header("Authorization","Bearer "+platform).param("status","ACTIVE").param("search","no-tenant-can-match-this"))
             .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
