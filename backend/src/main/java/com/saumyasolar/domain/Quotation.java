@@ -32,6 +32,8 @@ public class Quotation {
     BigDecimal grandTotal;
     LocalDate validUntil;
     boolean approvalRequired;
+    UUID decisionBy;
+    Instant decisionAt;
     UUID createdBy;
     Instant createdAt;
 }

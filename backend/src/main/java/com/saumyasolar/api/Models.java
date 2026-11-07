@@ -17,11 +17,17 @@ public final class Models {
     }
     
     public record Register(
-            @NotBlank String storeSlug, @NotBlank String name, @Email String email, @Size(min = 8) String password
+            @NotBlank String storeSlug, @NotBlank String name, @Email String email, @Size(min = 12) String password
     ) {
     }
     
     public record Refresh(@NotBlank String refreshToken) {
+    }
+
+    public record EmployeeCreate(
+            @NotBlank String name, @Email String email, @Size(min = 12) String password,
+            @NotBlank String roleName
+    ) {
     }
     
     public record PasswordReset(@Email String email, String token, String newPassword) {
@@ -44,13 +50,14 @@ public final class Models {
             UUID assignedUserId, Instant nextFollowUp, String stage, String reason, String lostReason, UUID leadId,
             Instant scheduledAt, String roofType, BigDecimal usableAreaSqft, String shading,
             BigDecimal sanctionedLoadKw, String notes, String status, UUID surveyId, BigDecimal discountPercent,
-            LocalDate validUntil, List<Line> items, String slug
+            LocalDate validUntil, List<Line> items, String slug, String adminName, String adminEmail,
+            String adminPassword, String imageUrl
     ) {
     }
     
     public record Line(
             UUID productId, UUID packageId, String description, int quantity, BigDecimal unitPrice,
-            BigDecimal taxPercent
+            BigDecimal taxPercent, Boolean optionalItem
     ) {
     }
     

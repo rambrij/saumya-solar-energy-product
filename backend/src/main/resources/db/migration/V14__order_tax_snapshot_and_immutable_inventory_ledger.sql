@@ -1,0 +1,6 @@
+-- Release 3 hardening marker.
+-- The tax_percent column is ensured by V15__ensure_order_tax_snapshot_column.java,
+-- which is safe to re-run after MySQL's non-transactional partial DDL behavior.
+-- Inventory transactions are append-only in the application repository/service.
+-- Do not create triggers here: managed MySQL instances with binary logging commonly
+-- deny trigger creation to the application account (ERROR 1419 / SUPER privilege).

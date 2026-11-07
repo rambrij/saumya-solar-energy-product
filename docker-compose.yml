@@ -21,10 +21,16 @@ services:
       DB_PASSWORD: solarpass
       JWT_SECRET: local-only-change-this-long-jwt-secret-12345678901234567890
       CORS_ORIGINS: http://localhost:3000,http://localhost:5173
+      SEED_DATA_ENABLED: "true"
+      UPLOAD_DIR: /var/lib/saumya/uploads
+      SERVICE_ATTACHMENT_DIR: /var/lib/saumya/private-service-attachments
     ports: [ "8080:8080" ]
+    volumes:
+      - solar_uploads:/var/lib/saumya/uploads
+      - solar_private_service_attachments:/var/lib/saumya/private-service-attachments
     depends_on: { mysql: { condition: service_healthy } }
   frontend:
     build: ./frontend
     ports: [ "3000:80" ]
     depends_on: [ backend ]
-volumes: { mysql_data: { } }
+volumes: { mysql_data: { }, solar_uploads: { }, solar_private_service_attachments: { } }

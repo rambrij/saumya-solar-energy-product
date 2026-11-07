@@ -17,9 +17,22 @@ public class Product {
     @Id
     UUID id;
     UUID tenantId;
+    @Column(nullable = false)
     UUID categoryId;
     String sku;
     String name;
+    String manufacturer;
+    String model;
+    String technology;
+    BigDecimal purchasePrice;
+    BigDecimal discountPercent;
+    Integer warrantyYears;
+    String imageUrl;
+    String datasheetUrl;
+    BigDecimal reorderLevel;
+    String unitOfMeasure;
+    String hsnCode;
+    boolean serialized;
     @Column(columnDefinition = "TEXT")
     String description;
     BigDecimal price;

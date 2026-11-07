@@ -1,0 +1,4 @@
+package com.saumyasolar.domain;
+import jakarta.persistence.Column;import jakarta.persistence.Entity;import jakarta.persistence.Id;import jakarta.persistence.Table;import lombok.Getter;import lombok.NoArgsConstructor;import lombok.Setter;import java.time.LocalDate;import java.time.Instant;import java.util.UUID;
+@Entity @Table(name="warranty") @Getter @Setter @NoArgsConstructor
+public class Warranty {@Id UUID id;UUID tenantId;UUID orderId;UUID installationId;UUID customerId;UUID productId;@Column(length=150) String serialNumber;int quantity;LocalDate startDate;LocalDate endDate;@Column(length=2000) String terms;String status;Instant activatedAt;}

@@ -17,8 +17,11 @@ public class OrderItem {
     UUID id;
     UUID tenantId;
     UUID orderId;
+    UUID productId;
+    UUID packageId;
     String description;
     int quantity;
     BigDecimal unitPrice;
+    BigDecimal taxPercent;
     BigDecimal lineTotal;
 }

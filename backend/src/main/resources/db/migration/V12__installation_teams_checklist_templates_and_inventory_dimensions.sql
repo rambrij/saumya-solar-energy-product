@@ -1,0 +1,5 @@
+ALTER TABLE inventory_transaction ADD COLUMN reserved_delta DECIMAL(19,4) NOT NULL DEFAULT 0, ADD COLUMN damaged_delta DECIMAL(19,4) NOT NULL DEFAULT 0;
+CREATE TABLE installation_team(id BINARY(16) PRIMARY KEY,tenant_id BINARY(16) NOT NULL,name VARCHAR(150) NOT NULL,member_ids_json VARCHAR(2000),active BOOLEAN NOT NULL DEFAULT TRUE,created_at TIMESTAMP(6) NOT NULL,FOREIGN KEY(tenant_id) REFERENCES tenant(id),UNIQUE(tenant_id,name),INDEX ix_install_team_tenant_active(tenant_id,active));
+ALTER TABLE installation_job ADD COLUMN team_id BINARY(16) NULL;
+ALTER TABLE installation_job ADD CONSTRAINT fk_install_job_team FOREIGN KEY(team_id) REFERENCES installation_team(id);
+CREATE TABLE installation_checklist_template(id BINARY(16) PRIMARY KEY,tenant_id BINARY(16) NOT NULL,code VARCHAR(60) NOT NULL,title VARCHAR(200) NOT NULL,mandatory BOOLEAN NOT NULL DEFAULT TRUE,active BOOLEAN NOT NULL DEFAULT TRUE,created_at TIMESTAMP(6) NOT NULL,FOREIGN KEY(tenant_id) REFERENCES tenant(id),UNIQUE(tenant_id,code),INDEX ix_check_template_tenant_active(tenant_id,active));

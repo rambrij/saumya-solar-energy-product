@@ -3,5 +3,26 @@ spring:
   datasource: { url: "${DB_URL}", username: "${DB_USER}", password: "${DB_PASSWORD}" }
   jpa: { hibernate: { ddl-auto: validate }, open-in-view: false }
   flyway: { enabled: true }
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
 management.endpoints.web.exposure.include: health,info
-app: { jwt-secret: "${JWT_SECRET}", cors-origins: "${CORS_ORIGINS}" }
+app:
+  jwt-secret: "${JWT_SECRET}"
+  cors-origins: "${CORS_ORIGINS}"
+  payment:
+    webhook-secret: "${PAYMENT_WEBHOOK_SECRET:}"
+  service:
+    sla-check-interval-ms: ${SERVICE_SLA_CHECK_INTERVAL_MS:60000}
+    attachment-location: ${SERVICE_ATTACHMENT_DIR:./data/private-service-attachments}
+  storage:
+    location: ${UPLOAD_DIR:./data/uploads}
+    public-base-url: ${PUBLIC_BASE_URL:}
+  seed:
+    enabled: ${SEED_DATA_ENABLED:false}
+  bootstrap:
+    platform-admin:
+      enabled: ${PLATFORM_BOOTSTRAP_ENABLED:false}
+      email: ${PLATFORM_BOOTSTRAP_EMAIL:}
+      password: ${PLATFORM_BOOTSTRAP_PASSWORD:}

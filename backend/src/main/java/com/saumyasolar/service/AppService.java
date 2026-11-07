@@ -2,6 +2,7 @@ package com.saumyasolar.service;
 
 import com.saumyasolar.api.Models.Input;
 import com.saumyasolar.api.Models.QuoteView;
+import com.saumyasolar.api.PackageInput;
 import com.saumyasolar.domain.*;
 import com.saumyasolar.repo.*;
 import com.saumyasolar.security.Principal;
@@ -15,6 +16,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 @Service
@@ -35,6 +37,8 @@ public class AppService {
     final CustomerOrderRepository orders;
     final OrderItemRepository orderItems;
     final IdempotencyRecordRepository idem;
+    final RoleRepository roles;
+    final OrderStatusHistoryRepository orderStatusHistory;
     
     public AppService(
             TenantRepository a,
@@ -52,7 +56,9 @@ public class AppService {
             QuotationItemRepository m,
             CustomerOrderRepository n,
             OrderItemRepository o,
-            IdempotencyRecordRepository p
+            IdempotencyRecordRepository p,
+            RoleRepository roles,
+            OrderStatusHistoryRepository orderStatusHistory
     ) {
         tenants = a;
         users = b;
@@ -70,21 +76,66 @@ public class AppService {
         orders = n;
         orderItems = o;
         idem = p;
+        this.roles = roles;
+        this.orderStatusHistory = orderStatusHistory;
     }
     
     void vendor(Principal p) {
         if (!"VENDOR".equals(p.accountType()) || p.tenantId() == null)
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
     }
+
+    private void requirePermission(Principal p, String code) {
+        if (p.permissions() == null || !p.permissions().contains(code))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing permission: " + code);
+    }
+
+    private void requireAnyPermission(Principal p, String... codes) {
+        if (p.permissions() == null || java.util.Arrays.stream(codes).noneMatch(p.permissions()::contains))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing required catalogue permission");
+    }
+
+    private void requireEmployee(UUID id, UUID tenantId) {
+        if (id != null && users.findById(id).filter(u -> tenantId.equals(u.getTenantId())
+                && "VENDOR".equals(u.getAccountType()) && u.isEnabled()).isEmpty())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee must belong to this vendor");
+    }
+
+    private CustomerProfile requireCustomer(UUID id, UUID tenantId) {
+        return customers.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
+    }
+
+    private SalesLead requireLead(UUID id, UUID tenantId) {
+        return leads.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found"));
+    }
     
     public Object list(String type, Principal p) {
         if ("tenants".equals(type)) {
-            if (!"PLATFORM".equals(p.accountType())) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+            if (!"PLATFORM".equals(p.accountType()) || p.permissions() == null || !p.permissions().contains("PLATFORM_MANAGE"))
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN);
             return tenants.findAll();
         }
         if ("users".equals(type)) {
             vendor(p);
-            return users.findByTenantId(p.tenantId());
+            requirePermission(p, "USER_VIEW");
+            return users.findByTenantId(p.tenantId()).stream()
+                    .filter(u -> "VENDOR".equals(u.getAccountType())).toList();
+        }
+        if (java.util.Set.of("catalog-categories", "catalog-products", "catalog-packages").contains(type)) {
+            if (!"CUSTOMER".equals(p.accountType()) || p.tenantId() == null)
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+            return switch (type) {
+                case "catalog-categories" -> cats.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(ProductCategory::isActive).toList();
+                case "catalog-products" -> products.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(Product::isActive).toList();
+                default -> packs.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(SolarPackage::isActive).toList();
+            };
+        }
+        if ("customer-enquiries".equals(type) && "CUSTOMER".equals(p.accountType())) {
+            var profile = customers.findByTenantIdAndUserId(p.tenantId(), p.userId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer profile not found"));
+            return enquiries.findByTenantIdAndCustomerIdOrderByIdDesc(p.tenantId(), profile.getId());
         }
         if ("customer-orders".equals(type) && "CUSTOMER".equals(p.accountType())) {
             var c = customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(x -> p.userId().equals(x.getUserId())).findFirst().orElseThrow();
@@ -95,6 +146,15 @@ public class AppService {
             return quotes.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(x -> x.getCustomerId().equals(c.getId())).toList();
         }
         vendor(p);
+        switch (type) {
+            case "categories", "products", "packages" -> requireAnyPermission(p, "CATALOG_VIEW", "CATALOG_MANAGE");
+            case "customers" -> requirePermission(p, "CUSTOMER_MANAGE");
+            case "enquiries", "leads" -> requirePermission(p, "LEAD_MANAGE");
+            case "surveys" -> requirePermission(p, "SURVEY_MANAGE");
+            case "quotations" -> requirePermission(p, "QUOTATION_MANAGE");
+            case "orders" -> requirePermission(p, "ORDER_CREATE");
+            default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
         return switch (type) {
             case "categories" -> cats.findByTenantIdOrderByIdDesc(p.tenantId());
             case "products" -> products.findByTenantIdOrderByIdDesc(p.tenantId());
@@ -109,6 +169,18 @@ public class AppService {
         };
     }
     
+    public Tenant updateTenantStatus(UUID tenantId, String status, Principal p) {
+        if (!"PLATFORM".equals(p.accountType()) || p.permissions() == null || !p.permissions().contains("PLATFORM_MANAGE"))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        if (!"ACTIVE".equals(status) && !"SUSPENDED".equals(status))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tenant status must be ACTIVE or SUSPENDED");
+        var tenant = tenants.findById(tenantId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
+        tenant.setStatus(status);
+        tenant.setUpdatedAt(Instant.now());
+        return tenants.save(tenant);
+    }
+
+    @Transactional
     public Object create(String type, Input x, Principal p) {
         if ("tenants".equals(type)) {
             if (!"PLATFORM".equals(p.accountType())) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
@@ -120,6 +192,12 @@ public class AppService {
             return tenants.save(t);
         }
         vendor(p);
+        switch (type) {
+            case "categories", "products", "packages" -> requirePermission(p, "CATALOG_MANAGE");
+            case "customers" -> requirePermission(p, "CUSTOMER_MANAGE");
+            case "enquiries" -> requirePermission(p, "LEAD_MANAGE");
+            default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
         return switch (type) {
             case "categories" -> {
                 var e = new ProductCategory();
@@ -134,16 +212,36 @@ public class AppService {
                 var e = new Product();
                 e.setId(UUID.randomUUID());
                 e.setTenantId(p.tenantId());
+                if (x.categoryId() == null || cats.findByIdAndTenantId(x.categoryId(), p.tenantId())
+                        .filter(ProductCategory::isActive).isEmpty())
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select an active product category belonging to this vendor");
+                if (x.price() == null || x.price().signum() < 0)
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product price must be zero or greater");
+                if (x.taxPercent() != null && (x.taxPercent().signum() < 0 || x.taxPercent().compareTo(new BigDecimal("100")) > 0))
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tax percentage must be between 0 and 100");
                 e.setCategoryId(x.categoryId());
                 e.setSku(x.sku());
                 e.setName(x.name());
                 e.setDescription(x.description());
                 e.setPrice(x.price());
+                e.setPurchasePrice(BigDecimal.ZERO);
+                e.setDiscountPercent(BigDecimal.ZERO);
+                e.setReorderLevel(BigDecimal.ZERO);
+                e.setUnitOfMeasure("PCS");
+                e.setSerialized(false);
                 e.setTaxPercent(x.taxPercent() == null ? BigDecimal.ZERO : x.taxPercent());
                 e.setActive(true);
                 yield products.save(e);
             }
             case "packages" -> {
+                if (x.items() == null || x.items().isEmpty())
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Add at least one package component");
+                for (var line : x.items()) {
+                    if (line.productId() == null || line.quantity() < 1)
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Every package component needs a product and positive quantity");
+                    if (products.findByIdAndTenantId(line.productId(), p.tenantId()).filter(Product::isActive).isEmpty())
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package components must use active products from this vendor");
+                }
                 var e = new SolarPackage();
                 e.setId(UUID.randomUUID());
                 e.setTenantId(p.tenantId());
@@ -153,15 +251,20 @@ public class AppService {
                 e.setPackageType(x.packageType());
                 e.setBasePrice(x.basePrice());
                 e.setWarrantyYears(x.warrantyYears());
+                e.setImageUrl(x.imageUrl());
                 e.setActive(true);
                 packs.save(e);
                 if (x.items() != null) for (var l : x.items()) {
                     var pi = new PackageItem();
                     pi.setId(UUID.randomUUID());
                     pi.setTenantId(p.tenantId());
+                    if (l.productId() == null || products.findByIdAndTenantId(l.productId(), p.tenantId()).filter(Product::isActive).isEmpty())
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package items must reference active products in this vendor");
+                    if (l.quantity() < 1) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package item quantity must be positive");
                     pi.setPackageId(e.getId());
                     pi.setProductId(l.productId());
                     pi.setQuantity(l.quantity());
+                    pi.setOptionalItem(Boolean.TRUE.equals(l.optionalItem()));
                     packItems.save(pi);
                 }
                 yield e;
@@ -180,6 +283,7 @@ public class AppService {
                 var e = new Enquiry();
                 e.setId(UUID.randomUUID());
                 e.setTenantId(p.tenantId());
+                if (x.customerId() != null) requireCustomer(x.customerId(), p.tenantId());
                 e.setCustomerId(x.customerId());
                 e.setName(x.name());
                 e.setEmail(x.email());
@@ -196,10 +300,189 @@ public class AppService {
         };
     }
     
+    public List<SolarPackage> publicPackages(String storeSlug) {
+        String normalized = storeSlug == null ? "" : storeSlug.trim().toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
+        var tenant = tenants.findBySlug(normalized)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
+        if (!"ACTIVE".equals(tenant.getStatus()))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Store is not available");
+        return packs.findByTenantIdOrderByIdDesc(tenant.getId()).stream()
+                .filter(SolarPackage::isActive).toList();
+    }
+
+    @Transactional
+    public Enquiry createPublicEnquiry(String storeSlug, Input input) {
+        String normalized = storeSlug == null ? "" : storeSlug.trim().toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
+        Tenant tenant = tenants.findBySlug(normalized)
+                .filter(value -> "ACTIVE".equals(value.getStatus()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Active store not found"));
+        if (input.name() == null || input.name().isBlank() || input.email() == null
+                || !input.email().matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
+                || input.phone() == null || input.phone().isBlank())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name, valid email and phone are required.");
+        Enquiry enquiry = new Enquiry();
+        enquiry.setId(UUID.randomUUID());
+        enquiry.setTenantId(tenant.getId());
+        enquiry.setName(input.name().trim());
+        enquiry.setEmail(input.email().trim().toLowerCase(java.util.Locale.ROOT));
+        enquiry.setPhone(input.phone().trim());
+        enquiry.setPropertyType(input.propertyType());
+        enquiry.setMonthlyBill(input.monthlyBill());
+        enquiry.setRequiredCapacityKw(input.requiredCapacityKw());
+        enquiry.setMessage(input.message());
+        enquiry.setStatus("NEW");
+        enquiry.setCreatedAt(Instant.now());
+        return enquiries.save(enquiry);
+    }
+
+    private UUID requirePackageManager(Principal p) {
+        vendor(p);
+        requirePermission(p, "CATALOG_MANAGE");
+        return p.tenantId();
+    }
+
+    public void assertPackageManageAccess(UUID id, Principal p) {
+        UUID tenantId = requirePackageManager(p);
+        if (packs.findByIdAndTenantId(id, tenantId).isEmpty())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Solar package not found");
+    }
+
+    @Transactional
+    public SolarPackage updatePackageImage(UUID id, String imageUrl, Principal p) {
+        UUID tenantId = requirePackageManager(p);
+        SolarPackage pack = packs.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Solar package not found"));
+        pack.setImageUrl(imageUrl);
+        return packs.save(pack);
+    }
+
+    @Transactional
+    public SolarPackage updateSolarPackage(UUID id, PackageInput x, Principal p) {
+        UUID tenantId = requirePackageManager(p);
+        SolarPackage pack = packs.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Solar package not found"));
+        packs.findByTenantIdOrderByIdDesc(tenantId).stream()
+                .filter(other -> !other.getId().equals(id) && other.getCode().equalsIgnoreCase(x.code()))
+                .findAny().ifPresent(other -> { throw new ResponseStatusException(HttpStatus.CONFLICT, "Package code already exists"); });
+        validatePackageItems(x.items(), tenantId);
+        pack.setCode(x.code().trim());
+        pack.setName(x.name().trim());
+        pack.setCapacityKw(x.capacityKw());
+        pack.setPackageType(x.packageType());
+        pack.setBasePrice(x.basePrice());
+        pack.setWarrantyYears(x.warrantyYears());
+        if (x.imageUrl() != null && !x.imageUrl().isBlank()) {
+            if (!x.imageUrl().startsWith("https://") && !x.imageUrl().startsWith("/uploads/"))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package image must use HTTPS or the managed /uploads path");
+            pack.setImageUrl(x.imageUrl());
+        }
+        if (x.active() != null) pack.setActive(x.active());
+        packs.save(pack);
+        packItems.findByTenantIdOrderByIdDesc(tenantId).stream()
+                .filter(item -> id.equals(item.getPackageId())).toList().forEach(packItems::delete);
+        for (PackageInput.Item item : x.items()) {
+            PackageItem row = new PackageItem();
+            row.setId(UUID.randomUUID());
+            row.setTenantId(tenantId);
+            row.setPackageId(id);
+            row.setProductId(item.productId());
+            row.setQuantity(item.quantity());
+            row.setOptionalItem(Boolean.TRUE.equals(item.optionalItem()));
+            packItems.save(row);
+        }
+        return pack;
+    }
+
+    private void validatePackageItems(List<PackageInput.Item> items, UUID tenantId) {
+        if (items == null || items.isEmpty())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Add at least one package component");
+        for (PackageInput.Item item : items) {
+            if (item.productId() == null || item.quantity() == null || item.quantity() < 1)
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Every package component needs an active product and positive quantity");
+            if (products.findByIdAndTenantId(item.productId(), tenantId).filter(Product::isActive).isEmpty())
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package components must use active products from this vendor");
+        }
+    }
+
+    @Transactional
+    public SolarPackage archiveSolarPackage(UUID id, Principal p) {
+        UUID tenantId = requirePackageManager(p);
+        SolarPackage pack = packs.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Solar package not found"));
+        pack.setActive(false);
+        return packs.save(pack);
+    }
+
+    public Tenant tenantSettings(Principal p) {
+        vendor(p);
+        requirePermission(p, "DISCOUNT_POLICY_MANAGE");
+        return tenants.findById(p.tenantId()).orElseThrow();
+    }
+
+    public Tenant updateDiscountApprovalThreshold(BigDecimal threshold, Principal p) {
+        vendor(p);
+        requirePermission(p, "DISCOUNT_POLICY_MANAGE");
+        if (threshold == null || threshold.compareTo(BigDecimal.ZERO) < 0
+                || threshold.compareTo(new BigDecimal("100")) > 0)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Discount approval threshold must be between 0 and 100");
+        var tenant = tenants.findById(p.tenantId()).orElseThrow();
+        tenant.setDiscountApprovalThreshold(threshold);
+        return tenants.save(tenant);
+    }
+
+    public List<Role> employeeRoles(Principal p) {
+        vendor(p);
+        requirePermission(p, "USER_MANAGE");
+        return roles.findByTenantIdOrderByNameAsc(p.tenantId()).stream()
+                .filter(role -> !java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "CUSTOMER").contains(role.getName()))
+                .toList();
+    }
+
+    @Transactional
+    public Enquiry createCustomerEnquiry(Input x, Principal p) {
+        if (!"CUSTOMER".equals(p.accountType()) || p.tenantId() == null)
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        var profile = customers.findByTenantIdAndUserId(p.tenantId(), p.userId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer profile not found"));
+        var enquiry = new Enquiry();
+        enquiry.setId(UUID.randomUUID());
+        enquiry.setTenantId(p.tenantId());
+        enquiry.setCustomerId(profile.getId());
+        enquiry.setName(profile.getName());
+        enquiry.setEmail(profile.getEmail());
+        enquiry.setPhone(profile.getPhone());
+        enquiry.setPropertyType(x.propertyType());
+        enquiry.setMonthlyBill(x.monthlyBill());
+        enquiry.setRequiredCapacityKw(x.requiredCapacityKw());
+        enquiry.setMessage(x.message());
+        enquiry.setStatus("NEW");
+        enquiry.setCreatedAt(Instant.now());
+        return enquiries.save(enquiry);
+    }
+
     @Transactional
     public SalesLead convertLead(UUID enquiryId, Input x, Principal p) {
         vendor(p);
+        requirePermission(p, "LEAD_MANAGE");
         var q = enquiries.findByIdAndTenantId(enquiryId, p.tenantId()).orElseThrow();
+        if (!"NEW".equals(q.getStatus()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Enquiry already converted");
+        requireEmployee(x.assignedUserId(), p.tenantId());
+        if (q.getCustomerId() == null) {
+            CustomerProfile customer = customers.findByTenantIdAndEmailIgnoreCase(p.tenantId(), q.getEmail())
+                    .orElseGet(() -> {
+                        var created = new CustomerProfile();
+                        created.setId(UUID.randomUUID());
+                        created.setTenantId(p.tenantId());
+                        created.setName(q.getName());
+                        created.setEmail(q.getEmail());
+                        created.setPhone(q.getPhone());
+                        return customers.save(created);
+                    });
+            q.setCustomerId(customer.getId());
+        }
         q.setStatus("CONVERTED");
         enquiries.save(q);
         var l = new SalesLead();
@@ -214,28 +497,65 @@ public class AppService {
         l.setCreatedAt(Instant.now());
         leads.save(l);
         history(l, null, "NEW", p.userId(), "Converted from enquiry");
+        if (l.getAssignedUserId() != null)
+            assignmentHistory(l, null, l.getAssignedUserId(), p.userId(), "Initial lead assignment");
         return l;
     }
     
+    @Transactional
     public SalesLead updateLead(UUID id, Input x, Principal p) {
         vendor(p);
+        requirePermission(p, "LEAD_MANAGE");
         var l = leads.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
+        requireEmployee(x.assignedUserId(), p.tenantId());
         var old = l.getStage();
+        var oldAssignee = l.getAssignedUserId();
+        if (x.stage() != null && !java.util.Set.of("NEW", "CONTACTED", "SITE_VISIT_SCHEDULED", "SURVEY_COMPLETED", "QUOTATION_SENT", "NEGOTIATION", "WON", "LOST").contains(x.stage()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid lead stage");
+        if (x.stage() != null && "LOST".equals(x.stage()) && (x.lostReason() == null || x.lostReason().isBlank()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lost reason is required");
+        if (x.priority() != null && !java.util.Set.of("LOW", "MEDIUM", "HIGH").contains(x.priority()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid lead priority");
         if (x.stage() != null) l.setStage(x.stage());
         if (x.priority() != null) l.setPriority(x.priority());
         if (x.assignedUserId() != null) l.setAssignedUserId(x.assignedUserId());
-        l.setNextFollowUp(x.nextFollowUp());
-        l.setLostReason(x.lostReason());
+        if (x.nextFollowUp() != null) l.setNextFollowUp(x.nextFollowUp());
+        if (x.lostReason() != null) l.setLostReason(x.lostReason());
         leads.save(l);
         if (!Objects.equals(old, l.getStage())) history(l, old, l.getStage(), p.userId(), x.reason());
+        if (!Objects.equals(oldAssignee, l.getAssignedUserId()))
+            assignmentHistory(l, oldAssignee, l.getAssignedUserId(), p.userId(), x.reason());
         return l;
     }
     
+    private void assignmentHistory(SalesLead lead, UUID oldAssignee, UUID newAssignee, UUID actor, String reason) {
+        var history = new LeadHistory();
+        history.setId(UUID.randomUUID());
+        history.setTenantId(lead.getTenantId());
+        history.setLeadId(lead.getId());
+        history.setEventType("ASSIGNMENT");
+        history.setOldAssignedUserId(oldAssignee);
+        history.setNewAssignedUserId(newAssignee);
+        history.setActorId(actor);
+        history.setReason(reason);
+        history.setCreatedAt(Instant.now());
+        histories.save(history);
+    }
+
+    public List<LeadHistory> leadHistory(UUID leadId, Principal p) {
+        vendor(p);
+        requirePermission(p, "LEAD_MANAGE");
+        if (leads.findByIdAndTenantId(leadId, p.tenantId()).isEmpty())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found");
+        return histories.findByLeadIdAndTenantIdOrderByCreatedAtDesc(leadId, p.tenantId());
+    }
+
     void history(SalesLead l, String old, String now, UUID actor, String reason) {
         var h = new LeadHistory();
         h.setId(UUID.randomUUID());
         h.setTenantId(l.getTenantId());
         h.setLeadId(l.getId());
+        h.setEventType("STAGE");
         h.setOldStage(old);
         h.setNewStage(now);
         h.setActorId(actor);
@@ -244,8 +564,13 @@ public class AppService {
         histories.save(h);
     }
     
+    @Transactional
     public SiteSurvey survey(Input x, Principal p) {
         vendor(p);
+        requirePermission(p, "SURVEY_MANAGE");
+        if (x.leadId() == null || leads.findByIdAndTenantId(x.leadId(), p.tenantId()).isEmpty())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lead must belong to this vendor");
+        requireEmployee(x.assignedUserId(), p.tenantId());
         var e = new SiteSurvey();
         e.setId(UUID.randomUUID());
         e.setTenantId(p.tenantId());
@@ -259,6 +584,10 @@ public class AppService {
         e.setSanctionedLoadKw(x.sanctionedLoadKw());
         e.setNotes(x.notes());
         e.setStatus(x.status() == null ? "SCHEDULED" : x.status());
+        if (!java.util.Set.of("SCHEDULED", "COMPLETED", "CANCELLED").contains(e.getStatus()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid survey status");
+        if ("SCHEDULED".equals(e.getStatus()) && e.getScheduledAt() == null)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Scheduled date/time is required");
         if ("COMPLETED".equals(e.getStatus())) e.setCompletedAt(Instant.now());
         return surveys.save(e);
     }
@@ -266,6 +595,21 @@ public class AppService {
     @Transactional
     public QuoteView quote(Input x, Principal p) {
         vendor(p);
+        requirePermission(p, "QUOTATION_MANAGE");
+        requireCustomer(x.customerId(), p.tenantId());
+        if (x.leadId() != null && !Objects.equals(requireLead(x.leadId(), p.tenantId()).getCustomerId(), x.customerId()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lead does not belong to the selected customer");
+        if (x.surveyId() != null) {
+            var survey = surveys.findByIdAndTenantId(x.surveyId(), p.tenantId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Survey not found in this vendor"));
+            if (x.leadId() == null || !x.leadId().equals(survey.getLeadId()))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Survey must belong to selected lead");
+        }
+        if (x.items() == null || x.items().isEmpty())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one quotation item is required");
+        var requestedDiscount = x.discountPercent() == null ? BigDecimal.ZERO : x.discountPercent();
+        if (requestedDiscount.compareTo(BigDecimal.ZERO) < 0 || requestedDiscount.compareTo(new BigDecimal("100")) > 0)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Discount must be between 0 and 100");
         var q = new Quotation();
         q.setId(UUID.randomUUID());
         q.setTenantId(p.tenantId());
@@ -275,7 +619,7 @@ public class AppService {
         q.setCustomerId(x.customerId());
         q.setLeadId(x.leadId());
         q.setSurveyId(x.surveyId());
-        q.setDiscountPercent(x.discountPercent() == null ? BigDecimal.ZERO : x.discountPercent());
+        q.setDiscountPercent(requestedDiscount);
         q.setValidUntil(x.validUntil() == null ? LocalDate.now().plusDays(30) : x.validUntil());
         q.setCreatedBy(p.userId());
         q.setCreatedAt(Instant.now());
@@ -283,43 +627,86 @@ public class AppService {
         BigDecimal sub = BigDecimal.ZERO, tax = BigDecimal.ZERO;
         var items = new ArrayList<QuotationItem>();
         for (var a : x.items()) {
-            var base = a.unitPrice().multiply(BigDecimal.valueOf(a.quantity()));
+            if (a.quantity() < 1) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Quantity must be positive");
+            BigDecimal unitPrice;
+            BigDecimal taxPercent;
+            String description;
+            if (a.productId() != null) {
+                var product = products.findByIdAndTenantId(a.productId(), p.tenantId()).filter(Product::isActive)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product is not active in this vendor"));
+                unitPrice = product.getPrice();
+                if(product.getDiscountPercent()!=null&&product.getDiscountPercent().signum()>0)
+                    unitPrice=unitPrice.multiply(BigDecimal.valueOf(100).subtract(product.getDiscountPercent())).divide(BigDecimal.valueOf(100),2,RoundingMode.HALF_UP);
+                taxPercent = product.getTaxPercent();
+                description = product.getName();
+            } else if (a.packageId() != null) {
+                var solarPackage = packs.findByIdAndTenantId(a.packageId(), p.tenantId()).filter(SolarPackage::isActive)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package is not active in this vendor"));
+                unitPrice = solarPackage.getBasePrice();
+                taxPercent = BigDecimal.ZERO;
+                description = solarPackage.getName();
+            } else {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Each quotation item must reference a product or package");
+            }
+            if (unitPrice == null || taxPercent == null)
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Catalog price and tax must be configured");
+            var base = unitPrice.multiply(BigDecimal.valueOf(a.quantity()));
             var i = new QuotationItem();
             i.setId(UUID.randomUUID());
             i.setTenantId(p.tenantId());
             i.setQuotationId(q.getId());
             i.setProductId(a.productId());
             i.setPackageId(a.packageId());
-            i.setDescription(a.description());
+            i.setDescription(description);
             i.setQuantity(a.quantity());
-            i.setUnitPrice(a.unitPrice());
-            i.setTaxPercent(a.taxPercent());
+            i.setUnitPrice(unitPrice);
+            i.setTaxPercent(taxPercent);
             i.setLineTotal(base);
             items.add(quoteItems.save(i));
             sub = sub.add(base);
-            tax = tax.add(base.multiply(a.taxPercent()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+            var taxableBase = base.multiply(BigDecimal.valueOf(100).subtract(requestedDiscount))
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            tax = tax.add(taxableBase.multiply(taxPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
         }
         var disc = sub.multiply(q.getDiscountPercent()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         q.setSubtotal(sub);
         q.setDiscountAmount(disc);
         q.setTaxAmount(tax);
         q.setGrandTotal(sub.subtract(disc).add(tax));
-        q.setApprovalRequired(q.getDiscountPercent().compareTo(BigDecimal.TEN) > 0);
+        var approvalThreshold = tenants.findById(p.tenantId()).map(Tenant::getDiscountApprovalThreshold)
+                .orElse(BigDecimal.TEN);
+        if (approvalThreshold == null) approvalThreshold = BigDecimal.TEN;
+        q.setApprovalRequired(q.getDiscountPercent().compareTo(approvalThreshold) > 0);
         q.setStatus(q.isApprovalRequired() ? "PENDING_APPROVAL" : "DRAFT");
         quotes.save(q);
         return new QuoteView(q, items);
     }
     
+    @Transactional
     public Quotation action(UUID id, String action, Principal p) {
+        if (p.tenantId() == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         var q = quotes.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
         if ("CUSTOMER".equals(p.accountType())) {
             var c = customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(x -> p.userId().equals(x.getUserId())).findFirst().orElseThrow();
             if (!q.getCustomerId().equals(c.getId()) || !"SENT".equals(q.getStatus()) || q.getValidUntil().isBefore(LocalDate.now()))
                 throw new ResponseStatusException(HttpStatus.CONFLICT);
+            if (!"accept".equals(action) && !"reject".equals(action))
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN);
             q.setStatus("accept".equals(action) ? "ACCEPTED" : "REJECTED");
+            q.setDecisionBy(p.userId());
+            q.setDecisionAt(Instant.now());
             return quotes.save(q);
         }
         vendor(p);
+        if ("approve".equals(action) || "reject-approval".equals(action)) {
+            requirePermission(p, "DISCOUNT_APPROVE");
+            if (!"PENDING_APPROVAL".equals(q.getStatus()) || !q.isApprovalRequired())
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Quotation is not awaiting approval");
+        } else {
+            requirePermission(p, "QUOTATION_MANAGE");
+        }
+        if ("send".equals(action) && !"DRAFT".equals(q.getStatus()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only a draft quotation can be sent");
         q.setStatus(switch (action) {
             case "approve" -> "DRAFT";
             case "reject-approval" -> "APPROVAL_REJECTED";
@@ -329,13 +716,40 @@ public class AppService {
         return quotes.save(q);
     }
     
+    public java.util.List<Quotation> quotationRevisions(UUID id, Principal p) {
+        if (p.tenantId() == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        var quotation = quotes.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
+        if ("CUSTOMER".equals(p.accountType())) {
+            var customer = customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
+                    .filter(x -> p.userId().equals(x.getUserId())).findFirst()
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+            if (!customer.getId().equals(quotation.getCustomerId()))
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        } else {
+            vendor(p);
+            requirePermission(p, "QUOTATION_MANAGE");
+        }
+        return quotes.findByQuoteGroupIdAndTenantIdOrderByRevisionAsc(quotation.getQuoteGroupId(), p.tenantId());
+    }
+
     @Transactional
     public CustomerOrder order(UUID qid, String key, Principal p) {
         vendor(p);
+        requirePermission(p, "ORDER_CREATE");
+        if (key == null || key.isBlank() || key.length() > 120)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valid Idempotency-Key header is required");
         var old = idem.findByTenantIdAndOperationNameAndIdempotencyKey(p.tenantId(), "QUOTE_TO_ORDER", key);
-        if (old.isPresent()) return orders.findById(old.get().getResourceId()).orElseThrow();
-        var q = quotes.findByIdAndTenantId(qid, p.tenantId()).orElseThrow();
+        if (old.isPresent()) {
+            var existing = orders.findByIdAndTenantId(old.get().getResourceId(), p.tenantId()).orElseThrow();
+            if (!qid.equals(existing.getQuotationId()))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key already belongs to another quotation");
+            return existing;
+        }
+        var q = quotes.findByIdAndTenantIdForUpdate(qid, p.tenantId()).orElseThrow();
         if (!"ACCEPTED".equals(q.getStatus())) throw new ResponseStatusException(HttpStatus.CONFLICT);
+        var existingOrder = orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
+                .filter(o -> qid.equals(o.getQuotationId())).findFirst();
+        if (existingOrder.isPresent()) return existingOrder.get();
         var o = new CustomerOrder();
         o.setId(UUID.randomUUID());
         o.setTenantId(p.tenantId());
@@ -346,14 +760,18 @@ public class AppService {
         o.setTotal(q.getGrandTotal());
         o.setCreatedAt(Instant.now());
         orders.save(o);
+        var initialHistory=new OrderStatusHistory();initialHistory.setId(UUID.randomUUID());initialHistory.setTenantId(p.tenantId());initialHistory.setOrderId(o.getId());initialHistory.setOldStatus(null);initialHistory.setNewStatus("CONFIRMED");initialHistory.setReason("Order created from accepted quotation");initialHistory.setActorId(p.userId());initialHistory.setCreatedAt(Instant.now());orderStatusHistory.save(initialHistory);
         for (var qi : quoteItems.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(i -> i.getQuotationId().equals(qid)).toList()) {
             var i = new OrderItem();
             i.setId(UUID.randomUUID());
             i.setTenantId(p.tenantId());
             i.setOrderId(o.getId());
+            i.setProductId(qi.getProductId());
+            i.setPackageId(qi.getPackageId());
             i.setDescription(qi.getDescription());
             i.setQuantity(qi.getQuantity());
             i.setUnitPrice(qi.getUnitPrice());
+            i.setTaxPercent(qi.getTaxPercent());
             i.setLineTotal(qi.getLineTotal());
             orderItems.save(i);
         }

@@ -1,5 +1,8 @@
 package com.saumyasolar.security;
 
+import com.saumyasolar.domain.AppUser;
+import com.saumyasolar.repo.AppUserRepository;
+import com.saumyasolar.repo.TenantRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,21 +18,52 @@ import java.util.ArrayList;
 @Component
 public class JwtFilter extends OncePerRequestFilter {
     private final JwtService j;
-    
-    JwtFilter(JwtService j) {
+    private final AppUserRepository users;
+    private final TenantRepository tenants;
+
+    JwtFilter(JwtService j, AppUserRepository users, TenantRepository tenants) {
         this.j = j;
+        this.users = users;
+        this.tenants = tenants;
     }
     
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getServletPath();
+        return path.startsWith("/api/v1/auth/") || path.startsWith("/api/v1/public/") || path.startsWith("/api/v1/payment-webhooks/") || path.startsWith("/uploads/");
+    }
+
     protected void doFilterInternal(HttpServletRequest r, HttpServletResponse s, FilterChain c)
             throws ServletException, IOException {
         var h = r.getHeader("Authorization");
         if (h != null && h.startsWith("Bearer ")) try {
-            var p = j.parse(h.substring(7));
+            var tokenPrincipal = j.parse(h.substring(7));
+            var user = users.findById(tokenPrincipal.userId()).filter(AppUser::isEnabled)
+                    .orElseThrow(() -> new IllegalArgumentException("User is disabled or no longer exists"));
+            if (!java.util.Objects.equals(user.getTenantId(), tokenPrincipal.tenantId())
+                    || !java.util.Objects.equals(user.getAccountType(), tokenPrincipal.accountType())
+                    || user.getTokenVersion() != tokenPrincipal.tokenVersion())
+                throw new IllegalArgumentException("User security context changed or token was revoked");
+            if (user.getTenantId() != null && tenants.findById(user.getTenantId())
+                    .filter(t -> "ACTIVE".equals(t.getStatus())).isEmpty())
+                throw new IllegalArgumentException("Tenant is suspended");
+            var roleNames = new java.util.HashSet<String>();
+            var permissionCodes = new java.util.HashSet<String>();
+            user.getRoles().forEach(role -> {
+                roleNames.add(role.getName());
+                role.getPermissions().forEach(permission -> permissionCodes.add(permission.getCode()));
+            });
+            var p = new Principal(user.getId(), user.getTenantId(), user.getEmail(), user.getAccountType(), roleNames, permissionCodes);
             var a = new ArrayList<SimpleGrantedAuthority>();
             p.roles().forEach(x -> a.add(new SimpleGrantedAuthority("ROLE_" + x)));
             p.permissions().forEach(x -> a.add(new SimpleGrantedAuthority(x)));
             SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(p, null, a));
-        } catch (Exception ignored) {
+        } catch (Exception invalidToken) {
+            SecurityContextHolder.clearContext();
+            s.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            s.setContentType("application/json");
+            s.getWriter().write("{\"status\":401,\"error\":\"Unauthorized\",\"detail\":\"Access token is invalid, expired, revoked, or no longer authorized. Please sign in again.\"}");
+            return;
         }
         c.doFilter(r, s);
     }
