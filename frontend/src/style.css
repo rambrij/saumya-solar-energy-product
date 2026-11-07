@@ -216,3 +216,11 @@ header .brand-home img{width:220px;max-width:48vw}
 @media(max-width:900px){.public-nav{gap:12px}.public-nav>div:nth-child(2){gap:12px}.public-nav a{font-size:.86rem}}
 @media(max-width:760px){.management-heading{align-items:flex-start;padding:17px}.management-heading>button{width:100%;margin-left:0}.module-create-form{grid-template-columns:1fr}.module-create-form h2,.module-create-form .form-actions{grid-column:auto}.table-controls{width:100%}.table-controls input,.table-controls select{flex:1;min-width:140px}.management-list{padding:14px}.management-table{min-width:780px}.public-about,.public-detail-section{grid-template-columns:1fr;gap:24px}.public-detail-section>img{height:260px}.public-nav>div:nth-child(2){order:3;width:100%;overflow-x:auto;justify-content:flex-start;padding-bottom:4px}.public-nav .nav-actions{margin-left:auto}}
 @media(max-width:460px){.table-pagination{align-items:flex-start}.table-pagination .actions{width:100%;justify-content:space-between}.management-heading h1{font-size:1.55rem}.public-nav a{font-size:.82rem}.public-detail-section>img{height:210px}}
+
+.record-detail{border-color:#cfe0d3;background:#fbfefc}
+.record-detail dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 20px;margin:14px 0 0}
+.record-detail dl>div{padding:11px 0;border-bottom:1px solid #e7efe9;min-width:0}
+.record-detail dt{font-size:.76rem;color:#728176;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.record-detail dd{margin:5px 0 0;color:#254735;overflow-wrap:anywhere}
+@media(max-width:760px){.record-detail dl{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:460px){.record-detail dl{grid-template-columns:1fr}}
