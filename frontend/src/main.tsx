@@ -127,5 +127,5 @@ function QuoteForm({s,lookups,done,error}:any){
   <button>Create Quote</button>
  </form>
 }
-async function downloadPdf(q:any,s:Session,error:any){try{const r=await fetch(`/api/v1/quotations/${q.id}/pdf`,{headers:{Authorization:`Bearer ${s.accessToken}`}});if(!r.ok)throw Error('PDF download failed');const u=URL.createObjectURL(await r.blob());const a=document.createElement('a');a.href=u;a.download=`${q.quotationNumber}.pdf`;a.click();URL.revokeObjectURL(u)}catch(e:any){error(e.message)}}
+async function downloadPdf(q:any,s:Session,error:any){try{const r=await fetch(API_BASE+`/api/v1/quotations/${q.id}/pdf`,{headers:{Authorization:`Bearer ${s.accessToken}`}});if(!r.ok)throw Error('PDF download failed');const u=URL.createObjectURL(await r.blob());const a=document.createElement('a');a.href=u;a.download=`${q.quotationNumber}.pdf`;a.click();URL.revokeObjectURL(u)}catch(e:any){error(e.message)}}
 createRoot(document.getElementById('root')!).render(<App/>);
