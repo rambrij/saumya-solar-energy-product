@@ -26,3 +26,5 @@ header{align-items:center;gap:18px;flex-wrap:wrap}
 button.danger{background:#b42318}
 button.secondary{background:#e5eee8;color:#1c4935}
 @media(max-width:640px){.brand-logo{width:175px;height:48px}.catalog-product{grid-template-columns:92px minmax(0,1fr)!important}.catalog-product>img{width:92px;height:88px}.product-price{grid-column:2;align-items:flex-start}.ops-grid{grid-template-columns:1fr}}
+
+.product-details{grid-column:1/-1;margin:8px 0 4px;color:#40584b}.product-details summary{cursor:pointer;font-weight:600}.product-details p{margin:8px 0}.product-details pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f8f5;padding:12px;border-radius:8px}.product-details a{color:#087644}
