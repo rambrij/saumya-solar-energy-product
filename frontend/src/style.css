@@ -28,3 +28,64 @@ button.secondary{background:#e5eee8;color:#1c4935}
 @media(max-width:640px){.brand-logo{width:175px;height:48px}.catalog-product{grid-template-columns:92px minmax(0,1fr)!important}.catalog-product>img{width:92px;height:88px}.product-price{grid-column:2;align-items:flex-start}.ops-grid{grid-template-columns:1fr}}
 
 .product-details{grid-column:1/-1;margin:8px 0 4px;color:#40584b}.product-details summary{cursor:pointer;font-weight:600}.product-details p{margin:8px 0}.product-details pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f8f5;padding:12px;border-radius:8px}.product-details a{color:#087644}
+
+/* Public solar storefront */
+.public-home{color:#173d2d}
+.public-nav{position:sticky;top:0;z-index:10;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:22px;padding:14px clamp(18px,5vw,72px);border-bottom:1px solid #e2ece5}
+.public-nav img{width:190px;height:48px;object-fit:contain;object-position:left}
+.public-nav>div:nth-child(2){display:flex;gap:22px;flex-wrap:wrap}
+.public-nav a{color:#315744;text-decoration:none;font-weight:600;font-size:.94rem}
+.nav-actions{display:flex;gap:9px}
+.public-home button{font-weight:700}
+.public-home button.secondary{background:#e6f1e9;color:#174b33}
+.solar-hero{display:grid;grid-template-columns:1fr 1fr;gap:42px;align-items:center;padding:clamp(40px,7vw,90px) clamp(20px,7vw,100px);background:linear-gradient(120deg,#f1f8f2,#fff)}
+.hero-copy h1{font-size:clamp(2.5rem,5vw,4.6rem);line-height:1.04;letter-spacing:-.045em;margin:14px 0 18px;max-width:680px}
+.hero-copy h1 em{font-style:normal;color:#07834a}
+.hero-copy p{font-size:1.1rem;line-height:1.75;color:#5b7063;max-width:620px}
+.eyebrow{color:#07834a;font-weight:800;font-size:.76rem;letter-spacing:.13em}
+.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin:26px 0}
+.hero-proof{display:flex;gap:18px;flex-wrap:wrap;color:#456553;font-size:.9rem}
+.hero-image img{width:100%;height:440px;object-fit:cover;border-radius:28px;box-shadow:0 24px 65px #173d2d20}
+.public-section{padding:76px clamp(20px,7vw,100px)}
+.section-heading{text-align:center;max-width:760px;margin:0 auto 34px}
+.section-heading h2,.benefits-section h2,.contact-section h2{font-size:clamp(2rem,3.5vw,3.1rem);letter-spacing:-.035em;margin:10px 0}
+.section-heading p,.benefits-section p,.contact-section p{color:#61766a;line-height:1.7}
+.public-package-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:22px}
+.public-package-card{background:#fff;border:1px solid #e0ebe3;border-radius:18px;overflow:hidden;box-shadow:0 8px 28px #143e2810}
+.public-package-card>img{width:100%;height:190px;object-fit:cover;background:#e9f2eb}
+.package-card-body{padding:20px;display:grid;gap:10px}
+.package-card-body h3{margin:0;font-size:1.2rem}
+.package-card-body p{margin:0;color:#65786c;line-height:1.5}
+.package-card-body strong{font-size:1.4rem;color:#087644}
+.package-type{font-size:.75rem;font-weight:800;color:#087644;text-transform:uppercase;letter-spacing:.1em}
+.package-card-body button{margin-top:8px}
+.public-state{padding:30px;text-align:center;border:1px dashed #bdd3c3;border-radius:16px;background:#fff;color:#51695a}
+.error-state{color:#a12d24;border-color:#efc2bd;background:#fff8f7}
+.soft-section{background:#f3f8f4}
+.public-feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.public-feature-grid article{background:#fff;padding:25px;border:1px solid #e1ebe4;border-radius:16px}
+.public-feature-grid article>span{color:#0a8a50;font-weight:800}
+.public-feature-grid h3{margin:14px 0 8px}
+.public-feature-grid p{color:#64766a;line-height:1.6}
+.benefits-section{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center}
+.benefits-section ul{list-style:none;padding:0;margin:0;display:grid;gap:16px}
+.benefits-section li{padding:18px;border-left:4px solid #0b8b51;background:#f3f8f4;border-radius:0 12px 12px 0}
+.benefits-section li b,.benefits-section li span{display:block}
+.benefits-section li span{margin-top:6px;color:#65786c;line-height:1.5}
+.contact-section{display:grid;grid-template-columns:1.2fr .8fr;gap:35px;background:#edf6ef}
+.public-enquiry-form{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:22px;max-width:720px}
+.public-enquiry-form input,.public-enquiry-form select,.public-enquiry-form textarea{min-width:0;padding:12px;border:1px solid #c7d8cc;border-radius:9px;background:white;font:inherit}
+.public-enquiry-form textarea,.public-enquiry-form button,.enquiry-feedback{grid-column:1/-1}
+.enquiry-feedback{color:#17623c;font-weight:600}
+.dealer-card{align-self:center;background:#fff;padding:28px;border-radius:18px;border:1px solid #dce9df}
+.dealer-card p{line-height:1.7;color:#65786c}
+.public-footer{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:24px clamp(20px,7vw,100px);background:#123c2a;color:#e7f3eb;flex-wrap:wrap}
+.public-footer img{width:170px;max-height:45px;filter:brightness(0) invert(1)}
+.customer-package-card{display:grid!important;grid-template-columns:125px 1fr auto;align-items:center;gap:16px}
+.customer-package-card img{width:125px;height:96px;object-fit:cover;border-radius:10px}
+.admin-package-thumb{width:82px;height:64px;object-fit:cover;border-radius:8px}
+.package-image-upload{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.package-image-upload label{display:grid;gap:5px;font-size:.8rem;color:#52695c}
+.settings-state{max-width:620px}
+.public-enquiry-form input:focus,.public-enquiry-form select:focus,.public-enquiry-form textarea:focus{outline:2px solid #56a879;outline-offset:1px}
+@media(max-width:760px){.public-nav{position:static;flex-wrap:wrap}.public-nav>div:nth-child(2){order:3;width:100%;justify-content:space-between;gap:10px}.solar-hero,.benefits-section,.contact-section{grid-template-columns:1fr}.hero-image img{height:270px}.public-section{padding-top:52px;padding-bottom:52px}.customer-package-card{grid-template-columns:90px 1fr!important}.customer-package-card img{width:90px;height:82px}.customer-package-card strong{grid-column:2}.public-enquiry-form{grid-template-columns:1fr}.public-enquiry-form>*{grid-column:1!important}}
