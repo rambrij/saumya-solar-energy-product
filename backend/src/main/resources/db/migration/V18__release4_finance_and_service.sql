@@ -1,5 +1,5 @@
 -- Release 4 finance, payments, service management and SLA configuration.
-ALTER TABLE tenant ADD COLUMN gstin VARCHAR(15) NULL, ADD COLUMN invoice_prefix VARCHAR(12) NOT NULL DEFAULT 'INV';
+ALTER TABLE tenant ADD COLUMN gstin VARCHAR(15) NULL, ADD COLUMN invoice_prefix VARCHAR(12) NOT NULL DEFAULT 'INV', ADD COLUMN service_reopen_days INT NULL;
 ALTER TABLE customer_profile ADD COLUMN gstin VARCHAR(15) NULL;
 ALTER TABLE inventory_transaction ADD COLUMN service_request_id BINARY(16) NULL;
 CREATE INDEX ix_inventory_tx_service_request ON inventory_transaction(tenant_id,service_request_id);
