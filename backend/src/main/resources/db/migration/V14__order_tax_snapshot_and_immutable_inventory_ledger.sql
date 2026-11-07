@@ -1,13 +1,6 @@
--- Release 3 hardening: preserve tax on direct product orders and make the stock ledger immutable.
-ALTER TABLE order_item
-    ADD COLUMN tax_percent DECIMAL(5,2) NOT NULL DEFAULT 0;
-
-CREATE TRIGGER trg_inventory_transaction_no_update
-BEFORE UPDATE ON inventory_transaction
-FOR EACH ROW
-SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Inventory transactions are immutable';
-
-CREATE TRIGGER trg_inventory_transaction_no_delete
-BEFORE DELETE ON inventory_transaction
-FOR EACH ROW
-SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Inventory transactions are immutable';
+-- Release 3 hardening marker.
+-- The tax_percent column is ensured by V15__ensure_order_tax_snapshot_column.java,
+-- which is safe to re-run after MySQL's non-transactional partial DDL behavior.
+-- Inventory transactions are append-only in the application repository/service.
+-- Do not create triggers here: managed MySQL instances with binary logging commonly
+-- deny trigger creation to the application account (ERROR 1419 / SUPER privilege).
