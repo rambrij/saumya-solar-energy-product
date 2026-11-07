@@ -152,7 +152,7 @@ docker compose build --no-cache
 docker compose up
 ```
 
-A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. The run for commit `a833e33dc036f244e4d7ccf23f99f78222a5a019` completed successfully for all three jobs: backend `mvn clean verify` (including H2-backed HTTP integration tests for registration, tenant provisioning, employee roles, category/product/package creation, customer enquiry, survey, quotation acceptance and idempotent order conversion), frontend `npm run build`, and V1–V10 migration application/verification on MySQL 8.4.
+A GitHub Actions workflow is included at `.github/workflows/release-validation.yml`. It is configured to run backend `mvn clean verify`, frontend `npm run build`, and MySQL 8.4 migration validation through V14. A historical run for commit `a833e33dc036f244e4d7ccf23f99f78222a5a019` passed the earlier backend/frontend/V1–V10 gates; that result does not validate the later Release 3 changes. The newly added direct-order integration test and V14 migration must pass in a fresh run before this branch is considered verified.
 
 ## Remaining release blockers
 
