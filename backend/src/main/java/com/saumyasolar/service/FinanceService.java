@@ -23,7 +23,7 @@ import java.util.*;
 @Service
 public class FinanceService {
     private final InvoiceRepository invoices; private final InvoiceItemRepository invoiceItems;
-    private final InvoiceSequenceRepository sequences; private final PaymentRepository payments;
+    private final InvoiceSequenceRepository sequences; private final CreditNoteRepository creditNotes; private final PaymentRepository payments;
     private final PaymentWebhookEventRepository webhookEvents; private final RefundRepository refunds;
     private final CustomerOrderRepository orders; private final OrderItemRepository orderItems;
     private final CustomerProfileRepository customers; private final TenantRepository tenants;
@@ -36,7 +36,7 @@ public class FinanceService {
     private final ObjectMapper mapper;
     private final String webhookSecret;
 
-    public FinanceService(InvoiceRepository invoices,InvoiceItemRepository invoiceItems,InvoiceSequenceRepository sequences,
+    public FinanceService(InvoiceRepository invoices,InvoiceItemRepository invoiceItems,InvoiceSequenceRepository sequences,CreditNoteRepository creditNotes,
         PaymentRepository payments,PaymentWebhookEventRepository webhookEvents,RefundRepository refunds,
         CustomerOrderRepository orders,OrderItemRepository orderItems,CustomerProfileRepository customers,
         TenantRepository tenants,ProductRepository products,ServiceRequestRepository tickets,ServiceVisitRepository visits,
@@ -44,7 +44,7 @@ public class FinanceService {
         WarrantyRepository warranties,InstallationJobRepository installations,InventoryBalanceRepository balances,
         WarehouseRepository warehouses,InventoryTransactionRepository inventoryTransactions,ObjectMapper mapper,
         @Value("${app.payment.webhook-secret:}") String webhookSecret) {
-        this.invoices=invoices;this.invoiceItems=invoiceItems;this.sequences=sequences;this.payments=payments;
+        this.invoices=invoices;this.invoiceItems=invoiceItems;this.sequences=sequences;this.creditNotes=creditNotes;this.payments=payments;
         this.webhookEvents=webhookEvents;this.refunds=refunds;this.orders=orders;this.orderItems=orderItems;
         this.customers=customers;this.tenants=tenants;this.products=products;this.tickets=tickets;this.visits=visits;
         this.slaPolicies=slaPolicies;this.serviceEvents=serviceEvents;this.users=users;this.warranties=warranties;
@@ -90,8 +90,26 @@ public class FinanceService {
             item.setUnitPrice(line.getUnitPrice());item.setTaxPercent(rate);item.setTaxableAmount(taxable);item.setTaxAmount(tax);item.setLineTotal(taxable.add(tax));invoiceItems.save(item);
             subtotal=subtotal.add(taxable);taxTotal=taxTotal.add(tax);
         }
-        invoice.setSubtotal(subtotal);invoice.setTaxTotal(taxTotal);invoice.setGrandTotal(subtotal.add(taxTotal));
+        invoice.setSubtotal(subtotal);invoice.setTaxTotal(taxTotal);if("CGST_SGST".equals(invoice.getTaxTreatment())){BigDecimal half=taxTotal.divide(new BigDecimal("2"),4,RoundingMode.HALF_UP);invoice.setCgstAmount(half);invoice.setSgstAmount(taxTotal.subtract(half));}else if("IGST".equals(invoice.getTaxTreatment()))invoice.setIgstAmount(taxTotal);invoice.setGrandTotal(subtotal.add(taxTotal));
         return invoices.save(invoice);
+    }
+    @Transactional public CreditNote createCreditNote(UUID invoiceId,CreditNoteCreate x,Principal p){
+        financeAccess(p);Invoice i=invoice(invoiceId,p.tenantId());
+        if(x.amount()==null||x.amount().signum()<=0||x.reason()==null||x.reason().isBlank())throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Credit note amount and reason are required");
+        if("VOID".equals(i.getStatus()))throw new ResponseStatusException(HttpStatus.CONFLICT,"A void invoice cannot receive a credit note");
+        List<CreditNote> prior=creditNotes.findByTenantIdAndInvoiceIdOrderByCreatedAtDesc(p.tenantId(),invoiceId);
+        BigDecimal already=prior.stream().filter(c->"ISSUED".equals(c.getStatus())).map(CreditNote::getAmount).reduce(BigDecimal.ZERO,BigDecimal::add);
+        if(already.add(x.amount()).compareTo(i.getGrandTotal())>0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Credit notes cannot exceed the invoice total");
+        CreditNote c=new CreditNote();c.setId(UUID.randomUUID());c.setTenantId(p.tenantId());c.setInvoiceId(invoiceId);
+        c.setCreditNoteNumber("CN-"+i.getInvoiceNumber()+"-"+String.format(Locale.ROOT,"%02d",prior.size()+1));
+        c.setReason(x.reason().trim());c.setAmount(x.amount());c.setStatus("ISSUED");c.setCreatedBy(p.userId());c.setCreatedAt(Instant.now());
+        creditNotes.save(c);i.setStatus(already.add(x.amount()).compareTo(i.getGrandTotal())==0?"CREDITED":"PARTIALLY_CREDITED");invoices.save(i);return c;
+    }
+    public List<CreditNote> creditNotes(UUID invoiceId,Principal p){
+        Invoice i=invoice(invoiceId,p.tenantId());
+        if("CUSTOMER".equals(p.accountType())){CustomerProfile cp=customer(p);if(!orders.findByIdAndTenantId(i.getOrderId(),p.tenantId()).map(o->cp.getId().equals(o.getCustomerId())).orElse(false))throw new ResponseStatusException(HttpStatus.NOT_FOUND);}
+        else financeAccess(p);
+        return creditNotes.findByTenantIdAndInvoiceIdOrderByCreatedAtDesc(p.tenantId(),invoiceId);
     }
     public List<Invoice> listInvoices(Principal p){
         if("CUSTOMER".equals(p.accountType())){CustomerProfile cp=customer(p);return invoices.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream().filter(i->orders.findByIdAndTenantId(i.getOrderId(),p.tenantId()).map(o->cp.getId().equals(o.getCustomerId())).orElse(false)).toList();}
@@ -101,6 +119,7 @@ public class FinanceService {
     @Transactional public Invoice voidInvoice(UUID id,String reason,Principal p){financeAccess(p);if(reason==null||reason.isBlank())throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Void reason is required");Invoice i=invoice(id,p.tenantId());if(!"ISSUED".equals(i.getStatus())&&! "PARTIALLY_PAID".equals(i.getStatus()))throw new ResponseStatusException(HttpStatus.CONFLICT,"Only an issued, unpaid or partially paid invoice can be voided");if(payments.findByTenantIdAndInvoiceId(p.tenantId(),id).stream().anyMatch(x->"CONFIRMED".equals(x.getStatus())))throw new ResponseStatusException(HttpStatus.CONFLICT,"Record a refund before voiding an invoice with payments");i.setStatus("VOID");i.setVoidReason(reason.trim());return invoices.save(i);}
     @Transactional public Payment recordPayment(ManualPayment x,Principal p){financeAccess(p);Invoice i=invoice(x.invoiceId(),p.tenantId());if(!Set.of("ISSUED","PARTIALLY_PAID").contains(i.getStatus()))throw new ResponseStatusException(HttpStatus.CONFLICT,"Invoice is not open for payment");BigDecimal paid=netPaid(p.tenantId(),i.getId());BigDecimal outstanding=i.getGrandTotal().subtract(paid);if(x.amount().compareTo(outstanding)>0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Payment exceeds the invoice outstanding amount of "+outstanding);Payment payment=new Payment();payment.setId(UUID.randomUUID());payment.setTenantId(p.tenantId());payment.setInvoiceId(i.getId());payment.setOrderId(i.getOrderId());payment.setAmount(x.amount());payment.setCurrency(i.getCurrency());payment.setMethod(x.method());payment.setSource("MANUAL");payment.setStatus("CONFIRMED");payment.setReference(x.reference());payment.setPaidAt(x.paidAt());payment.setRecordedBy(p.userId());payment.setCreatedAt(Instant.now());Payment saved=payments.save(payment);i.setStatus(paid.add(x.amount()).compareTo(i.getGrandTotal())>=0?"PAID":"PARTIALLY_PAID");invoices.save(i);return saved;}
     private BigDecimal netPaid(UUID tenant,UUID invoiceId){BigDecimal total=BigDecimal.ZERO;for(Payment payment:payments.findByTenantIdAndInvoiceId(tenant,invoiceId)){if("CONFIRMED".equals(payment.getStatus()))total=total.add(payment.getAmount());else if("PARTIALLY_REFUNDED".equals(payment.getStatus())){BigDecimal refunded=refunds.findByTenantIdAndPaymentId(tenant,payment.getId()).stream().filter(r->"RECORDED".equals(r.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO,BigDecimal::add);total=total.add(payment.getAmount().subtract(refunded));}}return total;}
+    public Payment getPayment(UUID id,Principal p){Payment payment=payments.findByIdAndTenantId(id,p.tenantId()).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Payment not found"));if("CUSTOMER".equals(p.accountType())){if(listInvoices(p).stream().noneMatch(i->i.getId().equals(payment.getInvoiceId())))throw new ResponseStatusException(HttpStatus.NOT_FOUND);}else financeAccess(p);return payment;}
     public List<Payment> listPayments(Principal p){if("CUSTOMER".equals(p.accountType())){CustomerProfile cp=customer(p);Set<UUID> invoiceIds=new HashSet<>();listInvoices(p).forEach(i->invoiceIds.add(i.getId()));return payments.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream().filter(v->invoiceIds.contains(v.getInvoiceId())).toList();}financeAccess(p);return payments.findByTenantIdOrderByCreatedAtDesc(p.tenantId());}
     @Transactional public Refund refund(RefundCreate x,Principal p){financeAccess(p);permission(p,"PAYMENT_REFUND");if(x.amount()==null||x.amount().signum()<=0||x.reason()==null||x.reason().isBlank())throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"A positive refund amount and reason are required");Payment pay=payments.findByIdAndTenantId(x.paymentId(),p.tenantId()).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Payment not found"));if(!"MANUAL".equals(pay.getSource()))throw new ResponseStatusException(HttpStatus.CONFLICT,"Gateway refunds require a configured provider refund adapter; no gateway is configured");BigDecimal refunded=refunds.findByTenantIdAndPaymentId(p.tenantId(),pay.getId()).stream().filter(r->"RECORDED".equals(r.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO,BigDecimal::add);if(refunded.add(x.amount()).compareTo(pay.getAmount())>0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Refund exceeds the unrefunded payment amount");Refund r=new Refund();r.setId(UUID.randomUUID());r.setTenantId(p.tenantId());r.setPaymentId(pay.getId());r.setAmount(x.amount());r.setReason(x.reason().trim());r.setStatus("RECORDED");r.setRecordedBy(p.userId());r.setCreatedAt(Instant.now());Refund saved=refunds.save(r);pay.setStatus(refunded.add(x.amount()).compareTo(pay.getAmount())==0?"REFUNDED":"PARTIALLY_REFUNDED");payments.save(pay);Invoice invoice=invoice(pay.getInvoiceId(),p.tenantId());BigDecimal net=netPaid(p.tenantId(),invoice.getId());invoice.setStatus(net.compareTo(invoice.getGrandTotal())>=0?"PAID":net.signum()>0?"PARTIALLY_PAID":"ISSUED");invoices.save(invoice);return saved;}
     private boolean validSignature(String raw,String signature){if(webhookSecret==null||webhookSecret.isBlank()||signature==null)return false;try{Mac mac=Mac.getInstance("HmacSHA256");mac.init(new SecretKeySpec(webhookSecret.getBytes(StandardCharsets.UTF_8),"HmacSHA256"));String expected=HexFormat.of().formatHex(mac.doFinal(raw.getBytes(StandardCharsets.UTF_8)));return MessageDigest.isEqual(expected.getBytes(StandardCharsets.US_ASCII),signature.toLowerCase(Locale.ROOT).getBytes(StandardCharsets.US_ASCII));}catch(Exception e){return false;}}
