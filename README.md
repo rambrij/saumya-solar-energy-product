@@ -210,3 +210,116 @@ Flyway migration `V14__order_tax_snapshot_and_immutable_inventory_ledger.sql` ad
 - Customer product ordering currently creates a single-product order with quantity one from the catalogue card. Multi-item cart, payment capture and order amendments belong to subsequent workflows/releases.
 - Inventory reservation expiry/background reconciliation is not yet implemented. Operations must release abandoned reservations explicitly using the authorized reservation-release endpoint.
 - Warranty dates currently begin on commissioning date and use product warranty years (minimum one year); manufacturer-specific warranty terms, registration evidence and pro-rata rules require configuration before production.
+
+
+---
+
+# Tenant access, settings, registration and solar package images
+
+This section documents the access-control and public storefront changes on `feature/release-3-operations`.
+
+## 403 investigation and root causes
+
+The repository code audit identified the following request-path problems. The original browser/network trace was not included in the issue, so the status explanations below are derived from the checked-in controller/security/service code and are now covered by integration tests.
+
+| Request | Root cause in the previous implementation | Correction |
+|---|---|---|
+| `POST /api/v1/tenants` | The endpoint used the shared `Models.Input` record, which mixed tenant fields with product, quotation and operations fields. The controller required `accountType=PLATFORM` and `PLATFORM_MANAGE`; a missing global role-permission mapping caused a real 403. A display value such as `Janhvi Soalr` was also not a valid canonical slug and could only fail later as a validation error. | Added a dedicated `TenantCreate` request DTO, explicit `PLATFORM_SUPER_ADMIN` role plus `PLATFORM_MANAGE` permission checks, V16 permission-mapping repair, and canonical slug normalization. Tenant creation still provisions the tenant-scoped Vendor Admin atomically. |
+| `GET /api/v1/settings` | The frontend called `/tenant/settings`, while the requested URL was `/settings`. The controller did not expose the latter route. The service intentionally restricts settings to vendor users with `DISCOUNT_POLICY_MANAGE`. | Added `/api/v1/settings` as an alias for the existing tenant settings handler and aligned the frontend to it. Both GET and PATCH remain protected by the existing vendor permission check. |
+| `POST /api/v1/auth/register` | Registration was already declared `permitAll()` and CSRF is disabled for this stateless bearer-token API. However, the JWT filter attempted to parse any supplied bearer token and swallowed failures, leaving a request anonymous; the security layer could then report 403 instead of a clear 401. Store lookup accepted only the exact slug, not an exact display name. | Public auth paths now bypass JWT parsing, invalid bearer tokens on protected APIs return 401, and registration resolves a canonical slug or an exact case-insensitive store display name. Unknown/inactive stores return 404; invalid registration fields return 400. |
+
+A 403 is still correct when a valid authenticated account lacks the required role or permission. The implementation does not grant platform privileges to vendor or customer accounts.
+
+## API and role permission matrix
+
+| Endpoint | Platform Super Admin | Vendor Admin | Vendor employee | Customer / public |
+|---|---|---|---|---|
+| `POST /api/v1/tenants` | Allowed with `PLATFORM_SUPER_ADMIN` and `PLATFORM_MANAGE` | 403 | 403 | 403 |
+| `GET /api/v1/settings` | 403 | Allowed with `DISCOUNT_POLICY_MANAGE` | Only if explicitly granted that permission | 403 |
+| `PATCH /api/v1/settings/discount-threshold` | 403 | Allowed with `DISCOUNT_POLICY_MANAGE` | Only if explicitly granted that permission | 403 |
+| `POST /api/v1/auth/register` | Public route; no JWT required | Public route; no JWT required | Public route; no JWT required | Public route; no JWT required |
+| `GET /api/v1/public/{storeSlug}/packages` | Public active-store catalogue | Public active-store catalogue | Public active-store catalogue | Public active-store catalogue |
+| `POST /api/v1/public/{storeSlug}/enquiries` | Public enquiry intake | Public enquiry intake | Public enquiry intake | Public enquiry intake |
+| `POST /api/v1/packages/{id}/image` | 403 | Allowed with `CATALOG_MANAGE` and same-tenant package | Only if explicitly granted `CATALOG_MANAGE` | 403 |
+| `PATCH/DELETE /api/v1/packages/{id}` | 403 | Allowed with `CATALOG_MANAGE` and same-tenant package | Only if explicitly granted `CATALOG_MANAGE` | 403 |
+
+Public registration creates only a `CUSTOMER` account and a tenant-owned customer profile. It cannot create or assign privileged roles.
+
+## Database migration
+
+V16 adds the missing global platform permission mapping and an optional package image URL:
+
+- `V16__repair_platform_permission_and_package_images.sql`
+- Inserts `PLATFORM_MANAGE` if it is missing.
+- Links it to the global `PLATFORM_SUPER_ADMIN` role idempotently.
+- Adds nullable `solar_package.image_url VARCHAR(1024)`.
+
+Existing solar packages remain valid; a null image uses the frontend placeholder. Do not edit previously applied Flyway migrations. Let Flyway apply V16 normally. Back up production before applying schema changes.
+
+## Solar package image storage
+
+Images are uploaded as multipart field `file` to:
+
+`POST /api/v1/packages/{packageId}/image`
+
+The endpoint requires `CATALOG_MANAGE` and checks that the package belongs to the authenticated vendor tenant. Supported formats are JPEG, PNG and WebP; maximum size is 5 MB. MIME type and file signature are checked, and JPEG/PNG image dimensions are validated. The generated UUID filename is stored outside the application artifact.
+
+Configuration:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `UPLOAD_DIR` | `./data/uploads` | Filesystem directory used by Spring Boot |
+| `PUBLIC_BASE_URL` | empty | Optional public backend base URL prepended to generated image paths |
+| `VITE_API_BASE_URL` | empty | Browser API origin; leave empty for same-origin Vite/Nginx proxy |
+| `VITE_PUBLIC_STORE_SLUG` | `saumya-solar` | Store slug shown on the public landing page |
+
+Docker Compose mounts the named `solar_uploads` volume at `/var/lib/saumya/uploads`, so rebuilding containers does not remove package images. Do not use `docker compose down -v` if you need to retain this volume.
+
+For a Vercel frontend with a separately hosted Spring Boot API, set `VITE_API_BASE_URL` to the backend origin at frontend build time, set `PUBLIC_BASE_URL` to the same backend origin, and include the exact Vercel origin in backend `CORS_ORIGINS`. Configure a persistent disk at `UPLOAD_DIR` on the backend host; ephemeral container filesystems are not suitable for production uploads. A future object-storage adapter (for example S3) can replace the filesystem provider without changing package image URLs.
+
+## Frontend routing and proxy
+
+- Local Vite development: `frontend/vite.config.ts` proxies both `/api` and `/uploads` to `http://localhost:8080`.
+- Docker production frontend: `frontend/nginx.conf` proxies `/api/` and `/uploads/` to the Compose service `backend:8080`.
+- React sends the bearer token in `Authorization: Bearer <accessToken>` for protected JSON and multipart calls. It deliberately does not set a JSON content type for multipart uploads.
+- A 401 clears the stale browser session and returns the user to sign-in; a 403 is shown as an authorization error. Settings has explicit loading, retry and error states.
+
+## Local setup and verification
+
+Apply the new migration and rebuild without deleting persistent volumes:
+
+```bash
+git checkout feature/release-3-operations
+git pull origin feature/release-3-operations
+docker compose up --build -d
+docker compose ps
+docker compose logs -f backend
+```
+
+Backend tests/build:
+
+```bash
+cd backend
+mvn clean verify
+```
+
+Frontend typecheck/build:
+
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+New regression coverage is in `backend/src/test/java/com/saumyasolar/Release4AccessAndPackageTest.java`. It verifies platform-only tenant creation and slug normalization, vendor settings authorization, exact store-name registration and unknown-store 404 behavior, public package listing, package image upload and static image retrieval. The complete CI run must pass before this branch is considered validated.
+
+## Demo users (local seed only)
+
+| Role | Email | Password | Expected access |
+|---|---|---|---|
+| Platform Super Admin | `platform@saumya.local` | `Platform@123` | Create/list/suspend tenants |
+| Vendor Admin | `admin@saumya.local` | `Admin@123` | Vendor catalogue, settings, package image upload and vendor workflows |
+| Vendor Sales User | `sales@saumya.local` | `Sales@123` | Sales permissions; no platform tenant creation or vendor settings unless explicitly granted |
+| Customer | `customer@saumya.local` | `Customer@123` | Own customer workspace; no vendor settings or package administration |
+
+These are disposable local-only seeded accounts. Do not enable demo seeding or use these credentials in production.
