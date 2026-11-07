@@ -8,6 +8,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockMultipartFile;
 import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -78,6 +79,12 @@ class Release4FinanceServiceAndPlatformTest {
             .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("OPEN")).andReturn().getResponse().getContentAsString();
         String id=json.readTree(created).get("id").asText();
         mvc.perform(get("/api/v1/service-requests").header("Authorization","Bearer "+customer)).andExpect(status().isOk()).andExpect(jsonPath("$[0].id").value(id));
+        MockMultipartFile evidence=new MockMultipartFile("file","service-evidence.png","image/png",new byte[]{(byte)0x89,'P','N','G',13,10,26,10,0,0,0,0});
+        String attachment=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/v1/service-requests/"+id+"/attachments").file(evidence).header("Authorization","Bearer "+customer))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.contentType").value("image/png")).andReturn().getResponse().getContentAsString();
+        String attachmentId=json.readTree(attachment).get("id").asText();
+        mvc.perform(get("/api/v1/service-requests/"+id+"/attachments/"+attachmentId).header("Authorization","Bearer "+customer))
+            .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith("image/png"));
         mvc.perform(get("/api/v1/service-requests/"+id).header("Authorization","Bearer "+vendor)).andExpect(status().isOk());
         String otherEmail="other-customer-"+UUID.randomUUID()+"@example.test";
         mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
@@ -85,6 +92,7 @@ class Release4FinanceServiceAndPlatformTest {
             .andExpect(status().isOk());
         String other=token(otherEmail,"OtherCustomer@2026");
         mvc.perform(get("/api/v1/service-requests/"+id).header("Authorization","Bearer "+other)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/service-requests/"+id+"/attachments/"+attachmentId).header("Authorization","Bearer "+other)).andExpect(status().isNotFound());
         mvc.perform(get("/api/v1/service-sla-policies").header("Authorization","Bearer "+customer)).andExpect(status().isForbidden());
     }
 }
