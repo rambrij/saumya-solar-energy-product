@@ -1,5 +1,6 @@
 package com.saumyasolar.api;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -22,7 +23,7 @@ public final class FinanceModels {
     public record ServiceAssign(@NotNull UUID engineerId,@NotBlank String reason) {}
     public record ServiceVisitCreate(@NotNull UUID engineerId,@NotNull Instant scheduledAt,@NotBlank String reason) {}
     public record ServicePart(@NotNull UUID warehouseId,@NotNull UUID productId,@NotNull @DecimalMin("0.0001") BigDecimal quantity,@NotBlank String reason) {}
-    public record ServiceVisitComplete(@NotBlank String engineerNotes,@NotBlank String resolution,@Size(max=1000) String evidenceUrl,List<ServicePart> parts) {}
+    public record ServiceVisitComplete(@NotBlank String engineerNotes,@NotBlank String resolution,@Size(max=1000) String evidenceUrl,@Valid List<ServicePart> parts) {}
     public record ServiceResolve(@NotBlank String resolution) {}
     public record SlaPolicyInput(@NotBlank @Pattern(regexp="LOW|MEDIUM|HIGH|CRITICAL") String priority,
         @Min(1) int responseMinutes,@Min(1) int resolutionMinutes,@NotBlank String timeZone,
