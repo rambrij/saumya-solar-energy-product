@@ -10,12 +10,16 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.mock.web.MockMultipartFile;
 import java.util.UUID;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.util.HexFormat;
 import java.time.LocalDate;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
+@SpringBootTest(properties = "app.payment.webhook-secret=test-webhook-secret")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class Release4FinanceServiceAndPlatformTest {
@@ -96,4 +100,16 @@ class Release4FinanceServiceAndPlatformTest {
         mvc.perform(get("/api/v1/service-requests/"+id+"/attachments/"+attachmentId).header("Authorization","Bearer "+other)).andExpect(status().isNotFound());
         mvc.perform(get("/api/v1/service-sla-policies").header("Authorization","Bearer "+customer)).andExpect(status().isForbidden());
     }
+    @Test void signedPaymentWebhookIsAuthenticatedAndDuplicateEventsAreIdempotent()throws Exception{
+        String raw="{\\"eventId\\":\\"evt-release4-test-1\\",\\"paymentReference\\":\\"unmatched-provider-ref\\",\\"amount\\":100.00,\\"status\\":\\"SUCCEEDED\\"}";
+        Mac mac=Mac.getInstance("HmacSHA256");mac.init(new SecretKeySpec("test-webhook-secret".getBytes(StandardCharsets.UTF_8),"HmacSHA256"));
+        String signature=HexFormat.of().formatHex(mac.doFinal(raw.getBytes(StandardCharsets.UTF_8)));
+        mvc.perform(post("/api/v1/payment-webhooks/test-provider").header("X-Payment-Signature",signature).contentType(MediaType.APPLICATION_JSON).content(raw))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.accepted").value(true)).andExpect(jsonPath("$.matched").value(false));
+        mvc.perform(post("/api/v1/payment-webhooks/test-provider").header("X-Payment-Signature",signature).contentType(MediaType.APPLICATION_JSON).content(raw))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.duplicate").value(true));
+        mvc.perform(post("/api/v1/payment-webhooks/test-provider").header("X-Payment-Signature","invalid").contentType(MediaType.APPLICATION_JSON).content(raw))
+            .andExpect(status().isUnauthorized());
+    }
+
 }
