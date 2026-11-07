@@ -363,6 +363,7 @@ Flyway applies these forward-only migrations; do not edit previously deployed mi
 | V19 | `PAYMENT_REFUND` permission for Vendor Admin and Accountant |
 | V20 | Invoice CGST/SGST/IGST component amounts and immutable credit-note records |
 | V21 | Configurable SLA working-day calendar |
+| V22 | Private tenant-authorized service evidence attachments |
 
 Before production migration, take a verified MySQL backup. Existing tenant records receive timestamps from the migration defaults. No table is dropped.
 
