@@ -66,6 +66,7 @@ public class FinanceController {
     }
 
     @GetMapping("/service-requests") List<?> serviceRequests(Authentication a){return finance.listTickets(principal(a));}
+    @GetMapping("/service-requests/{id}") Object getServiceRequest(@PathVariable UUID id,Authentication a){return finance.getTicket(id,principal(a));}
     @PostMapping("/service-requests") Object createServiceRequest(@Valid @RequestBody ServiceCreate x,Authentication a){return finance.createTicket(x,principal(a));}
     @PostMapping("/service-requests/{id}/assign") Object assignService(@PathVariable UUID id,@Valid @RequestBody ServiceAssign x,Authentication a){return finance.assignTicket(id,x,principal(a));}
     @PostMapping("/service-requests/{id}/visits") Object scheduleVisit(@PathVariable UUID id,@Valid @RequestBody ServiceVisitCreate x,Authentication a){return finance.scheduleVisit(id,x,principal(a));}
