@@ -31,6 +31,16 @@ public class TenantAdminService {
             !p.permissions().contains("PLATFORM_MANAGE"))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform Super Admin permission is required");
     }
+    private boolean matchesSearch(Tenant tenant, String search) {
+        if (search == null || search.isBlank()) return true;
+        String term = search.toLowerCase(Locale.ROOT);
+        if ((tenant.getName()!=null && tenant.getName().toLowerCase(Locale.ROOT).contains(term))
+                || (tenant.getSlug()!=null && tenant.getSlug().toLowerCase(Locale.ROOT).contains(term))) return true;
+        return users.findByTenantId(tenant.getId()).stream()
+            .filter(user -> user.getRoles().stream().anyMatch(role -> "VENDOR_ADMIN".equals(role.getName())))
+            .anyMatch(user -> (user.getName()!=null && user.getName().toLowerCase(Locale.ROOT).contains(term))
+                || (user.getEmail()!=null && user.getEmail().toLowerCase(Locale.ROOT).contains(term)));
+    }
     private TenantRow row(Tenant t) {
         AppUser admin = users.findByTenantId(t.getId()).stream()
             .filter(u -> u.getRoles().stream().anyMatch(r -> "VENDOR_ADMIN".equals(r.getName())))
@@ -47,15 +57,9 @@ public class TenantAdminService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported tenant status filter");
         var all = tenants.findAll(Sort.by(Sort.Direction.DESC,"createdAt"));
         var filtered = all.stream()
-            .filter(t -> normalized==null || normalized.equals(t.getStatus()))
-            .filter(t -> search==null || search.isBlank() ||
-                t.getName().toLowerCase(Locale.ROOT).contains(search.toLowerCase(Locale.ROOT)) ||
-                t.getSlug().toLowerCase(Locale.ROOT).contains(search.toLowerCase(Locale.ROOT)) ||
-                users.findByTenantId(t.getId()).stream().anyMatch(u ->
-                    u.getRoles().stream().anyMatch(r -> "VENDOR_ADMIN".equals(r.getName())) &&
-                    ((u.getName()!=null && u.getName().toLowerCase(Locale.ROOT).contains(search.toLowerCase(Locale.ROOT))) ||
-                     (u.getEmail()!=null && u.getEmail().toLowerCase(Locale.ROOT).contains(search.toLowerCase(Locale.ROOT)))))))
-            .toList();
+            .filter(t -> normalized == null || normalized.equals(t.getStatus()))
+            .filter(t -> matchesSearch(t, search))
+            .toList();  .toList();
         int from = Math.min(page*size, filtered.size()), to=Math.min(from+size,filtered.size());
         List<TenantRow> rows=filtered.subList(from,to).stream().map(this::row).toList();
         List<TenantRow> recent=all.stream().limit(5).map(this::row).toList();
