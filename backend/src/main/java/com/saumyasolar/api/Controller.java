@@ -252,11 +252,11 @@ public class Controller {
 
     private static String csv(Object value) {
         String v=value==null?"":String.valueOf(value);
-        return "\\""+v.replace("\\"","\\"\\"")+"\\"";
+        return "\"" + v.replace("\"","\"\"") + "\"";
     }
     private static String safe(Object value){return value==null?"":String.valueOf(value);}
     private static ResponseEntity<byte[]> export(byte[] bytes,String type,String filename) {
-        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=\\""+filename+"\\"")
+        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=\"" + filename + "\"")
             .header(HttpHeaders.CONTENT_TYPE,type).body(bytes);
     }
 
