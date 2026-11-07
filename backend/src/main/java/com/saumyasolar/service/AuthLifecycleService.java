@@ -156,6 +156,8 @@ public class AuthLifecycleService {
         tenant.setName(name.trim());
         tenant.setSlug(slug);
         tenant.setStatus("ACTIVE");
+        tenant.setCreatedAt(Instant.now());
+        tenant.setUpdatedAt(Instant.now());
         tenants.save(tenant);
 
         var vendorAdmin = new com.saumyasolar.domain.Role();
