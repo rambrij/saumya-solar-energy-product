@@ -75,6 +75,8 @@ public class FinanceController {
     @PostMapping("/service-requests/{id}/reopen") Object reopenService(@PathVariable UUID id,@RequestBody Map<String,String> body,Authentication a){return finance.reopenTicket(id,body.get("reason"),principal(a));}
     @GetMapping("/service-requests/{id}/visits") List<?> serviceVisits(@PathVariable UUID id,Authentication a){return finance.serviceVisits(id,principal(a));}
     @GetMapping("/service-requests/{id}/history") List<?> serviceHistory(@PathVariable UUID id,Authentication a){return finance.serviceHistory(id,principal(a));}
+    @GetMapping("/service-customers") List<?> serviceCustomers(Authentication a){return finance.serviceCustomers(principal(a));}
+    @GetMapping("/service-engineers") List<?> serviceEngineers(Authentication a){return finance.serviceEngineers(principal(a));}
     @GetMapping("/service-sla-policies") List<?> slaPolicies(Authentication a){return finance.slaPolicies(principal(a));}
     @PostMapping("/service-sla-policies") Object saveSlaPolicy(@Valid @RequestBody SlaPolicyInput x,Authentication a){return finance.saveSlaPolicy(x,principal(a));}
     private static String safe(Object value){return value==null?"":String.valueOf(value);}
