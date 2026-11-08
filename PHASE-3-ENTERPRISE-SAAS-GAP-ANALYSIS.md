@@ -419,3 +419,16 @@ All Phase 3 changes require regression tests against these existing workflows.
 This document is an audit/gap baseline, not evidence that the listed gaps have already been implemented. Implementation must proceed in the prioritized sequence, preserve existing Phase 1/2 behavior, and update this document with commit/test evidence as each workstream is completed.
 
 External provider credentials, production domains, accounting provider selection, gateway provider selection and any required commercial plan/pricing decisions must be supplied through secure configuration or confirmed before live integration testing. No secrets belong in Git.
+
+
+## 14. Post-audit implementation status (follow-up)
+
+This audit remains the historical pre-implementation baseline. Follow-up commits on `feature/phase-3-Enterprise-SaaS` have since added:
+- Tenant private evidence storage measurement and quota checks, with a vendor usage endpoint/UI (filesystem-scan based; not yet a durable cross-replica ledger).
+- Provider-neutral payment gateway registry, invoice checkout orchestration, customer Pay Online action and adapter-verified webhook normalization. No concrete gateway adapter is installed; checkout remains unavailable until one is deployed and configured. Gateway refund orchestration and settlement reconciliation remain open.
+- Provider-neutral accounting adapter contract/registry on top of the existing durable integration queue. No provider-specific adapter or reconciliation is included.
+- Tenant/user-partitioned IndexedDB offline queue and server-side idempotent replay for service comments and selected site-survey lifecycle commands. Full conflict resolution, attachments and offline order/payment/inventory actions remain open.
+- V41/V42 additive migrations and MySQL workflow validation steps.
+- Explicit Lombok annotation processor configuration and corrections identified by CI.
+
+These changes are documented with commit references and validation caveats in `PHASE-3-ENTERPRISE-SAAS-IMPLEMENTATION-REPORT.md`. They do not close the remaining branch propagation/isolation, branch analytics, universal audit coverage, secret-manager lifecycle, full provider refunds/reconciliation, complete offline conflict resolution, IoT scope or final end-to-end acceptance gaps. Do not treat this historical audit as a statement that Phase 3 is fully accepted.
