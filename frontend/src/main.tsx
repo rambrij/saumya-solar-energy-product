@@ -67,7 +67,7 @@ function Customer({s,error}:any){
    const [categories,products,packages,q,o,e,i,w,inv,pay,svc,claims,consent]=await Promise.all([
     api('/catalog-categories',{},s),api('/catalog-products',{},s),api('/catalog-packages',{},s),
     api('/quotations',{},s),api('/customer-orders',{},s),api('/customer-enquiries',{},s),
-    api('/customer/installations',{},s),api('/customer/warranties',{},s),api('/invoices',{},s),api('/payments',{},s),api('/service-requests',{},s)
+    api('/customer/installations',{},s),api('/customer/warranties',{},s),api('/invoices',{},s),api('/payments',{},s),api('/service-requests',{},s),api('/customer/warranty-claims',{},s),api('/customer/messaging-consent',{},s)
    ]);
    setCatalog({categories,products,packages});setQuotes(q||[]);setOrders(o||[]);setEnquiries(e||[]);setInstallations(i||[]);setWarranties(w||[]);setWarrantyClaims(claims||[]);setMessagingConsent(consent||{smsConsent:false,whatsappConsent:false});setInvoices(inv||[]);setPayments(pay||[]);setServiceTickets(svc||[]);const evidence=await Promise.all((svc||[]).map(async(ticket:any)=>[ticket.id,await api('/service-requests/'+ticket.id+'/attachments',{},s).catch(()=>[])]));setServiceAttachments(Object.fromEntries(evidence));
   }catch(err:any){error(err.message)}finally{setBusy(false)}
