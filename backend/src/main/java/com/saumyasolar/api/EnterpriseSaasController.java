@@ -38,7 +38,11 @@ public class EnterpriseSaasController {
   return service.updateBranding(new EnterpriseSaasService.BrandingInput(x.displayName(),x.logoUrl(),x.primaryColor(),x.secondaryColor(),x.contactEmail(),x.contactPhone(),x.supportEmail(),x.supportPhone()),p(a));
  }
  @GetMapping("/public/{slug}/branding") public EnterpriseSaasService.BrandingView publicBranding(@PathVariable String slug){return service.publicBranding(slug);}
- @GetMapping("/public/store-context") public EnterpriseSaasService.PublicStoreContext publicStoreContext(jakarta.servlet.http.HttpServletRequest request){return service.publicStoreContext(request.getServerName());}
+ @GetMapping("/public/store-context") public EnterpriseSaasService.PublicStoreContext publicStoreContext(jakarta.servlet.http.HttpServletRequest request,@RequestHeader(value="Origin",required=false) String origin){
+  String host=request.getServerName();
+  if(origin!=null&&!origin.isBlank())try{java.net.URI uri=java.net.URI.create(origin);if(("https".equalsIgnoreCase(uri.getScheme())||"http".equalsIgnoreCase(uri.getScheme()))&&uri.getHost()!=null)host=uri.getHost();}catch(IllegalArgumentException ignored){}
+  return service.publicStoreContext(host);
+ }
  @GetMapping("/vendor/domains") public List<TenantDomain> domains(Authentication a){return service.domains(p(a));}
  @PostMapping("/vendor/domains") public TenantDomain requestDomain(@Valid @RequestBody DomainRequest x,Authentication a){return service.requestDomain(x.domain(),p(a));}
  @PostMapping("/vendor/domains/{id}/verify") public TenantDomain verifyDomain(@PathVariable UUID id,Authentication a){return service.verifyDomain(id,p(a));}
