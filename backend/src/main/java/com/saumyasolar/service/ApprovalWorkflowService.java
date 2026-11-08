@@ -18,7 +18,7 @@ public class ApprovalWorkflowService {
    for(JsonNode step:root){
     if(!step.isObject())throw new IllegalArgumentException();
     boolean hasRole=step.hasNonNull("approverRole"),hasPermission=step.hasNonNull("permissionCode");
-    if(hasRole==hasPermission)throw new IllegalArgumentException();
+    if(!hasRole&&!hasPermission)throw new IllegalArgumentException();
     if(hasRole&&(step.get("approverRole").asText().isBlank()||step.get("approverRole").asText().length()>80))throw new IllegalArgumentException();
     if(hasPermission&&(step.get("permissionCode").asText().isBlank()||step.get("permissionCode").asText().length()>100))throw new IllegalArgumentException();
     if(step.has("minAmount")&&!step.get("minAmount").isNumber())throw new IllegalArgumentException();
