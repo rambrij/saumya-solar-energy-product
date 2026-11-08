@@ -108,13 +108,17 @@ public class EnterpriseSaasService {
   if(!plan.isActive()&&!planId.equals(s.getPlanId()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"A new inactive plan cannot be assigned");
   Instant start=x.startsAt()==null?s.getStartsAt():x.startsAt();
   if(x.endsAt()!=null&&!x.endsAt().isAfter(start))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Subscription end must be after start");
-  if(x.trialEndsAt()!=null&&x.trialEndsAt().isBefore(start))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Trial end cannot precede subscription start");
+  if(x.renewsAt()!=null&&x.renewsAt().isBefore(start))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Renewal date cannot precede subscription start");
+  String billingCycle=x.billingCycle()==null?plan.getBillingCycle():x.billingCycle();
+  if(!Set.of("MONTHLY","YEARLY").contains(billingCycle))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Billing cycle must be MONTHLY or YEARLY");
+  Instant trialEnd=x.trialEndsAt();if(trialEnd==null&&"TRIAL".equals(x.status())&&plan.getTrialPeriodDays()>0)trialEnd=start.plusSeconds(plan.getTrialPeriodDays()*86400L);
+  if(trialEnd!=null&&trialEnd.isBefore(start))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Trial end cannot precede subscription start");
   if(Set.of("TRIAL","ACTIVE","PAST_DUE").contains(x.status())){
    boolean another=subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId).stream().anyMatch(v->!v.getId().equals(subscriptionId)&&Set.of("TRIAL","ACTIVE","PAST_DUE").contains(v.getStatus())&&(v.getEndsAt()==null||v.getEndsAt().isAfter(Instant.now())));
    if(another)throw new ResponseStatusException(HttpStatus.CONFLICT,"Another active or scheduled subscription exists for this tenant");
   }
   String previous=s.getStatus();UUID previousPlan=s.getPlanId();s.setPlanId(planId);s.setStatus(x.status());s.setStartsAt(start);s.setEndsAt(x.endsAt());s.setRenewsAt(x.renewsAt());
-  s.setBillingCycle(x.billingCycle()==null?plan.getBillingCycle():x.billingCycle());s.setTrialEndsAt(x.trialEndsAt());s.setAutoRenew(x.autoRenew());s.setNotes(trim(x.notes()));s.setExternalReference(trim(x.externalReference()));s.setUpdatedAt(Instant.now());
+  s.setBillingCycle(billingCycle);s.setTrialEndsAt(trialEnd);s.setAutoRenew(x.autoRenew());s.setNotes(trim(x.notes()));s.setExternalReference(trim(x.externalReference()));s.setUpdatedAt(Instant.now());
   subscriptions.save(s);history(p,s,"UPDATED",previous,previousPlan,Map.of("planCode",plan.getPlanCode()));audit(p,tenantId,"SUBSCRIPTION_UPDATED","TENANT_SUBSCRIPTION",subscriptionId,s);return s;
  }
  public TenantSubscription tenantSubscription(UUID tenantId,UUID subscriptionId,Principal p){
