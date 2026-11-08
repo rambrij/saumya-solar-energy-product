@@ -628,6 +628,11 @@ public class AppService {
         requireCustomer(x.customerId(), p.tenantId());
         if (x.leadId() != null && !Objects.equals(requireLead(x.leadId(), p.tenantId()).getCustomerId(), x.customerId()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lead does not belong to the selected customer");
+        if (x.leadId() != null && x.surveyId() == null
+                && !surveys.findByLeadIdAndTenantIdOrderByIdDesc(x.leadId(), p.tenantId()).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "An approved site survey is required before creating a quotation for this lead");
+        }
         if (x.surveyId() != null) {
             var survey = surveys.findByIdAndTenantId(x.surveyId(), p.tenantId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Survey not found in this vendor"));
