@@ -63,6 +63,15 @@ public class SurveyLifecycleService {
     }
 
     @Transactional
+    public void recordCreated(SiteSurvey survey, Principal actor) {
+        authorize(actor);
+        if (survey == null || !actor.tenantId().equals(survey.getTenantId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Survey not found");
+        }
+        record(survey, actor, "CREATED", null, survey.getStatus(), "Survey scheduled");
+    }
+
+    @Transactional
     public SiteSurvey get(UUID id, Principal actor) {
         authorize(actor);
         return requireSurvey(id, actor);
