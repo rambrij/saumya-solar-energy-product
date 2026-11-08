@@ -100,6 +100,26 @@ public class EnterpriseSaasService {
   platform(p,"SUBSCRIPTION_MANAGE");String term=query==null?"":query.trim();if(term.length()<2)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Enter at least two characters to search tenants");
   return tenants.findByNameContainingIgnoreCaseOrSlugContainingIgnoreCaseOrderByNameAsc(term,term).stream().limit(30).toList();
  }
+ @Transactional public TenantSubscription updateTenantSubscription(UUID tenantId,UUID subscriptionId,SubscriptionInput x,UUID planId,Principal p){
+  platform(p,"SUBSCRIPTION_MANAGE");tenants.findByIdForUpdate(tenantId).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
+  TenantSubscription s=subscriptions.findById(subscriptionId).filter(v->tenantId.equals(v.getTenantId())).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Subscription not found"));
+  if(!Set.of("TRIAL","ACTIVE","PAST_DUE","SUSPENDED","CANCELLED","EXPIRED").contains(x.status()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Unsupported subscription status");
+  SubscriptionPlan plan=plans.findById(planId).orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"Plan not found"));
+  if(!plan.isActive()&&!planId.equals(s.getPlanId()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"A new inactive plan cannot be assigned");
+  Instant start=x.startsAt()==null?s.getStartsAt():x.startsAt();
+  if(x.endsAt()!=null&&!x.endsAt().isAfter(start))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Subscription end must be after start");
+  if(x.trialEndsAt()!=null&&x.trialEndsAt().isBefore(start))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Trial end cannot precede subscription start");
+  if(Set.of("TRIAL","ACTIVE","PAST_DUE").contains(x.status())){
+   boolean another=subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId).stream().anyMatch(v->!v.getId().equals(subscriptionId)&&Set.of("TRIAL","ACTIVE","PAST_DUE").contains(v.getStatus())&&(v.getEndsAt()==null||v.getEndsAt().isAfter(Instant.now())));
+   if(another)throw new ResponseStatusException(HttpStatus.CONFLICT,"Another active or scheduled subscription exists for this tenant");
+  }
+  String previous=s.getStatus();UUID previousPlan=s.getPlanId();s.setPlanId(planId);s.setStatus(x.status());s.setStartsAt(start);s.setEndsAt(x.endsAt());s.setRenewsAt(x.renewsAt());
+  s.setBillingCycle(x.billingCycle()==null?plan.getBillingCycle():x.billingCycle());s.setTrialEndsAt(x.trialEndsAt());s.setAutoRenew(x.autoRenew());s.setNotes(trim(x.notes()));s.setExternalReference(trim(x.externalReference()));s.setUpdatedAt(Instant.now());
+  subscriptions.save(s);history(p,s,"UPDATED",previous,previousPlan,Map.of("planCode",plan.getPlanCode()));audit(p,tenantId,"SUBSCRIPTION_UPDATED","TENANT_SUBSCRIPTION",subscriptionId,s);return s;
+ }
+ public TenantSubscription tenantSubscription(UUID tenantId,UUID subscriptionId,Principal p){
+  platform(p,"SUBSCRIPTION_MANAGE");return subscriptions.findById(subscriptionId).filter(v->tenantId.equals(v.getTenantId())).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Subscription not found"));
+ }
  public List<TenantSubscription> tenantSubscriptions(UUID tenantId,Principal p){
   platform(p,"SUBSCRIPTION_MANAGE");if(!tenants.existsById(tenantId))throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found");
   return subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId);
