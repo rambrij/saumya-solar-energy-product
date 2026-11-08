@@ -22,8 +22,8 @@ public class ServiceAttachmentService {
     private final ServiceAttachmentRepository attachments;
     private final FinanceService finance;
     public ServiceAttachmentService(@Value("${app.service.attachment-location:./data/private-service-attachments}") String location,
-            ServiceAttachmentRepository attachments,FinanceService finance){
-        this.root=Path.of(location).toAbsolutePath().normalize();this.attachments=attachments;this.finance=finance;
+            ServiceAttachmentRepository attachments,FinanceService finance,PrivateObjectStorageService storage){
+        this.root=Path.of(location).toAbsolutePath().normalize();this.attachments=attachments;this.finance=finance;this.storage=storage;
     }
     @Transactional
     public ServiceAttachment upload(UUID ticketId,MultipartFile file,Principal p){
@@ -36,14 +36,12 @@ public class ServiceAttachmentService {
         try{
             byte[] bytes=file.getBytes();if(!valid(bytes,type))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Uploaded file signature does not match its content type");
             String ext=switch(type){case "image/jpeg"->".jpg";case "image/png"->".png";case "image/webp"->".webp";default->".pdf";};
-            String key=UUID.randomUUID()+ext;Files.createDirectories(root);Path target=root.resolve(key).normalize();
-            if(!target.startsWith(root))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Invalid attachment path");
-            Files.write(target,bytes,StandardOpenOption.CREATE_NEW);
+            String key=storage.put(root,"service-tickets",p.tenantId(),UUID.randomUUID()+ext,bytes,type);
             try{
                 ServiceAttachment a=new ServiceAttachment();a.setId(UUID.randomUUID());a.setTenantId(p.tenantId());a.setServiceRequestId(ticketId);
                 a.setOriginalName(safeName(file.getOriginalFilename()));a.setStorageKey(key);a.setContentType(type);a.setSizeBytes(bytes.length);
                 a.setUploadedBy(p.userId());a.setCreatedAt(Instant.now());return attachments.save(a);
-            }catch(RuntimeException ex){Files.deleteIfExists(target);throw ex;}
+            }catch(RuntimeException ex){try{storage.delete(root,key);}catch(IOException cleanup){ex.addSuppressed(cleanup);}throw ex;}
         }catch(IOException ex){throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,"Unable to store service attachment",ex);}
     }
     public List<ServiceAttachment> list(UUID ticketId,Principal p){finance.getTicket(ticketId,p);return attachments.findByTenantIdAndServiceRequestIdOrderByCreatedAtAsc(p.tenantId(),ticketId);}
@@ -51,7 +49,7 @@ public class ServiceAttachmentService {
         finance.getTicket(ticketId,p);
         ServiceAttachment a=attachments.findByIdAndTenantIdAndServiceRequestId(attachmentId,p.tenantId(),ticketId)
             .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Service attachment not found"));
-        try{Path file=root.resolve(a.getStorageKey()).normalize();if(!file.startsWith(root)||!Files.isRegularFile(file))throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Service attachment file not found");return new Download(a,Files.readAllBytes(file));}
+        try{return new Download(a,storage.get(root,a.getStorageKey()));}
         catch(IOException ex){throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,"Unable to read service attachment",ex);}
     }
     private boolean valid(byte[] b,String type){
