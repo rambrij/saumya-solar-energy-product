@@ -119,10 +119,10 @@ public class EnterpriseSaasService {
  }
  @Transactional public BrandingView updateBranding(BrandingInput x,Principal p){
   UUID id=vendor(p,"BRANDING_MANAGE");
-  Tenant t=tenants.findByIdForUpdate(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
   if(x.logoUrl()!=null&&!x.logoUrl().isBlank()&&!x.logoUrl().startsWith("/uploads/")&&!x.logoUrl().startsWith("https://"))
    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Logo URL must use HTTPS or the application's private upload path");
   if(!color(x.primaryColor())||!color(x.secondaryColor()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Brand colors must use six-digit hexadecimal values");
+  Tenant t=tenants.findByIdForUpdate(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
   t.setDisplayName(trim(x.displayName()));t.setLogoUrl(trim(x.logoUrl()));t.setPrimaryColor(x.primaryColor().toUpperCase(Locale.ROOT));
   t.setSecondaryColor(x.secondaryColor().toUpperCase(Locale.ROOT));t.setContactEmail(trim(x.contactEmail()));t.setContactPhone(trim(x.contactPhone()));
   t.setSupportEmail(trim(x.supportEmail()));t.setSupportPhone(trim(x.supportPhone()));t.setUpdatedAt(Instant.now());tenants.save(t);
