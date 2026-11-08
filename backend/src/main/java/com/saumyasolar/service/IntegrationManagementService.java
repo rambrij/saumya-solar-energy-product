@@ -5,8 +5,8 @@ import jakarta.transaction.Transactional;import org.springframework.http.HttpSta
 import java.time.Instant;import java.util.*;
 @Service
 public class IntegrationManagementService {
- private final IntegrationConnectionRepository connections;private final IntegrationSyncJobRepository jobs;private final AuditEventRepository audits;private final ObjectMapper mapper;
- public IntegrationManagementService(IntegrationConnectionRepository c,IntegrationSyncJobRepository j,AuditEventRepository a,ObjectMapper m){connections=c;jobs=j;audits=a;mapper=m;}
+ private final IntegrationConnectionRepository connections;private final IntegrationSyncJobRepository jobs;private final AuditEventRepository audits;private final ObjectMapper mapper;private final EnterpriseSaasService entitlements;
+ public IntegrationManagementService(IntegrationConnectionRepository c,IntegrationSyncJobRepository j,AuditEventRepository a,ObjectMapper m,EnterpriseSaasService entitlements){connections=c;jobs=j;audits=a;mapper=m;this.entitlements=entitlements;}
  private UUID tenant(Principal p){if(!"VENDOR".equals(p.accountType())||p.tenantId()==null||p.permissions()==null||!p.permissions().contains("INTEGRATION_MANAGE"))throw new ResponseStatusException(HttpStatus.FORBIDDEN);return p.tenantId();}
  private void scan(JsonNode node){if(node.isObject())node.fields().forEachRemaining(e->{String k=e.getKey().toLowerCase(Locale.ROOT);if(k.contains("secret")||k.contains("password")||k.contains("token")||k.contains("apikey")||k.contains("clientsecret"))throw new IllegalArgumentException();scan(e.getValue());});else if(node.isArray())node.forEach(this::scan);}
  private void validateJson(String value){try{JsonNode n=mapper.readTree(value);if(n==null||!n.isObject())throw new IllegalArgumentException();scan(n);}catch(Exception e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Configuration/payload must be a JSON object and must not contain credentials");}}
