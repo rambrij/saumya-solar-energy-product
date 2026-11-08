@@ -24,6 +24,8 @@ SPA `/` → Platform Subscription Administration panel.
 ## 8. Request and response examples
 Example create body: `{"planCode":"GROWTH","name":"Growth","billingCycle":"MONTHLY","price":4999,"currency":"INR","maxUsers":30,"maxBranches":5,"maxWarehouses":5,"maxStorageMb":10240,"maxProducts":2000,"maxCustomers":2000,"trialPeriodDays":14,"displayOrder":4,"entitlementsJson":"{\\"branches\\":true}"}`.
 
+Response shape illustration: `{"id":"<plan-uuid>","planCode":"GROWTH","name":"Growth","billingCycle":"MONTHLY","price":4999.00,"active":true}`.
+
 ## 9. Database entities and relationships
 `SubscriptionPlan` is referenced by `TenantSubscription`; `subscription_plan.plan_code` has a unique constraint; V46 adds product/customer limits, trial days, display order and assignment-history table.
 
