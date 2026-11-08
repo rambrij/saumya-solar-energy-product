@@ -29,5 +29,5 @@ public class OfflineSyncController {
     }
 
     public record BatchRequest(@NotNull @Size(min = 1, max = 50)
-                               List<@Valid OfflineSyncService.SyncCommand> operations) {}
+                               List<OfflineSyncService.SyncCommand> operations) {}
 }
