@@ -85,6 +85,26 @@ class Release3OperationsIntegrationTest {
   java.util.concurrent.CountDownLatch start=new java.util.concurrent.CountDownLatch(1);java.util.concurrent.ExecutorService pool=java.util.concurrent.Executors.newFixedThreadPool(2);
   try{java.util.List<java.util.concurrent.Future<Boolean>> results=java.util.Arrays.stream(orderIds).map(id->pool.submit(()->{start.await();try{operations.reserve(id,new ReservationInput(warehouse.getId(),"concurrency test"),principal);return true;}catch(org.springframework.web.server.ResponseStatusException ex){return false;}})).toList();start.countDown();long success=0;for(var f:results)if(f.get())success++;assertEquals(1,success);InventoryBalance after=balances.findByTenantIdAndWarehouseIdAndProductId(tenantId,warehouse.getId(),product.getId()).orElseThrow();assertEquals(0,new BigDecimal("4").compareTo(after.getReserved()));assertEquals(0,new BigDecimal("1").compareTo(after.getAvailable()));}finally{pool.shutdownNow();}
  }
+ @Test void orderCancellationRequiresReservationReleaseAndThenUpdatesInventoryLedger() throws Exception {
+  var admin=users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+  var customer=customerProfiles.findByTenantIdOrderByIdDesc(tenantId).get(0);
+  Product product=products.findByTenantIdOrderByIdDesc(tenantId).stream().filter(p->"DEMO-PV-550".equals(p.getSku())).findFirst().orElseThrow();
+  Warehouse warehouse=new Warehouse();warehouse.setId(UUID.randomUUID());warehouse.setTenantId(tenantId);warehouse.setCode("CANCEL-"+UUID.randomUUID());warehouse.setName("Cancellation test warehouse");warehouse.setActive(true);warehouse.setCreatedAt(java.time.Instant.now());warehouses.save(warehouse);
+  InventoryBalance balance=new InventoryBalance();balance.setId(UUID.randomUUID());balance.setTenantId(tenantId);balance.setWarehouseId(warehouse.getId());balance.setProductId(product.getId());balance.setOnHand(new BigDecimal("5"));balance.setReserved(BigDecimal.ZERO);balance.setDamaged(BigDecimal.ZERO);balances.save(balance);
+  CustomerOrder order=new CustomerOrder();order.setId(UUID.randomUUID());order.setTenantId(tenantId);order.setCustomerId(customer.getId());order.setOrderNumber("CANCEL-"+UUID.randomUUID());order.setStatus("CONFIRMED");order.setTotal(new BigDecimal("500"));order.setCreatedAt(java.time.Instant.now());orders.save(order);
+  OrderItem line=new OrderItem();line.setId(UUID.randomUUID());line.setTenantId(tenantId);line.setOrderId(order.getId());line.setProductId(product.getId());line.setDescription("Cancellation test product");line.setQuantity(2);line.setUnitPrice(new BigDecimal("250"));line.setLineTotal(new BigDecimal("500"));orderItems.save(line);
+  Principal principal=new Principal(admin.getId(),tenantId,admin.getEmail(),"VENDOR",java.util.Set.of("VENDOR_ADMIN"),java.util.Set.of("INVENTORY_MANAGE","ORDER_CREATE"));
+  operations.reserve(order.getId(),new ReservationInput(warehouse.getId(),"customer order confirmed"),principal);
+  var transition=new com.saumyasolar.api.OperationsModels.OrderTransitionInput("CANCELLED","Customer cancelled");
+  var conflict=assertThrows(org.springframework.web.server.ResponseStatusException.class,()->operations.transition(order.getId(),transition,principal));
+  assertEquals(org.springframework.http.HttpStatus.CONFLICT,conflict.getStatusCode());
+  assertEquals(0,new BigDecimal("2").compareTo(balances.findByTenantIdAndWarehouseIdAndProductId(tenantId,warehouse.getId(),product.getId()).orElseThrow().getReserved()));
+  operations.release(order.getId(),"Release reservation before cancellation",principal);
+  var cancelled=operations.transition(order.getId(),transition,principal);
+  assertEquals("CANCELLED",cancelled.getStatus());
+  assertEquals(BigDecimal.ZERO,balances.findByTenantIdAndWarehouseIdAndProductId(tenantId,warehouse.getId(),product.getId()).orElseThrow().getReserved());
+ }
+
  @Test void vendorCannotReceiveStockForAnotherTenantsProduct() throws Exception {
   String auth=token();var foreign=otherTenant();ProductCategory category=new ProductCategory();category.setId(UUID.randomUUID());category.setTenantId(foreign.getId());category.setName("Foreign category");category.setActive(true);categories.save(category);
   Product product=new Product();product.setId(UUID.randomUUID());product.setTenantId(foreign.getId());product.setCategoryId(category.getId());product.setSku("FOREIGN-"+UUID.randomUUID());product.setName("Foreign product");product.setPrice(BigDecimal.TEN);product.setTaxPercent(BigDecimal.ZERO);product.setActive(true);products.save(product);
