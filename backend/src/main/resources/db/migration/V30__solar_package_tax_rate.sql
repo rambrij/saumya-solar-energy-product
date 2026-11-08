@@ -1,0 +1,2 @@
+ALTER TABLE solar_package
+    ADD COLUMN tax_percent DECIMAL(5,2) NOT NULL DEFAULT 0.00;
