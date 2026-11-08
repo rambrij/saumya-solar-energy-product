@@ -8,7 +8,9 @@ const money=(value:number)=>'₹'+Number(value||0).toLocaleString('en-IN',{maxim
 const asset=(value?:string|null)=>!value?placeholder:value.startsWith('/')?API_BASE+value:value;
 function capacity(product:PublicProduct){try{const a=JSON.parse(product.attributesJson||'{}');const v=a.capacityKw??a.capacityKW??a.capacity??a.systemCapacityKw;if(v!==undefined)return String(v).toLowerCase().includes('kw')?String(v):String(v)+' kW'}catch{}return product.technology||''}
 export default function PublicHome({onLogin,onRegister}: {onLogin:()=>void;onRegister:()=>void}) {
- const storeSlug=import.meta.env.VITE_PUBLIC_STORE_SLUG||'saumya-solar';
+ const configuredStoreSlug=import.meta.env.VITE_PUBLIC_STORE_SLUG||'';
+ const [storeSlug,setStoreSlug]=useState(configuredStoreSlug||'saumya-solar');
+ const [storeResolved,setStoreResolved]=useState(Boolean(configuredStoreSlug));
  const path=window.location.pathname.replace(/\/+$/,'')||'/';
  const productDetailId=path.startsWith('/products/')?decodeURIComponent(path.slice('/products/'.length)):null;
  const page=productDetailId?'product-detail':path==='/products'?'products':path==='/packages'?'packages':path==='/about'?'about':path==='/mounting-structures'?'mounting-structures':path==='/solar-technology'?'solar-technology':path==='/contact'?'contact':'home';
@@ -29,9 +31,18 @@ export default function PublicHome({onLogin,onRegister}: {onLogin:()=>void;onReg
  const [enquiryBusy,setEnquiryBusy]=useState(false);
  const [enquiryMessage,setEnquiryMessage]=useState('');
  const submitEnquiry=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();const form=e.currentTarget;const values:any=Object.fromEntries(new FormData(form));setEnquiryBusy(true);setEnquiryMessage('');try{const response=await fetch(API_BASE+'/api/v1/public/'+encodeURIComponent(storeSlug)+'/enquiries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...values,monthlyBill:values.monthlyBill?Number(values.monthlyBill):null,requiredCapacityKw:values.requiredCapacityKw?Number(values.requiredCapacityKw):null})});const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.detail||body.message||'Unable to submit your enquiry');form.reset();setEnquiryMessage('Thank you. Your enquiry has been sent to the selected solar store.');}catch(e:any){setEnquiryMessage(e.message||'Unable to submit your enquiry.')}finally{setEnquiryBusy(false)}};
- useEffect(()=>{let alive=true;fetch(API_BASE+'/api/v1/public/'+encodeURIComponent(storeSlug)+'/branding').then(r=>r.ok?r.json():null).then(x=>{if(alive)setBranding(x)}).catch(()=>{if(alive)setBranding(null)});return()=>{alive=false}},[storeSlug]);
- useEffect(()=>{let alive=true;fetch(API_BASE+'/api/v1/public/'+encodeURIComponent(storeSlug)+'/packages').then(async r=>{if(!r.ok)throw new Error(r.status===404?'This solar store is not available yet.':'Unable to load solar packages.');return r.json()}).then(rows=>{if(alive)setPackages(rows||[])}).catch(e=>{if(alive)setPackageError(e.message)}).finally(()=>{if(alive)setPackageLoading(false)});return()=>{alive=false}},[storeSlug]);
- useEffect(()=>{if(page!=='products'&&page!=='product-detail'&&page!=='home')return;let alive=true;setProductLoading(true);fetch(API_BASE+'/api/v1/public/'+encodeURIComponent(storeSlug)+'/products').then(async r=>{if(!r.ok)throw new Error(r.status===404?'This solar store is not available yet.':'Unable to load products. Please try again.');return r.json()}).then(rows=>{if(alive)setProducts(rows||[])}).catch(e=>{if(alive)setProductError(e.message)}).finally(()=>{if(alive)setProductLoading(false)});return()=>{alive=false}},[storeSlug,page]);
+ useEffect(()=>{
+  if(configuredStoreSlug){setStoreResolved(true);return}
+  let alive=true;
+  fetch(API_BASE+'/api/v1/public/store-context').then(async r=>r.ok?r.json():null).then(context=>{
+   if(!alive)return;
+   if(context?.slug){setStoreSlug(context.slug);setBranding(context.branding||null)}
+  }).catch(()=>{}).finally(()=>{if(alive)setStoreResolved(true)});
+  return()=>{alive=false};
+ },[]);
+ useEffect(()=>{if(!storeResolved)return;let alive=true;fetch(API_BASE+'/api/v1/public/'+encodeURIComponent(storeSlug)+'/branding').then(r=>r.ok?r.json():null).then(x=>{if(alive&&x)setBranding(x)}).catch(()=>{});return()=>{alive=false}},[storeSlug,storeResolved]);
+ useEffect(()=>{if(!storeResolved)return;let alive=true;fetch(API_BASE+'/api/v1/public/'+encodeURIComponent(storeSlug)+'/packages').then(async r=>{if(!r.ok)throw new Error(r.status===404?'This solar store is not available yet.':'Unable to load solar packages.');return r.json()}).then(rows=>{if(alive)setPackages(rows||[])}).catch(e=>{if(alive)setPackageError(e.message)}).finally(()=>{if(alive)setPackageLoading(false)});return()=>{alive=false}},[storeSlug,storeResolved]);
+ useEffect(()=>{if(!storeResolved||page!=='products'&&page!=='product-detail'&&page!=='home')return;let alive=true;setProductLoading(true);fetch(API_BASE+'/api/v1/public/'+encodeURIComponent(storeSlug)+'/products').then(async r=>{if(!r.ok)throw new Error(r.status===404?'This solar store is not available yet.':'Unable to load products. Please try again.');return r.json()}).then(rows=>{if(alive)setProducts(rows||[])}).catch(e=>{if(alive)setProductError(e.message)}).finally(()=>{if(alive)setProductLoading(false)});return()=>{alive=false}},[storeSlug,page,storeResolved]);
  const categories=useMemo(()=>Array.from(new Set(products.map(p=>p.categoryName).filter(Boolean))).sort(),[products]);
  const brands=useMemo(()=>Array.from(new Set(products.map(p=>p.manufacturer||'').filter(Boolean))).sort(),[products]);
  const filtered=useMemo(()=>products.filter(p=>{const q=query.trim().toLowerCase();const matchesQuery=!q||[p.name,p.sku,p.description,p.manufacturer,p.model,p.technology,p.categoryName].some(v=>String(v||'').toLowerCase().includes(q));const cap=capacity(p).toLowerCase();const matchesCapacity=!capacityFilter||cap.includes(capacityFilter.toLowerCase());const price=Number(p.price||0);return matchesQuery&&(!category||p.categoryName===category)&&(!brand||p.manufacturer===brand)&&matchesCapacity&&(minPrice===''||price>=Number(minPrice))&&(maxPrice===''||price<=Number(maxPrice))}),[products,query,category,brand,capacityFilter,minPrice,maxPrice]);
