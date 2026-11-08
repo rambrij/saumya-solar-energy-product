@@ -42,12 +42,13 @@ class Release4FinanceServiceAndPlatformTest {
             .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         String newTenantId=json.readTree(createdTenant).get("id").asText();
         mvc.perform(post("/api/v1/platform/tenants/"+newTenantId+"/verification").header("Authorization","Bearer "+platform)
-            .contentType(MediaType.APPLICATION_JSON).content("{\"decision\":\"APPROVE\"}")).andExpect(status().isOk());
+            .contentType(MediaType.APPLICATION_JSON).content("{\"decision\":\"APPROVE\"}")).andExpect(status().isConflict());
         String csv=mvc.perform(get("/api/v1/platform/tenants/export").header("Authorization","Bearer "+platform).param("status","ACTIVE"))
             .andExpect(status().isOk()).andExpect(header().string("Content-Disposition",org.hamcrest.Matchers.containsString("tenants-active-"+LocalDate.now()))).andExpect(content().contentTypeCompatibleWith("text/csv"))
             .andReturn().getResponse().getContentAsString();
         assertTrue(csv.startsWith("Tenant Name,Tenant Slug,Administrator Name"));
-        assertTrue(csv.contains(exportEmail));
+        assertTrue(csv.contains("admin@saumya.local"));
+        assertFalse(csv.contains(exportEmail));
         
         String emptyCsv=mvc.perform(get("/api/v1/platform/tenants/export").header("Authorization","Bearer "+platform).param("status","ACTIVE").param("search","no-tenant-can-match-this"))
             .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
