@@ -102,4 +102,21 @@ class Release3OperationsIntegrationTest {
   mvc.perform(delete("/api/v1/products/"+id).header("Authorization","Bearer "+auth)).andExpect(status().isOk());
   assertFalse(products.findByIdAndTenantId(id,tenantId).orElseThrow().isActive());
  }
+
+ @Test void inventoryLedgerCompensationRestoresBalanceAndCannotBeRepeated() throws Exception {
+  String auth=token();
+  Warehouse warehouse=new Warehouse();warehouse.setId(UUID.randomUUID());warehouse.setTenantId(tenantId);warehouse.setCode("REV-"+UUID.randomUUID());warehouse.setName("Compensation test warehouse");warehouse.setActive(true);warehouse.setCreatedAt(java.time.Instant.now());warehouse=warehouses.save(warehouse);
+  Product product=products.findByTenantIdOrderByIdDesc(tenantId).stream().filter(p->"DEMO-PV-550".equals(p.getSku())).findFirst().orElseThrow();
+  String wh=warehouse.getId().toString(),pr=product.getId().toString();
+  mvc.perform(post("/api/v1/inventory/receipts").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content("{\\"warehouseId\\":\\""+wh+"\\",\\"productId\\":\\""+pr+"\\",\\"quantity\\":7,\\"reason\\":\\"Compensation test receipt\\"}")).andExpect(status().isOk());
+  String ledger=mvc.perform(get("/api/v1/inventory/transactions").header("Authorization","Bearer "+auth)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+  JsonNode original=java.util.stream.StreamSupport.stream(json.readTree(ledger).spliterator(),false).filter(row->"RECEIPT".equals(row.get("type").asText())&&row.get("warehouseId").asText().equals(wh)&&row.get("reason").asText().equals("Compensation test receipt")).findFirst().orElseThrow();
+  String originalId=original.get("id").asText();
+  mvc.perform(post("/api/v1/inventory/transactions/"+originalId+"/reverse").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content("{\\"reason\\":\\"Duplicate goods receipt\\")).andExpect(status().isOk()).andExpect(jsonPath("$.type").value("COMPENSATION")).andExpect(jsonPath("$.reversalOfTransactionId").value(originalId));
+  mvc.perform(post("/api/v1/inventory/transactions/"+originalId+"/reverse").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content("{\\"reason\\":\\"Attempt duplicate reversal\\")).andExpect(status().isConflict());
+  InventoryBalance after=balances.findByTenantIdAndWarehouseIdAndProductId(tenantId,warehouse.getId(),product.getId()).orElseThrow();
+  assertEquals(0,BigDecimal.ZERO.compareTo(after.getOnHand()));
+  assertEquals(0,BigDecimal.ZERO.compareTo(after.getReserved()));
+  assertEquals(0,BigDecimal.ZERO.compareTo(after.getDamaged()));
+ }
 }
