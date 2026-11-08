@@ -29,7 +29,7 @@ class OfflineSyncServiceTest {
         stored.setId(UUID.randomUUID()); stored.setTenantId(tenant); stored.setActorId(actorId);
         stored.setClientOperationId(operationId); stored.setOperationType("SURVEY_START"); stored.setResourceId(surveyId);
         stored.setPayloadHash(hash("SURVEY_START\n" + surveyId + "\n{}")); stored.setStatus("APPLIED");
-        stored.setResultJson("{\"status\":\"IN_PROGRESS\"}"); stored.setAppliedAt(Instant.now());
+        stored.setResultJson(new ObjectMapper().writeValueAsString(survey)); stored.setAppliedAt(Instant.now());
         when(operations.findByTenantIdAndActorIdAndClientOperationId(tenant, actorId, operationId))
                 .thenReturn(Optional.empty(), Optional.of(stored));
         when(operations.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
