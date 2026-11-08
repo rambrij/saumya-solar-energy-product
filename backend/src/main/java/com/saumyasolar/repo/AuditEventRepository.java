@@ -1,6 +1,6 @@
 package com.saumyasolar.repo;
 import com.saumyasolar.domain.AuditEvent;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -22,5 +22,5 @@ public interface AuditEventRepository extends JpaRepository<AuditEvent,UUID> {
  """)
  List<AuditEvent> search(@Param("tenantId") UUID tenantId,@Param("from") Instant from,@Param("to") Instant to,
   @Param("actorId") UUID actorId,@Param("action") String action,@Param("entityType") String entityType,
-  @Param("outcome") String outcome,PageRequest page);
+  @Param("outcome") String outcome,Pageable page);
 }
