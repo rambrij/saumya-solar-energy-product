@@ -416,6 +416,21 @@ class Release12TenantIntegrationTest {
                                 """.formatted(vendor.getId())))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var leadId = json.readTree(leadResponse).get("id").asText();
+        var followUpResponse = mvc.perform(post("/api/v1/leads/" + leadId + "/follow-ups")
+                        .header("Authorization", "Bearer " + vendorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"assignedTo":"%s","dueAt":"%s","note":"Call customer to confirm site visit"}
+                                """.formatted(vendor.getId(), Instant.now().plusSeconds(3600))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var followUpId = json.readTree(followUpResponse).get("id").asText();
+        mvc.perform(get("/api/v1/leads/" + leadId + "/follow-ups").header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].status").value("OPEN"));
+        mvc.perform(post("/api/v1/lead-follow-ups/" + followUpId + "/complete")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.status").value("COMPLETED"));
         var leadHistory = mvc.perform(get("/api/v1/leads/" + leadId + "/history")
                         .header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
