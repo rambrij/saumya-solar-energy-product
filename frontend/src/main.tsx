@@ -8,7 +8,7 @@ const send=(path:string,body:any,s:Session,method='POST',headers={})=>api(path,{
 function App(){
  const[s,setS]=useState<Session|null>(()=>JSON.parse(localStorage.getItem('session')||'null'));
  const[msg,setMsg]=useState('');
- const[mode,setMode]=useState<'home'|'login'|'register'|'forgot'|'reset'|'mfa'>('home');
+ const[mode,setMode]=useState<'home'|'login'|'register'|'forgot'|'reset'|'mfa'>(()=>new URLSearchParams(window.location.search).has('resetToken')?'reset':'home');
  const[resetToken,setResetToken]=useState(()=>new URLSearchParams(window.location.search).get('resetToken')||'');const[mfaChallengeId,setMfaChallengeId]=useState('');
  const saveSession=(x:Session)=>{localStorage.setItem('session',JSON.stringify(x));setS(x);setMode('login');setMsg('')};
  const login=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();const form=e.currentTarget;try{const x=await api('/auth/login',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(form)))});if(x.mfaRequired){setMfaChallengeId(x.challengeId);setMode('mfa');setMsg('A verification code was sent to your platform administrator email.')}else saveSession(x)}catch(e:any){setMsg(e.message)}};
