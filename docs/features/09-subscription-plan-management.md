@@ -7,7 +7,7 @@ Allow Platform Super Admins to configure SaaS plans and feature/usage limits use
 Platform Super Admin with `SUBSCRIPTION_MANAGE`; Vendor users can view only their current subscription/usage.
 
 ## 3. Preconditions
-Flyway migrations V37, V45, V46 and V47 must be applied; platform principal must carry `PLATFORM_SUPER_ADMIN` and permission.
+Flyway migrations V37, V45, V46, V47 and V48 must be applied; platform principal must carry `PLATFORM_SUPER_ADMIN` and permission.
 
 ## 4. Business rules
 Plan code is unique; billing cycle is MONTHLY/YEARLY; price and limits validated; entitlements must be valid JSON; plans with subscription history cannot be physically deleted and must be deactivated.
