@@ -268,7 +268,6 @@ public class AuthLifecycleService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select a supported employee role");
         if (users.findByEmailIgnoreCase(email).isPresent())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email exists");
-        if(enterpriseSaas!=null)enterpriseSaas.enforceCustomerLimit(t.getId());
         var role = roles.findByNameAndTenantId(roleName, tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role is not configured for this vendor"));
         var u = new AppUser();
@@ -350,6 +349,7 @@ public class AuthLifecycleService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name, email and a password of at least 12 characters are required");
         if (users.findByEmailIgnoreCase(email).isPresent())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email exists");
+        if(enterpriseSaas!=null)enterpriseSaas.enforceCustomerLimit(t.getId());
         var u = new AppUser();
         u.setId(UUID.randomUUID());
         u.setTenantId(t.getId());
