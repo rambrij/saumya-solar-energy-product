@@ -43,7 +43,7 @@ Expected: each stage links to the previous record; only one order exists for an 
 ```mermaid\nflowchart TD\n A[Platform setup] --> B[Tenant subscription]\n B --> C[Product setup]\n C --> D[Customer enquiry]\n D --> E[Lead qualification]\n E --> F[Quotation and approval]\n F --> G[Site survey]\n G --> H[Order conversion]\n H --> I[Installation and commissioning]\n I --> J[Service request]\n```
 
 ## 15. Business flow diagram
-Automated browser E2E coverage is not currently configured in the repository. The opt-in local DataSeeder now creates one linked lifecycle graph; the manual guide remains necessary to validate browser interactions and role-specific behavior.
+Backend API integration coverage exercises plan creation, duplicate-code rejection, Platform-only authorization, tenant assignment, replacement and assignment history. Frontend Vitest component coverage exercises plan rendering/filtering and tenant search/assignment-history loading. A full browser-driven cross-role business E2E suite is not yet configured; the manual guide remains necessary to validate the complete browser journey. The opt-in local DataSeeder creates one linked lifecycle graph.
 
 ## 16. Known limitations
 undefined
