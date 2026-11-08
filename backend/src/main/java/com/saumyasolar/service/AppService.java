@@ -747,7 +747,6 @@ public class AppService {
         }
         vendor(p);
         if ("approve".equals(action) || "reject-approval".equals(action)) {
-            requirePermission(p, "DISCOUNT_APPROVE");
             if (!"PENDING_APPROVAL".equals(q.getStatus()) || !q.isApprovalRequired())
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Quotation is not awaiting approval");
             var workflowStatus=approvalWorkflows.decideForEntity(p.tenantId(),"QUOTATION",q.getId(),
@@ -757,6 +756,7 @@ public class AppService {
                 else if("REJECTED".equals(workflowStatus.get()))q.setStatus("APPROVAL_REJECTED");
                 return quotes.save(q);
             }
+            requirePermission(p, "DISCOUNT_APPROVE");
         } else {
             requirePermission(p, "QUOTATION_MANAGE");
         }
