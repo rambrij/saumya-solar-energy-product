@@ -632,7 +632,7 @@ For disposable local development only:
 | Vendor Sales User | sales@saumya.local | Sales@123 |
 | Customer | customer@saumya.local | Customer@123 |
 
-Passwords are encoded through the configured PasswordEncoder. Seeded baseline data includes the Saumya Solar tenant, roles, these accounts, customer profiles, product categories/products, warehouse/checklist templates and V45 plan catalogue. The current DataSeeder does **not** yet create a complete linked lead → enquiry → quotation → survey → order → installation → service-request graph. Use the manual E2E guide to create linked workflow records. Do not treat demo credentials as production credentials.
+Passwords are encoded through the configured PasswordEncoder. Seeded baseline data includes the Saumya Solar tenant, roles, these accounts, customer profiles, product categories/products, warehouse/checklist templates and V45 plan catalogue. The opt-in local DataSeeder creates a linked demonstration graph: enquiry → qualified lead → approved site survey → accepted quotation and item → confirmed order and item → commissioned installation → open service request. The records are tenant-owned and seeded idempotently. The UI/API manual E2E guide is still required to validate the complete interactive workflow. Do not treat demo credentials as production credentials.
 
 ### Role navigation
 
@@ -705,4 +705,4 @@ Subscription verification: sign in as Platform Super Admin; create/edit/deactiva
 
 ### Current validation caveat
 
-The GitHub branch contains backend/frontend source changes and documentation. A successful build, database migration execution against MySQL 8.4, role-separated browser E2E run and full connected demo lifecycle seed have not yet been verified in this environment. Do not mark this branch production-ready until the CI run and the manual E2E guide pass.
+The GitHub branch contains backend/frontend source changes and documentation. A successful build, database migration execution against MySQL 8.4, and role-separated browser E2E run have not yet been verified in this environment. Do not mark this branch production-ready until the CI run and the manual E2E guide pass.
