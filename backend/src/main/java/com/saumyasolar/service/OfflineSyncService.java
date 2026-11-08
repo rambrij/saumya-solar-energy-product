@@ -3,6 +3,7 @@ package com.saumyasolar.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.saumyasolar.api.SurveyModels;
 import com.saumyasolar.domain.OfflineSyncOperation;
+import com.saumyasolar.domain.AuditEvent;
 import com.saumyasolar.domain.ServiceComment;
 import com.saumyasolar.domain.ServiceRequest;
 import com.saumyasolar.domain.SiteSurvey;
