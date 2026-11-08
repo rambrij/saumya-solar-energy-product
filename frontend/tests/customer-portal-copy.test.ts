@@ -7,7 +7,7 @@ const customerPortal=readFileSync(resolve(here,'../src/main.tsx'),'utf8');
 const publicHome=readFileSync(resolve(here,'../src/PublicHome.tsx'),'utf8');
 describe('Customer catalogue and quotation copy regressions',()=>{
  it('keeps product categories in the available-products selector without a duplicate section',()=>{
-  expect(customerPortal).toContain('Available Products');
+  expect(customerPortal).toContain('Available products');
   expect(customerPortal).not.toContain('<h2>Product categories</h2>');
  });
  it('uses Our Products in customer and public navigation',()=>{
