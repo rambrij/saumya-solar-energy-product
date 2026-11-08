@@ -47,8 +47,9 @@ public class EnterpriseSaasController {
  }
  @PatchMapping("/warehouses/{id}/branch") public Warehouse assignWarehouseBranch(@PathVariable UUID id,@RequestBody WarehouseBranchRequest x,Authentication a){return service.assignWarehouseBranch(id,x.branchId(),p(a));}
  @GetMapping("/subscription") public Map<String,Object> currentSubscription(Authentication a){return service.currentSubscription(p(a));}
- @GetMapping("/audit-events") public List<AuditEvent> auditEvents(@RequestParam Instant from,@RequestParam Instant to,Authentication a){
-  if(to.isBefore(from)||java.time.Duration.between(from,to).toDays()>90)throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,"Audit range must be valid and no longer than 90 days");
-  return service.auditEvents(p(a),from,to);
+ @GetMapping("/audit-events") public List<AuditEvent> auditEvents(@RequestParam Instant from,@RequestParam Instant to,
+  @RequestParam(required=false) UUID actorId,@RequestParam(required=false) String action,
+  @RequestParam(required=false) String entityType,@RequestParam(required=false) String outcome,Authentication a){
+  return service.auditEvents(p(a),from,to,actorId,action,entityType,outcome);
  }
 }
