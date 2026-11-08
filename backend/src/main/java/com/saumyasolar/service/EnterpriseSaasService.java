@@ -127,6 +127,17 @@ public class EnterpriseSaasService {
   Set<UUID> branchIds=new HashSet<>();assigned.forEach(m->branchIds.add(m.getBranchId()));
   return rows.stream().filter(w->w.getBranchId()==null||branchIds.contains(w.getBranchId())).toList();
  }
+ @Transactional public long storageLimitBytes(UUID tenantId){
+  if(tenantId==null)throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Tenant context is required for storage metering");
+  List<TenantSubscription> history=subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId);
+  if(history.isEmpty())return Long.MAX_VALUE; // Existing Phase 1/2 tenants remain grandfathered until subscription assignment.
+  tenants.findByIdForUpdate(tenantId).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
+  TenantSubscription active=effectiveSubscription(tenantId)
+   .orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"An active subscription is required for tenant file storage"));
+  SubscriptionPlan plan=plans.findById(active.getPlanId()).orElseThrow();
+  long mb=plan.getMaxStorageMb();
+  return mb>Long.MAX_VALUE/(1024L*1024L)?Long.MAX_VALUE:mb*1024L*1024L;
+ }
  public void assertFeatureEnabled(UUID tenantId,String feature){requireEntitlement(tenantId,feature);}
  public void enforceUserLimit(UUID t){
   List<TenantSubscription> history=subscriptions.findByTenantIdOrderByCreatedAtDesc(t);
