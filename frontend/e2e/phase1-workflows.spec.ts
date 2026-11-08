@@ -42,7 +42,7 @@ test('vendor can sign in and view business dashboard and customer management', a
   await page.getByRole('button', { name: 'Upload for verification' }).click();
   await expect(page.getByText('Verification document uploaded for platform review.')).toBeVisible();
   await page.getByRole('button', { name: 'Audit Log' }).click();
-  await expect(page.getByRole('heading', { name: 'Audit Log' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Audit Log' }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Product', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Product' }).first()).toBeVisible();
 });
