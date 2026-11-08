@@ -23,6 +23,10 @@ public class CustomerOrder {
     UUID customerId;
     String orderNumber;
     String status;
+    BigDecimal subtotal;
+    BigDecimal discountPercent;
+    BigDecimal discountAmount;
+    BigDecimal taxTotal;
     BigDecimal total;
     Instant createdAt;
 }
