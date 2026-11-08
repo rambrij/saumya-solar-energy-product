@@ -35,6 +35,7 @@ public class FinanceService {
     private final InventoryTransactionRepository inventoryTransactions;
     private final ObjectMapper mapper;
     private final String webhookSecret;
+    private final NotificationService notifications;
 
     public FinanceService(InvoiceRepository invoices,InvoiceItemRepository invoiceItems,InvoiceSequenceRepository sequences,CreditNoteRepository creditNotes,
         PaymentRepository payments,PaymentWebhookEventRepository webhookEvents,RefundRepository refunds,
@@ -43,13 +44,13 @@ public class FinanceService {
         ServiceSlaPolicyRepository slaPolicies,ServiceEventRepository serviceEvents,AppUserRepository users,
         WarrantyRepository warranties,InstallationJobRepository installations,InventoryBalanceRepository balances,
         WarehouseRepository warehouses,InventoryTransactionRepository inventoryTransactions,ObjectMapper mapper,
-        @Value("${app.payment.webhook-secret:}") String webhookSecret) {
+        @Value("${app.payment.webhook-secret:}") String webhookSecret, NotificationService notifications) {
         this.invoices=invoices;this.invoiceItems=invoiceItems;this.sequences=sequences;this.creditNotes=creditNotes;this.payments=payments;
         this.webhookEvents=webhookEvents;this.refunds=refunds;this.orders=orders;this.orderItems=orderItems;
         this.customers=customers;this.tenants=tenants;this.products=products;this.tickets=tickets;this.visits=visits;
         this.slaPolicies=slaPolicies;this.serviceEvents=serviceEvents;this.users=users;this.warranties=warranties;
         this.installations=installations;this.balances=balances;this.warehouses=warehouses;
-        this.inventoryTransactions=inventoryTransactions;this.mapper=mapper;this.webhookSecret=webhookSecret;
+        this.inventoryTransactions=inventoryTransactions;this.mapper=mapper;this.webhookSecret=webhookSecret;this.notifications=notifications;
     }
     private UUID vendorTenant(Principal p){if(!"VENDOR".equals(p.accountType())||p.tenantId()==null)throw new ResponseStatusException(HttpStatus.FORBIDDEN);return p.tenantId();}
     private void permission(Principal p,String code){if(p.permissions()==null||!p.permissions().contains(code))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Missing permission: "+code);}
@@ -99,7 +100,13 @@ public class FinanceService {
             subtotal=subtotal.add(taxable);taxTotal=taxTotal.add(tax);
         }
         invoice.setSubtotal(subtotal);invoice.setTaxTotal(taxTotal);if("CGST_SGST".equals(invoice.getTaxTreatment())){BigDecimal half=taxTotal.divide(new BigDecimal("2"),4,RoundingMode.HALF_UP);invoice.setCgstAmount(half);invoice.setSgstAmount(taxTotal.subtract(half));}else if("IGST".equals(invoice.getTaxTreatment()))invoice.setIgstAmount(taxTotal);invoice.setGrandTotal(subtotal.add(taxTotal));
-        return invoices.save(invoice);
+        Invoice saved = invoices.save(invoice);
+        notifications.sendBusinessNotification(cp.getUserId(), tenant, "INVOICE_ISSUED",
+                cp.getEmail(), "Your Soumya Solar invoice " + invoice.getInvoiceNumber() + " is ready",
+                "Hello " + cp.getName() + ",\\n\\nInvoice " + invoice.getInvoiceNumber()
+                        + " has been issued for INR " + invoice.getGrandTotal()
+                        + ". Sign in to your customer portal to download the invoice.");
+        return saved;
     }
     @Transactional public CreditNote createCreditNote(UUID invoiceId,CreditNoteCreate x,Principal p){
         financeAccess(p);Invoice i=invoices.findForUpdate(invoiceId,p.tenantId()).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Invoice not found"));
