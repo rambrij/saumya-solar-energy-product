@@ -61,7 +61,7 @@ public class JwtFilter extends OncePerRequestFilter {
                     if (!allowedOnboardingPath) {
                         s.setStatus(HttpServletResponse.SC_FORBIDDEN);
                         s.setContentType("application/json");
-                        s.getWriter().write("{\\"status\\":403,\\"error\\":\\"Forbidden\\",\\"detail\\":\\"Only vendor profile and verification document onboarding actions are available before platform approval.\\"}");
+                        s.getWriter().write("{\"status\":403,\"error\":\"Forbidden\",\"detail\":\"Only vendor profile and verification document onboarding actions are available before platform approval.\"}");
                         return;
                     }
                 }
