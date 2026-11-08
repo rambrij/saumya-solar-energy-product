@@ -7,6 +7,7 @@ import com.saumyasolar.domain.IntegrationSyncJob;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
+import java.net.InetAddress;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -43,13 +44,22 @@ public class GenericHttpIntegrationAdapter implements IntegrationAdapter {
         String endpoint = required(config, "endpoint");
         URI uri = URI.create(endpoint);
         String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
-        boolean localHttp = "http".equals(scheme) && uri.getHost() != null
-                && (uri.getHost().equalsIgnoreCase("localhost") || uri.getHost().equals("127.0.0.1"));
-        if (!"https".equals(scheme) && !localHttp) {
-            throw new IllegalArgumentException("Generic integration endpoints must use HTTPS");
+        if (!"https".equals(scheme) || uri.getHost() == null || (uri.getPort() != -1 && uri.getPort() != 443)) {
+            throw new IllegalArgumentException("Generic integration endpoints must use HTTPS on the standard port");
         }
-        if (uri.getUserInfo() != null || uri.getFragment() != null) {
-            throw new IllegalArgumentException("Integration endpoint must not contain user information or fragments");
+        if (uri.getUserInfo() != null || uri.getFragment() != null || uri.getHost().endsWith(".")) {
+            throw new IllegalArgumentException("Integration endpoint must not contain user information, fragments or ambiguous hostnames");
+        }
+        String host = uri.getHost().toLowerCase(java.util.Locale.ROOT);
+        if (host.equals("localhost") || host.endsWith(".local") || host.endsWith(".internal")
+                || host.equals("metadata.google.internal") || host.matches("[0-9.]+")) {
+            throw new IllegalArgumentException("Integration endpoint host is not permitted");
+        }
+        for (InetAddress address : InetAddress.getAllByName(host)) {
+            if (address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress()
+                    || address.isSiteLocalAddress() || address.isMulticastAddress()) {
+                throw new IllegalArgumentException("Integration endpoint resolves to a non-public network address");
+            }
         }
 
         HttpRequest.Builder request = HttpRequest.newBuilder(uri)
