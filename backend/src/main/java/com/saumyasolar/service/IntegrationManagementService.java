@@ -16,6 +16,8 @@ public class IntegrationManagementService {
   if(x.providerCode()==null||!x.providerCode().trim().matches("[A-Za-z0-9][A-Za-z0-9_-]{1,59}"))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Provider code must be 2 to 60 alphanumeric characters, dashes or underscores");
   String type=x.integrationType().toUpperCase(Locale.ROOT);
   if(!Set.of("ACCOUNTING","PAYMENT_GATEWAY","SMS","WHATSAPP","GENERIC").contains(type))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Unsupported integration type");
+  String feature=switch(type){case "ACCOUNTING"->"accountingIntegration";case "PAYMENT_GATEWAY"->"paymentGateway";default->"apiIntegrations";};
+  entitlements.assertFeatureEnabled(t,feature);
   if(x.secretReference()!=null&&!x.secretReference().isBlank()&&!x.secretReference().startsWith("env://"))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Use env:// secret references; raw credentials are not accepted");
   if(x.secretReference()!=null&&x.secretReference().startsWith("env://")&&!x.secretReference().substring(6).matches("[A-Z_][A-Z0-9_]{0,127}"))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Invalid environment secret reference");
   validateJson(x.configJson());IntegrationConnection c=new IntegrationConnection();c.setId(UUID.randomUUID());c.setTenantId(t);c.setProviderCode(x.providerCode().trim().toUpperCase(Locale.ROOT));c.setIntegrationType(type);
