@@ -8,6 +8,10 @@ import java.util.UUID;
 public class PaymentGatewayController {
  private final PaymentGatewayCheckoutService checkout;
  public PaymentGatewayController(PaymentGatewayCheckoutService checkout){this.checkout=checkout;}
+ @GetMapping("/availability")
+ public java.util.Map<String,Object> availability(Authentication authentication){
+  return checkout.availability((Principal)authentication.getPrincipal());
+ }
  @PostMapping("/invoices/{invoiceId}/checkout")
  public PaymentGatewayCheckoutService.CheckoutResult checkout(@PathVariable UUID invoiceId,
    @RequestParam(required=false) String providerCode,@RequestHeader("Idempotency-Key") String idempotencyKey,Authentication authentication){
