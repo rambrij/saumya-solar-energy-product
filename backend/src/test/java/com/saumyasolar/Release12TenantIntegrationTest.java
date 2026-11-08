@@ -600,6 +600,14 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/platform/tenants").header("Authorization", "Bearer " + salesToken))
                 .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/dashboard/vendor").header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/dashboard/customer").header("Authorization", "Bearer " + customerToken))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/dashboard/vendor").header("Authorization", "Bearer " + customerToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/dashboard/customer").header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isForbidden());
     }
 
     @Test
