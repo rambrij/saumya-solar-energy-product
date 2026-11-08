@@ -202,6 +202,28 @@ class EnterpriseSaasServiceTest {
     }
 
     @Test
+    void productLimitIsEnforcedFromAssignedPlan() {
+        UUID tenantId=UUID.randomUUID();TenantSubscription assigned=subscription(tenantId);SubscriptionPlan plan=plan(2);
+        plan.setMaxProducts(1);assigned.setPlanId(plan.getId());
+        when(subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(assigned));
+        when(plans.findById(plan.getId())).thenReturn(Optional.of(plan));
+        when(productRecords.countByTenantIdAndActiveTrue(tenantId)).thenReturn(1L);
+        ResponseStatusException error=assertThrows(ResponseStatusException.class,()->service.enforceProductLimit(tenantId));
+        assertEquals(HttpStatus.FORBIDDEN,error.getStatusCode());
+    }
+
+    @Test
+    void customerLimitIsEnforcedFromAssignedPlan() {
+        UUID tenantId=UUID.randomUUID();TenantSubscription assigned=subscription(tenantId);SubscriptionPlan plan=plan(2);
+        plan.setMaxCustomers(2);assigned.setPlanId(plan.getId());
+        when(subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(assigned));
+        when(plans.findById(plan.getId())).thenReturn(Optional.of(plan));
+        when(customerProfiles.countByTenantIdAndActiveTrue(tenantId)).thenReturn(2L);
+        ResponseStatusException error=assertThrows(ResponseStatusException.class,()->service.enforceCustomerLimit(tenantId));
+        assertEquals(HttpStatus.FORBIDDEN,error.getStatusCode());
+    }
+
+    @Test
     void vendorCannotManagePlatformSubscriptionPlans() {
         Principal vendor=principal(UUID.randomUUID(),Set.of("SUBSCRIPTION_MANAGE"));
         ResponseStatusException error=assertThrows(ResponseStatusException.class,()->service.allPlans(vendor));
