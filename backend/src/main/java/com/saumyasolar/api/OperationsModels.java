@@ -19,3 +19,9 @@ public record ChecklistUpdateInput(Boolean completed,String evidenceUrl,String n
 public record EquipmentInput(@NotNull UUID productId,String serialNumber){}
 public record CommissionInput(boolean customerSignedOff,@NotBlank String commissioningNotes,List<EquipmentInput> equipment){}
 }
+record CustomerOrderLineView(UUID id, UUID productId, UUID packageId, String description,
+                             Integer quantity, java.math.BigDecimal unitPrice,
+                             java.math.BigDecimal lineTotal, java.math.BigDecimal taxPercent) {}
+record CustomerOrderView(UUID id, String orderNumber, String status, String paymentStatus,
+                         java.math.BigDecimal total, java.time.Instant createdAt,
+                         java.util.List<CustomerOrderLineView> items) {}
