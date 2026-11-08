@@ -14,8 +14,9 @@ public interface IntegrationSyncJobRepository extends JpaRepository<IntegrationS
  List<IntegrationSyncJob> findTop50ByStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(List<String> statuses,Instant now);
  Optional<IntegrationSyncJob> findByIdAndTenantId(UUID id,UUID tenantId);
  Optional<IntegrationSyncJob> findByTenantIdAndConnectionIdAndIdempotencyKey(UUID tenantId,UUID connectionId,String idempotencyKey);
+ List<IntegrationSyncJob> findTop50ByStatusAndUpdatedAtLessThanEqualOrderByUpdatedAtAsc(String status,Instant staleBefore);
  @Modifying
  @Transactional
- @Query("update IntegrationSyncJob j set j.status='PROCESSING', j.attemptCount=j.attemptCount+1, j.updatedAt=:now where j.id=:id and j.status in ('QUEUED','RETRY') and j.nextAttemptAt<=:now")
- int claimIfDue(@Param("id") UUID id,@Param("now") Instant now);
+ @Query("update IntegrationSyncJob j set j.status='PROCESSING', j.attemptCount=j.attemptCount+1, j.updatedAt=:now where j.id=:id and ((j.status in ('QUEUED','RETRY') and j.nextAttemptAt<=:now) or (j.status='PROCESSING' and j.updatedAt<=:staleBefore))")
+ int claimIfDue(@Param("id") UUID id,@Param("now") Instant now,@Param("staleBefore") Instant staleBefore);
 }
