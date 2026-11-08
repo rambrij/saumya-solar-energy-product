@@ -577,7 +577,7 @@ Keep Twilio credentials in the deployment secret manager; never place them in fr
 
 ### Subscription plans
 
-Flyway migration **V45** seeds the default Starter, Professional and Enterprise plans by unique plan code. Re-running application startup or Flyway does not create duplicate plans. Migration **V46** adds product/customer limits, trial period, display order, assignment billing metadata and an append-only assignment-history table. Existing plan and tenant-subscription IDs are preserved.
+Flyway migration **V45** seeds the default Starter, Professional and Enterprise plans by unique plan code. Re-running application startup or Flyway does not create duplicate plans. Migration **V46**, **V47** and **V48** adds product/customer limits, trial period, display order, assignment billing metadata and an append-only assignment-history table. Existing plan and tenant-subscription IDs are preserved.
 
 The Platform Super Admin manages plans from **Platform → Subscription administration**. Plan fields include name/code, description, monthly/yearly billing, INR price, user/branch/warehouse/product/customer limits, storage allowance, trial days, entitlements JSON, active status and display order. A plan referenced by a tenant subscription cannot be physically deleted; deactivate it instead.
 
@@ -706,4 +706,4 @@ Subscription verification: sign in as Platform Super Admin; create/edit/deactiva
 
 ### Current validation caveat
 
-The GitHub branch contains backend/frontend source changes and documentation. Backend unit/API integration tests and frontend component tests are included in CI. Browser-level cross-role E2E still requires the documented manual run; the CI workflow also validates V45/V46/V47/V48 migrations and Spring Boot startup against MySQL 8.4. Do not mark this branch production-ready until the CI run and the manual E2E guide pass.
+The GitHub branch contains backend/frontend source changes and documentation. Backend unit/API integration tests and frontend component tests are included in CI. Browser-level cross-role E2E still requires the documented manual run; the CI workflow also validates V45/V46/V47/V48/V48 migrations and Spring Boot startup against MySQL 8.4. Do not mark this branch production-ready until the CI run and the manual E2E guide pass.
