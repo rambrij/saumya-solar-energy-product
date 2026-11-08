@@ -9,12 +9,16 @@ public class IntegrationSyncScheduler {
  @Scheduled(fixedDelayString="${app.integrations.dispatch-interval-ms:30000}")
  public void dispatch(){
   List<IntegrationSyncJob> batch=jobs.findTop50ByStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(List.of("QUEUED","RETRY"),Instant.now());
-  for(IntegrationSyncJob job:batch){
+  for(IntegrationSyncJob candidate:batch){
+   Instant claimedAt=Instant.now();
+   if(jobs.claimIfDue(candidate.getId(),claimedAt)!=1)continue;
+   IntegrationSyncJob job=jobs.findById(candidate.getId()).orElse(null);
+   if(job==null)continue;
    Optional<IntegrationConnection> c=connections.findByIdAndTenantId(job.getConnectionId(),job.getTenantId());
    if(c.isEmpty()||!"ACTIVE".equals(c.get().getStatus())){job.setStatus("DEAD_LETTER");job.setLastError("Integration connection is unavailable");job.setUpdatedAt(Instant.now());jobs.save(job);continue;}
    Optional<IntegrationAdapter> adapter=adapters.stream().filter(a->a.providerCode().equalsIgnoreCase(c.get().getProviderCode())).findFirst();
    if(adapter.isEmpty()){job.setStatus("WAITING_FOR_ADAPTER");job.setLastError("No provider adapter is installed for "+c.get().getProviderCode());job.setUpdatedAt(Instant.now());jobs.save(job);continue;}
-   try{job.setStatus("PROCESSING");job.setAttemptCount(job.getAttemptCount()+1);jobs.save(job);adapter.get().synchronize(c.get(),job);job.setStatus("SUCCEEDED");job.setLastError(null);}
+   try{adapter.get().synchronize(c.get(),job);job.setStatus("SUCCEEDED");job.setLastError(null);}
    catch(Exception ex){int n=job.getAttemptCount();String msg=ex.getMessage()==null?"Provider synchronization failed":ex.getMessage();job.setLastError(msg.substring(0,Math.min(1000,msg.length())));job.setStatus(n>=8?"DEAD_LETTER":"RETRY");job.setNextAttemptAt(Instant.now().plusSeconds(Math.min(3600,30L*(1L<<Math.min(n,6)))));}
    job.setUpdatedAt(Instant.now());jobs.save(job);
   }
