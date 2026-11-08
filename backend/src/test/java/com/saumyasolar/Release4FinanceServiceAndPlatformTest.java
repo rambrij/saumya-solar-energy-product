@@ -109,7 +109,7 @@ class Release4FinanceServiceAndPlatformTest {
         mvc.perform(get("/api/v1/service-requests/"+id).header("Authorization","Bearer "+vendor)).andExpect(status().isOk());
         String otherEmail="other-customer-"+UUID.randomUUID()+"@example.test";
         mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
-            .content("{\"storeSlug\":\"saumya-solar\",\"name\":\"Other Customer\",\"email\":\""+otherEmail+"\",\"password\":\"OtherCustomer@2026\"}"))
+            .content(json.writeValueAsString(java.util.Map.of("storeSlug","saumya-solar","name","Other Warranty Customer","email",otherEmail,"password","OtherWarranty@2026"))))
             .andExpect(status().isOk());
         String other=token(otherEmail,"OtherCustomer@2026");
         mvc.perform(get("/api/v1/service-requests/"+id).header("Authorization","Bearer "+other)).andExpect(status().isNotFound());
