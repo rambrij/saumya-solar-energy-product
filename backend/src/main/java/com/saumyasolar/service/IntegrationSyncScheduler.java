@@ -4,8 +4,8 @@ import org.springframework.scheduling.annotation.Scheduled;import org.springfram
 import java.time.Instant;import java.util.*;
 @Component
 public class IntegrationSyncScheduler {
- private final IntegrationSyncJobRepository jobs;private final IntegrationConnectionRepository connections;private final List<IntegrationAdapter> adapters;
- public IntegrationSyncScheduler(IntegrationSyncJobRepository j,IntegrationConnectionRepository c,List<IntegrationAdapter> a){jobs=j;connections=c;adapters=a;}
+ private final IntegrationSyncJobRepository jobs;private final IntegrationConnectionRepository connections;private final List<IntegrationAdapter> adapters;private final IntegrationCircuitBreaker breaker;
+ public IntegrationSyncScheduler(IntegrationSyncJobRepository j,IntegrationConnectionRepository c,List<IntegrationAdapter> a,IntegrationCircuitBreaker breaker){jobs=j;connections=c;adapters=a;this.breaker=breaker;}
  @Scheduled(fixedDelayString="${app.integrations.dispatch-interval-ms:30000}")
  public void dispatch(){
   Instant now=Instant.now(),staleBefore=now.minusSeconds(600);
@@ -20,8 +20,14 @@ public class IntegrationSyncScheduler {
    if(c.isEmpty()||!"ACTIVE".equals(c.get().getStatus())){job.setStatus("DEAD_LETTER");job.setLastError("Integration connection is unavailable");job.setUpdatedAt(Instant.now());jobs.save(job);continue;}
    Optional<IntegrationAdapter> adapter=adapters.stream().filter(a->a.providerCode().equalsIgnoreCase(c.get().getProviderCode())).findFirst();
    if(adapter.isEmpty()){job.setStatus("WAITING_FOR_ADAPTER");job.setLastError("No provider adapter is installed for "+c.get().getProviderCode());job.setUpdatedAt(Instant.now());jobs.save(job);continue;}
-   try{adapter.get().synchronize(c.get(),job);job.setStatus("SUCCEEDED");job.setLastError(null);}
-   catch(Exception ex){int n=job.getAttemptCount();String msg=ex.getMessage()==null?"Provider synchronization failed":ex.getMessage();job.setLastError(msg.substring(0,Math.min(1000,msg.length())));job.setStatus(n>=8?"DEAD_LETTER":"RETRY");job.setNextAttemptAt(Instant.now().plusSeconds(Math.min(3600,30L*(1L<<Math.min(n,6)))));}
+   String circuitKey=job.getTenantId()+":"+c.get().getProviderCode();
+   if(!breaker.allow(circuitKey)){
+    job.setStatus("RETRY");job.setLastError("Provider circuit is open; retry deferred");
+    Instant openUntil=breaker.openUntil(circuitKey);job.setNextAttemptAt(openUntil==null?Instant.now().plusSeconds(60):openUntil);
+    job.setUpdatedAt(Instant.now());jobs.save(job);continue;
+   }
+   try{adapter.get().synchronize(c.get(),job);breaker.recordSuccess(circuitKey);job.setStatus("SUCCEEDED");job.setLastError(null);}
+   catch(Exception ex){breaker.recordFailure(circuitKey);int n=job.getAttemptCount();String msg=ex.getMessage()==null?"Provider synchronization failed":ex.getMessage();job.setLastError(msg.substring(0,Math.min(1000,msg.length())));job.setStatus(n>=8?"DEAD_LETTER":"RETRY");job.setNextAttemptAt(Instant.now().plusSeconds(Math.min(3600,30L*(1L<<Math.min(n,6)))));}
    job.setUpdatedAt(Instant.now());jobs.save(job);
   }
  }
