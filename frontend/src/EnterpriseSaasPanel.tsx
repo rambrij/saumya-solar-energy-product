@@ -8,7 +8,7 @@ async function request(path:string,s:Session,method='GET',body?:any){
  return data;
 }
 export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'vendor';s:Session;error:(message:string)=>void}){
- const [branches,setBranches]=useState<any[]>([]),[plans,setPlans]=useState<any[]>([]),[subscription,setSubscription]=useState<any>(null),[audits,setAudits]=useState<any[]>([]),[branding,setBranding]=useState<any>({displayName:'',logoUrl:'',primaryColor:'#0B6B4B',secondaryColor:'#F6C85F',contactEmail:'',contactPhone:'',supportEmail:'',supportPhone:''}),[domains,setDomains]=useState<any[]>([]),[workflows,setWorkflows]=useState<any[]>([]);
+ const [branches,setBranches]=useState<any[]>([]),[plans,setPlans]=useState<any[]>([]),[subscription,setSubscription]=useState<any>(null),[audits,setAudits]=useState<any[]>([]),[branding,setBranding]=useState<any>({displayName:'',logoUrl:'',primaryColor:'#0B6B4B',secondaryColor:'#F6C85F',contactEmail:'',contactPhone:'',supportEmail:'',supportPhone:''}),[domains,setDomains]=useState<any[]>([]),[workflows,setWorkflows]=useState<any[]>([]),[integrations,setIntegrations]=useState<any[]>([]);
  const [approvalInstances,setApprovalInstances]=useState<any[]>([]),[selectedBranch,setSelectedBranch]=useState<string|null>(null),[branchMembers,setBranchMembers]=useState<any[]>([]);
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[panelError,setPanelError]=useState('');
  const load=async()=>{
@@ -37,6 +37,10 @@ export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'ven
   const comments=window.prompt('Optional decision comments')||'';
   try{await request('/approval-instances/'+instanceId+'/decisions',s,'POST',{decision,comments});await load();error('Approval decision recorded.');}
   catch(e:any){setPanelError(e.message)}
+ };
+ const createIntegration=async(e:React.FormEvent<HTMLFormElement>)=>{
+  e.preventDefault();const form=e.currentTarget;const x:any=Object.fromEntries(new FormData(form));setBusy(true);
+  try{const created=await request('/integrations',s,'POST',x);setIntegrations(v=>[created,...v]);form.reset();error('Integration connection saved. A provider adapter is required before sync jobs can run.')}catch(e:any){setPanelError(e.message)}finally{setBusy(false)}
  };
  const createWorkflow=async(e:React.FormEvent<HTMLFormElement>)=>{
   e.preventDefault();const form=e.currentTarget;const x:any=Object.fromEntries(new FormData(form));setBusy(true);
@@ -75,6 +79,10 @@ export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'ven
   {panelError&&<div className="notice" role="alert">{panelError}<button type="button" onClick={()=>setPanelError('')}>×</button></div>}
   {loading?<div className="card">Loading enterprise settings…</div>:mode==='vendor'?<>
    <div className="card"><h2>Current subscription</h2>{subscription?<><p><b>{subscription.plan?.name}</b> · {subscription.subscription?.status}</p><p>Billing: {subscription.plan?.billingCycle} · ₹{subscription.plan?.price} {subscription.plan?.currency}</p><p>Branch limit: {subscription.plan?.maxBranches} · Warehouse limit: {subscription.plan?.maxWarehouses} · User limit: {subscription.plan?.maxUsers}</p><p>Effective: {subscription.effective?'Yes':'No'}</p></>:<p>No active subscription is assigned. Contact the platform administrator.</p>}</div>
+   {s.user?.permissions?.includes('INTEGRATION_MANAGE')&&<div className="card"><h2>External integrations</h2>
+    {integrations.map(i=><p key={i.id}><b>{i.displayName}</b> · {i.providerCode} · {i.integrationType} · {i.status}</p>)}
+    <form className="form" onSubmit={createIntegration}><h3>Register integration</h3><input name="providerCode" placeholder="Provider code (e.g. ZOHO_BOOKS)" required/><select name="integrationType"><option value="ACCOUNTING">Accounting</option><option value="PAYMENT_GATEWAY">Payment gateway</option><option value="SMS">SMS</option><option value="WHATSAPP">WhatsApp</option><option value="GENERIC">Generic API</option></select><input name="displayName" placeholder="Display name" required/><input name="secretReference" placeholder="env://VARIABLE or vault://secret-reference"/><textarea name="configJson" defaultValue="{}" placeholder="Non-secret provider configuration JSON" required/><button disabled={busy}>{busy?'Saving…':'Save integration'}</button></form>
+   </div>}
    {s.user?.permissions?.includes('APPROVAL_WORKFLOW_MANAGE')&&<div className="card"><h2>Approval workflows</h2>
     {workflows.map(w=><p key={w.id}><b>{w.name}</b> · {w.entityType} · {w.active?'Active':'Inactive'}</p>)}
     <h3>Approval requests</h3>
