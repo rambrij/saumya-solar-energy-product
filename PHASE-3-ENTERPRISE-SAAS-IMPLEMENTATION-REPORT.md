@@ -191,3 +191,16 @@ Do not claim 100% Phase 3 acceptance until these items and the follow-up validat
 - Corrected the offline batch DTO type annotation and test import based on GitHub Actions compiler findings.
 - Added V41 and V42 MySQL 8.4 migration steps to the release validation workflow.
 - Frontend typecheck/build passed on an intermediate commit. Backend test compilation initially exposed a missing test import, which was corrected in the subsequent commit. The latest workflow must finish before any passing result is claimed.
+
+
+## 10. Additional follow-up — audit, adapter dispatch and resilience
+
+- Successful offline business operations now write central audit events containing the operation/resource IDs and payload hash, not the raw command body.
+- Payment checkout creation and verified payment webhook outcomes now write central audit events with provider, invoice/payment references, amount/currency or hashed provider event ID. Provider secrets and raw webhook bodies are not copied into audit JSON.
+- Added an installed-adapter capability endpoint and vendor integration UI showing payment and accounting adapters deployed in the application.
+- Accounting sync jobs now dispatch through the typed `AccountingAdapter` registry for invoice, payment and refund events and store the returned external reference. Order sync retains the adapter's generic sync method.
+- Added a process-local provider circuit breaker to integration sync dispatch. Durable retry/dead-letter state remains in MySQL; the breaker opens after consecutive provider failures and resets after success.
+
+**Resilience caveat:** the circuit breaker is process-local. In a multi-replica deployment, each replica has independent breaker state; use a shared coordination store or provider-level rate limiting before claiming cluster-wide circuit-breaker semantics. No concrete payment/accounting adapters are installed, so capability lists remain empty until adapter implementations are deployed.
+
+**Migration correction:** V41 `payload_hash` is `VARCHAR(64)` to match Hibernate's validated mapping. The V41/V42 workflow includes both migrations on MySQL 8.4. No existing Phase 1/2 table or record is dropped or rewritten by V41/V42.
