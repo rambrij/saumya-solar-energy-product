@@ -20,7 +20,9 @@ public class EnterpriseSaasController {
  public record SubscriptionRequest(@NotNull UUID planId,@NotBlank String status,Instant startsAt,Instant endsAt,Instant renewsAt,@Size(max=160) String externalReference){}
  @GetMapping("/approval-workflows") public List<ApprovalWorkflow> approvalWorkflows(Authentication a){return approvalWorkflows.list(p(a));}
  @PostMapping("/approval-workflows") public ApprovalWorkflow createApprovalWorkflow(@Valid @RequestBody WorkflowRequest x,Authentication a){return approvalWorkflows.create(new com.saumyasolar.service.ApprovalWorkflowService.WorkflowInput(x.code(),x.name(),x.entityType(),x.stepsJson()),p(a));}
+ @GetMapping("/approval-instances") public List<ApprovalInstance> approvalInstances(Authentication a){return approvalWorkflows.instances(p(a));}
  @GetMapping("/approval-instances/{id}") public ApprovalInstance approvalInstance(@PathVariable UUID id,Authentication a){return approvalWorkflows.get(id,p(a));}
+ @GetMapping("/approval-instances/{id}/decisions") public List<ApprovalDecision> approvalDecisionHistory(@PathVariable UUID id,Authentication a){return approvalWorkflows.history(id,p(a));}
  @PostMapping("/approval-instances/{id}/decisions") public ApprovalInstance decideApproval(@PathVariable UUID id,@Valid @RequestBody ApprovalDecisionRequest x,Authentication a){return approvalWorkflows.decide(id,x.decision().toUpperCase(Locale.ROOT),x.comments(),p(a));}
  @GetMapping("/vendor/branding") public EnterpriseSaasService.BrandingView branding(Authentication a){return service.getBranding(p(a));}
  @PatchMapping("/vendor/branding") public EnterpriseSaasService.BrandingView updateBranding(@Valid @RequestBody BrandingRequest x,Authentication a){
