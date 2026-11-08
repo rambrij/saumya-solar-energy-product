@@ -143,6 +143,10 @@ public class EnterpriseSaasService {
   if(x.trialEndsAt()!=null&&x.trialEndsAt().isBefore(start))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Trial end cannot precede subscription start");
   List<TenantSubscription> active= subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId).stream().filter(v->Set.of("TRIAL","ACTIVE","PAST_DUE").contains(v.getStatus())&&(v.getEndsAt()==null||v.getEndsAt().isAfter(now))).toList();
   UUID newId=UUID.randomUUID();
+  TenantSubscription s=new TenantSubscription();s.setId(newId);s.setTenantId(tenantId);s.setPlanId(planId);s.setStatus(x.status());s.setStartsAt(start);
+  s.setEndsAt(x.endsAt());s.setRenewsAt(x.renewsAt());s.setExternalReference(trim(x.externalReference()));s.setCreatedBy(p.userId());
+  s.setBillingCycle(cycle);s.setTrialEndsAt(x.trialEndsAt());s.setAutoRenew(x.autoRenew());s.setNotes(trim(x.notes()));s.setCreatedAt(now);s.setUpdatedAt(now);
+  subscriptions.save(s);
   for(TenantSubscription old:active){
    String previous=old.getStatus();UUID previousPlan=old.getPlanId();
    if(old.getStartsAt()!=null&&!old.getStartsAt().isBefore(start)){old.setStatus("CANCELLED");}
@@ -151,10 +155,7 @@ public class EnterpriseSaasService {
    old.setReplacedBySubscriptionId(newId);old.setUpdatedAt(now);subscriptions.save(old);
    history(p,old,"REPLACED",previous,previousPlan,Map.of("replacementSubscriptionId",newId.toString(),"replacementPlanId",planId.toString()));
   }
-  TenantSubscription s=new TenantSubscription();s.setId(newId);s.setTenantId(tenantId);s.setPlanId(planId);s.setStatus(x.status());s.setStartsAt(start);
-  s.setEndsAt(x.endsAt());s.setRenewsAt(x.renewsAt());s.setExternalReference(trim(x.externalReference()));s.setCreatedBy(p.userId());
-  s.setBillingCycle(cycle);s.setTrialEndsAt(x.trialEndsAt());s.setAutoRenew(x.autoRenew());s.setNotes(trim(x.notes()));s.setCreatedAt(now);s.setUpdatedAt(now);
-  subscriptions.save(s);history(p,s,active.isEmpty()?"ASSIGNED":"REPLACEMENT_ASSIGNED",null,null,Map.of("planCode",plan.getPlanCode(),"billingCycle",cycle,"autoRenew",x.autoRenew()));
+  history(p,s,active.isEmpty()?"ASSIGNED":"REPLACEMENT_ASSIGNED",null,null,Map.of("planCode",plan.getPlanCode(),"billingCycle",cycle,"autoRenew",x.autoRenew()));
   audit(p,tenantId,"SUBSCRIPTION_ASSIGNED","TENANT_SUBSCRIPTION",s.getId(),s);return s;
  }
  @Transactional public TenantSubscription cancelSubscription(UUID tenantId,UUID subscriptionId,Principal p){
