@@ -653,7 +653,7 @@ public class AppService {
         q.setCreatedBy(p.userId());
         q.setCreatedAt(Instant.now());
         quotes.save(q);
-        BigDecimal sub = BigDecimal.ZERO, tax = BigDecimal.ZERO;
+        BigDecimal sub = BigDecimal.ZERO, discountTotal = BigDecimal.ZERO, tax = BigDecimal.ZERO;
         var items = new ArrayList<QuotationItem>();
         for (var a : x.items()) {
             if (a.quantity() < 1) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Quantity must be positive");
@@ -691,13 +691,20 @@ public class AppService {
             i.setUnitPrice(unitPrice);
             i.setTaxPercent(taxPercent);
             i.setLineTotal(base);
+            BigDecimal lineDiscount = base.multiply(requestedDiscount)
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            BigDecimal taxableBase = base.subtract(lineDiscount);
+            BigDecimal lineTax = taxableBase.multiply(taxPercent)
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            i.setDiscountAmount(lineDiscount);
+            i.setTaxableAmount(taxableBase);
+            i.setTaxAmount(lineTax);
             items.add(quoteItems.save(i));
             sub = sub.add(base);
-            var taxableBase = base.multiply(BigDecimal.valueOf(100).subtract(requestedDiscount))
-                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-            tax = tax.add(taxableBase.multiply(taxPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+            discountTotal = discountTotal.add(lineDiscount);
+            tax = tax.add(lineTax);
         }
-        var disc = sub.multiply(q.getDiscountPercent()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        var disc = discountTotal;
         q.setSubtotal(sub);
         q.setDiscountAmount(disc);
         q.setTaxAmount(tax);
@@ -815,6 +822,9 @@ public class AppService {
             i.setUnitPrice(qi.getUnitPrice());
             i.setTaxPercent(qi.getTaxPercent());
             i.setLineTotal(qi.getLineTotal());
+            i.setDiscountAmount(qi.getDiscountAmount());
+            i.setTaxableAmount(qi.getTaxableAmount());
+            i.setTaxAmount(qi.getTaxAmount());
             orderItems.save(i);
         }
         var rec = new IdempotencyRecord();
