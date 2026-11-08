@@ -337,6 +337,7 @@ public class Controller {
     }
     
     @PostMapping("/surveys")
+    @org.springframework.transaction.annotation.Transactional
     SiteSurvey survey(@RequestBody Input x, Authentication a) {
         Principal actor = p(a);
         SiteSurvey created = s.survey(x, actor);
