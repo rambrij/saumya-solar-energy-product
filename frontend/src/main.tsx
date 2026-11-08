@@ -6,6 +6,7 @@ async function api(path:string,init:RequestInit={},s?:Session|null){const r=awai
 async function uploadApi(path:string,file:File,s:Session){const form=new FormData();form.append('file',file);const r=await fetch(API_BASE+'/api/v1'+path,{method:'POST',headers:{Authorization:`Bearer ${s.accessToken}`},body:form});const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.detail||body.message||`Image upload failed (${r.status})`);return body}
 const send=(path:string,body:any,s:Session,method='POST',headers={})=>api(path,{method,body:body===undefined?undefined:JSON.stringify(body),headers},s);
 function App(){
+ useEffect(()=>{if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});},[]);
  const[s,setS]=useState<Session|null>(()=>JSON.parse(localStorage.getItem('session')||'null'));
  const[msg,setMsg]=useState('');
  const[mode,setMode]=useState<'home'|'login'|'register'|'forgot'|'reset'|'mfa'>(()=>new URLSearchParams(window.location.search).has('resetToken')?'reset':'home');
