@@ -75,37 +75,101 @@ public class FinanceService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,"An invoice can only be issued for a confirmed order milestone");
         var existing=invoices.findByOrderIdAndTenantId(order.getId(),tenant);if(existing.isPresent())return existing.get();
         CustomerProfile cp=customers.findByIdAndTenantId(order.getCustomerId(),tenant).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Order customer not found"));
-        Tenant t=tenants.findById(tenant).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
+        Tenant t=tenants.findByIdForUpdate(tenant).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
+        if(input.taxTreatment()!=null&&!Set.of("IGST","CGST_SGST","UNSPECIFIED").contains(input.taxTreatment()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Tax treatment must be IGST, CGST_SGST or UNSPECIFIED");
+
+        List<OrderItem> lines=orderItems.findByTenantIdOrderByIdDesc(tenant).stream().filter(x->order.getId().equals(x.getOrderId())).toList();
+        if(lines.isEmpty())throw new ResponseStatusException(HttpStatus.CONFLICT,"Order has no billable line items");
+        BigDecimal grossSubtotal=lines.stream().map(line->line.getLineTotal()==null
+                ?line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity())):line.getLineTotal())
+                .reduce(BigDecimal.ZERO,BigDecimal::add);
+        BigDecimal discountPercent=order.getDiscountPercent()==null?BigDecimal.ZERO:order.getDiscountPercent();
+        BigDecimal discountAmount=order.getDiscountAmount()==null
+                ?grossSubtotal.multiply(discountPercent).divide(new BigDecimal("100"),2,RoundingMode.HALF_UP)
+                :order.getDiscountAmount();
+        if(discountPercent.signum()<0||discountPercent.compareTo(new BigDecimal("100"))>0
+                ||discountAmount.signum()<0||discountAmount.compareTo(grossSubtotal)>0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Order discount snapshot is invalid");
+        BigDecimal subtotal=order.getSubtotal()==null?grossSubtotal.subtract(discountAmount):order.getSubtotal().subtract(discountAmount);
+        if(subtotal.compareTo(grossSubtotal.subtract(discountAmount))!=0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Order subtotal and discount snapshots do not reconcile");
+
+        BigDecimal taxTotal=order.getTaxTotal();
+        boolean hasPerLineSnapshots=lines.stream().allMatch(line->line.getDiscountAmount()!=null
+                &&line.getTaxableAmount()!=null&&line.getTaxAmount()!=null);
+        BigDecimal allocatedDiscount=BigDecimal.ZERO,allocatedTax=BigDecimal.ZERO,allocatedTaxable=BigDecimal.ZERO;
+        List<BigDecimal> taxableAmounts=new ArrayList<>(),taxAmounts=new ArrayList<>();
+        for(int index=0;index<lines.size();index++){
+            OrderItem line=lines.get(index);
+            BigDecimal gross=line.getLineTotal()==null?line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity())):line.getLineTotal();
+            BigDecimal lineDiscount;
+            BigDecimal taxable;
+            BigDecimal tax;
+            BigDecimal rate=line.getTaxPercent()==null?BigDecimal.ZERO:line.getTaxPercent();
+            if(rate.signum()<0||rate.compareTo(new BigDecimal("100"))>0)
+                throw new ResponseStatusException(HttpStatus.CONFLICT,"Order tax snapshot is invalid");
+            if(hasPerLineSnapshots){
+                lineDiscount=line.getDiscountAmount();
+                taxable=line.getTaxableAmount();
+                tax=line.getTaxAmount();
+                if(lineDiscount.signum()<0||taxable.signum()<0||tax.signum()<0
+                        ||gross.subtract(lineDiscount).compareTo(taxable)!=0
+                        ||taxable.multiply(rate).divide(new BigDecimal("100"),2,RoundingMode.HALF_UP).compareTo(tax)!=0)
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,"Order line financial snapshot is invalid");
+            }else{
+                lineDiscount=index==lines.size()-1?discountAmount.subtract(allocatedDiscount)
+                        :gross.multiply(discountAmount).divide(grossSubtotal,2,RoundingMode.HALF_UP);
+                taxable=gross.subtract(lineDiscount);
+                if(taxable.signum()<0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Order line discount exceeds line value");
+                tax=taxable.multiply(rate).divide(new BigDecimal("100"),2,RoundingMode.HALF_UP);
+                if(index==lines.size()-1&&taxTotal!=null)tax=taxTotal.subtract(allocatedTax);
+            }
+            if(tax.signum()<0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Order tax snapshot does not reconcile");
+            taxableAmounts.add(taxable);taxAmounts.add(tax);
+            allocatedDiscount=allocatedDiscount.add(lineDiscount);
+            allocatedTaxable=allocatedTaxable.add(taxable);
+            allocatedTax=allocatedTax.add(tax);
+        }
+        if(allocatedDiscount.compareTo(discountAmount)!=0||allocatedTaxable.compareTo(subtotal)!=0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Order line discount/taxable snapshots do not reconcile");
+        if(taxTotal==null)taxTotal=allocatedTax;
+        if(allocatedTax.compareTo(taxTotal)!=0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Order line tax does not reconcile with accepted quotation tax");
+        if(subtotal.add(taxTotal).compareTo(order.getTotal())!=0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Invoice total does not reconcile with accepted order total");
+
         LocalDate today=LocalDate.now(ZoneId.of("Asia/Kolkata"));String fy=fiscalYear(today);
-        sequences.next(tenant,fy);long sequence=sequences.findByTenantIdAndFiscalYear(tenant,fy).orElseThrow().getNextNumber();
+        InvoiceSequence sequenceRecord=sequences.findByTenantIdAndFiscalYearForUpdate(tenant,fy).orElseGet(()->{
+            InvoiceSequence created=new InvoiceSequence();created.setId(UUID.randomUUID());created.setTenantId(tenant);created.setFiscalYear(fy);created.setNextNumber(0);return created;
+        });
+        long sequence=sequenceRecord.getNextNumber()+1;
+        sequenceRecord.setNextNumber(sequence);
+        sequences.save(sequenceRecord);
         Invoice invoice=new Invoice();invoice.setId(UUID.randomUUID());invoice.setTenantId(tenant);invoice.setOrderId(order.getId());
         invoice.setFiscalYear(fy);invoice.setInvoiceNumber((t.getInvoicePrefix()==null?"INV":t.getInvoicePrefix())+"-"+fy+"-"+String.format(Locale.ROOT,"%06d",sequence));
         invoice.setStatus("ISSUED");invoice.setCustomerName(cp.getName());invoice.setCustomerEmail(cp.getEmail());invoice.setCustomerAddress(cp.getAddress());invoice.setCustomerGstin(cp.getGstin());
         invoice.setVendorName(t.getName());invoice.setVendorGstin(t.getGstin());invoice.setCurrency("INR");invoice.setTaxTreatment(input.taxTreatment());
-        if(input.taxTreatment()!=null&&!Set.of("IGST","CGST_SGST","UNSPECIFIED").contains(input.taxTreatment()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Tax treatment must be IGST, CGST_SGST or UNSPECIFIED");
         invoice.setDueDate(input.dueDate());invoice.setIssuedAt(Instant.now());invoice.setCreatedAt(Instant.now());invoice.setCreatedBy(p.userId());
+        invoice.setSubtotal(subtotal);invoice.setTaxTotal(taxTotal);
+        if("CGST_SGST".equals(invoice.getTaxTreatment())){BigDecimal half=taxTotal.divide(new BigDecimal("2"),2,RoundingMode.HALF_UP);invoice.setCgstAmount(half);invoice.setSgstAmount(taxTotal.subtract(half));}
+        else if("IGST".equals(invoice.getTaxTreatment()))invoice.setIgstAmount(taxTotal);
+        invoice.setGrandTotal(subtotal.add(taxTotal));
         invoices.save(invoice);
-        BigDecimal subtotal=BigDecimal.ZERO,taxTotal=BigDecimal.ZERO;
-        List<OrderItem> lines=orderItems.findByTenantIdOrderByIdDesc(tenant).stream().filter(x->order.getId().equals(x.getOrderId())).toList();
-        if(lines.isEmpty())throw new ResponseStatusException(HttpStatus.CONFLICT,"Order has no billable line items");
-        for(OrderItem line:lines){
-            BigDecimal taxable=line.getLineTotal()==null?line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity())):line.getLineTotal();
+        for(int index=0;index<lines.size();index++){
+            OrderItem line=lines.get(index);
             BigDecimal rate=line.getTaxPercent()==null?BigDecimal.ZERO:line.getTaxPercent();
-            if(rate.signum()<0||rate.compareTo(new BigDecimal("100"))>0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Order tax snapshot is invalid");
-            BigDecimal tax=taxable.multiply(rate).divide(new BigDecimal("100"),4,RoundingMode.HALF_UP);
             Product product=line.getProductId()==null?null:products.findByIdAndTenantId(line.getProductId(),tenant).orElse(null);
             InvoiceItem item=new InvoiceItem();item.setId(UUID.randomUUID());item.setTenantId(tenant);item.setInvoiceId(invoice.getId());item.setProductId(line.getProductId());
             item.setDescription(line.getDescription());item.setHsnCode(product==null?null:product.getHsnCode());item.setQuantity(line.getQuantity());
-            item.setUnitPrice(line.getUnitPrice());item.setTaxPercent(rate);item.setTaxableAmount(taxable);item.setTaxAmount(tax);item.setLineTotal(taxable.add(tax));invoiceItems.save(item);
-            subtotal=subtotal.add(taxable);taxTotal=taxTotal.add(tax);
+            item.setUnitPrice(line.getUnitPrice());item.setTaxPercent(rate);item.setTaxableAmount(taxableAmounts.get(index));
+            item.setTaxAmount(taxAmounts.get(index));item.setLineTotal(taxableAmounts.get(index).add(taxAmounts.get(index)));invoiceItems.save(item);
         }
-        invoice.setSubtotal(subtotal);invoice.setTaxTotal(taxTotal);if("CGST_SGST".equals(invoice.getTaxTreatment())){BigDecimal half=taxTotal.divide(new BigDecimal("2"),4,RoundingMode.HALF_UP);invoice.setCgstAmount(half);invoice.setSgstAmount(taxTotal.subtract(half));}else if("IGST".equals(invoice.getTaxTreatment()))invoice.setIgstAmount(taxTotal);invoice.setGrandTotal(subtotal.add(taxTotal));
-        Invoice saved = invoices.save(invoice);
-        notifications.sendBusinessNotification(cp.getUserId(), tenant, "INVOICE_ISSUED",
-                cp.getEmail(), "Your Soumya Solar invoice " + invoice.getInvoiceNumber() + " is ready",
-                "Hello " + cp.getName() + ",\n\nInvoice " + invoice.getInvoiceNumber()
-                        + " has been issued for INR " + invoice.getGrandTotal()
-                        + ". Sign in to your customer portal to download the invoice.");
+        Invoice saved=invoices.save(invoice);
+        notifications.sendBusinessNotification(cp.getUserId(),tenant,"INVOICE_ISSUED",cp.getEmail(),
+                "Your Soumya Solar invoice "+invoice.getInvoiceNumber()+" is ready",
+                "Hello "+cp.getName()+",\n\nInvoice "+invoice.getInvoiceNumber()+" has been issued for INR "+invoice.getGrandTotal()
+                        +". Sign in to your customer portal to download the invoice.");
         return saved;
     }
     @Transactional public CreditNote createCreditNote(UUID invoiceId,CreditNoteCreate x,Principal p){
