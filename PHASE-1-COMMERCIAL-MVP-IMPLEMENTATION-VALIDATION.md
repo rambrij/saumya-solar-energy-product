@@ -4,12 +4,12 @@
 **Repository:** `rambrij/saumya-solar-energy-product`  
 **Baseline branch:** `phase-1-commercial-mvp-implementation`  
 **Remediation branch:** `phase-1-commercial-mvp-remediation`  
-**Validated branch head:** `c3de4345795716eeef87844b552db846fe5c463f`  
+**Validated branch head:** `f5a93bbf187099427d65cfa843bd1bf24d5ec407`  
 **Source audit:** `phase-1-commercial-mvp-audit/PHASE-1-COMMERCIAL-MVP-AUDIT.md`  
 **Follow-on remediation PR:** https://github.com/rambrij/saumya-solar-energy-product/pull/7  
-**Successful CI run:** https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42469981759
+**Successful CI run:** https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42470156498
 
-> This report assesses the implementation on the remediation branch against the complete source audit. It does not claim that 100% completion or zero defects is achievable or proven. No production deployment or merge was performed.
+> This report assesses the implementation on the remediation branch against the complete source audit. It does not claim that 100% completion or zero defects is achievable or proven. No production deployment was performed. The initial remediation tranche PR #6 was merged into the Phase 1 implementation branch; the follow-on PR #7 remains open as a draft and has not been merged.
 
 ---
 
@@ -131,7 +131,7 @@ These are resolved scoped findings; they do not mean the broader modules are 100
 
 ## 6. CI and runtime evidence
 
-**Successful CI run:** https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42469334656
+**Successful CI run:** https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42470156498
 
 | CI job | Result | Evidence |
 |---|---|---|
