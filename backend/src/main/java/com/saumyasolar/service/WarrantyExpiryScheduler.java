@@ -15,7 +15,7 @@ public class WarrantyExpiryScheduler {
  private final CustomerProfileRepository customers;
  private final NotificationService notifications;private final java.time.ZoneId zone;
  public WarrantyExpiryScheduler(WarrantyRepository warranties,CustomerProfileRepository customers,NotificationService notifications,@Value("${app.warranty.expiry-alert-zone:Asia/Kolkata}") String zone){
-  this.warranties=warranties;this.customers=customers;this.notifications=notifications;
+  this.warranties=warranties;this.customers=customers;this.notifications=notifications;this.zone=java.time.ZoneId.of(zone);
  }
  @Scheduled(cron="${app.warranty.expiry-alert-cron:0 15 8 * * *}",zone="${app.warranty.expiry-alert-zone:Asia/Kolkata}")
  public void evaluateWarrantyExpiry(){
