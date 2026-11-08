@@ -3,6 +3,17 @@ spring:
   datasource: { url: "${DB_URL}", username: "${DB_USER}", password: "${DB_PASSWORD}" }
   jpa: { hibernate: { ddl-auto: validate }, open-in-view: false }
   flyway: { enabled: true }
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${MAIL_SMTP_STARTTLS:false}
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
   servlet:
     multipart:
       max-file-size: 10MB
@@ -26,3 +37,8 @@ app:
       enabled: ${PLATFORM_BOOTSTRAP_ENABLED:false}
       email: ${PLATFORM_BOOTSTRAP_EMAIL:}
       password: ${PLATFORM_BOOTSTRAP_PASSWORD:}
+  auth:
+    platform-mfa-enabled: ${PLATFORM_MFA_ENABLED:true}
+  mail:
+    from: ${MAIL_FROM:no-reply@saumya.local}
+  public-base-url: ${PUBLIC_BASE_URL:http://localhost:3000}

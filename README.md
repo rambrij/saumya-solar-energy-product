@@ -467,9 +467,9 @@ The Release 4 CI workflow validates backend tests, frontend build, V1–V21 migr
 1. **Gateway provider not selected:** provider adapter contract and signed event processing exist; no real hosted checkout, gateway payment creation, settlement reconciliation or gateway refund implementation is enabled.
 2. **GST statutory configuration:** GSTIN and tax components are snapshotted, but place-of-supply rules, statutory invoice fields/e-invoice/IRN, reverse charge and legally approved invoice numbering must be confirmed by the business/accountant.
 3. **Service attachments:** visit evidence URL is persisted, but a private, tenant-authorized upload/download service for customer photos/documents is not yet implemented. Do not place private service evidence in the public `/uploads` folder.
-4. **SLA notifications/escalation:** breach events are persisted and exposed in ticket history; outbound email/SMS/push escalation templates and provider integration remain future work.
+4. **SLA notifications/escalation:** breach events are persisted and exposed in ticket history; automated SLA email/SMS/push escalation and provider-specific delivery policies remain future work.
 5. **SLA calendar policy:** working days, holidays and timezone are configurable; tenant owners must supply their actual calendar. The default weekday set is Monday–Friday only when a business-hour window is configured.
-6. **Invoice delivery:** PDFs are downloadable; automated email sending and delivery tracking require an approved mail provider/configuration.
+6. **Invoice delivery:** invoice-issued email is sent through the configured SMTP provider and delivery attempts are recorded. PDF attachment delivery, retry processing and provider-specific bounce/webhook tracking remain future work.
 7. **Platform inactive state:** current lifecycle supports ACTIVE/SUSPENDED. Inactive count/filter is retained for reporting compatibility but no separate INACTIVE transition is introduced.
 8. **Release 5:** reporting/export center beyond platform tenant exports, audit search UI, dashboards, CMS/blog and notification provider management remain outside this Release 4 branch.
 
@@ -486,3 +486,35 @@ The React public storefront uses the shared navigation/header/footer with separa
 Public product data is read from `GET /api/v1/public/{storeSlug}/products`. The endpoint resolves only an active tenant store, returns only active products whose category is active in that same tenant, and intentionally omits internal purchase-price and reorder-level fields. It is covered by the public-catalogue integration test. The endpoint is public like the existing public package/enquiry routes; vendor catalogue management APIs remain authenticated and permission-protected.
 
 The Nginx SPA configuration serves `index.html` for unknown frontend paths so direct navigation and refreshes on public routes work. Configure `VITE_PUBLIC_STORE_SLUG` to the intended public store slug and `VITE_API_BASE_URL` when the API is hosted separately.
+
+## Local email testing with Mailpit
+
+Local development uses [Mailpit](https://mailpit.axllent.org/) as an offline SMTP sink. It captures outbound mail; it does **not** deliver messages to real customer inboxes.
+
+Start the complete local stack:
+
+```bash
+docker compose up --build
+```
+
+Open the Mailpit inbox at **http://localhost:8025**. The backend container sends SMTP to `mailpit:1025`; when running the backend directly on the host, use `MAIL_HOST=localhost` and `MAIL_PORT=1025`.
+
+The local Compose configuration sets `MAIL_SMTP_AUTH=false`, `MAIL_SMTP_STARTTLS=false`, and a development-only sender. Do not expose Mailpit ports to the public internet.
+
+### Email-backed authentication
+
+- Password reset: `POST /api/v1/auth/forgot-password` always returns a generic response. A 256-bit random, single-use reset token is stored as a SHA-256 hash, expires after 30 minutes, and is sent as a link to the account email. The raw token is never returned by the API.
+- Platform administrator MFA: after valid credentials, platform sign-in requires a six-digit email code. The code is stored as a hash, expires after five minutes, is single-use, and is locked after five failed attempts.
+- Notification delivery attempts are persisted in `notification_delivery`; failed SMTP attempts are recorded as FAILED. This initial implementation does not yet provide a background retry queue.
+
+### Production SMTP configuration
+
+Mailpit is local-only. For real delivery, configure an SMTP provider and set these backend environment variables in the production secret store:
+
+- `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`
+- `MAIL_SMTP_AUTH=true` when the provider requires authentication
+- `MAIL_SMTP_STARTTLS=true` when the provider requires STARTTLS
+- `MAIL_FROM` to a sender address verified by the provider
+- `PUBLIC_BASE_URL` to the deployed frontend URL used in password-reset links
+
+Never use the Compose Mailpit host, local credentials, or a localhost public URL in production. Verify sender-domain SPF, DKIM and DMARC with the chosen provider before enabling customer-facing notifications.

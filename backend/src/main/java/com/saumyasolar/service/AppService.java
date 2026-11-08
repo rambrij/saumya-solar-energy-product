@@ -39,6 +39,7 @@ public class AppService {
     final IdempotencyRecordRepository idem;
     final RoleRepository roles;
     final OrderStatusHistoryRepository orderStatusHistory;
+    final NotificationService notifications;
     
     public AppService(
             TenantRepository a,
@@ -58,7 +59,8 @@ public class AppService {
             OrderItemRepository o,
             IdempotencyRecordRepository p,
             RoleRepository roles,
-            OrderStatusHistoryRepository orderStatusHistory
+            OrderStatusHistoryRepository orderStatusHistory,
+            NotificationService notifications
     ) {
         tenants = a;
         users = b;
@@ -78,6 +80,7 @@ public class AppService {
         idem = p;
         this.roles = roles;
         this.orderStatusHistory = orderStatusHistory;
+        this.notifications = notifications;
     }
     
     void vendor(Principal p) {
@@ -650,7 +653,7 @@ public class AppService {
         q.setCreatedBy(p.userId());
         q.setCreatedAt(Instant.now());
         quotes.save(q);
-        BigDecimal sub = BigDecimal.ZERO, tax = BigDecimal.ZERO;
+        BigDecimal sub = BigDecimal.ZERO, discountTotal = BigDecimal.ZERO, tax = BigDecimal.ZERO;
         var items = new ArrayList<QuotationItem>();
         for (var a : x.items()) {
             if (a.quantity() < 1) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Quantity must be positive");
@@ -688,13 +691,20 @@ public class AppService {
             i.setUnitPrice(unitPrice);
             i.setTaxPercent(taxPercent);
             i.setLineTotal(base);
+            BigDecimal lineDiscount = base.multiply(requestedDiscount)
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            BigDecimal taxableBase = base.subtract(lineDiscount);
+            BigDecimal lineTax = taxableBase.multiply(taxPercent)
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            i.setDiscountAmount(lineDiscount);
+            i.setTaxableAmount(taxableBase);
+            i.setTaxAmount(lineTax);
             items.add(quoteItems.save(i));
             sub = sub.add(base);
-            var taxableBase = base.multiply(BigDecimal.valueOf(100).subtract(requestedDiscount))
-                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-            tax = tax.add(taxableBase.multiply(taxPercent).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+            discountTotal = discountTotal.add(lineDiscount);
+            tax = tax.add(lineTax);
         }
-        var disc = sub.multiply(q.getDiscountPercent()).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        var disc = discountTotal;
         q.setSubtotal(sub);
         q.setDiscountAmount(disc);
         q.setTaxAmount(tax);
@@ -739,7 +749,16 @@ public class AppService {
             case "send" -> "SENT";
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         });
-        return quotes.save(q);
+        Quotation saved = quotes.save(q);
+        if ("send".equals(action)) {
+            CustomerProfile recipient = requireCustomer(q.getCustomerId(), p.tenantId());
+            notifications.sendBusinessNotification(recipient.getUserId(), p.tenantId(), "QUOTATION_SENT",
+                    recipient.getEmail(), "Your solar quotation is ready",
+                    "Hello " + recipient.getName() + ",\n\nYour quotation " + q.getQuotationNumber()
+                            + " is ready. Total: INR " + q.getGrandTotal()
+                            + ". Sign in to your customer portal to review and accept or reject it.");
+        }
+        return saved;
     }
     
     public java.util.List<Quotation> quotationRevisions(UUID id, Principal p) {
@@ -783,6 +802,10 @@ public class AppService {
         o.setCustomerId(q.getCustomerId());
         o.setOrderNumber("ORD-" + System.currentTimeMillis());
         o.setStatus("CONFIRMED");
+        o.setSubtotal(q.getSubtotal());
+        o.setDiscountPercent(q.getDiscountPercent());
+        o.setDiscountAmount(q.getDiscountAmount());
+        o.setTaxTotal(q.getTaxAmount());
         o.setTotal(q.getGrandTotal());
         o.setCreatedAt(Instant.now());
         orders.save(o);
@@ -799,6 +822,9 @@ public class AppService {
             i.setUnitPrice(qi.getUnitPrice());
             i.setTaxPercent(qi.getTaxPercent());
             i.setLineTotal(qi.getLineTotal());
+            i.setDiscountAmount(qi.getDiscountAmount());
+            i.setTaxableAmount(qi.getTaxableAmount());
+            i.setTaxAmount(qi.getTaxAmount());
             orderItems.save(i);
         }
         var rec = new IdempotencyRecord();

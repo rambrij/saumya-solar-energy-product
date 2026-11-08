@@ -24,4 +24,7 @@ public class QuotationItem {
     BigDecimal unitPrice;
     BigDecimal taxPercent;
     BigDecimal lineTotal;
+    BigDecimal discountAmount;
+    BigDecimal taxableAmount;
+    BigDecimal taxAmount;
 }

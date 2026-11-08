@@ -21,6 +21,12 @@ public final class Models {
     ) {
     }
     
+    public record MfaVerify(@NotBlank String challengeId, @NotBlank String code) {
+    }
+
+    public record MfaChallengeRequired(boolean mfaRequired, String challengeId) {
+    }
+
     public record Refresh(@NotBlank String refreshToken) {
     }
 

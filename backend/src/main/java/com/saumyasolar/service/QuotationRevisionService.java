@@ -69,6 +69,9 @@ public class QuotationRevisionService {
             n.setUnitPrice(x.getUnitPrice());
             n.setTaxPercent(x.getTaxPercent());
             n.setLineTotal(x.getLineTotal());
+            n.setDiscountAmount(x.getDiscountAmount());
+            n.setTaxableAmount(x.getTaxableAmount());
+            n.setTaxAmount(x.getTaxAmount());
             copied.add(items.save(n));
         }
         return new QuoteView(q, copied);
