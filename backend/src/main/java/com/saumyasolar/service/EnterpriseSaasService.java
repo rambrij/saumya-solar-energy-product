@@ -115,31 +115,35 @@ public class EnterpriseSaasService {
  @Transactional public TenantSubscription assignSubscription(UUID tenantId,UUID planId,SubscriptionInput x,Principal p){
   platform(p,"SUBSCRIPTION_MANAGE");tenants.findByIdForUpdate(tenantId).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
   SubscriptionPlan plan=plans.findById(planId).filter(SubscriptionPlan::isActive).orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"Active plan not found"));
-  Instant now=Instant.now(),start=x.startsAt()==null?now:x.startsAt();
+  Instant now=Instant.now(),start=x.startsAt()==null?now:x.startsAt();String cycle=x.billingCycle()==null?plan.getBillingCycle():x.billingCycle();
   if(!Set.of("TRIAL","ACTIVE").contains(x.status()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"New subscriptions must be TRIAL or ACTIVE");
+  if(!Set.of("MONTHLY","YEARLY").contains(cycle))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Billing cycle must be MONTHLY or YEARLY");
   if(x.endsAt()!=null&&!x.endsAt().isAfter(start))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Subscription end must be after start");
   if(x.renewsAt()!=null&&x.renewsAt().isBefore(start))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Renewal date cannot precede subscription start");
-  for(TenantSubscription old:subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId)){
-   if(!Set.of("TRIAL","ACTIVE","PAST_DUE").contains(old.getStatus()))continue;
-   if(old.getStartsAt()!=null&&!old.getStartsAt().isBefore(start)){
-    old.setStatus("CANCELLED");old.setUpdatedAt(now);subscriptions.save(old);
-   }else if(start.isAfter(now)&&effective(old)){
-    if(old.getEndsAt()==null||start.isBefore(old.getEndsAt()))old.setEndsAt(start);
-    old.setUpdatedAt(now);subscriptions.save(old);
-   }else if(!start.isAfter(now)&&effective(old)){
-    old.setStatus("CANCELLED");old.setUpdatedAt(now);subscriptions.save(old);
-   }
+  if(x.trialEndsAt()!=null&&x.trialEndsAt().isBefore(start))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Trial end cannot precede subscription start");
+  List<TenantSubscription> active= subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId).stream().filter(v->Set.of("TRIAL","ACTIVE","PAST_DUE").contains(v.getStatus())&&(v.getEndsAt()==null||v.getEndsAt().isAfter(now))).toList();
+  UUID newId=UUID.randomUUID();
+  for(TenantSubscription old:active){
+   String previous=old.getStatus();UUID previousPlan=old.getPlanId();
+   if(old.getStartsAt()!=null&&!old.getStartsAt().isBefore(start)){old.setStatus("CANCELLED");}
+   else if(start.isAfter(now)&&effective(old)){if(old.getEndsAt()==null||start.isBefore(old.getEndsAt()))old.setEndsAt(start);}
+   else if(!start.isAfter(now)){old.setStatus("CANCELLED");}
+   old.setReplacedBySubscriptionId(newId);old.setUpdatedAt(now);subscriptions.save(old);
+   history(p,old,"REPLACED",previous,previousPlan,Map.of("replacementSubscriptionId",newId.toString(),"replacementPlanId",planId.toString()));
   }
-  TenantSubscription s=new TenantSubscription();s.setId(UUID.randomUUID());s.setTenantId(tenantId);s.setPlanId(planId);s.setStatus(x.status());s.setStartsAt(start);
-  s.setEndsAt(x.endsAt());s.setRenewsAt(x.renewsAt());s.setExternalReference(trim(x.externalReference()));s.setCreatedBy(p.userId());s.setCreatedAt(now);s.setUpdatedAt(now);
-  subscriptions.save(s);audit(p,tenantId,"SUBSCRIPTION_ASSIGNED","TENANT_SUBSCRIPTION",s.getId(),s);return s;
+  TenantSubscription s=new TenantSubscription();s.setId(newId);s.setTenantId(tenantId);s.setPlanId(planId);s.setStatus(x.status());s.setStartsAt(start);
+  s.setEndsAt(x.endsAt());s.setRenewsAt(x.renewsAt());s.setExternalReference(trim(x.externalReference()));s.setCreatedBy(p.userId());
+  s.setBillingCycle(cycle);s.setTrialEndsAt(x.trialEndsAt());s.setAutoRenew(x.autoRenew());s.setNotes(trim(x.notes()));s.setCreatedAt(now);s.setUpdatedAt(now);
+  subscriptions.save(s);history(p,s,active.isEmpty()?"ASSIGNED":"REPLACEMENT_ASSIGNED",null,null,Map.of("planCode",plan.getPlanCode(),"billingCycle",cycle,"autoRenew",x.autoRenew()));
+  audit(p,tenantId,"SUBSCRIPTION_ASSIGNED","TENANT_SUBSCRIPTION",s.getId(),s);return s;
  }
  @Transactional public TenantSubscription cancelSubscription(UUID tenantId,UUID subscriptionId,Principal p){
   platform(p,"SUBSCRIPTION_MANAGE");
   TenantSubscription subscription=subscriptions.findById(subscriptionId).filter(x->tenantId.equals(x.getTenantId()))
    .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Subscription not found"));
   if(!Set.of("TRIAL","ACTIVE","PAST_DUE").contains(subscription.getStatus()))throw new ResponseStatusException(HttpStatus.CONFLICT,"Subscription cannot be cancelled from its current state");
-  subscription.setStatus("CANCELLED");subscription.setUpdatedAt(Instant.now());subscriptions.save(subscription);
+  String previous=subscription.getStatus();UUID previousPlan=subscription.getPlanId();subscription.setStatus("CANCELLED");subscription.setUpdatedAt(Instant.now());subscriptions.save(subscription);
+  history(p,subscription,"CANCELLED",previous,previousPlan,Map.of("reason","Platform administrator cancellation"));
   audit(p,tenantId,"SUBSCRIPTION_CANCELLED","TENANT_SUBSCRIPTION",subscriptionId,subscription);return subscription;
  }
  @Transactional public SubscriptionPlan deactivatePlan(UUID planId,Principal p){
