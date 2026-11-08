@@ -140,13 +140,14 @@ public class EnterpriseSaasService {
   if(!Set.of("MONTHLY","YEARLY").contains(cycle))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Billing cycle must be MONTHLY or YEARLY");
   if(x.endsAt()!=null&&!x.endsAt().isAfter(start))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Subscription end must be after start");
   if(x.renewsAt()!=null&&x.renewsAt().isBefore(start))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Renewal date cannot precede subscription start");
-  if(x.trialEndsAt()!=null&&x.trialEndsAt().isBefore(start))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Trial end cannot precede subscription start");
+  Instant trialEnd=x.trialEndsAt();if(trialEnd==null&&"TRIAL".equals(x.status())&&plan.getTrialPeriodDays()>0)trialEnd=start.plusSeconds(plan.getTrialPeriodDays()*86400L);
+  if(trialEnd!=null&&trialEnd.isBefore(start))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Trial end cannot precede subscription start");
   List<TenantSubscription> active= subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId).stream().filter(v->Set.of("TRIAL","ACTIVE","PAST_DUE").contains(v.getStatus())&&(v.getEndsAt()==null||v.getEndsAt().isAfter(now))).toList();
   UUID newId=UUID.randomUUID();
   TenantSubscription s=new TenantSubscription();s.setId(newId);s.setTenantId(tenantId);s.setPlanId(planId);s.setStatus(x.status());s.setStartsAt(start);
   s.setEndsAt(x.endsAt());s.setRenewsAt(x.renewsAt());s.setExternalReference(trim(x.externalReference()));s.setCreatedBy(p.userId());
-  s.setBillingCycle(cycle);s.setTrialEndsAt(x.trialEndsAt());s.setAutoRenew(x.autoRenew());s.setNotes(trim(x.notes()));s.setCreatedAt(now);s.setUpdatedAt(now);
-  subscriptions.save(s);
+  s.setBillingCycle(cycle);s.setTrialEndsAt(trialEnd);s.setAutoRenew(x.autoRenew());s.setNotes(trim(x.notes()));s.setCreatedAt(now);s.setUpdatedAt(now);
+  subscriptions.save(s);subscriptions.flush();
   for(TenantSubscription old:active){
    String previous=old.getStatus();UUID previousPlan=old.getPlanId();
    if(old.getStartsAt()!=null&&!old.getStartsAt().isBefore(start)){old.setStatus("CANCELLED");}
