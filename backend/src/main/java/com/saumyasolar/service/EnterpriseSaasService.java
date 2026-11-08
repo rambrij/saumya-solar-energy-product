@@ -29,6 +29,11 @@ public class EnterpriseSaasService {
   branches.save(b);audit(p,t,"BRANCH_CREATED","BRANCH",b.getId(),b);return b;
  }
  public List<Branch> branches(Principal p){return branches.findByTenantIdOrderByNameAsc(vendor(p,"BRANCH_MANAGE"));}
+ public List<BranchMembership> branchUsers(UUID branchId,Principal p){
+  UUID t=vendor(p,"BRANCH_MANAGE");
+  branches.findByIdAndTenantId(branchId,t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Branch not found"));
+  return memberships.findByTenantIdAndBranchId(t,branchId);
+ }
  @Transactional public Branch updateBranch(UUID id,BranchInput x,Principal p){
   UUID t=vendor(p,"BRANCH_MANAGE");Branch b=branches.findByIdAndTenantId(id,t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Branch not found"));
   String code=x.code().trim().toUpperCase(Locale.ROOT);
