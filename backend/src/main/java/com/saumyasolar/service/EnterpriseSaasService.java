@@ -39,6 +39,7 @@ public class EnterpriseSaasService {
  @Transactional public void setBranchActive(UUID id,boolean active,Principal p){
   UUID t=vendor(p,"BRANCH_MANAGE");Branch b=branches.findByIdAndTenantId(id,t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Branch not found"));
   if(!active&&memberships.countByTenantIdAndBranchId(t,id)>0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Remove branch memberships before deactivation");
+  if(!active&&warehouses.countByTenantIdAndBranchId(t,id)>0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Unassign warehouses from this branch before deactivation");
   b.setActive(active);b.setUpdatedAt(Instant.now());branches.save(b);audit(p,t,active?"BRANCH_ACTIVATED":"BRANCH_DEACTIVATED","BRANCH",id,b);
  }
  @Transactional public void removeUser(UUID branchId,UUID userId,Principal p){
@@ -116,6 +117,7 @@ public class EnterpriseSaasService {
  }
  @Transactional public Warehouse assignWarehouseBranch(UUID warehouseId,UUID branchId,Principal p){
   UUID t=vendor(p,"INVENTORY_MANAGE");
+  if((p.roles()==null||!p.roles().contains("VENDOR_ADMIN"))&&(p.permissions()==null||!p.permissions().contains("BRANCH_MANAGE")))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Branch management permission is required to move warehouses between branches");
   Warehouse w=warehouses.findByIdAndTenantId(warehouseId,t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Warehouse not found"));
   if(branchId!=null)branches.findByIdAndTenantId(branchId,t).filter(Branch::isActive)
    .orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"Active branch must belong to this vendor"));
