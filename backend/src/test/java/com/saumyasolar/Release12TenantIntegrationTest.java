@@ -374,7 +374,7 @@ class Release12TenantIntegrationTest {
                         .header("Authorization", "Bearer " + vendorToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"customerId":"%s","leadId":"%s","surveyId":"%s","discountPercent":0,"validUntil":"%s","items":[{"productId":"%s","quantity":2}]}
+                                {"customerId":"%s","leadId":"%s","surveyId":"%s","discountPercent":10,"validUntil":"%s","items":[{"productId":"%s","quantity":2}]}
                                 """.formatted(profile.getId(), leadId, surveyId,
                                 java.time.LocalDate.now().plusDays(30), productId)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
@@ -397,6 +397,34 @@ class Release12TenantIntegrationTest {
                         .header("Idempotency-Key", key))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertEquals(json.readTree(firstOrder).get("id").asText(), json.readTree(secondOrder).get("id").asText());
+
+        var orderId = json.readTree(firstOrder).get("id").asText();
+        var persistedOrder = customerOrders.findByIdAndTenantId(UUID.fromString(orderId), vendorTenantId).orElseThrow();
+        assertEquals(0, new BigDecimal("20000.00").compareTo(persistedOrder.getSubtotal()));
+        assertEquals(0, new BigDecimal("10.00").compareTo(persistedOrder.getDiscountPercent()));
+        assertEquals(0, new BigDecimal("2000.00").compareTo(persistedOrder.getDiscountAmount()));
+        assertEquals(0, new BigDecimal("900.00").compareTo(persistedOrder.getTaxTotal()));
+        assertEquals(0, new BigDecimal("18900.00").compareTo(persistedOrder.getTotal()));
+
+        var invoiceResponse = mvc.perform(post("/api/v1/invoices")
+                        .header("Authorization", "Bearer " + vendorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"orderId":"%s","taxTreatment":"IGST"}
+                                """.formatted(orderId)))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.subtotal").value(18000.0))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.taxTotal").value(900.0))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.grandTotal").value(18900.0))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.igstAmount").value(900.0))
+                .andReturn().getResponse().getContentAsString();
+        var invoiceId = json.readTree(invoiceResponse).get("id").asText();
+        var invoiceLines = mvc.perform(get("/api/v1/invoices/" + invoiceId + "/items")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].taxableAmount").value(18000.0))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].taxAmount").value(900.0))
+                .andReturn().getResponse().getContentAsString();
+        assertEquals(1, json.readTree(invoiceLines).size());
     }
 
     private String accessToken(String email, String password) throws Exception {
