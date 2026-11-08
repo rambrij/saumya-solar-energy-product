@@ -127,14 +127,7 @@ public class EnterpriseSaasService {
   Set<UUID> branchIds=new HashSet<>();assigned.forEach(m->branchIds.add(m.getBranchId()));
   return rows.stream().filter(w->w.getBranchId()==null||branchIds.contains(w.getBranchId())).toList();
  }
- public void assertFeatureEnabled(UUID tenantId,String feature){
-  List<TenantSubscription> history=subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId);
-  if(history.isEmpty())return;
-  TenantSubscription subscription=effectiveSubscription(tenantId).orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"An active subscription is required"));
-  SubscriptionPlan plan=plans.findById(subscription.getPlanId()).orElseThrow();
-  try{JsonNode root=mapper.readTree(plan.getEntitlementsJson());if(!root.path(feature).asBoolean(false))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"The current subscription plan does not include "+feature);}
-  catch(ResponseStatusException ex){throw ex;}catch(Exception ex){throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,"Subscription entitlements are invalid");}
- }
+ public void assertFeatureEnabled(UUID tenantId,String feature){requireEntitlement(tenantId,feature);}
  public void enforceUserLimit(UUID t){
   List<TenantSubscription> history=subscriptions.findByTenantIdOrderByCreatedAtDesc(t);
   if(history.isEmpty())return; // Existing Phase 1/2 vendors remain grandfathered until subscription assignment.
@@ -205,6 +198,7 @@ public class EnterpriseSaasService {
      if(!included)throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Current subscription does not include "+featureCode);
     }else throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Subscription feature list is invalid");
    }
+   if(feature==null&&!root.has("features"))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Current subscription does not include "+featureCode);
    if(feature!=null&&feature.isBoolean()&&!feature.asBoolean())throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Current subscription does not include "+featureCode);
   }catch(ResponseStatusException e){throw e;}
   catch(Exception e){throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Subscription entitlements are invalid; contact the platform administrator");}
