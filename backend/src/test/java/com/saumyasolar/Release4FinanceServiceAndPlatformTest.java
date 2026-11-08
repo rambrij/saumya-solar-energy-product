@@ -3,6 +3,12 @@ package com.saumyasolar;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import com.saumyasolar.domain.Warranty;
+import com.saumyasolar.domain.CustomerOrder;
+import com.saumyasolar.domain.InstallationJob;
+import com.saumyasolar.domain.Product;
+import com.saumyasolar.repo.CustomerOrderRepository;
+import com.saumyasolar.repo.InstallationJobRepository;
+import com.saumyasolar.repo.ProductRepository;
 import com.saumyasolar.repo.AppUserRepository;
 import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.repo.WarrantyRepository;
@@ -32,6 +38,9 @@ class Release4FinanceServiceAndPlatformTest {
     @Autowired AppUserRepository users;
     @Autowired CustomerProfileRepository customerProfiles;
     @Autowired WarrantyRepository warranties;
+    @Autowired CustomerOrderRepository orders;
+    @Autowired InstallationJobRepository installations;
+    @Autowired ProductRepository products;
     private String token(String email,String password)throws Exception{
         String result=mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
             .content("{\"email\":\""+email+"\",\"password\":\""+password+"\"}"))
@@ -129,7 +138,11 @@ class Release4FinanceServiceAndPlatformTest {
         String customer=token(email,"WarrantyCustomer@2026");
         var user=users.findByEmailIgnoreCase(email).orElseThrow();
         var profile=customerProfiles.findByTenantIdAndUserId(user.getTenantId(),user.getId()).orElseThrow();
-        Warranty warranty=new Warranty();warranty.setId(UUID.randomUUID());warranty.setTenantId(user.getTenantId());warranty.setCustomerId(profile.getId());warranty.setProductId(UUID.randomUUID());warranty.setQuantity(1);warranty.setStartDate(LocalDate.now().minusDays(1));warranty.setEndDate(LocalDate.now().plusDays(30));warranty.setTerms("Test warranty");warranty.setStatus("ACTIVE");warranty.setActivatedAt(java.time.Instant.now());warranties.save(warranty);
+        var vendorUser=users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        Product product=products.findByTenantIdOrderByIdDesc(user.getTenantId()).stream().filter(v->"DEMO-PV-550".equals(v.getSku())).findFirst().orElseThrow();
+        CustomerOrder order=new CustomerOrder();order.setId(UUID.randomUUID());order.setTenantId(user.getTenantId());order.setCustomerId(profile.getId());order.setOrderNumber("WARRANTY-EVIDENCE-"+UUID.randomUUID());order.setStatus("COMMISSIONED");order.setTotal(java.math.BigDecimal.TEN);order.setCreatedAt(java.time.Instant.now());orders.save(order);
+        InstallationJob installation=new InstallationJob();installation.setId(UUID.randomUUID());installation.setTenantId(user.getTenantId());installation.setOrderId(order.getId());installation.setCustomerId(profile.getId());installation.setSiteAddress("Test warranty installation");installation.setScheduledAt(java.time.Instant.now());installation.setAssignedEngineerId(vendorUser.getId());installation.setTeamName("Warranty test team");installation.setStatus("COMMISSIONED");installation.setCreatedAt(java.time.Instant.now());installations.save(installation);
+        Warranty warranty=new Warranty();warranty.setId(UUID.randomUUID());warranty.setTenantId(user.getTenantId());warranty.setOrderId(order.getId());warranty.setInstallationId(installation.getId());warranty.setCustomerId(profile.getId());warranty.setProductId(product.getId());warranty.setQuantity(1);warranty.setStartDate(LocalDate.now().minusDays(1));warranty.setEndDate(LocalDate.now().plusDays(30));warranty.setTerms("Test warranty");warranty.setStatus("ACTIVE");warranty.setActivatedAt(java.time.Instant.now());warranties.save(warranty);
         String claim=mvc.perform(post("/api/v1/customer/warranty-claims").header("Authorization","Bearer "+customer).contentType(MediaType.APPLICATION_JSON)
             .content(json.writeValueAsString(java.util.Map.of("warrantyId",warranty.getId(),"subject","Panel output issue","description","Output is lower than expected"))))
             .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
