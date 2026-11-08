@@ -41,12 +41,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class Release3OperationsIntegrationTest {
  @Autowired MockMvc mvc;@Autowired ObjectMapper json;@Autowired AppUserRepository users;
  @Autowired ProductRepository products;@Autowired ProductCategoryRepository categories;@Autowired TenantRepository tenants;@Autowired WarehouseRepository warehouses;
- @Autowired CustomerOrderRepository orders;@Autowired OrderItemRepository orderItems;@Autowired CustomerProfileRepository customerProfiles;@Autowired InventoryBalanceRepository balances;@Autowired OperationsService operations;
+ @Autowired CustomerOrderRepository orders;@Autowired OrderItemRepository orderItems;@Autowired CustomerProfileRepository customerProfiles;@Autowired InventoryBalanceRepository balances;@Autowired OperationsService operations;@Autowired SubscriptionPlanRepository subscriptionPlans;@Autowired TenantSubscriptionRepository tenantSubscriptions;
  UUID tenantId;
  @BeforeEach void setup(){tenantId=users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow().getTenantId();}
  private String token() throws Exception {String body=mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"admin@saumya.local\",\"password\":\"Admin@123\"}")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();return json.readTree(body).get("accessToken").asText();}
  private Tenant otherTenant(){Tenant t=new Tenant();t.setId(UUID.randomUUID());t.setName("Other vendor");t.setSlug("other-"+UUID.randomUUID());t.setStatus("ACTIVE");return tenants.save(t);}
  @Test void warehouseReceiptCreatesBalanceAndImmutableLedger() throws Exception {
+  var assigned=tenantSubscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId).stream().findFirst().orElseThrow();var starter=subscriptionPlans.findById(assigned.getPlanId()).orElseThrow();assertEquals(3,starter.getMaxWarehouses(),starter.getEntitlementsJson());assertTrue(starter.getEntitlementsJson().contains("\\\"multiWarehouse\\\":true"),starter.getEntitlementsJson());
   String auth=token();String warehouseBody="{\"code\":\"WH-"+UUID.randomUUID()+"\",\"name\":\"Test warehouse\",\"address\":\"Mumbai\"}";
   var warehouseResult=mvc.perform(post("/api/v1/warehouses").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content(warehouseBody)).andReturn();
   assertEquals(200,warehouseResult.getResponse().getStatus(),warehouseResult.getResponse().getContentAsString());
