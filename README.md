@@ -518,3 +518,28 @@ Mailpit is local-only. For real delivery, configure an SMTP provider and set the
 - `PUBLIC_BASE_URL` to the deployed frontend URL used in password-reset links
 
 Never use the Compose Mailpit host, local credentials, or a localhost public URL in production. Verify sender-domain SPF, DKIM and DMARC with the chosen provider before enabling customer-facing notifications.
+
+
+## Phase 1 remediation additions
+
+The remediation branch adds the following workflows on top of the existing commercial MVP:
+
+- Vendor administrator invitations are generated with random one-time tokens, expire after 24 hours, and can be revoked/resend by a Platform Super Admin. Vendor administrators set their own password; the platform never supplies a reusable initial password.
+- An accepted vendor administrator can sign in while the tenant is pending verification, but the JWT filter permits only the vendor legal profile and verification-document endpoints until platform approval.
+- Vendor approval requires a completed legal profile and at least one verification document reviewed as APPROVED by a Platform Super Admin.
+- Vendor verification documents are stored outside public static/upload paths. Configure `VENDOR_KYC_DIR` to a private persistent volume in hosted environments. Do not point it at a public web root or ephemeral storage if documents must survive redeploys.
+- Vendor and customer dashboard summaries are computed by backend endpoints and are scoped by account type and permissions.
+- Email notifications are available through a recipient-scoped inbox; message bodies and invitation/reset tokens are not returned by inbox APIs.
+- Lead follow-up tasks are tenant-scoped, assigned only to enabled same-tenant sales users, and can generate due reminders through the notification outbox.
+- Vendor administrators can review their tenant audit history; Platform Super Admins can review platform-wide audit history.
+- Flyway migrations V25–V35 add financial snapshots, invitation, inbox, legal-profile, verification-document and lead-follow-up data structures.
+
+The onboarding invitation and verification flow is:
+
+1. Platform Super Admin creates a vendor. The vendor tenant is created as INACTIVE / PENDING_VERIFICATION and its initial administrator is disabled.
+2. The platform sends a one-time invitation. The administrator accepts it and chooses a password.
+3. While pending, the administrator can only update the legal profile and upload verification documents; normal catalogue, sales, finance and inventory APIs remain forbidden.
+4. Platform Super Admin downloads and reviews the submitted evidence. Approval requires a complete legal profile and at least one approved document.
+5. Approval activates the tenant and unlocks the normal vendor permission model.
+
+These additions remain subject to the latest CI run and the final independent Phase 1 acceptance audit. A passing compile or test suite is evidence for the tested scenarios only; it is not a guarantee of zero defects or proof that every Phase 1 requirement is complete.
