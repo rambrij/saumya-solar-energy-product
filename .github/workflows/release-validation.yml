@@ -305,7 +305,7 @@ jobs:
           MAIL_PORT: 1025
           MAIL_SMTP_AUTH: 'false'
           MAIL_SMTP_STARTTLS: 'false'
-          SEED_DATA_ENABLED: 'false'
+          SEED_DATA_ENABLED: 'true'
           PLATFORM_BOOTSTRAP_ENABLED: 'false'
         run: |
           java -jar target/platform-2.0.0.jar > /tmp/saumya-backend.log 2>&1 &
