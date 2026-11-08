@@ -20,6 +20,14 @@ public class Tenant {
     String name;
     String slug;
     String status;
+    @Column(name = "verification_status", nullable = false, length = 30)
+    String verificationStatus = "PENDING_VERIFICATION";
+    @Column(name = "verified_at")
+    Instant verifiedAt;
+    @Column(name = "verified_by")
+    UUID verifiedBy;
+    @Column(name = "rejection_reason", length = 1000)
+    String rejectionReason;
     BigDecimal discountApprovalThreshold = BigDecimal.TEN;
     @Column(name = "created_at")
     Instant createdAt;
