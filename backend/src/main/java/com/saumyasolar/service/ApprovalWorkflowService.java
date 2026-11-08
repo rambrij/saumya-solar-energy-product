@@ -6,7 +6,7 @@ import java.time.Instant;import java.util.*;import java.math.BigDecimal;
 @Service
 public class ApprovalWorkflowService {
  private final ApprovalWorkflowRepository workflows;private final ApprovalInstanceRepository instances;
- private final ApprovalDecisionRepository decisions;private final AuditEventRepository audits;private final ObjectMapper mapper;private final EnterpriseSaasService entitlements;private final EnterpriseSaasService enterpriseSaas;
+ private final ApprovalDecisionRepository decisions;private final AuditEventRepository audits;private final ObjectMapper mapper;private final EnterpriseSaasService enterpriseSaas;
  public ApprovalWorkflowService(ApprovalWorkflowRepository w,ApprovalInstanceRepository i,ApprovalDecisionRepository d,AuditEventRepository a,ObjectMapper m,EnterpriseSaasService e){workflows=w;instances=i;decisions=d;audits=a;mapper=m;enterpriseSaas=e;}
  private UUID vendor(Principal p){if(!"VENDOR".equals(p.accountType())||p.tenantId()==null||p.permissions()==null||!p.permissions().contains("APPROVAL_WORKFLOW_MANAGE"))throw new ResponseStatusException(HttpStatus.FORBIDDEN);return p.tenantId();}
  private String json(Object v){try{return mapper.writeValueAsString(v);}catch(Exception e){return "{}";}}
