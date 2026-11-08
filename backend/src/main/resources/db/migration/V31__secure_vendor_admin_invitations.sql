@@ -2,7 +2,7 @@ CREATE TABLE vendor_invitation (
     id BINARY(16) NOT NULL PRIMARY KEY,
     tenant_id BINARY(16) NOT NULL,
     user_id BINARY(16) NOT NULL,
-    token_hash CHAR(64) NOT NULL,
+    token_hash VARCHAR(64) NOT NULL,
     expires_at TIMESTAMP(6) NOT NULL,
     accepted_at TIMESTAMP(6) NULL,
     revoked_at TIMESTAMP(6) NULL,
