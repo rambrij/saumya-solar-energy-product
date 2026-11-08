@@ -35,13 +35,14 @@ class EnterpriseSaasServiceTest {
     @Mock AuditEventRepository audits;
     @Mock WarehouseRepository warehouses;
     @Mock TenantDomainRepository tenantDomains;
+    @Mock SubscriptionAssignmentHistoryRepository subscriptionHistory;
 
     EnterpriseSaasService service;
 
     @BeforeEach
     void setUp() {
         service = new EnterpriseSaasService(branches, memberships, plans, subscriptions, tenants,
-                users, audits, warehouses, tenantDomains, new ObjectMapper());
+                users, audits, warehouses, tenantDomains, new ObjectMapper(), subscriptionHistory);
     }
 
     @Test
@@ -142,7 +143,7 @@ class EnterpriseSaasServiceTest {
                 Set.of("PLATFORM_SUPER_ADMIN"),Set.of("SUBSCRIPTION_MANAGE"),0);
 
         service.assignSubscription(tenantId,plan.getId(),
-                new EnterpriseSaasService.SubscriptionInput("ACTIVE",scheduledStart,null,null,"scheduled"),platform);
+                new EnterpriseSaasService.SubscriptionInput("ACTIVE",scheduledStart,null,null,"scheduled","MONTHLY",null,true,"scheduled replacement test"),platform);
 
         assertEquals("ACTIVE",current.getStatus());
         assertEquals(scheduledStart,current.getEndsAt());
