@@ -12,7 +12,7 @@ public class DataSeeder {
  @Value("${app.seed.enabled:false}") boolean seedEnabled;
  private static final List<String> PERMISSIONS=List.of("PLATFORM_MANAGE","SUBSCRIPTION_MANAGE","AUDIT_VIEW","CATALOG_MANAGE","CATALOG_VIEW","DISCOUNT_POLICY_MANAGE","CUSTOMER_MANAGE","LEAD_MANAGE","SURVEY_MANAGE","QUOTATION_MANAGE","DISCOUNT_APPROVE","ORDER_CREATE","USER_VIEW","USER_MANAGE","INVENTORY_MANAGE","SERVICE_MANAGE","FINANCE_MANAGE","PAYMENT_REFUND","REPORT_VIEW");
  private static final List<String> CATEGORIES=List.of("Solar Panels","Inverters","Batteries","Mounting Structures","Cables","AC/DC Distribution Boxes","Solar Accessories","Solar Lights");
- @Bean CommandLineRunner seedData(TenantRepository tenants,PermissionRepository permissions,RoleRepository roles,AppUserRepository users,CustomerProfileRepository customers,ProductCategoryRepository categories,ProductRepository products,WarehouseRepository warehouses,InstallationChecklistTemplateRepository checklistTemplates,SubscriptionPlanRepository subscriptionPlans,EnquiryRepository enquiries,SalesLeadRepository leads,QuotationRepository quotations,QuotationItemRepository quotationItems,SiteSurveyRepository surveys,CustomerOrderRepository orders,OrderItemRepository orderItems,InvoiceRepository invoices,PaymentRepository payments,InstallationJobRepository installations,ServiceRequestRepository serviceRequests,PasswordEncoder encoder){
+ @Bean CommandLineRunner seedData(TenantRepository tenants,PermissionRepository permissions,RoleRepository roles,AppUserRepository users,CustomerProfileRepository customers,ProductCategoryRepository categories,ProductRepository products,WarehouseRepository warehouses,InstallationChecklistTemplateRepository checklistTemplates,SubscriptionPlanRepository subscriptionPlans,EnquiryRepository enquiries,SalesLeadRepository leads,QuotationRepository quotations,QuotationItemRepository quotationItems,SiteSurveyRepository surveys,CustomerOrderRepository orders,OrderItemRepository orderItems,InvoiceRepository invoices,PaymentRepository payments,InstallationJobRepository installations,ServiceRequestRepository serviceRequests,TenantSubscriptionRepository tenantSubscriptions,SubscriptionAssignmentHistoryRepository assignmentHistory,PasswordEncoder encoder){
   return args->{
    if(!seedEnabled) return;
    Tenant defaultTenant=tenants.findBySlug("saumya-solar").orElseGet(()->{Tenant t=new Tenant();t.setId(UUID.randomUUID());t.setName("Saumya Solar");t.setSlug("saumya-solar");t.setStatus("ACTIVE");t.setCreatedAt(java.time.Instant.now());t.setUpdatedAt(java.time.Instant.now());return tenants.save(t);});
@@ -31,6 +31,7 @@ public class DataSeeder {
    seedDemoProducts(defaultTenant.getId(),categories,products);
    seedDefaultSubscriptionPlans(subscriptionPlans);
    ensureUser(users,encoder,null,"Platform Admin","platform@saumya.local","Platform@123","PLATFORM",platform);
+   seedDemoTenantSubscription(defaultTenant.getId(),users.findByEmailIgnoreCase("platform@saumya.local").orElseThrow(),subscriptionPlans,tenantSubscriptions,assignmentHistory);
    ensureUser(users,encoder,defaultTenant.getId(),"Vendor Admin","admin@saumya.local","Admin@123","VENDOR",ensureRole(roles,defaultTenant.getId(),"VENDOR_ADMIN"));
    ensureUser(users,encoder,defaultTenant.getId(),"Sales User","sales@saumya.local","Sales@123","VENDOR",ensureRole(roles,defaultTenant.getId(),"SALES_EXECUTIVE"));
    ensureUser(users,encoder,defaultTenant.getId(),"Aarav Sharma","customer@saumya.local","Customer@123","CUSTOMER",customer);
@@ -52,6 +53,12 @@ public class DataSeeder {
   Map.entry("TECHNICIAN",List.of("SURVEY_MANAGE","SERVICE_MANAGE")),
   Map.entry("SERVICE_MANAGER",List.of("SURVEY_MANAGE","SERVICE_MANAGE","REPORT_VIEW")),
   Map.entry("OPERATIONS_MANAGER",List.of("ORDER_CREATE","SURVEY_MANAGE","INVENTORY_MANAGE","SERVICE_MANAGE","REPORT_VIEW")));
+ }
+ private static void seedDemoTenantSubscription(UUID tenantId,AppUser platformAdmin,SubscriptionPlanRepository plans,TenantSubscriptionRepository subscriptions,SubscriptionAssignmentHistoryRepository history){
+  boolean assigned=subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId).stream().anyMatch(s->Set.of("TRIAL","ACTIVE","PAST_DUE").contains(s.getStatus())&&(s.getEndsAt()==null||s.getEndsAt().isAfter(java.time.Instant.now())));
+  if(assigned)return;SubscriptionPlan plan=plans.findByPlanCodeIgnoreCase("STARTER").orElse(null);if(plan==null)return;
+  java.time.Instant now=java.time.Instant.now();TenantSubscription s=new TenantSubscription();s.setId(UUID.randomUUID());s.setTenantId(tenantId);s.setPlanId(plan.getId());s.setStatus("ACTIVE");s.setStartsAt(now.minusSeconds(86400*10L));s.setRenewsAt(now.plusSeconds(86400*20L));s.setBillingCycle(plan.getBillingCycle());s.setAutoRenew(true);s.setNotes("Local demonstration subscription; no payment collection is configured.");s.setCreatedBy(platformAdmin.getId());s.setCreatedAt(now);s.setUpdatedAt(now);subscriptions.save(s);
+  SubscriptionAssignmentHistory h=new SubscriptionAssignmentHistory();h.setId(UUID.randomUUID());h.setTenantId(tenantId);h.setSubscriptionId(s.getId());h.setActorId(platformAdmin.getId());h.setAction("ASSIGNED");h.setNewStatus("ACTIVE");h.setNewPlanId(plan.getId());h.setDetailsJson("{\\"source\\":\\"local-demo-seed\\",\\"planCode\\":\\"STARTER\\"}");h.setCreatedAt(now);history.save(h);
  }
  private static void seedDemoLifecycle(Tenant tenant,AppUser sales,CustomerProfile customer,ProductRepository products,EnquiryRepository enquiries,SalesLeadRepository leads,QuotationRepository quotations,QuotationItemRepository quotationItems,SiteSurveyRepository surveys,CustomerOrderRepository orders,OrderItemRepository orderItems,InvoiceRepository invoices,PaymentRepository payments,InstallationJobRepository installations,ServiceRequestRepository serviceRequests){
   UUID tenantId=tenant.getId();
