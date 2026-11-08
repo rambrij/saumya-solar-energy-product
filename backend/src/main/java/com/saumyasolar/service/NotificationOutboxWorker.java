@@ -52,6 +52,7 @@ public class NotificationOutboxWorker {
                 delivery.setSentAt(Instant.now());
                 delivery.setLastError(null);
                 delivery.setNextAttemptAt(null);
+                delivery.setBody(null);
             } catch (Exception ex) {
                 int attempts = delivery.getAttemptCount() + 1;
                 delivery.setAttemptCount(attempts);
@@ -59,9 +60,11 @@ public class NotificationOutboxWorker {
                 if (attempts >= MAX_ATTEMPTS) {
                     delivery.setStatus("DEAD");
                     delivery.setNextAttemptAt(null);
+                    delivery.setBody(null);
                 } else {
                     delivery.setStatus("PENDING");
-                    long delaySeconds = Math.min(3600L, 30L * (1L << Math.min(attempts - 1, 7)));
+                    long baseDelay = "MFA_CODE".equals(delivery.getEventType()) ? 5L : 30L;
+                    long delaySeconds = Math.min(3600L, baseDelay * (1L << Math.min(attempts - 1, 7)));
                     delivery.setNextAttemptAt(Instant.now().plus(Duration.ofSeconds(delaySeconds)));
                 }
                 log.warn("Notification delivery {} failed on attempt {} of {}", delivery.getId(),
