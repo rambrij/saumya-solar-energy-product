@@ -82,8 +82,7 @@ public class NotificationService {
             return true;
         } catch (MailException ex) {
             record.setStatus("FAILED");
-            record.setLastError(ex.getMessage() == null ? "SMTP delivery failed" :
-                    ex.getMessage().substring(0, Math.min(1000, ex.getMessage().length())));
+            record.setLastError("SMTP delivery failed");
             deliveries.save(record);
             return false;
         }
