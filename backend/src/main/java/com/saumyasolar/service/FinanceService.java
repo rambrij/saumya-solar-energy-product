@@ -75,7 +75,7 @@ public class FinanceService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,"An invoice can only be issued for a confirmed order milestone");
         var existing=invoices.findByOrderIdAndTenantId(order.getId(),tenant);if(existing.isPresent())return existing.get();
         CustomerProfile cp=customers.findByIdAndTenantId(order.getCustomerId(),tenant).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Order customer not found"));
-        Tenant t=tenants.findById(tenant).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
+        Tenant t=tenants.findByIdForUpdate(tenant).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
         if(input.taxTreatment()!=null&&!Set.of("IGST","CGST_SGST","UNSPECIFIED").contains(input.taxTreatment()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Tax treatment must be IGST, CGST_SGST or UNSPECIFIED");
 
@@ -121,7 +121,12 @@ public class FinanceService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,"Invoice total does not reconcile with accepted order total");
 
         LocalDate today=LocalDate.now(ZoneId.of("Asia/Kolkata"));String fy=fiscalYear(today);
-        sequences.next(tenant,fy);long sequence=sequences.findByTenantIdAndFiscalYear(tenant,fy).orElseThrow().getNextNumber();
+        InvoiceSequence sequenceRecord=sequences.findByTenantIdAndFiscalYearForUpdate(tenant,fy).orElseGet(()->{
+            InvoiceSequence created=new InvoiceSequence();created.setId(UUID.randomUUID());created.setTenantId(tenant);created.setFiscalYear(fy);created.setNextNumber(0);return created;
+        });
+        long sequence=sequenceRecord.getNextNumber()+1;
+        sequenceRecord.setNextNumber(sequence);
+        sequences.save(sequenceRecord);
         Invoice invoice=new Invoice();invoice.setId(UUID.randomUUID());invoice.setTenantId(tenant);invoice.setOrderId(order.getId());
         invoice.setFiscalYear(fy);invoice.setInvoiceNumber((t.getInvoicePrefix()==null?"INV":t.getInvoicePrefix())+"-"+fy+"-"+String.format(Locale.ROOT,"%06d",sequence));
         invoice.setStatus("ISSUED");invoice.setCustomerName(cp.getName());invoice.setCustomerEmail(cp.getEmail());invoice.setCustomerAddress(cp.getAddress());invoice.setCustomerGstin(cp.getGstin());
