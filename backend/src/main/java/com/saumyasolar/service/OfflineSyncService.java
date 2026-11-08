@@ -24,11 +24,13 @@ public class OfflineSyncService {
     private static final int MAX_BATCH = 50;
     private static final int MAX_PAYLOAD_CHARS = 16_000;
     private final OfflineSyncOperationRepository operations;
+    private final AuditEventRepository audits;
     private final ServiceCommentControllerAccess comments;
     private final SurveyLifecycleService surveys;
     private final ObjectMapper mapper;
 
     public OfflineSyncService(OfflineSyncOperationRepository operations,
+                              AuditEventRepository audits,
                               ServiceRequestRepository tickets,
                               ServiceCommentRepository serviceComments,
                               CustomerProfileRepository customers,
@@ -36,6 +38,7 @@ public class OfflineSyncService {
                               SurveyLifecycleService surveys,
                               ObjectMapper mapper) {
         this.operations = operations;
+        this.audits = audits;
         this.comments = new ServiceCommentControllerAccess(tickets, serviceComments, customers, notifications, mapper);
         this.surveys = surveys;
         this.mapper = mapper;
@@ -124,6 +127,13 @@ public class OfflineSyncService {
         row.setReceivedAt(now);
         row.setAppliedAt(Instant.now());
         operations.save(row);
+        AuditEvent audit = new AuditEvent();
+        audit.setId(UUID.randomUUID()); audit.setTenantId(actor.tenantId()); audit.setActorId(actor.userId());
+        audit.setActorType(actor.accountType()); audit.setAction("OFFLINE_SYNC_" + type);
+        audit.setEntityType("OFFLINE_SYNC_OPERATION"); audit.setEntityId(row.getId().toString());
+        audit.setOutcome("SUCCESS"); audit.setAfterJson("{\\"operationId\\":\\"" + command.operationId()
+                + "\\",\\"resourceId\\":\\"" + command.resourceId() + "\\",\\"payloadHash\\":\\"" + hash + "\\"}");
+        audit.setCreatedAt(Instant.now()); audits.save(audit);
         return result(row);
     }
 
