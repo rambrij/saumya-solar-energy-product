@@ -11,7 +11,7 @@ import java.util.*;
 public class DataSeeder {
  @Value("${app.seed.enabled:false}") boolean seedEnabled;
  private static final List<String> PERMISSIONS=List.of("PLATFORM_MANAGE","SUBSCRIPTION_MANAGE","AUDIT_VIEW","CATALOG_MANAGE","CATALOG_VIEW","DISCOUNT_POLICY_MANAGE","CUSTOMER_MANAGE","LEAD_MANAGE","SURVEY_MANAGE","QUOTATION_MANAGE","DISCOUNT_APPROVE","ORDER_CREATE","USER_VIEW","USER_MANAGE","INVENTORY_MANAGE","SERVICE_MANAGE","FINANCE_MANAGE","PAYMENT_REFUND","REPORT_VIEW");
- private static final List<String> CATEGORIES=List.of("Solar Panels","Inverters","Batteries","Mounting Structures","Cables","AC/DC Distribution Boxes","Solar Accessories");
+ private static final List<String> CATEGORIES=List.of("Solar Panels","Inverters","Batteries","Mounting Structures","Cables","AC/DC Distribution Boxes","Solar Accessories","Solar Lights");
  @Bean CommandLineRunner seedData(TenantRepository tenants,PermissionRepository permissions,RoleRepository roles,AppUserRepository users,CustomerProfileRepository customers,ProductCategoryRepository categories,ProductRepository products,WarehouseRepository warehouses,InstallationChecklistTemplateRepository checklistTemplates,SubscriptionPlanRepository subscriptionPlans,EnquiryRepository enquiries,SalesLeadRepository leads,QuotationRepository quotations,QuotationItemRepository quotationItems,SiteSurveyRepository surveys,CustomerOrderRepository orders,OrderItemRepository orderItems,InstallationJobRepository installations,ServiceRequestRepository serviceRequests,PasswordEncoder encoder){
   return args->{
    if(!seedEnabled) return;
