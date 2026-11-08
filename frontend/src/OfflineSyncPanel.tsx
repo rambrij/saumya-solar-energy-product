@@ -53,7 +53,7 @@ export default function OfflineSyncPanel({session}:{session:Session}){
   <div className="platform-heading"><div><h2>Offline business sync</h2><p className="muted">{online?'Online · queued actions can synchronize':'Offline · actions are stored on this device'}</p></div><span className={'status-pill '+(online?'active':'pending')}>{online?'Online':'Offline'}</span></div>
   <form className="form" onSubmit={enqueue}>
    <label>Business action<select value={type} onChange={e=>{setType(e.target.value);setPayload(e.target.value==='SERVICE_COMMENT_CREATE'?'{"body":"Customer update","visibility":"CUSTOMER"}':'{}')}}>
-    <option value="SERVICE_COMMENT_CREATE">Add service-ticket comment</option><option value="SURVEY_UPDATE">Update site survey</option><option value="SURVEY_START">Start site survey</option><option value="SURVEY_SUBMIT">Submit site survey</option>
+    <option value="SERVICE_COMMENT_CREATE">Add service-ticket comment</option>{session.user.accountType==='VENDOR'&&<><option value="SURVEY_UPDATE">Update site survey</option><option value="SURVEY_START">Start site survey</option><option value="SURVEY_SUBMIT">Submit site survey</option></>}
    </select></label>
    <label>Service ticket / survey ID<input value={resourceId} onChange={e=>setResourceId(e.target.value)} placeholder="Record UUID" required/></label>
    {(type==='SERVICE_COMMENT_CREATE'||type==='SURVEY_UPDATE')&&<label>Action data (JSON)<textarea rows={3} value={payload} onChange={e=>setPayload(e.target.value)} required/></label>}
