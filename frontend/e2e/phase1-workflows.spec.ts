@@ -9,6 +9,12 @@ test('public enquiry reaches the solar store workflow', async ({ page }) => {
   await page.getByPlaceholder('Required capacity (kW)').fill('3');
   await page.getByRole('button', { name: 'Send enquiry' }).click();
   await expect(page.getByRole('status')).toContainText('Your enquiry has been sent');
+  await expect.poll(async () => {
+    const response = await page.request.get('http://127.0.0.1:8025/api/v1/messages');
+    if (!response.ok()) return 0;
+    const payload = await response.json();
+    return Number(payload.total ?? payload.messages?.length ?? 0);
+  }, { timeout: 30_000, intervals: [1000, 2000, 3000] }).toBeGreaterThan(0);
 });
 
 test('vendor can sign in and view business dashboard and customer management', async ({ page }) => {
