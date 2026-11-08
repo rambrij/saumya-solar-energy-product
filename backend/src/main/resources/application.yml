@@ -37,6 +37,8 @@ app:
       enabled: ${PLATFORM_BOOTSTRAP_ENABLED:false}
       email: ${PLATFORM_BOOTSTRAP_EMAIL:}
       password: ${PLATFORM_BOOTSTRAP_PASSWORD:}
+  auth:
+    platform-mfa-enabled: ${PLATFORM_MFA_ENABLED:true}
   mail:
     from: ${MAIL_FROM:no-reply@saumya.local}
   public-base-url: ${PUBLIC_BASE_URL:http://localhost:3000}
