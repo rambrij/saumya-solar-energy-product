@@ -505,7 +505,7 @@ The local Compose configuration sets `MAIL_SMTP_AUTH=false`, `MAIL_SMTP_STARTTLS
 
 - Password reset: `POST /api/v1/auth/forgot-password` always returns a generic response. A 256-bit random, single-use reset token is stored as a SHA-256 hash, expires after 30 minutes, and is sent as a link to the account email. The raw token is never returned by the API.
 - Platform administrator MFA: after valid credentials, platform sign-in requires a six-digit email code. The code is stored as a hash, expires after five minutes, is single-use, and is locked after five failed attempts.
-- Notification delivery attempts are persisted in `notification_delivery`; failed SMTP attempts are recorded as FAILED. This initial implementation does not yet provide a background retry queue.
+- Notification delivery attempts are persisted in `notification_delivery`; failed email, SMS and WhatsApp attempts are retried by a scheduled worker with exponential backoff and a five-attempt limit.
 
 ### Production SMTP configuration
 
@@ -522,7 +522,7 @@ Never use the Compose Mailpit host, local credentials, or a localhost public URL
 
 ## Phase 2 Operations — engineer, warranty and messaging additions
 
-The Phase 2 branch adds:
+The Phase 2 branch adds (with remaining gaps documented in the Phase 2 report):
 - Tenant-scoped engineer profiles (skills, certifications, territory, availability window and concurrent-job limit) at `GET/POST /api/v1/engineers`.
 - Warranty claims submitted by customers at `POST /api/v1/customer/warranty-claims`; vendor operations users can list, approve, reject and resolve claims at `/api/v1/warranty-claims`.
 - An operational KPI snapshot at `GET /api/v1/reports/operations?from=YYYY-MM-DD&to=YYYY-MM-DD`.
@@ -542,3 +542,9 @@ The registered customer phone number must be in E.164 format (for example `+9198
 ### Messaging security and operational notes
 
 Keep Twilio credentials in the deployment secret manager; never place them in frontend environment variables or commit them to source control. Ask customers to save consent only after presenting the intended notification purpose. Revoke consent using the same preferences endpoint. Provider HTTP responses are recorded as provider-accepted, not handset-delivered/read receipts.
+
+
+### Service ticket comments and warranty expiry
+
+- Customer and authorized vendor staff can read/post service ticket comments at `/api/v1/service-requests/{ticketId}/comments`. Internal comments are hidden from customers; all comment access is tenant- and ticket-scoped.
+- Warranty expiry is evaluated daily using `app.warranty.expiry-alert-cron` and `app.warranty.expiry-alert-zone` (defaults to 08:15 Asia/Kolkata). The scheduler marks ended ACTIVE warranties EXPIRED and sends 30-day, 7-day and 1-day reminders through configured customer-consented channels. Email idempotency keys suppress duplicate reminder deliveries for the same warranty/event.
