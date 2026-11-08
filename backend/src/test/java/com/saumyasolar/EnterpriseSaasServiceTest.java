@@ -51,6 +51,7 @@ class EnterpriseSaasServiceTest {
         SubscriptionPlan plan = plan(1);
         subscription.setPlanId(plan.getId());
         when(branches.existsByTenantIdAndCodeIgnoreCase(tenantId, "HQ")).thenReturn(false);
+        when(subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(subscription));
         when(subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(tenantId, List.of("TRIAL", "ACTIVE")))
                 .thenReturn(Optional.of(subscription));
         when(plans.findById(plan.getId())).thenReturn(Optional.of(plan));
@@ -72,6 +73,7 @@ class EnterpriseSaasServiceTest {
         SubscriptionPlan plan = plan(3);
         subscription.setPlanId(plan.getId());
         when(branches.existsByTenantIdAndCodeIgnoreCase(tenantId, "HQ")).thenReturn(false);
+        when(subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(subscription));
         when(subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(tenantId, List.of("TRIAL", "ACTIVE")))
                 .thenReturn(Optional.of(subscription));
         when(plans.findById(plan.getId())).thenReturn(Optional.of(plan));
@@ -103,7 +105,7 @@ class EnterpriseSaasServiceTest {
 
         ResponseStatusException error = assertThrows(ResponseStatusException.class,
                 () -> service.assignWarehouseBranch(warehouseId, foreignBranchId,
-                        principal(tenantId, Set.of("INVENTORY_MANAGE"))));
+                        principal(tenantId, Set.of("INVENTORY_MANAGE", "BRANCH_MANAGE"))));
 
         assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
         verify(warehouses, never()).save(any());
