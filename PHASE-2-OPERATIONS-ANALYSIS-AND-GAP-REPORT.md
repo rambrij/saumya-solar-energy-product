@@ -405,7 +405,7 @@ The user explicitly approved implementation. The Stage 1 audit figures above rem
 
 ### 19.3 Verification evidence
 
-GitHub Actions run **42480790865**, for implementation commit `a44d32b5c6ef34f82885b9b90f9e62a67ef90cd5`, completed backend tests, frontend build and clean MySQL migrations successfully; the application startup/health job was still running at the time of this report update. Earlier run **42480136783** for code commit `5b35e81cae9fc7eeca0b663e2c42e55109bcde92` completed all four workflow jobs successfully:
+GitHub Actions run **42480790865**, for implementation commit `a44d32b5c6ef34f82885b9b90f9e62a67ef90cd5`, completed all four workflow jobs successfully: backend compile/tests, frontend production build, clean MySQL migrations through V31, and Spring Boot startup/health smoke. Earlier run **42480136783** for code commit `5b35e81cae9fc7eeca0b663e2c42e55109bcde92` completed all four workflow jobs successfully:
 
 - Backend compile and tests — PASS.
 - Frontend TypeScript check and production build — PASS.
