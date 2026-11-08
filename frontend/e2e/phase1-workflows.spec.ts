@@ -25,7 +25,7 @@ test('vendor can sign in and view business dashboard and customer management', a
   await page.getByRole('button', { name: 'Login', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Business Dashboard' })).toBeVisible();
   await page.getByRole('button', { name: 'Product', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Product' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Product' }).first()).toBeVisible();
 });
 
 test('customer can sign in and view account dashboard and quotations', async ({ page }) => {
