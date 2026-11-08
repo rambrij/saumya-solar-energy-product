@@ -477,10 +477,9 @@ class Release12TenantIntegrationTest {
         String platformToken=accessToken("platform@saumya.local","Platform@123");
         String suffix=UUID.randomUUID().toString().replace("-","");
         String email="rejected-"+suffix+"@example.test";
-        String password="RejectedVendor-Pass-2026";
         String body="""
-                {"name":"Rejected Vendor","slug":"rejected-%s","adminName":"Rejected Admin","adminEmail":"%s","adminPassword":"%s"}
-                """.formatted(suffix,email,password);
+                {"name":"Rejected Vendor","slug":"rejected-%s","adminName":"Rejected Admin","adminEmail":"%s"}
+                """.formatted(suffix,email);
         String tenantJson=mvc.perform(post("/api/v1/tenants").header("Authorization","Bearer "+platformToken)
                 .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
