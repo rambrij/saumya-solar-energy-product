@@ -59,6 +59,8 @@ public class Controller {
     final TenantAdminService tenantAdmin;
     final com.saumyasolar.service.VendorRoleAdminService roleAdmin;
     final boolean platformMfaEnabled;
+    final com.saumyasolar.service.VendorProfileService vendorProfile;
+    final com.saumyasolar.service.VendorVerificationDocumentService vendorDocuments;
     
     Controller(
             AppService s,
@@ -74,6 +76,8 @@ public class Controller {
             PackageImageStorageService packageImages,
             TenantAdminService tenantAdmin,
             com.saumyasolar.service.VendorRoleAdminService roleAdmin,
+            com.saumyasolar.service.VendorProfileService vendorProfile,
+            com.saumyasolar.service.VendorVerificationDocumentService vendorDocuments,
             @org.springframework.beans.factory.annotation.Value("${app.auth.platform-mfa-enabled:true}") boolean platformMfaEnabled
     ) {
         this.s = s;
@@ -89,6 +93,8 @@ public class Controller {
         this.packageImages = packageImages;
         this.tenantAdmin = tenantAdmin;
         this.roleAdmin = roleAdmin;
+        this.vendorProfile = vendorProfile;
+        this.vendorDocuments = vendorDocuments;
         this.platformMfaEnabled = platformMfaEnabled;
     }
     
@@ -203,6 +209,49 @@ public class Controller {
     @PatchMapping({"/tenant/settings/discount-threshold", "/settings/discount-threshold"})
     Tenant discountThreshold(@RequestBody Input x, Authentication a) {
         return s.updateDiscountApprovalThreshold(x.discountPercent(), p(a));
+    }
+
+    @GetMapping("/vendor/profile")
+    com.saumyasolar.api.VendorProfileModels.VendorProfileView vendorProfile(Authentication a) {
+        return vendorProfile.get(p(a));
+    }
+
+    @PatchMapping("/vendor/profile")
+    com.saumyasolar.api.VendorProfileModels.VendorProfileView updateVendorProfile(
+            @Valid @RequestBody com.saumyasolar.api.VendorProfileModels.VendorProfileInput input, Authentication a) {
+        return vendorProfile.update(input, p(a));
+    }
+
+    @PostMapping(value="/vendor/verification-documents", consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
+    com.saumyasolar.api.VendorProfileModels.VerificationDocumentView uploadVendorVerificationDocument(
+            @RequestParam("documentType") String documentType, @RequestPart("file") MultipartFile file, Authentication a) {
+        return vendorDocuments.upload(documentType, file, p(a));
+    }
+
+    @GetMapping("/vendor/verification-documents")
+    List<com.saumyasolar.api.VendorProfileModels.VerificationDocumentView> vendorVerificationDocuments(Authentication a) {
+        return vendorDocuments.vendorList(p(a));
+    }
+
+    @GetMapping("/platform/tenants/{tenantId}/verification-documents")
+    List<com.saumyasolar.api.VendorProfileModels.VerificationDocumentView> platformVendorDocuments(
+            @PathVariable UUID tenantId, Authentication a) {
+        return vendorDocuments.platformList(tenantId, p(a));
+    }
+
+    @GetMapping(value="/platform/verification-documents/{id}/download")
+    ResponseEntity<byte[]> downloadVendorVerificationDocument(@PathVariable UUID id, Authentication a) {
+        var file = vendorDocuments.download(id, p(a));
+        return ResponseEntity.ok().contentType(MediaType.parseMediaType(file.metadata().contentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.metadata().originalName() + "\"")
+                .body(file.content());
+    }
+
+    @PatchMapping("/platform/verification-documents/{id}/review")
+    com.saumyasolar.api.VendorProfileModels.VerificationDocumentView reviewVendorVerificationDocument(
+            @PathVariable UUID id, @Valid @RequestBody com.saumyasolar.api.VendorProfileModels.DocumentReviewInput input,
+            Authentication a) {
+        return vendorDocuments.review(id, input, p(a));
     }
 
     @GetMapping("/roles")
