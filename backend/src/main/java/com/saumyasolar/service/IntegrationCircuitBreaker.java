@@ -34,5 +34,6 @@ public class IntegrationCircuitBreaker {
         });
         return next[0].openUntil();
     }
+    public Instant openUntil(String key){State state=states.get(key);return state==null?null:state.openUntil();}
     public void recordSuccess(String key){states.remove(key);}
 }
