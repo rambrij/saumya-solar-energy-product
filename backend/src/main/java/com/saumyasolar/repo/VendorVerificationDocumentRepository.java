@@ -10,4 +10,5 @@ import java.util.UUID;
 public interface VendorVerificationDocumentRepository extends JpaRepository<VendorVerificationDocument, UUID> {
     List<VendorVerificationDocument> findByTenantIdOrderByCreatedAtDesc(UUID tenantId);
     Optional<VendorVerificationDocument> findByIdAndTenantId(UUID id, UUID tenantId);
+    boolean existsByTenantIdAndReviewStatus(UUID tenantId, String reviewStatus);
 }
