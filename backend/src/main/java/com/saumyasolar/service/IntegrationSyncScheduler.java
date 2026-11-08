@@ -8,10 +8,12 @@ public class IntegrationSyncScheduler {
  public IntegrationSyncScheduler(IntegrationSyncJobRepository j,IntegrationConnectionRepository c,List<IntegrationAdapter> a){jobs=j;connections=c;adapters=a;}
  @Scheduled(fixedDelayString="${app.integrations.dispatch-interval-ms:30000}")
  public void dispatch(){
-  List<IntegrationSyncJob> batch=jobs.findTop50ByStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(List.of("QUEUED","RETRY"),Instant.now());
+  Instant now=Instant.now(),staleBefore=now.minusSeconds(600);
+  List<IntegrationSyncJob> batch=new ArrayList<>(jobs.findTop50ByStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(List.of("QUEUED","RETRY"),now));
+  batch.addAll(jobs.findTop50ByStatusAndUpdatedAtLessThanEqualOrderByUpdatedAtAsc("PROCESSING",staleBefore));
   for(IntegrationSyncJob candidate:batch){
    Instant claimedAt=Instant.now();
-   if(jobs.claimIfDue(candidate.getId(),claimedAt)!=1)continue;
+   if(jobs.claimIfDue(candidate.getId(),claimedAt,staleBefore)!=1)continue;
    IntegrationSyncJob job=jobs.findById(candidate.getId()).orElse(null);
    if(job==null)continue;
    Optional<IntegrationConnection> c=connections.findByIdAndTenantId(job.getConnectionId(),job.getTenantId());
