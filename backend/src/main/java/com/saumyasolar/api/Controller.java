@@ -61,6 +61,7 @@ public class Controller {
     final boolean platformMfaEnabled;
     final com.saumyasolar.service.VendorProfileService vendorProfile;
     final com.saumyasolar.service.VendorVerificationDocumentService vendorDocuments;
+    final com.saumyasolar.service.LeadFollowUpTaskService leadFollowUps;
     
     Controller(
             AppService s,
@@ -78,6 +79,7 @@ public class Controller {
             com.saumyasolar.service.VendorRoleAdminService roleAdmin,
             com.saumyasolar.service.VendorProfileService vendorProfile,
             com.saumyasolar.service.VendorVerificationDocumentService vendorDocuments,
+            com.saumyasolar.service.LeadFollowUpTaskService leadFollowUps,
             @org.springframework.beans.factory.annotation.Value("${app.auth.platform-mfa-enabled:true}") boolean platformMfaEnabled
     ) {
         this.s = s;
@@ -95,6 +97,7 @@ public class Controller {
         this.roleAdmin = roleAdmin;
         this.vendorProfile = vendorProfile;
         this.vendorDocuments = vendorDocuments;
+        this.leadFollowUps = leadFollowUps;
         this.platformMfaEnabled = platformMfaEnabled;
     }
     
@@ -209,6 +212,22 @@ public class Controller {
     @PatchMapping({"/tenant/settings/discount-threshold", "/settings/discount-threshold"})
     Tenant discountThreshold(@RequestBody Input x, Authentication a) {
         return s.updateDiscountApprovalThreshold(x.discountPercent(), p(a));
+    }
+
+    @GetMapping("/leads/{id}/follow-ups")
+    List<com.saumyasolar.domain.LeadFollowUpTask> leadFollowUps(@PathVariable UUID id, Authentication a) {
+        return leadFollowUps.list(id, p(a));
+    }
+
+    @PostMapping("/leads/{id}/follow-ups")
+    com.saumyasolar.domain.LeadFollowUpTask createLeadFollowUp(@PathVariable UUID id,
+            @Valid @RequestBody com.saumyasolar.api.LeadFollowUpModels.CreateFollowUp input, Authentication a) {
+        return leadFollowUps.create(id, input, p(a));
+    }
+
+    @PostMapping("/lead-follow-ups/{taskId}/complete")
+    com.saumyasolar.domain.LeadFollowUpTask completeLeadFollowUp(@PathVariable UUID taskId, Authentication a) {
+        return leadFollowUps.complete(taskId, p(a));
     }
 
     @GetMapping("/vendor/profile")
