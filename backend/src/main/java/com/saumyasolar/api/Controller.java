@@ -34,6 +34,7 @@ import java.time.LocalDate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.http.HttpStatus;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
