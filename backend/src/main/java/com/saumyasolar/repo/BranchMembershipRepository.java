@@ -4,4 +4,5 @@ import java.util.UUID;
 public interface BranchMembershipRepository extends JpaRepository<BranchMembership,UUID> {
  boolean existsByTenantIdAndBranchIdAndUserId(UUID tenantId,UUID branchId,UUID userId);
  long countByTenantIdAndBranchId(UUID tenantId,UUID branchId);
+ void deleteByTenantIdAndBranchIdAndUserId(UUID tenantId,UUID branchId,UUID userId);
 }
