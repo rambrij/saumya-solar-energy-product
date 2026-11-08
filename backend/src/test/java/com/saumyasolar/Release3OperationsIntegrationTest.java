@@ -112,8 +112,8 @@ class Release3OperationsIntegrationTest {
   String ledger=mvc.perform(get("/api/v1/inventory/transactions").header("Authorization","Bearer "+auth)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
   JsonNode original=java.util.stream.StreamSupport.stream(json.readTree(ledger).spliterator(),false).filter(row->"RECEIPT".equals(row.get("type").asText())&&row.get("warehouseId").asText().equals(wh)&&row.get("reason").asText().equals("Compensation test receipt")).findFirst().orElseThrow();
   String originalId=original.get("id").asText();
-  mvc.perform(post("/api/v1/inventory/transactions/"+originalId+"/reverse").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content("{\\"reason\\":\\"Duplicate goods receipt\\")).andExpect(status().isOk()).andExpect(jsonPath("$.type").value("COMPENSATION")).andExpect(jsonPath("$.reversalOfTransactionId").value(originalId));
-  mvc.perform(post("/api/v1/inventory/transactions/"+originalId+"/reverse").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content("{\\"reason\\":\\"Attempt duplicate reversal\\")).andExpect(status().isConflict());
+  mvc.perform(post("/api/v1/inventory/transactions/"+originalId+"/reverse").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content("{\\"reason\\":\\"Duplicate goods receipt\\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.type").value("COMPENSATION")).andExpect(jsonPath("$.reversalOfTransactionId").value(originalId));
+  mvc.perform(post("/api/v1/inventory/transactions/"+originalId+"/reverse").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content("{\\"reason\\":\\"Attempt duplicate reversal\\"}")).andExpect(status().isConflict());
   InventoryBalance after=balances.findByTenantIdAndWarehouseIdAndProductId(tenantId,warehouse.getId(),product.getId()).orElseThrow();
   assertEquals(0,BigDecimal.ZERO.compareTo(after.getOnHand()));
   assertEquals(0,BigDecimal.ZERO.compareTo(after.getReserved()));
