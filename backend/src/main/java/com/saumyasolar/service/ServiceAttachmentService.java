@@ -21,6 +21,7 @@ public class ServiceAttachmentService {
     private final Path root;
     private final ServiceAttachmentRepository attachments;
     private final FinanceService finance;
+    private final PrivateObjectStorageService storage;
     public ServiceAttachmentService(@Value("${app.service.attachment-location:./data/private-service-attachments}") String location,
             ServiceAttachmentRepository attachments,FinanceService finance,PrivateObjectStorageService storage){
         this.root=Path.of(location).toAbsolutePath().normalize();this.attachments=attachments;this.finance=finance;this.storage=storage;
