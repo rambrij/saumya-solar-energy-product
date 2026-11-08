@@ -795,6 +795,10 @@ public class AppService {
         o.setCustomerId(q.getCustomerId());
         o.setOrderNumber("ORD-" + System.currentTimeMillis());
         o.setStatus("CONFIRMED");
+        o.setSubtotal(q.getSubtotal());
+        o.setDiscountPercent(q.getDiscountPercent());
+        o.setDiscountAmount(q.getDiscountAmount());
+        o.setTaxTotal(q.getTaxAmount());
         o.setTotal(q.getGrandTotal());
         o.setCreatedAt(Instant.now());
         orders.save(o);
