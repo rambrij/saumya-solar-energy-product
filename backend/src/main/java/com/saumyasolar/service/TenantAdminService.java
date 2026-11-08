@@ -5,6 +5,7 @@ import com.saumyasolar.domain.AppUser;
 import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.AppUserRepository;
 import com.saumyasolar.repo.TenantRepository;
+import com.saumyasolar.repo.VendorVerificationDocumentRepository;
 import com.saumyasolar.security.Principal;
 import jakarta.transaction.Transactional;
 import org.springframework.data.domain.PageRequest;
@@ -23,8 +24,11 @@ public class TenantAdminService {
     private final TenantRepository tenants;
     private final AppUserRepository users;
     private final NotificationService notifications;
-    public TenantAdminService(TenantRepository tenants, AppUserRepository users, NotificationService notifications) {
+    private final VendorVerificationDocumentRepository verificationDocuments;
+    public TenantAdminService(TenantRepository tenants, AppUserRepository users, NotificationService notifications,
+            VendorVerificationDocumentRepository verificationDocuments) {
         this.tenants = tenants; this.users = users; this.notifications = notifications;
+        this.verificationDocuments = verificationDocuments;
     }
     private void authorize(Principal p) {
         if (!"PLATFORM".equals(p.accountType()) || p.roles()==null ||
@@ -85,6 +89,12 @@ public class TenantAdminService {
         Tenant t=tenants.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
         String action=decision==null?"":decision.trim().toUpperCase(Locale.ROOT);
         if ("APPROVE".equals(action)) {
+            if (t.getLegalName() == null || t.getLegalName().isBlank()
+                    || t.getContactPhone() == null || t.getContactPhone().isBlank()
+                    || t.getRegisteredAddress() == null || t.getRegisteredAddress().isBlank())
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Complete the vendor legal profile before approval");
+            if (!verificationDocuments.existsByTenantIdAndReviewStatus(id, "APPROVED"))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "At least one vendor verification document must be reviewed and approved");
             t.setVerificationStatus("VERIFIED");
             t.setVerifiedAt(Instant.now());
             t.setVerifiedBy(p.userId());
