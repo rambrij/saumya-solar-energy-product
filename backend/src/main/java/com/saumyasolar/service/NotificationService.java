@@ -103,6 +103,7 @@ public class NotificationService {
             return true;
         } catch (MailException ex) {
             record.setStatus("FAILED");
+            record.setNextAttemptAt(Instant.now().plusSeconds(60));
             record.setLastError("SMTP delivery failed");
             deliveries.save(record);
             return false;
@@ -128,8 +129,8 @@ public class NotificationService {
                 .header("Authorization","Basic "+auth).header("Content-Type","application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(form)).build();
             HttpResponse<String> response=http.send(request,HttpResponse.BodyHandlers.ofString());record.setAttemptCount(1);
             if(response.statusCode()>=200&&response.statusCode()<300){record.setStatus("DELIVERED");record.setSentAt(Instant.now());}
-            else{record.setStatus("FAILED");record.setLastError("Messaging provider returned HTTP "+response.statusCode());}
-        }catch(Exception ex){record.setAttemptCount(1);record.setStatus("FAILED");record.setLastError("Messaging provider request failed");}
+            else{record.setStatus("FAILED");record.setNextAttemptAt(Instant.now().plusSeconds(60));record.setLastError("Messaging provider returned HTTP "+response.statusCode());}
+        }catch(Exception ex){record.setAttemptCount(1);record.setStatus("FAILED");record.setNextAttemptAt(Instant.now().plusSeconds(60));record.setLastError("Messaging provider request failed");}
         deliveries.save(record);
     }
 
