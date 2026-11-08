@@ -52,7 +52,8 @@ public class TenantAdminService {
             .findFirst().orElse(null);
         return new TenantRow(t.getId(), t.getName(), t.getSlug(),
             admin==null?null:admin.getName(), admin==null?null:admin.getEmail(),
-            t.getStatus(), t.getVerificationStatus(), t.getVerifiedAt(), t.getRejectionReason(), t.getCreatedAt(), t.getUpdatedAt());
+            t.getStatus(), t.getVerificationStatus(), t.getVerifiedAt(), t.getRejectionReason(), t.getCreatedAt(), t.getUpdatedAt(),
+            t.getLegalName(), t.getContactPhone(), t.getRegisteredAddress(), t.getContactEmail(), t.getGstin(), t.getWebsite());
     }
     public TenantPage page(Principal p, String search, String status, int page, int size) {
         authorize(p);
