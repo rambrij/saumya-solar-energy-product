@@ -8,6 +8,8 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 
 import java.util.UUID;
+import java.time.Instant;
+import org.mockito.ArgumentCaptor;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -41,6 +43,12 @@ class NotificationServiceTest {
                 "QUOTE_SENT", "customer@example.test", "Your quotation", "Quotation details");
 
         assertFalse(sent);
-        verify(repository, times(2)).save(any(NotificationDelivery.class));
+        ArgumentCaptor<NotificationDelivery> saved = ArgumentCaptor.forClass(NotificationDelivery.class);
+        verify(repository, times(2)).save(saved.capture());
+        NotificationDelivery failed = saved.getAllValues().get(1);
+        assertEquals("FAILED", failed.getStatus());
+        assertEquals(1, failed.getAttemptCount());
+        assertNotNull(failed.getNextAttemptAt());
+        assertTrue(failed.getNextAttemptAt().isAfter(Instant.now()));
     }
 }
