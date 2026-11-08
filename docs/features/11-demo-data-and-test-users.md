@@ -35,7 +35,7 @@ Do not seed when `SEED_DATA_ENABLED=false`; use a disposable database; ensure un
 Seeded user roles map to role-specific navigation and backend permissions; the full lead-to-service lifecycle is not yet guaranteed to be populated automatically by current DataSeeder.
 
 ## 12. Error and edge cases
-Run with seed enabled on a fresh local database; sign in as each demo account; verify tenant separation and expected menus; restart and confirm no duplicate users/categories/products/plans/lifecycle records; run `DemoLifecycleSeedIntegrationTest`; disable seed and verify no demo inserts occur on a clean database.
+Run with seed enabled on a fresh local database; sign in as each demo account; verify tenant separation and expected menus; restart and confirm no duplicate users/categories/products/plans/lifecycle records; inspect the linked enquiry, lead, survey, quotation, order, invoice/payment, installation and service-request records through the supported APIs; disable seed and verify no demo inserts occur on a clean database.
 
 ## 13. Manual testing instructions
 Current documented baseline seed creates tenant, roles, demo users, category/product catalogue, warehouse and checklist templates; V45 adds three default plans. Additional fully connected lead→service sample records remain a known gap until lifecycle seeder is implemented.
