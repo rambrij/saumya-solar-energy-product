@@ -43,6 +43,22 @@ public class IntegrationManagementService {
   if(!Set.of("DEAD_LETTER","WAITING_FOR_ADAPTER","RETRY").contains(j.getStatus()))throw new ResponseStatusException(HttpStatus.CONFLICT,"Only failed or waiting jobs can be retried");
   j.setStatus("QUEUED");j.setAttemptCount(0);j.setLastError(null);j.setNextAttemptAt(Instant.now());j.setUpdatedAt(Instant.now());IntegrationSyncJob saved=jobs.save(j);audit(p,"INTEGRATION_SYNC_RETRIED","INTEGRATION_SYNC_JOB",j.getId(),Map.of("status","QUEUED"));return saved;
  }
+ @Transactional public void enqueueAccountingEvent(String entityType,String entityId,String operation,Map<String,Object> payload,Principal p){
+  if(p==null||!"VENDOR".equals(p.accountType())||p.tenantId()==null)return;
+  List<IntegrationConnection> accounting=connections.findByTenantIdAndIntegrationTypeAndStatus(p.tenantId(),"ACCOUNTING","ACTIVE");
+  for(IntegrationConnection connection:accounting){
+   String key=entityType.toUpperCase(Locale.ROOT)+":"+entityId+":"+operation.toUpperCase(Locale.ROOT)+":v1";
+   if(jobs.findByTenantIdAndConnectionIdAndIdempotencyKey(p.tenantId(),connection.getId(),key).isPresent())continue;
+   try{
+    String json=mapper.writeValueAsString(payload);validateJson(json);
+    IntegrationSyncJob job=new IntegrationSyncJob();job.setId(UUID.randomUUID());job.setTenantId(p.tenantId());job.setConnectionId(connection.getId());
+    job.setEntityType(entityType.toUpperCase(Locale.ROOT));job.setEntityId(entityId);job.setOperation(operation.toUpperCase(Locale.ROOT));
+    job.setIdempotencyKey(key);job.setPayloadJson(json);job.setStatus("QUEUED");job.setAttemptCount(0);job.setNextAttemptAt(Instant.now());
+    job.setCreatedAt(Instant.now());job.setUpdatedAt(Instant.now());jobs.save(job);
+    audit(p,"ACCOUNTING_SYNC_QUEUED","INTEGRATION_SYNC_JOB",job.getId(),Map.of("entityType",job.getEntityType(),"entityId",entityId));
+   }catch(com.fasterxml.jackson.core.JsonProcessingException ex){throw new IllegalStateException("Unable to serialize accounting synchronization payload",ex);}
+  }
+ }
  public record ConnectionInput(String providerCode,String integrationType,String displayName,String secretReference,String configJson){}
  public record JobInput(String entityType,String entityId,String operation,String idempotencyKey,String payloadJson){}
 }
