@@ -62,6 +62,7 @@ public class Controller {
     final com.saumyasolar.service.VendorProfileService vendorProfile;
     final com.saumyasolar.service.VendorVerificationDocumentService vendorDocuments;
     final com.saumyasolar.service.LeadFollowUpTaskService leadFollowUps;
+    final com.saumyasolar.service.DashboardService dashboards;
     
     Controller(
             AppService s,
@@ -80,6 +81,7 @@ public class Controller {
             com.saumyasolar.service.VendorProfileService vendorProfile,
             com.saumyasolar.service.VendorVerificationDocumentService vendorDocuments,
             com.saumyasolar.service.LeadFollowUpTaskService leadFollowUps,
+            com.saumyasolar.service.DashboardService dashboards,
             @org.springframework.beans.factory.annotation.Value("${app.auth.platform-mfa-enabled:true}") boolean platformMfaEnabled
     ) {
         this.s = s;
@@ -98,6 +100,7 @@ public class Controller {
         this.vendorProfile = vendorProfile;
         this.vendorDocuments = vendorDocuments;
         this.leadFollowUps = leadFollowUps;
+        this.dashboards = dashboards;
         this.platformMfaEnabled = platformMfaEnabled;
     }
     
@@ -213,6 +216,12 @@ public class Controller {
     Tenant discountThreshold(@RequestBody Input x, Authentication a) {
         return s.updateDiscountApprovalThreshold(x.discountPercent(), p(a));
     }
+
+    @GetMapping("/dashboard/vendor")
+    Map<String,Object> vendorDashboard(Authentication a) { return dashboards.vendor(p(a)); }
+
+    @GetMapping("/dashboard/customer")
+    Map<String,Object> customerDashboard(Authentication a) { return dashboards.customer(p(a)); }
 
     @GetMapping("/leads/{id}/follow-ups")
     List<com.saumyasolar.domain.LeadFollowUpTask> leadFollowUps(@PathVariable UUID id, Authentication a) {
