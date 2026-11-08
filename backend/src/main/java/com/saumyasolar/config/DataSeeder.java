@@ -21,7 +21,7 @@ public class DataSeeder {
    Role platform=ensureRole(roles,null,"PLATFORM_SUPER_ADMIN");grant(platform,List.of("PLATFORM_MANAGE","SUBSCRIPTION_MANAGE","AUDIT_VIEW"),pm);roles.save(platform);
    Role customer=roles.findByNameAndTenantIdIsNull("CUSTOMER").orElseGet(()->{Role r=new Role();r.setId(UUID.randomUUID());r.setName("CUSTOMER");return roles.save(r);});
    for(Tenant tenant:tenants.findAll()){
-    Role admin=ensureRole(roles,tenant.getId(),"VENDOR_ADMIN");grant(admin,PERMISSIONS.stream().filter(x->!x.equals("PLATFORM_MANAGE")).toList(),pm);roles.save(admin);
+    Role admin=ensureRole(roles,tenant.getId(),"VENDOR_ADMIN");grant(admin,PERMISSIONS.stream().filter(x->!x.equals("PLATFORM_MANAGE")&&!x.equals("SUBSCRIPTION_MANAGE")).toList(),pm);roles.save(admin);
     employeeRolePermissions().forEach((name,codes)->{Role role=ensureRole(roles,tenant.getId(),name);grant(role,codes,pm);roles.save(role);});
     for(String name:CATEGORIES)categories.findByNameAndTenantId(name,tenant.getId()).orElseGet(()->{ProductCategory x=new ProductCategory();x.setId(UUID.randomUUID());x.setTenantId(tenant.getId());x.setName(name);x.setDescription("Solar catalogue category");x.setActive(true);return categories.save(x);});
     if(warehouses.findByTenantIdOrderByNameAsc(tenant.getId()).isEmpty()){Warehouse w=new Warehouse();w.setId(UUID.randomUUID());w.setTenantId(tenant.getId());w.setCode("MAIN");w.setName("Main Warehouse");w.setAddress("Primary stock location");w.setActive(true);w.setCreatedAt(java.time.Instant.now());warehouses.save(w);}
