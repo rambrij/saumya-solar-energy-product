@@ -12,6 +12,7 @@ public class EnterpriseSaasController {
   @NotBlank String billingCycle,@NotNull @DecimalMin("0.00") BigDecimal price,@Pattern(regexp="[A-Z]{3}") String currency,
   @Min(1) @Max(10000) int maxUsers,@Min(1) @Max(1000) int maxBranches,@Min(1) @Max(1000) int maxWarehouses,
   @Min(0) long maxStorageMb,@NotBlank String entitlementsJson){}
+ public record WarehouseBranchRequest(UUID branchId){}
  public record SubscriptionRequest(@NotNull UUID planId,@NotBlank String status,Instant startsAt,Instant endsAt,Instant renewsAt,@Size(max=160) String externalReference){}
  @GetMapping("/branches") public List<Branch> branches(Authentication a){return service.branches(p(a));}
  @PostMapping("/branches") public Branch createBranch(@Valid @RequestBody BranchRequest x,Authentication a){return service.createBranch(new EnterpriseSaasService.BranchInput(x.code(),x.name(),x.address(),x.phone(),x.email()),p(a));}
@@ -25,6 +26,7 @@ public class EnterpriseSaasController {
   if(!Set.of("TRIAL","ACTIVE").contains(x.status()))throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,"New subscriptions must be TRIAL or ACTIVE");
   return service.assignSubscription(tenantId,x.planId(),new EnterpriseSaasService.SubscriptionInput(x.status(),x.startsAt(),x.endsAt(),x.renewsAt(),x.externalReference()),p(a));
  }
+ @PatchMapping("/warehouses/{id}/branch") public Warehouse assignWarehouseBranch(@PathVariable UUID id,@RequestBody WarehouseBranchRequest x,Authentication a){return service.assignWarehouseBranch(id,x.branchId(),p(a));}
  @GetMapping("/subscription") public Map<String,Object> currentSubscription(Authentication a){return service.currentSubscription(p(a));}
  @GetMapping("/audit-events") public List<AuditEvent> auditEvents(@RequestParam Instant from,@RequestParam Instant to,Authentication a){
   if(to.isBefore(from)||java.time.Duration.between(from,to).toDays()>90)throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,"Audit range must be valid and no longer than 90 days");
