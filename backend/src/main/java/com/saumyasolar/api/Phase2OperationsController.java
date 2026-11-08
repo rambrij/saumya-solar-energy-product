@@ -97,8 +97,8 @@ public class Phase2OperationsController {
 
  @GetMapping(value="/reports/operations/export.csv",produces="text/csv")
  public ResponseEntity<byte[]> exportOperationsCsv(@RequestParam(required=false) LocalDate from,@RequestParam(required=false) LocalDate to,Authentication a){
-  Map<String,Object> report=operationsReport(from,to,a);StringBuilder csv=new StringBuilder("Metric,Value\\r\\n");
-  report.forEach((key,value)->csv.append('"').append(key.replace("\\\"","\\\"\\\"")).append('"').append(',').append('"').append(String.valueOf(value).replace("\\\"","\\\"\\\"")).append('"').append("\\r\\n"));
+  Map<String,Object> report=operationsReport(from,to,a);StringBuilder csv=new StringBuilder("Metric,Value\\n");
+  report.forEach((key,value)->csv.append(key).append(',').append(value==null?"":value).append('\\n'));
   return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=operations-report.csv").contentType(MediaType.parseMediaType("text/csv; charset=UTF-8")).body(csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
  }
 
