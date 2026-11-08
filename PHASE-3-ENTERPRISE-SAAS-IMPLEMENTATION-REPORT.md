@@ -87,7 +87,7 @@ The implementation is materially improved but **Phase 3 should not yet be repres
 
 | Area | Remaining limitation |
 |---|---|
-| Storage metering | Plan storage limits are modelled, but tenant-attributed bytes used are not measured. Current local file storage has no complete tenant usage ledger. |
+| Storage metering | **Partially implemented in follow-up commit:** private service-ticket, survey and warranty evidence bytes are measured per tenant; upload quota is checked against the active plan under a tenant row lock; vendor usage endpoint/UI shows used/remaining MB. Still filesystem-scan based (not a durable usage ledger), excludes non-evidence assets such as package images, and needs concurrent-upload/MySQL runtime validation. |
 | Branch isolation | Branch authorization is enforced for branch-bound warehouses/inventory. Orders, quotations, customers, invoices, installations and service records are still primarily tenant-scoped and do not all carry/enforce a branch context. |
 | Branch analytics | Complete branch-level sales, finance, warehouse and operational dashboards are not implemented. Existing operational reporting and new subscription usage meters are partial coverage. |
 | Central audit | Audit coverage is improved for Phase 3 operations, but it is not yet a universal before/after audit layer for every business mutation, failed login, denied access and security event. Export/correlation-ID coverage is also incomplete. |
@@ -123,3 +123,33 @@ Automated validation passed at the implementation baseline listed above. Before 
 - Work was committed only to `feature/phase-3-Enterprise-SaaS`.
 - No changes were intentionally made to `main`.
 - Existing Phase 1/2 architecture and workflows were preserved; the automated backend tests, frontend build, MySQL migration validation and Spring Boot/Mailpit smoke test passed at the implementation baseline.
+
+
+## 7. Follow-up implementation — tenant evidence storage metering
+
+**Commits:** `271885b162fdd6d1d706f63e46ffe291fff12fdf`, `01568de113e1447d0b870403a927d6184cdc67f3`, `10441c85fb0470fe2f73eeacc27fb00538608254`, `9b5fc84efea3bf262d5cefd426a0e7640a63339f`, `824d35e296a84773f523c66f5406c1546fb5fca0`, `10e8d71f094e25d8a8dc2e7177d9747f0f735f40`, `a87f83d64e1c2ad3ee74d963207b4b897b0d4cc7`, `584900e34ced85e6e499ed9f51023da36b3519b0`.
+
+- Added tenant storage entitlement resolution from the effective subscription plan; existing tenants without an assigned subscription remain grandfathered.
+- Added filesystem metering across private service, survey and warranty evidence roots.
+- Enforced storage quota before a private evidence upload. The tenant row is locked in the upload transaction to serialize quota checks for concurrent uploads by the same tenant.
+- Added `GET /api/v1/subscription/storage` for tenant-scoped storage usage and quota summary.
+- Added a vendor UI panel showing used MB, plan limit and remaining MB.
+- Added unit tests for multi-root byte measurement and quota rejection.
+
+**Validation caveat:** These follow-up commits have not yet been verified by a completed CI run in this report. The implementation uses a filesystem scan rather than a transactional storage ledger, so it is suitable as an incremental guard for the current single-instance persistent-volume deployment, not a final multi-replica metering architecture. Package images and any other non-evidence file stores are not yet included. A durable ledger, reconciliation job, storage deletion accounting, multi-instance shared storage strategy and concurrency test against MySQL remain required for full acceptance.
+
+## 8. Remaining Phase 3 acceptance work
+
+The following items remain open and must not be marked accepted solely because a branch, warehouse or audit foundation exists:
+
+1. Propagate and enforce branch context for orders, quotations, customers, invoices, payments, installations, service tickets, reporting and background jobs. Existing branch authorization is limited primarily to branch-bound warehouses/inventory.
+2. Add branch-aware sales/finance/operations analytics after branch assignment rules and historical-data backfill are defined.
+3. Extend audit capture to all business mutations, before/after snapshots, authentication failures, denied access, security events and correlation IDs; redact secrets and sensitive personal data.
+4. Add selected accounting and payment provider implementations, provider-specific contracts, webhook verification, refund flows and reconciliation. Provider selection and sandbox credentials are external prerequisites.
+5. Replace environment-only secret references with a selected Vault/KMS/Secrets Manager integration, rotation and audit lifecycle.
+6. Add integration rate limiting, provider health, circuit breaking and provider contract tests.
+7. Decide whether offline business-data queueing/conflict resolution is in Phase 3; the current PWA is intentionally app-shell/offline-indicator only.
+8. Add complete browser E2E, cross-tenant/cross-branch negative tests, clean-install and upgrade migration checks, and deployed smoke validation.
+9. Confirm IoT acceptance scope and any accounting/payment providers with the product owner.
+
+Do not claim 100% Phase 3 acceptance until these items and the follow-up validation gates are completed.
