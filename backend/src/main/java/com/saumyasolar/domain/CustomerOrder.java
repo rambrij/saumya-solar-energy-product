@@ -19,6 +19,7 @@ public class CustomerOrder {
     @Id
     UUID id;
     UUID tenantId;
+    UUID branchId;
     UUID quotationId;
     UUID customerId;
     String orderNumber;
