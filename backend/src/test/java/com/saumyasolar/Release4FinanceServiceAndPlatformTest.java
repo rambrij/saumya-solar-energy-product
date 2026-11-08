@@ -2,6 +2,10 @@ package com.saumyasolar;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import com.saumyasolar.domain.Warranty;
+import com.saumyasolar.repo.AppUserRepository;
+import com.saumyasolar.repo.CustomerProfileRepository;
+import com.saumyasolar.repo.WarrantyRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -25,6 +29,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class Release4FinanceServiceAndPlatformTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
+    @Autowired AppUserRepository users;
+    @Autowired CustomerProfileRepository customerProfiles;
+    @Autowired WarrantyRepository warranties;
     private String token(String email,String password)throws Exception{
         String result=mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
             .content("{\"email\":\""+email+"\",\"password\":\""+password+"\"}"))
@@ -112,4 +119,33 @@ class Release4FinanceServiceAndPlatformTest {
             .andExpect(status().isUnauthorized());
     }
 
+
+    @Test void warrantyClaimEvidenceIsPrivateAndTenantScoped() throws Exception {
+        String vendor=token("admin@saumya.local","Admin@123");
+        String email="warranty-evidence-"+UUID.randomUUID()+"@example.test";
+        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
+            .content("{\\"storeSlug\\":\\"saumya-solar\\",\\"name\\":\\"Warranty Customer\\",\\"email\\":\\""+email+"\\",\\"password\\":\\"WarrantyCustomer@2026\\"}"))
+            .andExpect(status().isOk());
+        String customer=token(email,"WarrantyCustomer@2026");
+        var user=users.findByEmailIgnoreCase(email).orElseThrow();
+        var profile=customerProfiles.findByTenantIdAndUserId(user.getTenantId(),user.getId()).orElseThrow();
+        Warranty warranty=new Warranty();warranty.setId(UUID.randomUUID());warranty.setTenantId(user.getTenantId());warranty.setCustomerId(profile.getId());warranty.setProductId(UUID.randomUUID());warranty.setQuantity(1);warranty.setStartDate(LocalDate.now().minusDays(1));warranty.setEndDate(LocalDate.now().plusDays(30));warranty.setTerms("Test warranty");warranty.setStatus("ACTIVE");warranty.setActivatedAt(java.time.Instant.now());warranties.save(warranty);
+        String claim=mvc.perform(post("/api/v1/customer/warranty-claims").header("Authorization","Bearer "+customer).contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(java.util.Map.of("warrantyId",warranty.getId(),"subject","Panel output issue","description","Output is lower than expected"))))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String claimId=json.readTree(claim).get("id").asText();
+        MockMultipartFile evidence=new MockMultipartFile("file","warranty-proof.pdf","application/pdf","%PDF-1.4\\nproof\\n%%EOF".getBytes(StandardCharsets.US_ASCII));
+        String attachment=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/v1/warranty-claims/"+claimId+"/attachments").file(evidence).header("Authorization","Bearer "+customer))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.contentType").value("application/pdf")).andReturn().getResponse().getContentAsString();
+        String attachmentId=json.readTree(attachment).get("id").asText();
+        mvc.perform(get("/api/v1/warranty-claims/"+claimId+"/attachments/"+attachmentId).header("Authorization","Bearer "+customer))
+            .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PDF));
+        mvc.perform(get("/api/v1/warranty-claims/"+claimId+"/attachments").header("Authorization","Bearer "+vendor)).andExpect(status().isOk());
+        String otherEmail="warranty-other-"+UUID.randomUUID()+"@example.test";
+        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
+            .content("{\\"storeSlug\\":\\"saumya-solar\\",\\"name\\":\\"Other Warranty Customer\\",\\"email\\":\\""+otherEmail+"\\",\\"password\\":\\"OtherWarranty@2026\\"}"))
+            .andExpect(status().isOk());
+        String other=token(otherEmail,"OtherWarranty@2026");
+        mvc.perform(get("/api/v1/warranty-claims/"+claimId+"/attachments/"+attachmentId).header("Authorization","Bearer "+other)).andExpect(status().isNotFound());
+    }
 }
