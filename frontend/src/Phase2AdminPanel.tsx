@@ -1,0 +1,20 @@
+import React,{useEffect,useState}from'react';
+export default function Phase2AdminPanel({s,api,send,error}:any){
+ const [engineers,setEngineers]=useState<any[]>([]),[claims,setClaims]=useState<any[]>([]),[report,setReport]=useState<any>(null),[users,setUsers]=useState<any[]>([]);
+ const [from,setFrom]=useState(''),[to,setTo]=useState(''),[busy,setBusy]=useState(false);
+ const load=async()=>{setBusy(true);try{const [e,c,u]=await Promise.all([api('/engineers',{},s),api('/warranty-claims',{},s),api('/users',{},s)]);setEngineers(e||[]);setClaims(c||[]);setUsers(u||[])}catch(x:any){error(x.message)}finally{setBusy(false)}};
+ useEffect(()=>{void load()},[]);
+ const saveEngineer=async(ev:any)=>{ev.preventDefault();const f:any=Object.fromEntries(new FormData(ev.currentTarget));try{await send('/engineers',{userId:f.userId,skills:f.skills.split(',').map((x:string)=>x.trim()).filter(Boolean),certifications:f.certifications.split(',').map((x:string)=>x.trim()).filter(Boolean),territory:f.territory,availableFrom:f.availableFrom||null,availableUntil:f.availableUntil||null,maxConcurrentJobs:Number(f.maxConcurrentJobs)},s);ev.currentTarget.reset();await load()}catch(x:any){error(x.message)}};
+ const decide=async(id:string,action:string)=>{const reason=window.prompt('Decision reason');if(!reason?.trim())return;try{await send('/warranty-claims/'+id+'/'+action,{reason},s);await load()}catch(x:any){error(x.message)}};
+ const runReport=async()=>{try{const q=new URLSearchParams();if(from)q.set('from',from);if(to)q.set('to',to);setReport(await api('/reports/operations?'+q.toString(),{},s))}catch(x:any){error(x.message)}};
+ return <section className="ops-shell">
+  <div className="ops-card"><h2>Engineer skills, certifications and availability</h2><form className="ops-form" onSubmit={saveEngineer}>
+   <select name="userId" required defaultValue=""><option value="">Select enabled engineer</option>{users.filter(u=>u.enabled&&u.roles?.some((r:any)=>['SERVICE_ENGINEER','TECHNICIAN','INSTALLER','OPERATIONS_MANAGER'].includes(typeof r==='string'?r:r.name))).map(u=><option key={u.id} value={u.id}>{u.name} · {u.email}</option>)}</select>
+   <input name="skills" placeholder="Skills, comma separated" required/><input name="certifications" placeholder="Certifications, comma separated" required/><input name="territory" placeholder="Territory / service area"/>
+   <label>Available from<input name="availableFrom" type="time"/></label><label>Available until<input name="availableUntil" type="time"/></label><input name="maxConcurrentJobs" type="number" min="1" max="50" defaultValue="3" required/><button>Save engineer profile</button>
+  </form>{engineers.map(e=><article key={e.id}><b>{e.name}</b><small>{e.email} · {e.territory||'No territory'} · Skills {e.skills} · Certifications {e.certifications}</small><small>Workload {e.activeJobs}/{e.maxConcurrentJobs} · Remaining capacity {e.availableCapacity}</small></article>)}</div>
+  <div className="ops-card"><h2>Warranty claims</h2>{claims.map(c=><article key={c.id}><div><b>{c.claimNumber} · {c.subject}</b><small>{c.status} · {c.description}</small><small>{c.decisionReason||''} {c.resolutionNotes||''}</small></div>{['SUBMITTED','UNDER_REVIEW'].includes(c.status)&&<div className="actions"><button type="button" onClick={()=>decide(c.id,'approve')}>Approve</button><button type="button" className="danger" onClick={()=>decide(c.id,'reject')}>Reject</button></div>}</article>)}</div>
+  <div className="ops-card"><h2>Operational report</h2><div className="ops-grid"><label>From<input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label><label>To<input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label><button type="button" onClick={runReport}>Generate report</button></div>{report&&<div className="ops-grid">{Object.entries(report).map(([k,v])=><article key={k}><b>{k.replaceAll(/([A-Z])/g,' $1')}</b><small>{String(v)}</small></article>)}</div>}</div>
+  {busy&&<p>Loading Phase 2 operations…</p>}
+ </section>
+}
