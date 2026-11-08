@@ -5,6 +5,9 @@ import java.math.BigDecimal;import java.time.Instant;import java.time.LocalDate;
 @Service
 public class OperationsService{
 @org.springframework.beans.factory.annotation.Autowired private NotificationService notifications;
+@org.springframework.beans.factory.annotation.Autowired private InvoiceRepository invoiceRepository;
+@org.springframework.beans.factory.annotation.Autowired private PaymentRepository paymentRepository;
+@org.springframework.beans.factory.annotation.Autowired private RefundRepository refundRepository;
 private final CustomerOrderRepository orders;private final OrderItemRepository orderItems;private final OrderStatusHistoryRepository orderHistory;private final WarehouseRepository warehouses;private final InventoryBalanceRepository balances;private final InventoryTransactionRepository transactions;private final InventoryReservationRepository reservations;private final ProductRepository products;private final PackageItemRepository packageItems;private final InstallationJobRepository installations;private final InstallationChecklistItemRepository checklist;private final WarrantyRepository warranties;private final AppUserRepository users;private final InstallationTeamRepository teams;private final InstallationChecklistTemplateRepository templates;private final CustomerProfileRepository customers;
 public OperationsService(CustomerOrderRepository a,OrderItemRepository b,OrderStatusHistoryRepository c,WarehouseRepository d,InventoryBalanceRepository e,InventoryTransactionRepository f,InventoryReservationRepository g,ProductRepository h,PackageItemRepository i,InstallationJobRepository j,InstallationChecklistItemRepository k,WarrantyRepository l,AppUserRepository m,InstallationTeamRepository teams,InstallationChecklistTemplateRepository templates,CustomerProfileRepository customers){orders=a;orderItems=b;orderHistory=c;warehouses=d;balances=e;transactions=f;reservations=g;products=h;packageItems=i;installations=j;checklist=k;warranties=l;users=m;this.teams=teams;this.templates=templates;this.customers=customers;}
 private UUID tenant(Principal p){if(!"VENDOR".equals(p.accountType())||p.tenantId()==null)throw new ResponseStatusException(HttpStatus.FORBIDDEN);return p.tenantId();}
@@ -87,7 +90,16 @@ if(cp!=null)notifications.sendBusinessNotification(cp.getUserId(),t,"CUSTOMER_OR
         "Hello "+cp.getName()+",\n\nYour order "+o.getOrderNumber()+" is now "+o.getStatus()+". "+(x.reason()==null?"":x.reason()));
 return o;
 }
-public List<CustomerOrder> customerOrders(Principal p){CustomerProfile cp=customer(p);return orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(o->cp.getId().equals(o.getCustomerId())).toList();}
+public List<CustomerOrderView> customerOrders(Principal p){CustomerProfile cp=customer(p);return orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(o->cp.getId().equals(o.getCustomerId())).map(this::customerOrderView).toList();}
+public CustomerOrderView customerOrderDetails(UUID id,Principal p){CustomerProfile cp=customer(p);CustomerOrder order=orders.findByIdAndTenantId(id,p.tenantId()).filter(o->cp.getId().equals(o.getCustomerId())).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Order not found"));return customerOrderView(order);}
+private CustomerOrderView customerOrderView(CustomerOrder order){
+List<CustomerOrderLineView> lines=orderItems.findByTenantIdOrderByIdDesc(order.getTenantId()).stream().filter(line->order.getId().equals(line.getOrderId())).map(line->new CustomerOrderLineView(line.getId(),line.getProductId(),line.getPackageId(),line.getDescription(),line.getQuantity(),line.getUnitPrice(),line.getLineTotal(),line.getTaxPercent())).toList();
+String paymentStatus="NOT_INVOICED";
+var invoice=invoiceRepository.findByOrderIdAndTenantId(order.getId(),order.getTenantId()).orElse(null);
+if(invoice!=null){BigDecimal paid=paymentRepository.findByTenantIdAndInvoiceId(order.getTenantId(),invoice.getId()).stream().map(payment->{BigDecimal amount=("CONFIRMED".equals(payment.getStatus())||"PARTIALLY_REFUNDED".equals(payment.getStatus()))?payment.getAmount():BigDecimal.ZERO;if("PARTIALLY_REFUNDED".equals(payment.getStatus())){BigDecimal refunded=refundRepository.findByTenantIdAndPaymentId(order.getTenantId(),payment.getId()).stream().filter(refund->"RECORDED".equals(refund.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO,BigDecimal::add);amount=amount.subtract(refunded);}return amount.max(BigDecimal.ZERO);}).reduce(BigDecimal.ZERO,BigDecimal::add);
+paymentStatus=paid.compareTo(invoice.getGrandTotal())>=0?"PAID":paid.signum()>0?"PARTIALLY_PAID":"UNPAID";}
+return new CustomerOrderView(order.getId(),order.getOrderNumber(),order.getStatus(),paymentStatus,order.getTotal(),order.getCreatedAt(),lines);
+}
 public List<InstallationJob> customerInstallations(Principal p){CustomerProfile cp=customer(p);return installations.findByTenantIdAndCustomerIdOrderByScheduledAtAsc(p.tenantId(),cp.getId());}
 public List<Warranty> customerWarranties(Principal p){CustomerProfile cp=customer(p);return warranties.findByTenantIdAndCustomerIdOrderByStartDateDesc(p.tenantId(),cp.getId());}
 }
