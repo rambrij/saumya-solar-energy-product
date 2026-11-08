@@ -7,7 +7,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
+@SpringBootTest(properties = "SEED_DATA_ENABLED=true")
 @ActiveProfiles("test")
 class DemoLifecycleSeedIntegrationTest {
  @Autowired TenantRepository tenants;
