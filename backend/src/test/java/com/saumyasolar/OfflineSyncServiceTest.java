@@ -2,6 +2,7 @@ package com.saumyasolar;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.saumyasolar.domain.SiteSurvey;
+import com.saumyasolar.domain.OfflineSyncOperation;
 import com.saumyasolar.repo.*;
 import com.saumyasolar.security.Principal;
 import com.saumyasolar.service.*;
