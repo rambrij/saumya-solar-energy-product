@@ -7,6 +7,7 @@ on:
       - feature/release-3-operations
       - feature/release-4-finance-and-service
       - feature/phase-2-operations
+      - feature/phase-3-Enterprise-SaaS
       - phase-1-commercial-mvp-remediation
   pull_request:
     branches:
