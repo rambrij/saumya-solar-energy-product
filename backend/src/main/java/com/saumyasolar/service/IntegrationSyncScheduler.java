@@ -1,13 +1,13 @@
 package com.saumyasolar.service;
 import com.saumyasolar.domain.*;import com.saumyasolar.repo.*;
-import org.springframework.scheduling.annotation.Scheduled;import org.springframework.stereotype.Component;import jakarta.transaction.Transactional;
+import org.springframework.scheduling.annotation.Scheduled;import org.springframework.stereotype.Component;
 import java.time.Instant;import java.util.*;
 @Component
 public class IntegrationSyncScheduler {
  private final IntegrationSyncJobRepository jobs;private final IntegrationConnectionRepository connections;private final List<IntegrationAdapter> adapters;
  public IntegrationSyncScheduler(IntegrationSyncJobRepository j,IntegrationConnectionRepository c,List<IntegrationAdapter> a){jobs=j;connections=c;adapters=a;}
  @Scheduled(fixedDelayString="${app.integrations.dispatch-interval-ms:30000}")
- @Transactional public void dispatch(){
+ public void dispatch(){
   List<IntegrationSyncJob> batch=jobs.findTop50ByStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(List.of("QUEUED","RETRY"),Instant.now());
   for(IntegrationSyncJob job:batch){
    Optional<IntegrationConnection> c=connections.findByIdAndTenantId(job.getConnectionId(),job.getTenantId());
