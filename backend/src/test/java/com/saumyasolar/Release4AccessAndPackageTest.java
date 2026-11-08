@@ -143,7 +143,7 @@ class Release4AccessAndPackageTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"code":"IMGPKG-%s","name":"Image package","capacityKw":3,"packageType":"RESIDENTIAL",
-                                 "basePrice":10000,"items":[{"productId":"%s","quantity":1}]}
+                                 "basePrice":10000,"taxPercent":18,"items":[{"productId":"%s","quantity":1}]}
                                 """.formatted(UUID.randomUUID(), productId)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         String packageId = json.readTree(pkg).get("id").asText();
