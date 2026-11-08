@@ -5,6 +5,7 @@ import com.saumyasolar.domain.*;
 import com.saumyasolar.repo.*;
 import com.saumyasolar.security.Principal;
 import com.saumyasolar.service.ApprovalWorkflowService;
+import com.saumyasolar.service.EnterpriseSaasService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,10 +30,14 @@ class ApprovalWorkflowServiceTest {
     @Mock ApprovalInstanceRepository instances;
     @Mock ApprovalDecisionRepository decisions;
     @Mock AuditEventRepository audits;
+    @Mock EnterpriseSaasService enterpriseSaas;
     ApprovalWorkflowService service;
 
     @BeforeEach
-    void setUp() { service = new ApprovalWorkflowService(workflows, instances, decisions, audits, new ObjectMapper()); }
+    void setUp() {
+        service = new ApprovalWorkflowService(workflows, instances, decisions, audits, new ObjectMapper(), enterpriseSaas);
+        doNothing().when(enterpriseSaas).requireEntitlement(any(UUID.class), eq("APPROVAL_WORKFLOWS"));
+    }
 
     @Test
     void configuredWorkflowRequiresEveryStepBeforeApprovalCompletes() {
@@ -53,7 +58,7 @@ class ApprovalWorkflowServiceTest {
         Principal requester = principal(userId, tenantId, Set.of("SALES_MANAGER"), Set.of());
         ApprovalInstance instance = service.startIfConfigured("QUOTATION", UUID.randomUUID(), requester).orElseThrow();
 
-        when(instances.findByIdAndTenantId(instance.getId(), tenantId)).thenReturn(Optional.of(instance));
+        when(instances.findForUpdate(instance.getId(), tenantId)).thenReturn(Optional.of(instance));
         ApprovalInstance first = service.decide(instance.getId(), "APPROVE", "Reviewed by sales", requester);
         assertEquals("PENDING", first.getStatus());
         assertEquals(2, first.getCurrentStep());
@@ -69,7 +74,7 @@ class ApprovalWorkflowServiceTest {
     void workflowDecisionCannotBeReadOrChangedAcrossTenants() {
         UUID tenantId = UUID.randomUUID();
         UUID instanceId = UUID.randomUUID();
-        when(instances.findByIdAndTenantId(instanceId, tenantId)).thenReturn(Optional.empty());
+        when(instances.findForUpdate(instanceId, tenantId)).thenReturn(Optional.empty());
         ResponseStatusException error = assertThrows(ResponseStatusException.class,
                 () -> service.decide(instanceId, "APPROVE", null, principal(UUID.randomUUID(), tenantId, Set.of("VENDOR_ADMIN"), Set.of())));
         assertEquals(HttpStatus.NOT_FOUND, error.getStatusCode());
