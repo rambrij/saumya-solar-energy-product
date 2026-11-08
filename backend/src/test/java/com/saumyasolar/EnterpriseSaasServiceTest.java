@@ -52,8 +52,7 @@ class EnterpriseSaasServiceTest {
         subscription.setPlanId(plan.getId());
         when(branches.existsByTenantIdAndCodeIgnoreCase(tenantId, "HQ")).thenReturn(false);
         when(subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(subscription));
-        when(subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(tenantId, List.of("TRIAL", "ACTIVE")))
-                .thenReturn(Optional.of(subscription));
+
         when(plans.findById(plan.getId())).thenReturn(Optional.of(plan));
         when(branches.countByTenantIdAndActiveTrue(tenantId)).thenReturn(1L);
 
@@ -74,8 +73,7 @@ class EnterpriseSaasServiceTest {
         subscription.setPlanId(plan.getId());
         when(branches.existsByTenantIdAndCodeIgnoreCase(tenantId, "HQ")).thenReturn(false);
         when(subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(subscription));
-        when(subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(tenantId, List.of("TRIAL", "ACTIVE")))
-                .thenReturn(Optional.of(subscription));
+
         when(plans.findById(plan.getId())).thenReturn(Optional.of(plan));
         when(branches.countByTenantIdAndActiveTrue(tenantId)).thenReturn(0L);
         when(branches.save(any(Branch.class))).thenAnswer(invocation -> invocation.getArgument(0));
