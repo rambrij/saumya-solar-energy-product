@@ -28,7 +28,7 @@ describe('Platform subscription administration',()=>{
   });
   render(<EnterpriseSaasPanel mode="platform" s={session} error={vi.fn()}/>);
   await screen.findByText('Starter');
-  fireEvent.change(screen.getByPlaceholderText('Type at least two characters…'),{target:{value:'sa'}});
+  fireEvent.change(screen.getByPlaceholderText('Type at least 2 characters…'),{target:{value:'sa'}});
   const tenantSelect=await screen.findByRole('combobox',{name:'Select tenant'});
   fireEvent.change(tenantSelect,{target:{value:'tenant-1'}});
   expect(await screen.findByText('Assignment history')).toBeTruthy();
