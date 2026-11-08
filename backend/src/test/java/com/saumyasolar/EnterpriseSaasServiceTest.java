@@ -46,6 +46,7 @@ class EnterpriseSaasServiceTest {
     @Test
     void branchCreationIsRejectedWhenSubscriptionBranchLimitIsReached() {
         UUID tenantId = UUID.randomUUID();
+        when(tenants.findByIdForUpdate(tenantId)).thenReturn(Optional.of(new Tenant()));
         TenantSubscription subscription = subscription(tenantId);
         SubscriptionPlan plan = plan(1);
         subscription.setPlanId(plan.getId());
