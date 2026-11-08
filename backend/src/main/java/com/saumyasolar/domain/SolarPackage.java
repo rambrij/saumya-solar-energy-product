@@ -22,6 +22,7 @@ public class SolarPackage {
     BigDecimal capacityKw;
     String packageType;
     BigDecimal basePrice;
+    BigDecimal taxPercent;
     Integer warrantyYears;
     @Column(name = "image_url", length = 1024)
     String imageUrl;
