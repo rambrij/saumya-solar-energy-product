@@ -473,3 +473,21 @@ The following additional changes were made after the initial Stage 2 implementat
 - Integration coverage verifies customer upload/download, vendor listing, and denial to a different customer.
 - CI run `42485901046` passed all four jobs: 42 backend tests, frontend build, clean MySQL migrations through V36, and Spring Boot startup/health.
 - The same local-filesystem production caveat applies: configure shared durable object storage before multi-instance or ephemeral production deployment.
+
+
+### 19.9 Shared private object storage and report exports — 2026-11-08
+
+- Added `PrivateObjectStorageService` with local and AWS S3-compatible providers. New survey, service-ticket and warranty-claim evidence writes can be stored in S3 using tenant/category-prefixed object keys; reads remain private and occur only after the owning survey/ticket/claim authorization checks.
+- Existing local keys remain readable after provider selection changes. The service does not automatically migrate local files; a separately verified data migration is required before deleting legacy local storage.
+- S3 requests use the AWS SDK default credential provider chain and AES-256 server-side encryption. Configuration is environment-only: `PRIVATE_STORAGE_PROVIDER`, `PRIVATE_STORAGE_S3_BUCKET`, `AWS_REGION`, optional `PRIVATE_STORAGE_S3_ENDPOINT`, and `PRIVATE_STORAGE_S3_PATH_STYLE`. No access keys are stored in source or application configuration.
+- Added unit tests for local round-trip/delete, traversal rejection, unsupported provider and missing-bucket fail-fast. These tests do not establish connectivity to a live AWS account or S3-compatible endpoint.
+- Added deployment documentation for least-privilege bucket permissions, public access blocking, versioning/retention, backup, and migration caveats.
+- Added tenant-authorized operational report exports in CSV, XLSX and PDF formats at `/api/v1/reports/operations/export.{csv,xlsx,pdf}`. The React operations report screen now offers all three formats.
+- Added upload/list/download controls for site-survey and warranty-claim evidence in the operations UI. Uploads use authenticated multipart requests; download actions use the authenticated endpoints.
+- Added integration coverage for report response formats, date-range validation and customer denial, plus local private-storage unit tests.
+- GitHub Actions run **42492744832** passed all four jobs on the report/documentation snapshot: **46 backend tests**, frontend typecheck/production build, clean MySQL 8.4 migrations through V36, and Spring Boot startup/health.
+- Earlier storage-only CI run **42492400252** passed 45 backend tests and all other jobs. The later report-export integration run is the 46-test verification above.
+
+**Important remaining caveats:** a live S3 bucket/IAM-role upload-download round trip has not been run; S3 deployment is code/configuration ready, not provider-runtime verified. No automatic migration of existing local files is included. Reporting remains a tenant KPI summary export rather than a complete catalogue of paginated vendor/customer/product/project/engineer/inventory/service reports. Twilio configuration remains global rather than tenant-specific and delivery webhooks/templates are outstanding. Full browser E2E and comprehensive role/tenant matrix tests are still outstanding.
+
+**Current status:** Phase 2 remains **not accepted**. The new storage, report export and evidence UI improvements are code- and CI-verified within the limits above; live provider and full business workflow verification remain required.
