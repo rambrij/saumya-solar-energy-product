@@ -498,7 +498,9 @@ public class Controller {
     @PostMapping("/customer/product-orders")
     CustomerOrder createCustomerProductOrder(@Valid @RequestBody CustomerProductOrderInput x,Authentication a){return operations.createCustomerProductOrder(x,p(a));}
     @GetMapping("/customer/product-orders")
-    List<CustomerOrder> customerProductOrders(Authentication a){return operations.customerOrders(p(a));}
+    List<CustomerOrderView> customerProductOrders(Authentication a){return operations.customerOrders(p(a));}
+    @GetMapping("/customer/product-orders/{id}")
+    CustomerOrderView customerProductOrderDetails(@PathVariable UUID id,Authentication a){return operations.customerOrderDetails(id,p(a));}
     @PostMapping("/orders/{id}/vendor-decision")
     CustomerOrder vendorOrderDecision(@PathVariable UUID id,@Valid @RequestBody OrderDecisionInput x,Authentication a){return operations.decideCustomerOrder(id,x,p(a));}
     // Release 3: warehouse and immutable inventory ledger.
