@@ -516,9 +516,14 @@ class Release12TenantIntegrationTest {
         assertTrue(vendorResponse.contains("TEST_VENDOR_NOTICE"));
         assertFalse(vendorResponse.contains("TEST_CUSTOMER_NOTICE"));
         var vendorRows = json.readTree(vendorResponse);
-        var vendorNoticeId = vendorRows.findValuesAsText("id").stream()
-                .filter(id -> vendorRows.toString().contains("TEST_VENDOR_NOTICE"))
-                .findFirst().orElseThrow();
+        String vendorNoticeId = null;
+        for (JsonNode row : vendorRows) {
+            if ("TEST_VENDOR_NOTICE".equals(row.path("eventType").asText())) {
+                vendorNoticeId = row.path("id").asText();
+                break;
+            }
+        }
+        assertNotNull(vendorNoticeId);
 
         var customerResponse = mvc.perform(get("/api/v1/notifications")
                         .header("Authorization", "Bearer " + customerToken))
