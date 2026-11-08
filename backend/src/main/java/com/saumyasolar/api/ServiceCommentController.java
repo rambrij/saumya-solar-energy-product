@@ -1,5 +1,5 @@
 package com.saumyasolar.api;
-import com.saumyasolar.domain.*;import com.saumyasolar.repo.*;import com.saumyasolar.security.Principal;import jakarta.transaction.Transactional;import jakarta.validation.Valid;import jakarta.validation.constraints.*;import org.springframework.http.HttpStatus;import org.springframework.security.core.Authentication;import org.springframework.web.bind.annotation.*;import org.springframework.web.server.ResponseStatusException;import java.time.Instant;import java.util.*;
+import com.saumyasolar.domain.*;import com.saumyasolar.repo.*;import com.saumyasolar.security.Principal;import com.saumyasolar.service.NotificationService;import jakarta.transaction.Transactional;import jakarta.validation.Valid;import jakarta.validation.constraints.*;import org.springframework.http.HttpStatus;import org.springframework.security.core.Authentication;import org.springframework.web.bind.annotation.*;import org.springframework.web.server.ResponseStatusException;import java.time.Instant;import java.util.*;
 @RestController @RequestMapping("/api/v1/service-requests/{ticketId}/comments")
 public class ServiceCommentController {
  private final ServiceRequestRepository tickets;private final ServiceCommentRepository comments;private final CustomerProfileRepository customers;private final NotificationService notifications;
