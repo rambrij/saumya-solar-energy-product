@@ -8,4 +8,6 @@ import java.util.UUID;
 
 public interface NotificationDeliveryRepository extends JpaRepository<NotificationDelivery, UUID> {
     List<NotificationDelivery> findTop100ByTenantIdOrderByCreatedAtDesc(UUID tenantId);
+    boolean existsByTenantIdAndIdempotencyKey(UUID tenantId,String idempotencyKey);
+    List<NotificationDelivery> findTop50ByStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(String status,java.time.Instant before);
 }
