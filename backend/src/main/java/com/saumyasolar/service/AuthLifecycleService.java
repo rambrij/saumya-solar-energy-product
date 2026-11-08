@@ -7,6 +7,7 @@ import com.saumyasolar.domain.MfaChallenge;
 import com.saumyasolar.domain.RefreshToken;
 import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.domain.Permission;
+import com.saumyasolar.domain.VendorInvitation;
 import com.saumyasolar.repo.*;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
@@ -35,6 +36,7 @@ public class AuthLifecycleService {
     final ProductCategoryRepository categories;
     final PasswordEncoder encoder;
     final NotificationService notifications;
+    final VendorInvitationRepository vendorInvitations;
     
     AuthLifecycleService(
             RefreshTokenRepository r,
@@ -47,7 +49,8 @@ public class AuthLifecycleService {
             CustomerProfileRepository customerProfiles,
             ProductCategoryRepository categories,
             PasswordEncoder e,
-            NotificationService notifications
+            NotificationService notifications,
+            VendorInvitationRepository vendorInvitations
     ) {
         refresh = r;
         resets = p;
@@ -60,6 +63,7 @@ public class AuthLifecycleService {
         this.categories = categories;
         encoder = e;
         this.notifications = notifications;
+        this.vendorInvitations = vendorInvitations;
     }
     
     public boolean tenantIsActive(AppUser user) {
@@ -213,18 +217,18 @@ public class AuthLifecycleService {
     }
     
     @Transactional
-    public Tenant createTenant(String name, String slug, String adminName, String adminEmail, String adminPassword) {
+    public Tenant createTenant(String name, String slug, String adminName, String adminEmail, UUID invitedBy) {
         slug = normalizeSlug(slug == null || slug.isBlank() ? name : slug);
         if (name == null || name.isBlank() || slug == null || !slug.matches("[a-z0-9]+(?:-[a-z0-9]+)*")
-                || adminName == null || adminName.isBlank() || adminEmail == null || adminEmail.isBlank()
-                || adminPassword == null || adminPassword.length() < 12)
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tenant and initial vendor administrator details are required");
+                || adminName == null || adminName.isBlank() || adminEmail == null
+                || !adminEmail.matches("(?i)^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$"))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tenant and valid initial vendor administrator details are required");
         if (tenants.findBySlug(slug).isPresent())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Tenant slug already exists");
         if (users.findByEmailIgnoreCase(adminEmail).isPresent())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Administrator email already exists");
 
-        var tenant = new Tenant();
+        Tenant tenant = new Tenant();
         tenant.setId(UUID.randomUUID());
         tenant.setName(name.trim());
         tenant.setSlug(slug);
@@ -234,28 +238,69 @@ public class AuthLifecycleService {
         tenant.setUpdatedAt(Instant.now());
         tenants.save(tenant);
 
-        var vendorAdmin = new com.saumyasolar.domain.Role();
+        com.saumyasolar.domain.Role vendorAdmin = new com.saumyasolar.domain.Role();
         vendorAdmin.setId(UUID.randomUUID());
         vendorAdmin.setTenantId(tenant.getId());
         vendorAdmin.setName("VENDOR_ADMIN");
         permissions.findAll().stream().filter(permission -> !"PLATFORM_MANAGE".equals(permission.getCode()))
                 .forEach(vendorAdmin.getPermissions()::add);
         roles.save(vendorAdmin);
-
         provisionEmployeeRoles(tenant.getId());
         seedCategories(tenant.getId());
 
-        var admin = new AppUser();
+        AppUser admin = new AppUser();
         admin.setId(UUID.randomUUID());
         admin.setTenantId(tenant.getId());
         admin.setName(adminName.trim());
-        admin.setEmail(adminEmail.trim().toLowerCase());
-        admin.setPasswordHash(encoder.encode(adminPassword));
+        admin.setEmail(adminEmail.trim().toLowerCase(java.util.Locale.ROOT));
+        byte[] randomPassword = new byte[48];
+        new SecureRandom().nextBytes(randomPassword);
+        admin.setPasswordHash(encoder.encode(Base64.getUrlEncoder().withoutPadding().encodeToString(randomPassword)));
         admin.setAccountType("VENDOR");
-        admin.setEnabled(true);
+        admin.setEnabled(false);
         admin.getRoles().add(vendorAdmin);
         users.save(admin);
+
+        byte[] randomToken = new byte[32];
+        new SecureRandom().nextBytes(randomToken);
+        String rawToken = Base64.getUrlEncoder().withoutPadding().encodeToString(randomToken);
+        VendorInvitation invitation = new VendorInvitation();
+        invitation.setId(UUID.randomUUID());
+        invitation.setTenantId(tenant.getId());
+        invitation.setUserId(admin.getId());
+        invitation.setTokenHash(hashResetToken(rawToken));
+        invitation.setExpiresAt(Instant.now().plus(Duration.ofHours(24)));
+        invitation.setCreatedAt(Instant.now());
+        invitation.setInvitedBy(invitedBy);
+        vendorInvitations.save(invitation);
+        if (!notifications.sendVendorInvitation(admin.getId(), tenant.getId(), admin.getEmail(), admin.getName(), rawToken))
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Unable to queue vendor administrator invitation");
         return tenant;
+    }
+
+    @Transactional
+    public void acceptVendorInvitation(String rawToken, String password) {
+        if (rawToken == null || rawToken.isBlank() || password == null || password.length() < 12)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A valid invitation token and password of at least 12 characters are required");
+        VendorInvitation invitation = vendorInvitations.findByTokenHashForUpdate(hashResetToken(rawToken))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation is invalid or expired"));
+        if (invitation.getAcceptedAt() != null || invitation.getRevokedAt() != null
+                || !invitation.getExpiresAt().isAfter(Instant.now()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation is invalid or expired");
+        AppUser admin = users.findById(invitation.getUserId())
+                .filter(user -> invitation.getTenantId().equals(user.getTenantId()) && "VENDOR".equals(user.getAccountType()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invitation account is unavailable"));
+        admin.setPasswordHash(encoder.encode(password));
+        admin.setEnabled(true);
+        admin.setTokenVersion(admin.getTokenVersion() + 1);
+        users.save(admin);
+        invitation.setAcceptedAt(Instant.now());
+        vendorInvitations.save(invitation);
+        vendorInvitations.findByTenantIdAndUserIdAndAcceptedAtIsNullAndRevokedAtIsNull(invitation.getTenantId(), invitation.getUserId())
+                .stream().filter(other -> !other.getId().equals(invitation.getId())).forEach(other -> {
+                    other.setRevokedAt(Instant.now());
+                    vendorInvitations.save(other);
+                });
     }
 
     @Transactional
