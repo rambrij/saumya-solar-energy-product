@@ -4,7 +4,7 @@ import com.saumyasolar.domain.Warranty;
 import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.repo.WarrantyRepository;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Component;import org.springframework.beans.factory.annotation.Value;
 import java.time.LocalDate;
 import java.util.Set;
 
@@ -13,13 +13,13 @@ import java.util.Set;
 public class WarrantyExpiryScheduler {
  private final WarrantyRepository warranties;
  private final CustomerProfileRepository customers;
- private final NotificationService notifications;
- public WarrantyExpiryScheduler(WarrantyRepository warranties,CustomerProfileRepository customers,NotificationService notifications){
+ private final NotificationService notifications;private final java.time.ZoneId zone;
+ public WarrantyExpiryScheduler(WarrantyRepository warranties,CustomerProfileRepository customers,NotificationService notifications,@Value("${app.warranty.expiry-alert-zone:Asia/Kolkata}") String zone){
   this.warranties=warranties;this.customers=customers;this.notifications=notifications;
  }
  @Scheduled(cron="${app.warranty.expiry-alert-cron:0 15 8 * * *}",zone="${app.warranty.expiry-alert-zone:Asia/Kolkata}")
  public void evaluateWarrantyExpiry(){
-  LocalDate today=LocalDate.now();
+  LocalDate today=LocalDate.now(zone);
   for(Warranty warranty:warranties.findAll()){
    if(warranty.getTenantId()==null||warranty.getEndDate()==null||!"ACTIVE".equals(warranty.getStatus()))continue;
    long days=java.time.temporal.ChronoUnit.DAYS.between(today,warranty.getEndDate());
