@@ -91,11 +91,11 @@ The implementation is materially improved but **Phase 3 should not yet be repres
 | Branch isolation | Branch authorization is enforced for branch-bound warehouses/inventory. Orders, quotations, customers, invoices, installations and service records are still primarily tenant-scoped and do not all carry/enforce a branch context. |
 | Branch analytics | Complete branch-level sales, finance, warehouse and operational dashboards are not implemented. Existing operational reporting and new subscription usage meters are partial coverage. |
 | Central audit | Audit coverage is improved for Phase 3 operations, but it is not yet a universal before/after audit layer for every business mutation, failed login, denied access and security event. Export/correlation-ID coverage is also incomplete. |
-| Accounting provider support | Durable accounting event delivery and a generic HTTPS adapter exist. Provider-specific accounting mappings, reconciliation, external ID lifecycle and certification against a selected accounting product remain outstanding. |
-| Payment provider | `PaymentGatewayAdapter` remains a provider-neutral port. No concrete payment gateway, hosted checkout, provider-specific webhook verification and provider refund implementation can be claimed without selecting and configuring a provider. Existing manual payment and signed webhook foundations remain. |
+| Accounting provider support | **Provider-neutral port/registry added** for invoice, payment and refund synchronization, on top of the existing durable integration queue and generic HTTPS adapter. No concrete accounting adapter is installed; provider-specific mappings, reconciliation, external ID lifecycle and certification remain outstanding. |
+| Payment provider | **Provider-neutral flow added:** payment gateway registry, idempotent hosted-checkout orchestration endpoint, customer invoice Pay Online action, signed provider webhook verification/parsing contract and payment/invoice state update. No concrete provider adapter is installed; checkout correctly returns unavailable until a tenant has an active gateway connection and a matching server-side adapter. Provider-specific refunds/reconciliation remain open. |
 | Secret management | The generic adapter supports server-side environment references. A vault/KMS-backed tenant secret resolver, rotation and per-tenant secret lifecycle are not implemented. |
 | Integration resilience | Generic HTTP delivery is durable and retried, but provider-specific rate limits, circuit breakers, health dashboards and contract tests remain future work. |
-| PWA offline behavior | The PWA supports installability and an offline shell/status. Offline business data, queued writes and conflict resolution are intentionally not implemented. |
+| PWA offline behavior | **Limited offline business-data queue added:** IndexedDB queue scoped by tenant/user, online replay and server-side idempotency for service comments and selected site-survey actions. It does not yet support all business modules, multi-device conflict resolution, attachments, or offline inventory/payment/order mutations. |
 | IoT | IoT scope and release acceptance are ambiguous between the reference documents; implementation requires product-owner clarification. |
 
 ## 4. Security and compatibility notes
@@ -153,3 +153,41 @@ The following items remain open and must not be marked accepted solely because a
 9. Confirm IoT acceptance scope and any accounting/payment providers with the product owner.
 
 Do not claim 100% Phase 3 acceptance until these items and the follow-up validation gates are completed.
+
+
+## 9. Follow-up implementation — provider-neutral payment/accounting and offline business sync
+
+**Implementation commits:** `a5e39001fe47f8fed9bc05b0fc38e686789d9c12`, `6503d254dc2888a19ee04b8ab94f1887741e963d`, `828ff2b7312dd3eecd38169efe92540f6f4ec8af`, `5135ebda73641c0767242ec04e24fa80db6d297d`, `cbc13ed0cb7c9ebad806963a963e11c3aafa7bef`, `36b7bd9a9df1d9ce37221c6c8877b11220edb7ca`, `a1f330e4737416dcddd8f7409b4b3f942d52a09d`, `9ff4d75af2391715892ef0152baa0a68366c1d78`, `a69e7e175c6edfe6da032e5c2980c27dc393b3d5`, `8c607c4c3caf0d2d28fd3c5d2fad40b7114f08cf`, `a09fbd4d98dd992af6f74c93ffaabd96df066664`, `772d61c85416ee788b977c0b3e64a45fbfa07f0d`, `a14746a0bd5e15f17d05f533397b5ed4139b20f4`, `3f4b3f5ca42b1b83588bfb6544be8ecfea7f2023`, `ff3df62b8891a2347c9af9c9388eefe4039bc376`, `fe2c9e93a715f830882aa02bd653eae0c9b19a6a`, `ac482cd264c04cf07b5b1c1d3a24d2972287322d`, `b1aed3429e3d8200ff922f3a4b4db71514d9663b`, `654cf51c5564f86e8eb039a5bf0b41bf6ffb0309`, `d6069be7a75e3cef888c7f165f817aa0e84e4db7`, `88d7053b3083fa38dadbebdce7f3faeed30c282c`, `a9df92bc9e9f9aa6e1862e1db7146799b2f5bcb9`, `b97862e82907f6cbec6a9bbe27b3af5dd96335b8`, `dce7c4c881744fb784617cbe9b03cbb4912108d2`, `fb7e3a55ef6d281eca7aca0e29acb7576be3757b`, `96817d728f3202d75c1f770ace351379e96b8716`, `d66d36483dfe1db4b2b0b38ff02a391dcd1db5a2`, `8d5ba703973adcde75a1781826048fc7804607c2`.
+
+### Offline business-data synchronization
+- Added additive Flyway V41 inbox table with tenant, actor, client operation ID, resource ID, payload hash and applied result.
+- Added authenticated batch/status APIs. Batches are limited to 50 commands and payloads/timestamps are validated.
+- Commands are allowlisted: service comment create, site-survey update, start and submit.
+- The client uses IndexedDB; queued items are partitioned by tenant and user and replayed with an operation ID.
+- The server persists an applied result and returns the stored result on a duplicate replay; reusing an operation ID with a different payload is rejected.
+- Existing survey lifecycle and service-ticket authorization are reused; customer-visible vendor comments continue to use the durable notification pipeline.
+- Sensitive API responses and uploads remain excluded from the service-worker cache.
+
+**Offline limitations:** no general-purpose conflict resolution, cross-device queue replication, attachment upload queue, order/payment/inventory commands or server-side stale-record merge policy are included. Users should review failed commands and retry only after resolving the reported business validation conflict.
+
+### Provider-neutral payment
+- Extended the payment gateway port with normalized webhook parsing and added a registry for installed adapters.
+- Added invoice checkout orchestration with tenant subscription entitlement, invoice ownership checks, outstanding-balance calculation, HTTPS checkout URL validation and deterministic payment ID/idempotency handling.
+- Added customer portal Pay Online action.
+- Added signed provider webhook route; the installed adapter is responsible for signature verification and normalization. The server matches provider reference, amount and currency before confirming payment and updating invoice status.
+- Added additive Flyway V42 columns for checkout URL and tenant-scoped idempotency key.
+
+**Payment limitations:** no provider adapter is bundled or configured by this request. A configured integration alone is insufficient; the corresponding server-side `PaymentGatewayAdapter` implementation must be deployed. Until then checkout returns a controlled service-unavailable response. Gateway refund execution, refund webhook lifecycle, settlement reconciliation and provider sandbox certification remain open.
+
+### Provider-neutral accounting
+- Added `AccountingAdapter` contract and registry for canonical invoice, payment and refund synchronization.
+- Existing durable tenant integration jobs, idempotency, retry and dead-letter behavior remain the transport.
+- No Zoho/Tally/SAP or other provider implementation was added, as requested.
+
+**Accounting limitations:** provider mappings, tax-ledger mapping, reconciliation, external-reference lifecycle and provider-specific contract tests require a concrete adapter implementation.
+
+### Build and validation follow-up
+- Added explicit Lombok annotation processor configuration for deterministic Java 21 builds.
+- Corrected the offline batch DTO type annotation and test import based on GitHub Actions compiler findings.
+- Added V41 and V42 MySQL 8.4 migration steps to the release validation workflow.
+- Frontend typecheck/build passed on an intermediate commit. Backend test compilation initially exposed a missing test import, which was corrected in the subsequent commit. The latest workflow must finish before any passing result is claimed.
