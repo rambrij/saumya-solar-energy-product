@@ -9,18 +9,26 @@ async function request(path:string,s:Session,method='GET',body?:any){
 }
 export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'vendor';s:Session;error:(message:string)=>void}){
  const [branches,setBranches]=useState<any[]>([]),[plans,setPlans]=useState<any[]>([]),[subscription,setSubscription]=useState<any>(null),[audits,setAudits]=useState<any[]>([]),[branding,setBranding]=useState<any>({displayName:'',logoUrl:'',primaryColor:'#0B6B4B',secondaryColor:'#F6C85F',contactEmail:'',contactPhone:'',supportEmail:'',supportPhone:''}),[domains,setDomains]=useState<any[]>([]),[workflows,setWorkflows]=useState<any[]>([]),[integrations,setIntegrations]=useState<any[]>([]);
- const [approvalInstances,setApprovalInstances]=useState<any[]>([]),[selectedBranch,setSelectedBranch]=useState<string|null>(null),[branchMembers,setBranchMembers]=useState<any[]>([]);
+ const [approvalInstances,setApprovalInstances]=useState<any[]>([]),[selectedBranch,setSelectedBranch]=useState<string|null>(null),[branchMembers,setBranchMembers]=useState<any[]>([]),[integrations,setIntegrations]=useState<any[]>([]);
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[panelError,setPanelError]=useState('');
  const load=async()=>{
   setLoading(true);setPanelError('');
   try{
    if(mode==='vendor'){
-    const perms=s.user?.permissions||[];const [b,sub,brand,domainRows,wf,ai]=await Promise.all([perms.includes('BRANCH_MANAGE')?request('/branches',s):Promise.resolve([]),request('/subscription',s).catch(()=>null),perms.includes('BRANDING_MANAGE')?request('/vendor/branding',s):Promise.resolve(branding),perms.includes('BRANDING_MANAGE')?request('/vendor/domains',s):Promise.resolve([]),perms.includes('APPROVAL_WORKFLOW_MANAGE')?request('/approval-workflows',s):Promise.resolve([]),perms.includes('APPROVAL_WORKFLOW_MANAGE')?request('/approval-instances',s):Promise.resolve([])]);
-    setBranches(b);setSubscription(sub);setBranding(brand);setDomains(domainRows);setWorkflows(wf);setApprovalInstances(ai);
+    const perms=s.user?.permissions||[];const [b,sub,brand,domainRows,wf,ai,ic]=await Promise.all([perms.includes('BRANCH_MANAGE')?request('/branches',s):Promise.resolve([]),request('/subscription',s).catch(()=>null),perms.includes('BRANDING_MANAGE')?request('/vendor/branding',s):Promise.resolve(branding),perms.includes('BRANDING_MANAGE')?request('/vendor/domains',s):Promise.resolve([]),perms.includes('APPROVAL_WORKFLOW_MANAGE')?request('/approval-workflows',s):Promise.resolve([]),perms.includes('APPROVAL_WORKFLOW_MANAGE')?request('/approval-instances',s):Promise.resolve([]),perms.includes('INTEGRATION_MANAGE')?request('/integrations',s):Promise.resolve([])]);
+    setBranches(b);setSubscription(sub);setBranding(brand);setDomains(domainRows);setWorkflows(wf);setApprovalInstances(ai);setIntegrations(ic);
    }else setPlans(await request('/subscription-plans',s));
   }catch(e:any){setPanelError(e.message)}finally{setLoading(false)}
  };
  useEffect(()=>{void load()},[mode,s.accessToken]);
+ const createIntegration=async(e:React.FormEvent<HTMLFormElement>)=>{
+  e.preventDefault();const form=e.currentTarget;const x:any=Object.fromEntries(new FormData(form));
+  setBusy(true);try{const created=await request('/integrations',s,'POST',x);setIntegrations(v=>[created,...v]);form.reset();error('Integration connection saved.')}catch(e:any){setPanelError(e.message)}finally{setBusy(false)}
+ };
+ const toggleIntegration=async(item:any)=>{
+  const status=item.status==='ACTIVE'?'DISABLED':'ACTIVE';
+  try{const updated=await request('/integrations/'+item.id+'/status',s,'PATCH',{status});setIntegrations(v=>v.map(x=>x.id===item.id?updated:x));error('Integration status updated.')}catch(e:any){setPanelError(e.message)}
+ };
  const createBranch=async(e:React.FormEvent<HTMLFormElement>)=>{
   e.preventDefault();const form=e.currentTarget;const x:any=Object.fromEntries(new FormData(form));setBusy(true);
   try{await request('/branches',s,'POST',x);form.reset();await load();error('Branch created.')}catch(e:any){setPanelError(e.message)}finally{setBusy(false)}
@@ -82,6 +90,10 @@ export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'ven
    {s.user?.permissions?.includes('INTEGRATION_MANAGE')&&<div className="card"><h2>External integrations</h2>
     {integrations.map(i=><p key={i.id}><b>{i.displayName}</b> · {i.providerCode} · {i.integrationType} · {i.status}</p>)}
     <form className="form" onSubmit={createIntegration}><h3>Register integration</h3><input name="providerCode" placeholder="Provider code (e.g. ZOHO_BOOKS)" required/><select name="integrationType"><option value="ACCOUNTING">Accounting</option><option value="PAYMENT_GATEWAY">Payment gateway</option><option value="SMS">SMS</option><option value="WHATSAPP">WhatsApp</option><option value="GENERIC">Generic API</option></select><input name="displayName" placeholder="Display name" required/><input name="secretReference" placeholder="env://VARIABLE or vault://secret-reference"/><textarea name="configJson" defaultValue="{}" placeholder="Non-secret provider configuration JSON" required/><button disabled={busy}>{busy?'Saving…':'Save integration'}</button></form>
+   </div>}
+   {s.user?.permissions?.includes('INTEGRATION_MANAGE')&&<div className="card"><h2>External integrations</h2><p className="muted">Tenant-scoped provider connections. Credentials must be stored as environment or vault references, never in configuration JSON.</p>
+    {integrations.length?<div className="table-wrap"><table><thead><tr><th>Provider</th><th>Type</th><th>Name</th><th>Status</th><th>Action</th></tr></thead><tbody>{integrations.map(item=><tr key={item.id}><td>{item.providerCode}</td><td>{item.integrationType}</td><td>{item.displayName}</td><td>{item.status}</td><td><button type="button" className="secondary" onClick={()=>void toggleIntegration(item)}>{item.status==='ACTIVE'?'Disable':'Enable'}</button></td></tr>)}</tbody></table></div>:<p>No external integrations configured.</p>}
+    <form className="form" onSubmit={createIntegration}><h3>Register integration</h3><input name="providerCode" placeholder="Provider code (e.g. GENERIC_HTTP)" required maxLength={60}/><select name="integrationType"><option value="ACCOUNTING">Accounting</option><option value="PAYMENT_GATEWAY">Payment gateway</option><option value="SMS">SMS</option><option value="WHATSAPP">WhatsApp</option><option value="GENERIC">Generic API</option></select><input name="displayName" placeholder="Display name" required maxLength={150}/><input name="secretReference" placeholder="env://SECRET_NAME or vault://path"/><textarea name="configJson" defaultValue={'{\n  "endpoint": "https://api.example.com/sync"\n}'} required/><button disabled={busy}>{busy?'Saving…':'Register integration'}</button></form>
    </div>}
    {s.user?.permissions?.includes('APPROVAL_WORKFLOW_MANAGE')&&<div className="card"><h2>Approval workflows</h2>
     {workflows.map(w=><p key={w.id}><b>{w.name}</b> · {w.entityType} · {w.active?'Active':'Inactive'}</p>)}
