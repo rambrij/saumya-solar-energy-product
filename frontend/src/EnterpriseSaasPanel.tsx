@@ -10,15 +10,15 @@ async function request(path:string,s:Session,method='GET',body?:any){
 export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'vendor';s:Session;error:(message:string)=>void}){
  const [branches,setBranches]=useState<any[]>([]),[plans,setPlans]=useState<any[]>([]),[subscription,setSubscription]=useState<any>(null),[audits,setAudits]=useState<any[]>([]),[branding,setBranding]=useState<any>({displayName:'',logoUrl:'',primaryColor:'#0B6B4B',secondaryColor:'#F6C85F',contactEmail:'',contactPhone:'',supportEmail:'',supportPhone:''}),[domains,setDomains]=useState<any[]>([]),[workflows,setWorkflows]=useState<any[]>([]),[integrations,setIntegrations]=useState<any[]>([]);
  const [approvalInstances,setApprovalInstances]=useState<any[]>([]),[selectedBranch,setSelectedBranch]=useState<string|null>(null),[branchMembers,setBranchMembers]=useState<any[]>([]);
- const [subscriptionUsage,setSubscriptionUsage]=useState<any>(null),[selectedIntegration,setSelectedIntegration]=useState<string|null>(null),[integrationJobs,setIntegrationJobs]=useState<any[]>([]);
+ const [subscriptionUsage,setSubscriptionUsage]=useState<any>(null),[storageUsage,setStorageUsage]=useState<any>(null),[selectedIntegration,setSelectedIntegration]=useState<string|null>(null),[integrationJobs,setIntegrationJobs]=useState<any[]>([]);
  const [auditFilters,setAuditFilters]=useState({actorId:'',action:'',entityType:'',outcome:''});
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[panelError,setPanelError]=useState('');
  const load=async()=>{
   setLoading(true);setPanelError('');
   try{
    if(mode==='vendor'){
-    const perms=s.user?.permissions||[];const [b,sub,brand,domainRows,wf,ai,ic,su,storage]=await Promise.all([perms.includes('BRANCH_MANAGE')?request('/branches',s):Promise.resolve([]),request('/subscription',s).catch(()=>null),perms.includes('BRANDING_MANAGE')?request('/vendor/branding',s):Promise.resolve(branding),perms.includes('BRANDING_MANAGE')?request('/vendor/domains',s):Promise.resolve([]),perms.includes('APPROVAL_WORKFLOW_MANAGE')?request('/approval-workflows',s):Promise.resolve([]),perms.includes('APPROVAL_WORKFLOW_MANAGE')?request('/approval-instances',s):Promise.resolve([]),perms.includes('INTEGRATION_MANAGE')?request('/integrations',s):Promise.resolve([]),request('/subscription/usage',s).catch(()=>null)]);
-    setBranches(b);setSubscription(sub);setBranding(brand);setDomains(domainRows);setWorkflows(wf);setApprovalInstances(ai);setIntegrations(ic);setSubscriptionUsage(su);
+    const perms=s.user?.permissions||[];const [b,sub,brand,domainRows,wf,ai,ic,su,storage]=await Promise.all([perms.includes('BRANCH_MANAGE')?request('/branches',s):Promise.resolve([]),request('/subscription',s).catch(()=>null),perms.includes('BRANDING_MANAGE')?request('/vendor/branding',s):Promise.resolve(branding),perms.includes('BRANDING_MANAGE')?request('/vendor/domains',s):Promise.resolve([]),perms.includes('APPROVAL_WORKFLOW_MANAGE')?request('/approval-workflows',s):Promise.resolve([]),perms.includes('APPROVAL_WORKFLOW_MANAGE')?request('/approval-instances',s):Promise.resolve([]),perms.includes('INTEGRATION_MANAGE')?request('/integrations',s):Promise.resolve([]),request('/subscription/usage',s).catch(()=>null),request('/subscription/storage',s).catch(()=>null)]);
+    setBranches(b);setSubscription(sub);setBranding(brand);setDomains(domainRows);setWorkflows(wf);setApprovalInstances(ai);setIntegrations(ic);setSubscriptionUsage(su);setStorageUsage(storage);
    }else setPlans(await request('/subscription-plans',s));
   }catch(e:any){setPanelError(e.message)}finally{setLoading(false)}
  };
