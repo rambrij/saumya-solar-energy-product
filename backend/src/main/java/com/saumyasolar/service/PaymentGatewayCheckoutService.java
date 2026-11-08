@@ -17,12 +17,12 @@ public class PaymentGatewayCheckoutService {
     private final InvoiceRepository invoices; private final PaymentRepository payments;
     private final RefundRepository refunds; private final CustomerProfileRepository customers;
     private final CustomerOrderRepository orders; private final IntegrationConnectionRepository connections;
-    private final PaymentGatewayRegistry adapters; private final EnterpriseSaasService entitlements;
+    private final PaymentGatewayRegistry adapters; private final EnterpriseSaasService entitlements; private final AuditEventRepository audits;
     public PaymentGatewayCheckoutService(InvoiceRepository invoices,PaymentRepository payments,RefundRepository refunds,
             CustomerProfileRepository customers,CustomerOrderRepository orders,IntegrationConnectionRepository connections,
-            PaymentGatewayRegistry adapters,EnterpriseSaasService entitlements) {
+            PaymentGatewayRegistry adapters,EnterpriseSaasService entitlements,AuditEventRepository audits) {
         this.invoices=invoices;this.payments=payments;this.refunds=refunds;this.customers=customers;this.orders=orders;
-        this.connections=connections;this.adapters=adapters;this.entitlements=entitlements;
+        this.connections=connections;this.adapters=adapters;this.entitlements=entitlements;this.audits=audits;
     }
     @Transactional
     public CheckoutResult create(UUID invoiceId,String providerCode,String idempotencyKey,Principal actor) {
@@ -66,7 +66,14 @@ public class PaymentGatewayCheckoutService {
         payment.setMethod("ONLINE");payment.setSource("GATEWAY");payment.setStatus("PENDING");payment.setProvider(connection.getProviderCode());
         payment.setProviderReference(gateway.providerReference());payment.setCheckoutUrl(gateway.checkoutUrl());
         payment.setIdempotencyKey(idempotencyKey);payment.setCreatedAt(Instant.now());payment.setRecordedBy(actor.userId());
-        payments.save(payment);return view(payment);
+        payments.save(payment);
+        AuditEvent audit=new AuditEvent();audit.setId(UUID.randomUUID());audit.setTenantId(actor.tenantId());audit.setActorId(actor.userId());
+        audit.setActorType(actor.accountType());audit.setAction("PAYMENT_GATEWAY_CHECKOUT_CREATED");audit.setEntityType("PAYMENT");
+        audit.setEntityId(paymentId.toString());audit.setOutcome("SUCCESS");
+        audit.setAfterJson("{\\"providerCode\\":\\"" + connection.getProviderCode() + "\\",\\"invoiceId\\":\\"" + invoiceId
+                + "\\",\\"amount\\":\\"" + outstanding.toPlainString() + "\\",\\"currency\\":\\"" + invoice.getCurrency() + "\\"}");
+        audit.setCreatedAt(Instant.now());audits.save(audit);
+        return view(payment);
     }
     private void authorizeInvoice(Invoice invoice,Principal actor){
         if("VENDOR".equals(actor.accountType())){
