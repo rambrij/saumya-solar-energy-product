@@ -24,6 +24,8 @@ SPA `/` → Customer Request/Enquiry area or Vendor Enquiries tab; public store 
 ## 8. Request and response examples
 Illustrative customer request: `{"subject":"5 kW rooftop solar","message":"Please share a quotation","monthlyBill":4500}`. Use the request DTO in the API source as the authoritative schema.
 
+Response shape illustration: `{"id":"<enquiry-uuid>","tenantId":"<tenant-uuid>","customerId":"<customer-uuid>","status":"NEW"}`.
+
 ## 9. Database entities and relationships
 `Enquiry` references tenant and customer; product/package references are validated against the same tenant; conversion creates/links `SalesLead`.
 
