@@ -365,7 +365,7 @@ class Release12TenantIntegrationTest {
                         .header("Authorization", "Bearer " + vendorToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"sku":"JOURNEY-%s","name":"Journey solar panel","categoryId":"%s","price":10000,"taxPercent":5}
+                                {"sku":"JOURNEY-%s","name":"Journey solar panel","categoryId":"%s","price":0.05,"taxPercent":18}
                                 """.formatted(UUID.randomUUID(), categoryId)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var productId = json.readTree(productResponse).get("id").asText();
@@ -374,9 +374,9 @@ class Release12TenantIntegrationTest {
                         .header("Authorization", "Bearer " + vendorToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"customerId":"%s","leadId":"%s","surveyId":"%s","discountPercent":10,"validUntil":"%s","items":[{"productId":"%s","quantity":2}]}
+                                {"customerId":"%s","leadId":"%s","surveyId":"%s","discountPercent":10,"validUntil":"%s","items":[{"productId":"%s","quantity":1},{"productId":"%s","quantity":1}]}
                                 """.formatted(profile.getId(), leadId, surveyId,
-                                java.time.LocalDate.now().plusDays(30), productId)))
+                                java.time.LocalDate.now().plusDays(30), productId, productId)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var quotationId = json.readTree(quoteResponse).get("quotation").get("id").asText();
 
@@ -400,11 +400,11 @@ class Release12TenantIntegrationTest {
 
         var orderId = json.readTree(firstOrder).get("id").asText();
         var persistedOrder = customerOrders.findByIdAndTenantId(UUID.fromString(orderId), vendorTenantId).orElseThrow();
-        assertEquals(0, new BigDecimal("20000.00").compareTo(persistedOrder.getSubtotal()));
+        assertEquals(0, new BigDecimal("0.10").compareTo(persistedOrder.getSubtotal()));
         assertEquals(0, new BigDecimal("10.00").compareTo(persistedOrder.getDiscountPercent()));
-        assertEquals(0, new BigDecimal("2000.00").compareTo(persistedOrder.getDiscountAmount()));
-        assertEquals(0, new BigDecimal("900.00").compareTo(persistedOrder.getTaxTotal()));
-        assertEquals(0, new BigDecimal("18900.00").compareTo(persistedOrder.getTotal()));
+        assertEquals(0, new BigDecimal("0.02").compareTo(persistedOrder.getDiscountAmount()));
+        assertEquals(0, new BigDecimal("0.02").compareTo(persistedOrder.getTaxTotal()));
+        assertEquals(0, new BigDecimal("0.10").compareTo(persistedOrder.getTotal()));
 
         var invoiceResponse = mvc.perform(post("/api/v1/invoices")
                         .header("Authorization", "Bearer " + vendorToken)
@@ -413,18 +413,18 @@ class Release12TenantIntegrationTest {
                                 {"orderId":"%s","taxTreatment":"IGST"}
                                 """.formatted(orderId)))
                 .andExpect(status().isOk())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.subtotal").value(18000.0))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.taxTotal").value(900.0))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.grandTotal").value(18900.0))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.igstAmount").value(900.0))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.subtotal").value(0.08))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.taxTotal").value(0.02))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.grandTotal").value(0.10))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.igstAmount").value(0.02))
                 .andReturn().getResponse().getContentAsString();
         var invoiceId = json.readTree(invoiceResponse).get("id").asText();
         var invoiceLines = mvc.perform(get("/api/v1/invoices/" + invoiceId + "/items")
                         .header("Authorization", "Bearer " + vendorToken))
-                .andExpect(status().isOk()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].taxableAmount").value(18000.0))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].taxAmount").value(900.0))
+                .andExpect(status().isOk()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].taxableAmount").value(0.04))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].taxAmount").value(0.01))
                 .andReturn().getResponse().getContentAsString();
-        assertEquals(1, json.readTree(invoiceLines).size());
+        assertEquals(2, json.readTree(invoiceLines).size());
     }
 
     private String accessToken(String email, String password) throws Exception {
