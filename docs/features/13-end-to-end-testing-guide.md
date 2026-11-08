@@ -24,6 +24,7 @@ Platform plans: `/platform/subscription-plans`; tenant search/assign: `/platform
 ## 8. Request and response examples
 Example API assertions: platform plan create returns 201/200 and unique `planCode`; tenant assignment returns status TRIAL/ACTIVE; quotation conversion repeated with same idempotency key returns the same order identity; foreign-tenant requests return 403/404.
 
+At each step retain the returned identity/status tuple, for example: `{"enquiryId":"<uuid>","leadId":"<uuid>","quotationId":"<uuid>","surveyId":"<uuid>","orderId":"<uuid>","installationId":"<uuid>","serviceRequestId":"<uuid>"}`. This is a test-run worksheet, not a single API response.
 ## 9. Database entities and relationships
 Verify tenant, plan, tenant_subscription, subscription_assignment_history, product/category, customer, enquiry, lead/lead_history, quotation/items/revisions, site_survey/history, customer_order/order_item/status_history, installation/checklist/history and service/warranty entities.
 
