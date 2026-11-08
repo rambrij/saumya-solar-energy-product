@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useState} from 'react';
 
 type Session = {accessToken:string; user:{id:string;tenantId?:string;accountType:string}};
-type Pending = {operationId:string;type:string;resourceId:string;payload:string;clientCreatedAt:string;state:'PENDING'|'SYNCED';lastError?:string};
+type Pending = {operationId:string;ownerUserId:string;ownerTenantId:string;type:string;resourceId:string;payload:string;clientCreatedAt:string;state:'PENDING'|'SYNCED';lastError?:string};
 
 const DB_NAME='saumya-offline-operations';
 const STORE='operations';
@@ -25,10 +25,10 @@ const API=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
 export default function OfflineSyncPanel({session}:{session:Session}){
  const [rows,setRows]=useState<Pending[]>([]),[online,setOnline]=useState(navigator.onLine),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
  const [type,setType]=useState('SERVICE_COMMENT_CREATE'),[resourceId,setResourceId]=useState(''),[payload,setPayload]=useState('{"body":"Customer update","visibility":"CUSTOMER"}');
- const refresh=useCallback(async()=>{try{setRows((await allRows()).filter(x=>x.state==='PENDING'));}catch(e:any){setMessage('Local offline queue unavailable: '+e.message)}},[]);
+ const refresh=useCallback(async()=>{try{setRows((await allRows()).filter(x=>x.state==='PENDING'&&x.ownerUserId===session.user.id&&x.ownerTenantId===(session.user.tenantId||'')));}catch(e:any){setMessage('Local offline queue unavailable: '+e.message)}},[session.user.id,session.user.tenantId]);
  const flush=useCallback(async()=>{
   if(!navigator.onLine||busy)return;
-  const pending=(await allRows()).filter(x=>x.state==='PENDING').slice(0,50);
+  const pending=(await allRows()).filter(x=>x.state==='PENDING'&&x.ownerUserId===session.user.id&&x.ownerTenantId===(session.user.tenantId||'')).slice(0,50);
   if(!pending.length)return;
   setBusy(true);setMessage('');
   try{
@@ -40,12 +40,12 @@ export default function OfflineSyncPanel({session}:{session:Session}){
    await refresh();
   }catch(e:any){setMessage(e.message||'Synchronization failed. Pending changes were retained.');}
   finally{setBusy(false);}
- },[session.accessToken,busy,refresh]);
+ },[session.accessToken,session.user.id,session.user.tenantId,busy,refresh]);
  useEffect(()=>{void refresh();const onOnline=()=>{setOnline(true);void flush()};const onOffline=()=>setOnline(false);window.addEventListener('online',onOnline);window.addEventListener('offline',onOffline);return()=>{window.removeEventListener('online',onOnline);window.removeEventListener('offline',onOffline)}},[refresh,flush]);
  const enqueue=async(e:React.FormEvent<HTMLFormElement>)=>{
   e.preventDefault();if(!resourceId.trim()){setMessage('Enter the service ticket or survey ID.');return}
   try{JSON.parse(payload);}catch{setMessage('Payload must be valid JSON.');return}
-  const row:Pending={operationId:crypto.randomUUID(),type,resourceId:resourceId.trim(),payload,clientCreatedAt:new Date().toISOString(),state:'PENDING'};
+  const row:Pending={operationId:crypto.randomUUID(),ownerUserId:session.user.id,ownerTenantId:session.user.tenantId||'',type,resourceId:resourceId.trim(),payload,clientCreatedAt:new Date().toISOString(),state:'PENDING'};
   try{await saveRow(row);setResourceId('');await refresh();setMessage('Saved locally. It will synchronize when a connection is available.');if(navigator.onLine)void flush();}
   catch(e:any){setMessage('Could not save offline operation: '+e.message)}
  };
