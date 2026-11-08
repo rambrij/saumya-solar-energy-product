@@ -22,8 +22,9 @@ import java.util.UUID;
 public class TenantAdminService {
     private final TenantRepository tenants;
     private final AppUserRepository users;
-    public TenantAdminService(TenantRepository tenants, AppUserRepository users) {
-        this.tenants = tenants; this.users = users;
+    private final NotificationService notifications;
+    public TenantAdminService(TenantRepository tenants, AppUserRepository users, NotificationService notifications) {
+        this.tenants = tenants; this.users = users; this.notifications = notifications;
     }
     private void authorize(Principal p) {
         if (!"PLATFORM".equals(p.accountType()) || p.roles()==null ||
@@ -101,7 +102,21 @@ public class TenantAdminService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Decision must be APPROVE or REJECT");
         }
         t.setUpdatedAt(Instant.now());
-        return row(tenants.save(t));
+        Tenant saved=tenants.save(t);
+        AppUser admin=users.findByTenantId(saved.getId()).stream()
+                .filter(user -> user.getRoles().stream().anyMatch(role -> "VENDOR_ADMIN".equals(role.getName())))
+                .findFirst().orElse(null);
+        if (admin!=null) {
+            String event="APPROVE".equals(action)?"VENDOR_VERIFIED":"VENDOR_VERIFICATION_REJECTED";
+            String subject="APPROVE".equals(action)?"Your vendor account is verified":"Vendor verification needs attention";
+            String message="Hello "+admin.getName()+",\\n\\n"
+                    + ("APPROVE".equals(action)
+                    ? "Your Soumya Solar vendor account has been verified and is now active."
+                    : "Your vendor verification was not approved. Reason: "+saved.getRejectionReason())
+                    + "\\n\\nPlease contact the platform administrator if you need assistance.";
+            notifications.sendBusinessNotification(admin.getId(),saved.getId(),event,admin.getEmail(),subject,message);
+        }
+        return row(saved);
     }
 
     @Transactional
