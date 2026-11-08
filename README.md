@@ -467,9 +467,9 @@ The Release 4 CI workflow validates backend tests, frontend build, V1–V21 migr
 1. **Gateway provider not selected:** provider adapter contract and signed event processing exist; no real hosted checkout, gateway payment creation, settlement reconciliation or gateway refund implementation is enabled.
 2. **GST statutory configuration:** GSTIN and tax components are snapshotted, but place-of-supply rules, statutory invoice fields/e-invoice/IRN, reverse charge and legally approved invoice numbering must be confirmed by the business/accountant.
 3. **Service attachments:** visit evidence URL is persisted, but a private, tenant-authorized upload/download service for customer photos/documents is not yet implemented. Do not place private service evidence in the public `/uploads` folder.
-4. **SLA notifications/escalation:** breach events are persisted and exposed in ticket history; outbound email/SMS/push escalation templates and provider integration remain future work.
+4. **SLA notifications/escalation:** breach events are persisted and exposed in ticket history; automated SLA email/SMS/push escalation and provider-specific delivery policies remain future work.
 5. **SLA calendar policy:** working days, holidays and timezone are configurable; tenant owners must supply their actual calendar. The default weekday set is Monday–Friday only when a business-hour window is configured.
-6. **Invoice delivery:** PDFs are downloadable; automated email sending and delivery tracking require an approved mail provider/configuration.
+6. **Invoice delivery:** invoice-issued email is sent through the configured SMTP provider and delivery attempts are recorded. PDF attachment delivery, retry processing and provider-specific bounce/webhook tracking remain future work.
 7. **Platform inactive state:** current lifecycle supports ACTIVE/SUSPENDED. Inactive count/filter is retained for reporting compatibility but no separate INACTIVE transition is introduced.
 8. **Release 5:** reporting/export center beyond platform tenant exports, audit search UI, dashboards, CMS/blog and notification provider management remain outside this Release 4 branch.
 
