@@ -39,6 +39,7 @@ public class AppService {
     final IdempotencyRecordRepository idem;
     final RoleRepository roles;
     final OrderStatusHistoryRepository orderStatusHistory;
+    final NotificationService notifications;
     
     public AppService(
             TenantRepository a,
@@ -58,7 +59,8 @@ public class AppService {
             OrderItemRepository o,
             IdempotencyRecordRepository p,
             RoleRepository roles,
-            OrderStatusHistoryRepository orderStatusHistory
+            OrderStatusHistoryRepository orderStatusHistory,
+            NotificationService notifications
     ) {
         tenants = a;
         users = b;
@@ -78,6 +80,7 @@ public class AppService {
         idem = p;
         this.roles = roles;
         this.orderStatusHistory = orderStatusHistory;
+        this.notifications = notifications;
     }
     
     void vendor(Principal p) {
@@ -739,7 +742,16 @@ public class AppService {
             case "send" -> "SENT";
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         });
-        return quotes.save(q);
+        Quotation saved = quotes.save(q);
+        if ("send".equals(action)) {
+            CustomerProfile recipient = requireCustomer(q.getCustomerId(), p.tenantId());
+            notifications.sendBusinessNotification(recipient.getUserId(), p.tenantId(), "QUOTATION_SENT",
+                    recipient.getEmail(), "Your solar quotation is ready",
+                    "Hello " + recipient.getName() + ",\\n\\nYour quotation " + q.getQuotationNumber()
+                            + " is ready. Total: INR " + q.getGrandTotal()
+                            + ". Sign in to your customer portal to review and accept or reject it.");
+        }
+        return saved;
     }
     
     public java.util.List<Quotation> quotationRevisions(UUID id, Principal p) {
