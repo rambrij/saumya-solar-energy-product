@@ -1,0 +1,20 @@
+CREATE TABLE lead_follow_up_task (
+    id BINARY(16) NOT NULL PRIMARY KEY,
+    tenant_id BINARY(16) NOT NULL,
+    lead_id BINARY(16) NOT NULL,
+    assigned_to BINARY(16) NOT NULL,
+    created_by BINARY(16) NOT NULL,
+    due_at TIMESTAMP(6) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+    note VARCHAR(1000) NULL,
+    reminder_sent_at TIMESTAMP(6) NULL,
+    completed_at TIMESTAMP(6) NULL,
+    created_at TIMESTAMP(6) NOT NULL,
+    INDEX ix_lead_follow_up_tenant_lead_due (tenant_id, lead_id, due_at),
+    INDEX ix_lead_follow_up_due_reminder (status, due_at, reminder_sent_at),
+    CONSTRAINT fk_lead_follow_up_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(id),
+    CONSTRAINT fk_lead_follow_up_lead FOREIGN KEY (lead_id) REFERENCES sales_lead(id),
+    CONSTRAINT fk_lead_follow_up_assignee FOREIGN KEY (assigned_to) REFERENCES app_user(id),
+    CONSTRAINT fk_lead_follow_up_creator FOREIGN KEY (created_by) REFERENCES app_user(id),
+    CONSTRAINT chk_lead_follow_up_status CHECK (status IN ('OPEN','COMPLETED','CANCELLED'))
+);
