@@ -5,7 +5,7 @@ CREATE TABLE offline_sync_operation (
     client_operation_id BINARY(16) NOT NULL,
     operation_type VARCHAR(40) NOT NULL,
     resource_id BINARY(16) NOT NULL,
-    payload_hash CHAR(64) NOT NULL,
+    payload_hash VARCHAR(64) NOT NULL,
     status VARCHAR(20) NOT NULL,
     result_json LONGTEXT,
     error_message VARCHAR(1000),
