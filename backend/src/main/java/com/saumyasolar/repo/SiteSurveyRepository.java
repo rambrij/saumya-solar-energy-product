@@ -10,6 +10,7 @@ public interface SiteSurveyRepository extends JpaRepository<SiteSurvey, UUID> {
     List<SiteSurvey> findByTenantIdOrderByIdDesc(UUID tenantId);
     
     Optional<SiteSurvey> findByIdAndTenantId(UUID id, UUID tenantId);
+ long countByTenantIdAndBranchId(UUID tenantId,UUID branchId);
 
     List<SiteSurvey> findByLeadIdAndTenantIdOrderByIdDesc(UUID leadId, UUID tenantId);
 }
