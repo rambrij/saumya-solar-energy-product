@@ -18,6 +18,7 @@ public class Enquiry {
     @Id
     UUID id;
     UUID tenantId;
+    UUID branchId;
     UUID customerId;
     String name;
     String email;
