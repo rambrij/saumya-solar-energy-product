@@ -495,6 +495,7 @@ public class Controller {
     @GetMapping("/orders/{id}/history") List<com.saumyasolar.domain.OrderStatusHistory> orderHistory(@PathVariable UUID id,Authentication a){return operations.orderHistory(id,p(a));}
     @GetMapping("/installation-teams") List<com.saumyasolar.domain.InstallationTeam> installationTeams(Authentication a){return operations.teams(p(a));}
     @PostMapping("/installation-teams") com.saumyasolar.domain.InstallationTeam createInstallationTeam(@Valid @RequestBody TeamInput x,Authentication a){return operations.createTeam(x,p(a));}
+    @PatchMapping("/installation-teams/{id}") com.saumyasolar.domain.InstallationTeam updateInstallationTeam(@PathVariable UUID id,@Valid @RequestBody TeamInput x,Authentication a){return operations.updateTeam(id,x,p(a));}
     @GetMapping("/installation-checklist-templates") List<com.saumyasolar.domain.InstallationChecklistTemplate> checklistTemplates(Authentication a){return operations.checklistTemplates(p(a));}
     @PostMapping("/installation-checklist-templates") com.saumyasolar.domain.InstallationChecklistTemplate createChecklistTemplate(@Valid @RequestBody ChecklistTemplateInput x,Authentication a){return operations.createChecklistTemplate(x,p(a));}
     @DeleteMapping("/installation-checklist-templates/{id}") com.saumyasolar.domain.InstallationChecklistTemplate archiveChecklistTemplate(@PathVariable UUID id,Authentication a){return operations.archiveChecklistTemplate(id,p(a));}
@@ -503,6 +504,8 @@ public class Controller {
     @GetMapping("/installations/{id}/checklist") List<com.saumyasolar.domain.InstallationChecklistItem> installationChecklist(@PathVariable UUID id,Authentication a){return operations.checklist(id,p(a));}
     @PatchMapping("/installations/{id}/checklist/{itemId}") com.saumyasolar.domain.InstallationChecklistItem updateChecklist(@PathVariable UUID id,@PathVariable UUID itemId,@RequestBody ChecklistUpdateInput x,Authentication a){return operations.updateChecklist(id,itemId,x,p(a));}
     @PostMapping("/installations/{id}/reschedule") com.saumyasolar.domain.InstallationJob rescheduleInstallation(@PathVariable UUID id,@Valid @RequestBody RescheduleInput x,Authentication a){return operations.reschedule(id,x,p(a));}
+    @PostMapping("/installations/{id}/cancel") com.saumyasolar.domain.InstallationJob cancelInstallation(@PathVariable UUID id,@RequestBody Map<String,String> x,Authentication a){return operations.cancelInstallation(id,x.get("reason"),p(a));}
+    @GetMapping("/installations/{id}/schedule-history") List<com.saumyasolar.domain.InstallationScheduleHistory> installationScheduleHistory(@PathVariable UUID id,Authentication a){return operations.scheduleHistory(id,p(a));}
     @PostMapping("/installations/{id}/complete") com.saumyasolar.domain.InstallationJob completeInstallation(@PathVariable UUID id,@RequestBody Map<String,String> x,Authentication a){return operations.completeInstallation(id,x.getOrDefault("reason","Installation checklist completed"),p(a));}
     @PostMapping("/installations/{id}/commission") com.saumyasolar.domain.InstallationJob commissionInstallation(@PathVariable UUID id,@Valid @RequestBody CommissionInput x,Authentication a){return operations.commission(id,x,p(a));}
     @GetMapping("/warranties") List<com.saumyasolar.domain.Warranty> warranties(Authentication a){return operations.warranties(p(a));}
