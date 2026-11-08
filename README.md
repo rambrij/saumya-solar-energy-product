@@ -36,6 +36,43 @@ The optional `.`/start-clean.ps1` script and `docker compose down -v` remove the
 
 The Compose file enables demo seeding with `SEED_DATA_ENABLED=true` for local development. Application default is false, so production does not create demo accounts. Production must use its own database/JWT/CORS secrets and must not enable demo seeding. Do not expose the Compose MySQL port to an untrusted network.
 
+
+### Run backend and frontend separately (PowerShell)
+
+1. Start only the database and local email inbox:
+
+```powershell
+docker compose up -d mysql mailpit
+```
+
+2. In a backend terminal, configure the local connection (use your own long random JWT secret outside disposable development) and start Spring Boot:
+
+```powershell
+cd backend
+$env:DB_URL="jdbc:mysql://localhost:3306/solar?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+$env:DB_USER="solar"
+$env:DB_PASSWORD="solarpass"
+$env:JWT_SECRET="local-only-change-this-long-jwt-secret-12345678901234567890"
+$env:CORS_ORIGINS="http://localhost:3000,http://localhost:5173"
+$env:MAIL_HOST="localhost"
+$env:MAIL_PORT="1025"
+$env:MAIL_SMTP_AUTH="false"
+$env:MAIL_SMTP_STARTTLS="false"
+$env:SEED_DATA_ENABLED="true"
+mvn spring-boot:run
+```
+
+3. In a separate frontend terminal:
+
+```powershell
+cd frontend
+npm install
+$env:VITE_API_BASE_URL="http://localhost:8080"
+npm run dev -- --host 0.0.0.0
+```
+
+Open the Vite URL shown in the terminal (normally `http://localhost:5173`). Mailpit inbox: `http://localhost:8025`. For the containerized default experience, prefer `docker compose up --build`.
+
 For a new production database, run Flyway migrations first. Then bootstrap the first platform administrator once using deployment secrets: set `PLATFORM_BOOTSTRAP_ENABLED=true`, `PLATFORM_BOOTSTRAP_EMAIL`, and `PLATFORM_BOOTSTRAP_PASSWORD` (minimum 16 characters), start the backend, verify the account can sign in, and immediately set `PLATFORM_BOOTSTRAP_ENABLED=false` and remove the bootstrap password. The bootstrap is disabled by default and fails if the email already exists.
 
 
