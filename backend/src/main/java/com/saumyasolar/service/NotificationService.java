@@ -42,7 +42,7 @@ public class NotificationService {
     }
 
     public boolean sendVendorInvitation(UUID userId, UUID tenantId, String recipient, String displayName, String token) {
-        String link = publicBaseUrl + "/?vendorInviteToken=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
+        String link = publicBaseUrl + "/#vendorInviteToken=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
         String body = "Hello " + safeName(displayName) + ",\n\n"
                 + "You have been invited to administer a Soumya Solar vendor workspace. "
                 + "Set your password using the one-time link below within 24 hours. "
