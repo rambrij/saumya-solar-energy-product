@@ -18,6 +18,9 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.security.SecureRandom;
+import java.security.MessageDigest;
+import java.util.Base64;
 @Service
 public class AuthLifecycleService {
     final RefreshTokenRepository refresh;
@@ -29,6 +32,7 @@ public class AuthLifecycleService {
     final CustomerProfileRepository customerProfiles;
     final ProductCategoryRepository categories;
     final PasswordEncoder encoder;
+    final NotificationService notifications;
     
     AuthLifecycleService(
             RefreshTokenRepository r,
@@ -39,7 +43,8 @@ public class AuthLifecycleService {
             PermissionRepository permissions,
             CustomerProfileRepository customerProfiles,
             ProductCategoryRepository categories,
-            PasswordEncoder e
+            PasswordEncoder e,
+            NotificationService notifications
     ) {
         refresh = r;
         resets = p;
@@ -50,6 +55,7 @@ public class AuthLifecycleService {
         this.customerProfiles = customerProfiles;
         this.categories = categories;
         encoder = e;
+        this.notifications = notifications;
     }
     
     public boolean tenantIsActive(AppUser user) {
@@ -108,23 +114,36 @@ public class AuthLifecycleService {
     }
     
     public Map<String, String> forgot(String email) {
-        var out = new HashMap<String, String>();
-        out.put("message", "If the account exists, reset instructions were created");
-        users.findByEmailIgnoreCase(email).ifPresent(u -> {
-            var x = new PasswordResetToken();
-            x.setId(UUID.randomUUID());
-            x.setUserId(u.getId());
-            x.setToken(UUID.randomUUID().toString());
-            x.setExpiresAt(Instant.now().plus(Duration.ofMinutes(30)));
-            resets.save(x);
-            out.put("devResetToken", x.getToken());
+        Map<String, String> out = Map.of("message", "If the account exists, reset instructions were sent");
+        if (email == null || email.isBlank()) return out;
+        users.findByEmailIgnoreCase(email.trim()).filter(AppUser::isEnabled).ifPresent(user -> {
+            byte[] random = new byte[32];
+            new SecureRandom().nextBytes(random);
+            String rawToken = Base64.getUrlEncoder().withoutPadding().encodeToString(random);
+            var reset = new PasswordResetToken();
+            reset.setId(UUID.randomUUID());
+            reset.setUserId(user.getId());
+            reset.setToken(hashResetToken(rawToken));
+            reset.setExpiresAt(Instant.now().plus(Duration.ofMinutes(30)));
+            resets.save(reset);
+            notifications.sendPasswordReset(user.getId(), user.getTenantId(), user.getEmail(), user.getName(), rawToken);
         });
         return out;
     }
-    
+
+    private String hashResetToken(String token) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(token.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
+        } catch (java.security.NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is not available", ex);
+        }
+    }
+
     @Transactional
     public void reset(String token, String password) {
-        var x = resets.findByToken(token).filter(v -> !v.isUsed() && v.getExpiresAt().isAfter(Instant.now())).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid token"));
+        var x = resets.findByToken(hashResetToken(token)).filter(v -> !v.isUsed() && v.getExpiresAt().isAfter(Instant.now())).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid token"));
         var u = users.findById(x.getUserId()).orElseThrow();
         if (password == null || password.length() < 12)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password must contain at least 12 characters");
