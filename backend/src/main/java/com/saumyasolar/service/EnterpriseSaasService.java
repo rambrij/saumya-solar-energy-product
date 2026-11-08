@@ -156,7 +156,7 @@ public class EnterpriseSaasService {
    old.setReplacedBySubscriptionId(newId);old.setUpdatedAt(now);subscriptions.save(old);
    history(p,old,"REPLACED",previous,previousPlan,Map.of("replacementSubscriptionId",newId.toString(),"replacementPlanId",planId.toString()));
   }
-  history(p,s,active.isEmpty()?"ASSIGNED":"REPLACEMENT_ASSIGNED",null,null,Map.of("planCode",plan.getPlanCode(),"billingCycle",cycle,"autoRenew",x.autoRenew()));
+  history(p,s,active.isEmpty()?"ASSIGNED":"REPLACEMENT_ASSIGNED",null,null,Map.of("planCode",Objects.toString(plan.getPlanCode(),""),"billingCycle",Objects.toString(cycle,""),"autoRenew",x.autoRenew()));
   audit(p,tenantId,"SUBSCRIPTION_ASSIGNED","TENANT_SUBSCRIPTION",s.getId(),s);return s;
  }
  @Transactional public TenantSubscription cancelSubscription(UUID tenantId,UUID subscriptionId,Principal p){
