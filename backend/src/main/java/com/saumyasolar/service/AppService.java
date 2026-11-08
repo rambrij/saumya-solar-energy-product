@@ -230,6 +230,7 @@ public class AppService {
                 yield cats.save(e);
             }
             case "products" -> {
+                if(enterpriseSaas!=null)enterpriseSaas.enforceProductLimit(p.tenantId());
                 var e = new Product();
                 e.setId(UUID.randomUUID());
                 e.setTenantId(p.tenantId());
@@ -291,6 +292,7 @@ public class AppService {
                 yield e;
             }
             case "customers" -> {
+                if(enterpriseSaas!=null)enterpriseSaas.enforceCustomerLimit(p.tenantId());
                 var e = new CustomerProfile();
                 e.setId(UUID.randomUUID());
                 e.setTenantId(p.tenantId());
