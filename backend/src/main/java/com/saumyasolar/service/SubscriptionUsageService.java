@@ -17,12 +17,13 @@ public class SubscriptionUsageService {
  private final BranchRepository branches;
  private final WarehouseRepository warehouses;
  private final SubscriptionUsageRepository usage;
- public SubscriptionUsageService(TenantSubscriptionRepository s,SubscriptionPlanRepository p,AppUserRepository u,BranchRepository b,WarehouseRepository w,SubscriptionUsageRepository m){
-  subscriptions=s;plans=p;users=u;branches=b;warehouses=w;usage=m;
+ private final TenantRepository tenants;
+ public SubscriptionUsageService(TenantSubscriptionRepository s,SubscriptionPlanRepository p,AppUserRepository u,BranchRepository b,WarehouseRepository w,SubscriptionUsageRepository m,TenantRepository t){
+  subscriptions=s;plans=p;users=u;branches=b;warehouses=w;usage=m;tenants=t;
  }
  @Transactional public Map<String,Object> current(Principal p){
   if(!"VENDOR".equals(p.accountType())||p.tenantId()==null)throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-  UUID tenant=p.tenantId();Instant now=Instant.now();
+  UUID tenant=p.tenantId();tenants.findByIdForUpdate(tenant).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));Instant now=Instant.now();
   LocalDate start=LocalDate.now(ZoneOffset.UTC).withDayOfMonth(1),end=start.plusMonths(1).minusDays(1);
   long userCount=users.findByTenantId(tenant).stream().filter(u->"VENDOR".equals(u.getAccountType())&&u.isEnabled()).count();
   long branchCount=branches.countByTenantIdAndActiveTrue(tenant);
