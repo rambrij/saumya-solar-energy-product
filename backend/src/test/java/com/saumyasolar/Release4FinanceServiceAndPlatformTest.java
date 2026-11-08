@@ -133,7 +133,7 @@ class Release4FinanceServiceAndPlatformTest {
         String vendor=token("admin@saumya.local","Admin@123");
         String email="warranty-evidence-"+UUID.randomUUID()+"@example.test";
         mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
-            .content("{\\"storeSlug\\":\\"saumya-solar\\",\\"name\\":\\"Warranty Customer\\",\\"email\\":\\""+email+"\\",\\"password\\":\\"WarrantyCustomer@2026\\"}"))
+            .content(json.writeValueAsString(java.util.Map.of("storeSlug","saumya-solar","name","Warranty Customer","email",email,"password","WarrantyCustomer@2026"))))
             .andExpect(status().isOk());
         String customer=token(email,"WarrantyCustomer@2026");
         var user=users.findByEmailIgnoreCase(email).orElseThrow();
@@ -156,7 +156,7 @@ class Release4FinanceServiceAndPlatformTest {
         mvc.perform(get("/api/v1/warranty-claims/"+claimId+"/attachments").header("Authorization","Bearer "+vendor)).andExpect(status().isOk());
         String otherEmail="warranty-other-"+UUID.randomUUID()+"@example.test";
         mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
-            .content("{\\"storeSlug\\":\\"saumya-solar\\",\\"name\\":\\"Other Warranty Customer\\",\\"email\\":\\""+otherEmail+"\\",\\"password\\":\\"OtherWarranty@2026\\"}"))
+            .content(json.writeValueAsString(java.util.Map.of("storeSlug","saumya-solar","name","Warranty Customer","email",email,"password","WarrantyCustomer@2026"))))
             .andExpect(status().isOk());
         String other=token(otherEmail,"OtherWarranty@2026");
         mvc.perform(get("/api/v1/warranty-claims/"+claimId+"/attachments/"+attachmentId).header("Authorization","Bearer "+other)).andExpect(status().isNotFound());
