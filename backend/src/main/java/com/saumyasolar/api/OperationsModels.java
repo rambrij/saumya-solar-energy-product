@@ -18,10 +18,8 @@ public record RescheduleInput(@NotNull Instant scheduledAt,@NotBlank String reas
 public record ChecklistUpdateInput(Boolean completed,String evidenceUrl,String notes){}
 public record EquipmentInput(@NotNull UUID productId,String serialNumber){}
 public record CommissionInput(boolean customerSignedOff,@NotBlank String commissioningNotes,List<EquipmentInput> equipment){}
+public record CustomerOrderLineView(UUID id, UUID productId, UUID packageId, String description,
+                                     Integer quantity, BigDecimal unitPrice, BigDecimal lineTotal, BigDecimal taxPercent) {}
+public record CustomerOrderView(UUID id, String orderNumber, String status, String paymentStatus,
+                                BigDecimal total, Instant createdAt, List<CustomerOrderLineView> items) {}
 }
-record CustomerOrderLineView(UUID id, UUID productId, UUID packageId, String description,
-                             Integer quantity, java.math.BigDecimal unitPrice,
-                             java.math.BigDecimal lineTotal, java.math.BigDecimal taxPercent) {}
-record CustomerOrderView(UUID id, String orderNumber, String status, String paymentStatus,
-                         java.math.BigDecimal total, java.time.Instant createdAt,
-                         java.util.List<CustomerOrderLineView> items) {}
