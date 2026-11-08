@@ -11,6 +11,8 @@ spring:
   flyway:
     enabled: false
 app:
+  auth:
+    platform-mfa-enabled: false
   jwt-secret: test-only-jwt-secret-that-is-long-enough-for-hmac-sha-256-and-more
   cors-origins: http://localhost:3000
   seed:
