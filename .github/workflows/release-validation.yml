@@ -243,6 +243,10 @@ jobs:
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V29__vendor_verification_lifecycle.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='tenant' AND column_name IN ('verification_status','verified_at','verified_by','rejection_reason')")" = "4"
+      - name: Apply V30 solar package tax rate migration
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V30__solar_package_tax_rate.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='solar_package' AND column_name='tax_percent'")" = "1"
 
 
   mysql-app-startup:
