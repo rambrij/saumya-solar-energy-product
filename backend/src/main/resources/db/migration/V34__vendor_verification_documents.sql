@@ -1,0 +1,21 @@
+CREATE TABLE vendor_verification_document (
+    id BINARY(16) NOT NULL PRIMARY KEY,
+    tenant_id BINARY(16) NOT NULL,
+    document_type VARCHAR(50) NOT NULL,
+    original_name VARCHAR(200) NOT NULL,
+    storage_key VARCHAR(100) NOT NULL,
+    content_type VARCHAR(100) NOT NULL,
+    size_bytes BIGINT NOT NULL,
+    uploaded_by BINARY(16) NOT NULL,
+    review_status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    review_notes VARCHAR(1000) NULL,
+    reviewed_by BINARY(16) NULL,
+    reviewed_at TIMESTAMP(6) NULL,
+    created_at TIMESTAMP(6) NOT NULL,
+    UNIQUE KEY uk_vendor_verification_storage_key (storage_key),
+    INDEX ix_vendor_verification_tenant_created (tenant_id, created_at),
+    CONSTRAINT fk_vendor_verification_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(id),
+    CONSTRAINT fk_vendor_verification_uploader FOREIGN KEY (uploaded_by) REFERENCES app_user(id),
+    CONSTRAINT fk_vendor_verification_reviewer FOREIGN KEY (reviewed_by) REFERENCES app_user(id),
+    CONSTRAINT chk_vendor_verification_review_status CHECK (review_status IN ('PENDING','APPROVED','REJECTED'))
+);
