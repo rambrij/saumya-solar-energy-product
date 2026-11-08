@@ -500,6 +500,32 @@ class Release12TenantIntegrationTest {
     }
 
     @Test
+    void rolePermissionMatrixRejectsPrivilegedActionsForSalesCustomerAndPlatformUsers() throws Exception {
+        var salesToken = accessToken("sales@saumya.local", "Sales@123");
+        var customerToken = accessToken("customer@saumya.local", "Customer@123");
+        var platformToken = accessToken("platform@saumya.local", "Platform@123");
+
+        mvc.perform(get("/api/v1/roles/permissions").header("Authorization", "Bearer " + salesToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/roles").header("Authorization", "Bearer " + salesToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"UNAUTHORIZED_ROLE\",\"permissionCodes\":[\"CATALOG_VIEW\"]}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/invoices").header("Authorization", "Bearer " + salesToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"orderId\":\""+UUID.randomUUID()+"\",\"taxTreatment\":\"IGST\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/products").header("Authorization", "Bearer " + customerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Unauthorized product\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/products").header("Authorization", "Bearer " + platformToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/platform/tenants").header("Authorization", "Bearer " + salesToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void notificationInboxIsScopedToAuthenticatedRecipientAndSupportsReadState() throws Exception {
         var vendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
         var customer = users.findByEmailIgnoreCase("customer@saumya.local").orElseThrow();
