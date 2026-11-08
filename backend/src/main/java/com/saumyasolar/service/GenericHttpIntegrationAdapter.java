@@ -13,7 +13,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Locale;
-import java.util.regex.Pattern;
 
 /**
  * Safe baseline adapter for tenant-configured HTTPS APIs. Provider-specific accounting
@@ -21,12 +20,13 @@ import java.util.regex.Pattern;
  */
 @Component
 public class GenericHttpIntegrationAdapter implements IntegrationAdapter {
-    private static final Pattern ENV_NAME = Pattern.compile("[A-Z_][A-Z0-9_]{0,127}");
     private final ObjectMapper mapper;
     private final HttpClient client;
+    private final SecretProviderRegistry secrets;
 
-    public GenericHttpIntegrationAdapter(ObjectMapper mapper) {
+    public GenericHttpIntegrationAdapter(ObjectMapper mapper, SecretProviderRegistry secrets) {
         this.mapper = mapper;
+        this.secrets = secrets;
         this.client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
                 .followRedirects(HttpClient.Redirect.NEVER)
@@ -71,17 +71,7 @@ public class GenericHttpIntegrationAdapter implements IntegrationAdapter {
 
         String secretReference = connection.getSecretReference();
         if (secretReference != null && !secretReference.isBlank()) {
-            if (!secretReference.startsWith("env://")) {
-                throw new IllegalStateException("This adapter supports env:// secret references; configure a secret resolver for vault://");
-            }
-            String variable = secretReference.substring("env://".length());
-            if (!ENV_NAME.matcher(variable).matches()) {
-                throw new IllegalArgumentException("Invalid environment secret reference");
-            }
-            String secret = System.getenv(variable);
-            if (secret == null || secret.isBlank()) {
-                throw new IllegalStateException("Configured integration environment secret is unavailable");
-            }
+            String secret = secrets.resolve(secretReference);
             String header = config.hasNonNull("authHeader") ? config.get("authHeader").asText() : "Authorization";
             String schemeName = config.hasNonNull("authScheme") ? config.get("authScheme").asText() : "Bearer";
             if (!header.matches("[A-Za-z0-9-]{1,64}") || header.equalsIgnoreCase("Host")
