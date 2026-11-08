@@ -837,6 +837,11 @@ public class AppService {
         rec.setIdempotencyKey(key);
         rec.setResourceId(o.getId());
         idem.save(rec);
+        CustomerProfile orderCustomer=requireCustomer(q.getCustomerId(),p.tenantId());
+        notifications.sendBusinessNotification(orderCustomer.getUserId(),p.tenantId(),"ORDER_CREATED",
+                orderCustomer.getEmail(),"Your solar order "+o.getOrderNumber()+" is confirmed",
+                "Hello "+orderCustomer.getName()+",\n\nYour accepted quotation has been converted to order "
+                        +o.getOrderNumber()+" for INR "+o.getTotal()+". Sign in to your customer portal to track progress.");
         return o;
     }
 }
