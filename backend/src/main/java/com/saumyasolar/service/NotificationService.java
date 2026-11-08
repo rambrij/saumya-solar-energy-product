@@ -84,7 +84,7 @@ public class NotificationService {
         record.setEventType(eventType);
         record.setRecipient(recipient.trim());
         record.setSubject(subject);
-        record.setChannel("EMAIL");record.setMessageBody(body);record.setStatus("PENDING");
+        record.setChannel("EMAIL");record.setMessageBody(body);record.setIdempotencyKey(UUID.nameUUIDFromBytes((tenantId+":"+userId+":"+eventType+":EMAIL:"+recipient.trim()+":"+subject+":"+body).getBytes(StandardCharsets.UTF_8)).toString());if(tenantId!=null&&deliveries.existsByTenantIdAndIdempotencyKey(tenantId,record.getIdempotencyKey()))return false;record.setStatus("PENDING");
         record.setAttemptCount(0);
         record.setCreatedAt(Instant.now());
         deliveries.save(record);
