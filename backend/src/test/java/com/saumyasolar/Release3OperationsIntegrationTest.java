@@ -14,6 +14,8 @@ import com.saumyasolar.repo.CustomerOrderRepository;
 import com.saumyasolar.repo.OrderItemRepository;
 import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.repo.InventoryBalanceRepository;
+import com.saumyasolar.repo.SubscriptionPlanRepository;
+import com.saumyasolar.repo.TenantSubscriptionRepository;
 import com.saumyasolar.domain.ProductCategory;
 import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.AppUserRepository;
