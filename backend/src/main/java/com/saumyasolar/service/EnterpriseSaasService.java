@@ -113,15 +113,20 @@ public class EnterpriseSaasService {
    .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"No subscription found")));
   SubscriptionPlan plan=plans.findById(s.getPlanId()).orElseThrow();return Map.of("subscription",s,"plan",plan,"effective",effective(s));
  }
+ private UUID branchTenant(Principal p){
+  if(p==null||!"VENDOR".equals(p.accountType())||p.tenantId()==null)
+   throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+  return p.tenantId();
+ }
  public void assertBranchAccess(UUID branchId,Principal p){
-  UUID tenantId=vendor(p,"BRANCH_MANAGE");
+  UUID tenantId=branchTenant(p);
   if(branchId==null||p.roles()!=null&&p.roles().contains("VENDOR_ADMIN"))return;
   branches.findByIdAndTenantId(branchId,tenantId).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Business record not found"));
   if(!memberships.existsByTenantIdAndBranchIdAndUserId(tenantId,branchId,p.userId()))
    throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Business record not found");
  }
  public <T> List<T> filterBranchRecords(List<T> rows,java.util.function.Function<T,UUID> branchId,Principal p){
-  UUID tenantId=vendor(p,"BRANCH_MANAGE");
+  UUID tenantId=branchTenant(p);
   if(p.roles()!=null&&p.roles().contains("VENDOR_ADMIN"))return rows;
   Set<UUID> assigned=new HashSet<>();
   memberships.findByTenantIdAndUserId(tenantId,p.userId()).forEach(m->assigned.add(m.getBranchId()));
