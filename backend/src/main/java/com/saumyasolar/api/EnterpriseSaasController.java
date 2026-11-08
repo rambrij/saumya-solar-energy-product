@@ -17,7 +17,7 @@ public class EnterpriseSaasController {
  public record DomainRequest(@NotBlank @Size(max=253) String domain){}
  public record IntegrationRequest(@NotBlank @Size(max=60) String providerCode,@NotBlank String integrationType,@NotBlank @Size(max=150) String displayName,@Size(max=500) String secretReference,@NotBlank String configJson){}
  public record IntegrationStatusRequest(@NotBlank String status){}
- public record IntegrationJobRequest(@NotBlank String entityType,@NotBlank @Size(max=100) String entityId,@NotBlank String operation,@NotBlank @Size(max=160) String idempotencyKey,@NotBlank String payloadJson){}
+ public record IntegrationJobRequest(@NotBlank @Size(max=60) String entityType,@NotBlank @Size(max=100) String entityId,@NotBlank @Size(max=30) String operation,@NotBlank @Size(max=160) String idempotencyKey,@NotBlank @Size(max=100000) String payloadJson){}
  public record WorkflowRequest(@NotBlank @Size(max=60) String code,@NotBlank @Size(max=150) String name,@NotBlank String entityType,@NotBlank String stepsJson){}
  public record ApprovalDecisionRequest(@NotBlank String decision,@Size(max=1000) String comments){}
  public record SubscriptionRequest(@NotNull UUID planId,@NotBlank String status,Instant startsAt,Instant endsAt,Instant renewsAt,@Size(max=160) String externalReference){}
