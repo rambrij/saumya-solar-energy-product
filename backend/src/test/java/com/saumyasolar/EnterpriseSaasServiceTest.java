@@ -184,6 +184,7 @@ class EnterpriseSaasServiceTest {
         value.setId(UUID.randomUUID());
         value.setActive(true);
         value.setMaxBranches(maxBranches);
+        value.setEntitlementsJson("{\"branches\":true,\"multiWarehouse\":true,\"customBranding\":true,\"approvalWorkflows\":true,\"accountingIntegration\":true,\"paymentGateway\":true,\"apiIntegrations\":true}");
         return value;
     }
 
