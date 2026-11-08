@@ -26,6 +26,9 @@ public class NotificationDelivery {
     String subject;
     @Column(nullable = false, length = 20)
     String status;
+    @Column(columnDefinition = "TEXT")
+    String body;
+    Instant nextAttemptAt;
     int attemptCount;
     Instant createdAt;
     Instant sentAt;
