@@ -7,7 +7,7 @@ Assign and replace SaaS plans for tenants while retaining effective dates, trial
 Platform Super Admin with `SUBSCRIPTION_MANAGE`; Vendor Admin can read current subscription and usage but cannot assign plans.
 
 ## 3. Preconditions
-Tenant must exist; selected plan must be active; V46 migration must be applied.
+Tenant must exist; selected plan must be active; V46, V47 and V48 migrations must be applied.
 
 ## 4. Business rules
 Tenant row is locked during assignment; start/end/trial dates validated; replacement closes/cancels previous active assignments and records replacement links/history; plan/tenant IDs are validated server-side.
