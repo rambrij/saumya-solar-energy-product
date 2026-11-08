@@ -24,6 +24,8 @@ SPA `/` → Vendor Orders tab; Customer My Orders; order history detail.
 ## 8. Request and response examples
 Conversion request requires `Idempotency-Key` header; body is the quotation conversion DTO (often empty). Response returns the created order. Never retry with a new key after a timeout until checking the original order.
 
+Response shape illustration: `{"id":"<order-uuid>","quotationId":"<quotation-uuid>","orderNumber":"ORD-...","status":"CONFIRMED","total":218300.00}`.
+
 ## 9. Database entities and relationships
 `CustomerOrder` references tenant/customer/quotation; `OrderItem` stores product and financial snapshots; `OrderStatusHistory`, inventory reservation and payment records link to order.
 
