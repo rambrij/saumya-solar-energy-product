@@ -621,6 +621,12 @@ class Release12TenantIntegrationTest {
         var customerOrdersJson = mvc.perform(get("/api/v1/customer/product-orders")
                         .header("Authorization", "Bearer " + customerToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertTrue(json.readTree(customerOrdersJson).toString().contains(orderId.toString()));
+        var customerOrderView=json.readTree(customerOrdersJson).get(0);
+        assertEquals(orderId.toString(),customerOrderView.get("id").asText());
+        assertEquals("NOT_INVOICED",customerOrderView.get("paymentStatus").asText());
+        assertEquals(1,customerOrderView.get("items").size());
+        assertTrue(customerOrderView.get("items").get(0).get("description").asText().contains("Journey solar panel"));
+        mvc.perform(get("/api/v1/customer/product-orders/"+orderId).header("Authorization","Bearer "+customerToken))
+                .andExpect(status().isOk()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.items[0].quantity").value(2));
     }
 }
