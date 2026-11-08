@@ -832,7 +832,7 @@ public class AppService {
         o.setCreatedAt(Instant.now());
         orders.save(o);
         if(integrationManagement!=null)integrationManagement.enqueueAccountingEvent("ORDER",o.getId().toString(),"UPSERT",
-                Map.of("orderNumber",o.getOrderNumber(),"customerId",o.getCustomerId().toString(),"total",o.getTotal(),"status",o.getStatus()),p);
+                Map.of("orderNumber",o.getOrderNumber(),"customerId",o.getCustomerId().toString(),"total",o.getTotal()==null?java.math.BigDecimal.ZERO:o.getTotal(),"status",o.getStatus()),p);
         var initialHistory=new OrderStatusHistory();initialHistory.setId(UUID.randomUUID());initialHistory.setTenantId(p.tenantId());initialHistory.setOrderId(o.getId());initialHistory.setOldStatus(null);initialHistory.setNewStatus("CONFIRMED");initialHistory.setReason("Order created from accepted quotation");initialHistory.setActorId(p.userId());initialHistory.setCreatedAt(Instant.now());orderStatusHistory.save(initialHistory);
         for (var qi : quoteItems.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(i -> i.getQuotationId().equals(qid)).toList()) {
             var i = new OrderItem();
