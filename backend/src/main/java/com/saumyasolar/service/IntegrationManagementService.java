@@ -10,7 +10,7 @@ public class IntegrationManagementService {
  private UUID tenant(Principal p){if(!"VENDOR".equals(p.accountType())||p.tenantId()==null||p.permissions()==null||!p.permissions().contains("INTEGRATION_MANAGE"))throw new ResponseStatusException(HttpStatus.FORBIDDEN);return p.tenantId();}
  private void scan(JsonNode node){if(node.isObject())node.fields().forEachRemaining(e->{String k=e.getKey().toLowerCase(Locale.ROOT);if(k.contains("secret")||k.contains("password")||k.contains("token")||k.contains("apikey")||k.contains("clientsecret"))throw new IllegalArgumentException();scan(e.getValue());});else if(node.isArray())node.forEach(this::scan);}
  private void validateJson(String value){try{JsonNode n=mapper.readTree(value);if(n==null||!n.isObject())throw new IllegalArgumentException();scan(n);}catch(Exception e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Configuration/payload must be a JSON object and must not contain credentials");}}
- private void audit(Principal p,String action,String type,UUID id,Object value){try{AuditEvent a=new AuditEvent();a.setId(UUID.randomUUID());a.setTenantId(p.tenantId());a.setActorId(p.userId());a.setActorType(p.accountType());a.setAction(action);a.setEntityType(type);a.setEntityId(id.toString());a.setOutcome("SUCCESS");a.setAfterJson(mapper.writeValueAsString(value));a.setCreatedAt(Instant.now());audits.save(a);}catch(Exception ex){throw new IllegalStateException("Could not persist integration audit event",ex);}}
+ private void audit(Principal p,String action,String type,UUID id,Object value){try{AuditEvent a=new AuditEvent();a.setId(UUID.randomUUID());a.setTenantId(p.tenantId());a.setActorId("SYSTEM".equals(p.accountType())?null:p.userId());a.setActorType(p.accountType());a.setAction(action);a.setEntityType(type);a.setEntityId(id.toString());a.setOutcome("SUCCESS");a.setAfterJson(mapper.writeValueAsString(value));a.setCreatedAt(Instant.now());audits.save(a);}catch(Exception ex){throw new IllegalStateException("Could not persist integration audit event",ex);}}
  @Transactional public IntegrationConnection create(ConnectionInput x,Principal p){
   UUID t=tenant(p);
   if(x.providerCode()==null||!x.providerCode().trim().matches("[A-Za-z0-9][A-Za-z0-9_-]{1,59}"))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Provider code must be 2 to 60 alphanumeric characters, dashes or underscores");
@@ -44,7 +44,7 @@ public class IntegrationManagementService {
   j.setStatus("QUEUED");j.setAttemptCount(0);j.setLastError(null);j.setNextAttemptAt(Instant.now());j.setUpdatedAt(Instant.now());IntegrationSyncJob saved=jobs.save(j);audit(p,"INTEGRATION_SYNC_RETRIED","INTEGRATION_SYNC_JOB",j.getId(),Map.of("status","QUEUED"));return saved;
  }
  @Transactional public void enqueueAccountingEvent(String entityType,String entityId,String operation,Map<String,Object> payload,Principal p){
-  if(p==null||!"VENDOR".equals(p.accountType())||p.tenantId()==null)return;
+  if(p==null||(!"VENDOR".equals(p.accountType())&&!"SYSTEM".equals(p.accountType()))||p.tenantId()==null)return;
   List<IntegrationConnection> accounting=connections.findByTenantIdAndIntegrationTypeAndStatus(p.tenantId(),"ACCOUNTING","ACTIVE");
   for(IntegrationConnection connection:accounting){
    String key=entityType.toUpperCase(Locale.ROOT)+":"+entityId+":"+operation.toUpperCase(Locale.ROOT)+":v1";
