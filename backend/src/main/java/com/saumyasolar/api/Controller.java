@@ -482,6 +482,7 @@ public class Controller {
     @PostMapping("/warehouses") com.saumyasolar.domain.Warehouse createWarehouse(@Valid @RequestBody WarehouseInput x,Authentication a){return operations.createWarehouse(x,p(a));}
     @GetMapping("/inventory/balances") List<com.saumyasolar.domain.InventoryBalance> inventoryBalances(Authentication a){return operations.balances(p(a));}
     @GetMapping("/inventory/transactions") List<com.saumyasolar.domain.InventoryTransaction> inventoryLedger(Authentication a){return operations.ledger(p(a));}
+    @PostMapping("/inventory/transactions/{id}/reverse") com.saumyasolar.domain.InventoryTransaction reverseInventoryTransaction(@PathVariable UUID id,@Valid @RequestBody InventoryReversalInput x,Authentication a){return operations.reverseInventoryTransaction(id,x,p(a));}
     @PostMapping("/inventory/receipts") com.saumyasolar.domain.InventoryBalance inventoryReceipt(@Valid @RequestBody ReceiptInput x,Authentication a){return operations.receive(x,p(a));}
     @PostMapping("/inventory/returns") com.saumyasolar.domain.InventoryBalance inventoryReturn(@Valid @RequestBody ReceiptInput x,Authentication a){return operations.returnStock(x,p(a));}
     @PostMapping("/inventory/issues") com.saumyasolar.domain.InventoryBalance inventoryIssue(@Valid @RequestBody IssueInput x,Authentication a){return operations.issue(x,p(a));}
