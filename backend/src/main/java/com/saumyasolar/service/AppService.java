@@ -612,12 +612,12 @@ public class AppService {
         e.setShading(x.shading());
         e.setSanctionedLoadKw(x.sanctionedLoadKw());
         e.setNotes(x.notes());
-        e.setStatus(x.status() == null ? "SCHEDULED" : x.status());
-        if (!java.util.Set.of("SCHEDULED", "COMPLETED", "CANCELLED").contains(e.getStatus()))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid survey status");
-        if ("SCHEDULED".equals(e.getStatus()) && e.getScheduledAt() == null)
+        if (x.status() != null && !"SCHEDULED".equals(x.status()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "New surveys must start in SCHEDULED status; use the survey lifecycle endpoints for transitions");
+        e.setStatus("SCHEDULED");
+        if (e.getScheduledAt() == null)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Scheduled date/time is required");
-        if ("COMPLETED".equals(e.getStatus())) e.setCompletedAt(Instant.now());
         return surveys.save(e);
     }
     
@@ -633,6 +633,9 @@ public class AppService {
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Survey not found in this vendor"));
             if (x.leadId() == null || !x.leadId().equals(survey.getLeadId()))
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Survey must belong to selected lead");
+            if (!"APPROVED".equals(survey.getStatus()))
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Quotation creation requires an approved site survey");
         }
         if (x.items() == null || x.items().isEmpty())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one quotation item is required");
