@@ -26,9 +26,10 @@ class IntegrationManagementServiceTest {
     @Mock IntegrationConnectionRepository connections;
     @Mock IntegrationSyncJobRepository jobs;
     @Mock AuditEventRepository audits;
+    @Mock com.saumyasolar.service.EnterpriseSaasService entitlements;
     IntegrationManagementService service;
 
-    @BeforeEach void setUp(){service=new IntegrationManagementService(connections,jobs,audits,new ObjectMapper());}
+    @BeforeEach void setUp(){service=new IntegrationManagementService(connections,jobs,audits,new ObjectMapper(),entitlements);}
 
     @Test void integrationConfigurationRejectsInlineCredentials(){
         var error=assertThrows(ResponseStatusException.class,()->service.create(
