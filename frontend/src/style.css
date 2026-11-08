@@ -236,7 +236,7 @@ header .brand-home img{width:220px;max-width:48vw}
 .public-site-nav a:after{position:absolute;right:0;bottom:4px;left:0;height:2px;background:#21834e;content:"";transform:scaleX(0);transform-origin:left;transition:transform .18s ease}
 .public-site-nav a:hover,.public-site-nav a.active{color:#147343}
 .public-site-nav a:hover:after,.public-site-nav a.active:after{transform:scaleX(1)}
-.public-login-link{padding:10px 16px!important;background:transparent!important;color:#1e6a42!important;border:1px solid #b9d4c2!important;border-radius:9px!important;white-space:nowrap}
+.public-login-link{padding:10px 16px!important;background:transparent!important;color:var(--vendor-primary,#1e6a42)!important;border:1px solid #b9d4c2!important;border-radius:9px!important;white-space:nowrap}
 .public-login-link:hover{background:#eef7f0!important}
 .public-header-cta{flex:0 0 auto;white-space:nowrap}
 .public-menu-toggle{display:none;flex-direction:column;gap:5px;width:42px;height:40px;align-items:center;justify-content:center;background:#f0f7f2;border:1px solid #d9e8dd;border-radius:9px}
@@ -256,7 +256,7 @@ header .brand-home img{width:220px;max-width:48vw}
 .public-product-body .product-model{margin:0 0 7px;font-size:.8rem;color:#819087}
 .product-card-bottom{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:auto;padding-top:15px}
 .product-card-bottom strong{font-size:1.15rem;color:#173d2d}
-.public-link-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 16px;background:#176c40;color:#fff!important;text-decoration:none;border:1px solid #176c40;border-radius:9px;font-weight:700;cursor:pointer;transition:background .18s ease,transform .18s ease}
+.public-link-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 16px;background:var(--vendor-primary,#176c40);color:#fff!important;text-decoration:none;border:1px solid var(--vendor-primary,#176c40);border-radius:9px;font-weight:700;cursor:pointer;transition:background .18s ease,transform .18s ease}
 .public-link-button:hover{background:#105632;transform:translateY(-1px)}
 .public-link-button.secondary{background:#fff;color:#1c6740!important;border-color:#bcd7c4}
 .public-text-link{display:inline-flex;color:#176c40;text-decoration:none;font-weight:700}
