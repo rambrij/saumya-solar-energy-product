@@ -554,6 +554,7 @@ public class AppService {
         vendor(p);
         requirePermission(p, "LEAD_MANAGE");
         var l = leads.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
+        if(enterpriseSaas!=null)enterpriseSaas.assertBranchAccess(l.getBranchId(),p);
         requireEmployee(x.assignedUserId(), p.tenantId());
         var old = l.getStage();
         var oldAssignee = l.getAssignedUserId();
@@ -761,6 +762,7 @@ public class AppService {
             return quotes.save(q);
         }
         vendor(p);
+        if(enterpriseSaas!=null)enterpriseSaas.assertBranchAccess(q.getBranchId(),p);
         if ("approve".equals(action) || "reject-approval".equals(action)) {
             if (!"PENDING_APPROVAL".equals(q.getStatus()) || !q.isApprovalRequired())
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Quotation is not awaiting approval");
@@ -825,6 +827,7 @@ public class AppService {
             return existing;
         }
         var q = quotes.findByIdAndTenantIdForUpdate(qid, p.tenantId()).orElseThrow();
+        if(enterpriseSaas!=null)enterpriseSaas.assertBranchAccess(q.getBranchId(),p);
         if (!"ACCEPTED".equals(q.getStatus())) throw new ResponseStatusException(HttpStatus.CONFLICT);
         var existingOrder = orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
                 .filter(o -> qid.equals(o.getQuotationId())).findFirst();
