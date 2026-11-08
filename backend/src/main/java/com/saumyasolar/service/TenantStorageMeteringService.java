@@ -43,6 +43,20 @@ public class TenantStorageMeteringService {
         }
     }
 
+
+    public java.util.Map<String, Object> summary(UUID tenantId) {
+        long used = usedBytes(tenantId);
+        long limit = entitlements.storageLimitBytes(tenantId);
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("usedBytes", used);
+        result.put("limitBytes", limit == Long.MAX_VALUE ? null : limit);
+        result.put("remainingBytes", limit == Long.MAX_VALUE ? null : Math.max(0L, limit - used));
+        result.put("unlimited", limit == Long.MAX_VALUE);
+        result.put("usedMegabytes", used / (1024d * 1024d));
+        result.put("limitMegabytes", limit == Long.MAX_VALUE ? null : limit / (1024d * 1024d));
+        return result;
+    }
+
     public long usedBytes(UUID tenantId) {
         if (tenantId == null) throw new IllegalArgumentException("Tenant ID is required");
         long total = 0L;
