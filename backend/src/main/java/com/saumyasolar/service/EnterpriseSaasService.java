@@ -9,10 +9,10 @@ import java.time.Instant;import java.util.*;import java.math.BigDecimal;
 public class EnterpriseSaasService {
  private final BranchRepository branches;private final BranchMembershipRepository memberships;
  private final SubscriptionPlanRepository plans;private final TenantSubscriptionRepository subscriptions;
- private final TenantRepository tenants;private final AppUserRepository users;private final AuditEventRepository audits;private final SubscriptionAssignmentHistoryRepository subscriptionHistory;private final WarehouseRepository warehouses;private final TenantDomainRepository tenantDomains;private final ObjectMapper mapper;
+ private final TenantRepository tenants;private final AppUserRepository users;private final AuditEventRepository audits;private final SubscriptionAssignmentHistoryRepository subscriptionHistory;private final ProductRepository productRecords;private final CustomerProfileRepository customerProfiles;private final WarehouseRepository warehouses;private final TenantDomainRepository tenantDomains;private final ObjectMapper mapper;
  public EnterpriseSaasService(BranchRepository b,BranchMembershipRepository m,SubscriptionPlanRepository pl,
-  TenantSubscriptionRepository s,TenantRepository t,AppUserRepository u,AuditEventRepository a,WarehouseRepository wr,TenantDomainRepository td,ObjectMapper om,SubscriptionAssignmentHistoryRepository sh){
-  branches=b;memberships=m;plans=pl;subscriptions=s;tenants=t;users=u;audits=a;warehouses=wr;tenantDomains=td;mapper=om;subscriptionHistory=sh;
+  TenantSubscriptionRepository s,TenantRepository t,AppUserRepository u,AuditEventRepository a,WarehouseRepository wr,TenantDomainRepository td,ObjectMapper om,SubscriptionAssignmentHistoryRepository sh,ProductRepository pr,CustomerProfileRepository cp){
+  branches=b;memberships=m;plans=pl;subscriptions=s;tenants=t;users=u;audits=a;warehouses=wr;tenantDomains=td;mapper=om;subscriptionHistory=sh;productRecords=pr;customerProfiles=cp;
  }
  private void permission(Principal p,String code){if(p.permissions()==null||!p.permissions().contains(code))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Missing permission: "+code);}
  private UUID vendor(Principal p,String code){if(!"VENDOR".equals(p.accountType())||p.tenantId()==null)throw new ResponseStatusException(HttpStatus.FORBIDDEN);permission(p,code);return p.tenantId();}
@@ -224,6 +224,18 @@ public class EnterpriseSaasService {
   return mb>Long.MAX_VALUE/(1024L*1024L)?Long.MAX_VALUE:mb*1024L*1024L;
  }
  public void assertFeatureEnabled(UUID tenantId,String feature){requireEntitlement(tenantId,feature);}
+ public void enforceProductLimit(UUID tenantId){
+  if(subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId).isEmpty())return;
+  TenantSubscription active=effectiveSubscription(tenantId).orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"An active subscription is required to add products"));
+  SubscriptionPlan plan=plans.findById(active.getPlanId()).orElseThrow();
+  if(productRecords.countByTenantIdAndActiveTrue(tenantId)>=plan.getMaxProducts())throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Product limit reached for current plan");
+ }
+ public void enforceCustomerLimit(UUID tenantId){
+  if(subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId).isEmpty())return;
+  TenantSubscription active=effectiveSubscription(tenantId).orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"An active subscription is required to add customers"));
+  SubscriptionPlan plan=plans.findById(active.getPlanId()).orElseThrow();
+  if(customerProfiles.countByTenantIdAndActiveTrue(tenantId)>=plan.getMaxCustomers())throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Customer limit reached for current plan");
+ }
  public void enforceUserLimit(UUID t){
   List<TenantSubscription> history=subscriptions.findByTenantIdOrderByCreatedAtDesc(t);
   if(history.isEmpty())return; // Existing Phase 1/2 vendors remain grandfathered until subscription assignment.
