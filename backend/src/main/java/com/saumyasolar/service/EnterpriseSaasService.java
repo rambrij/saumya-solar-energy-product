@@ -9,10 +9,10 @@ import java.time.Instant;import java.util.*;import java.math.BigDecimal;
 public class EnterpriseSaasService {
  private final BranchRepository branches;private final BranchMembershipRepository memberships;
  private final SubscriptionPlanRepository plans;private final TenantSubscriptionRepository subscriptions;
- private final TenantRepository tenants;private final AppUserRepository users;private final AuditEventRepository audits;private final WarehouseRepository warehouses;private final TenantDomainRepository tenantDomains;private final ObjectMapper mapper;
+ private final TenantRepository tenants;private final AppUserRepository users;private final AuditEventRepository audits;private final SubscriptionAssignmentHistoryRepository subscriptionHistory;private final WarehouseRepository warehouses;private final TenantDomainRepository tenantDomains;private final ObjectMapper mapper;
  public EnterpriseSaasService(BranchRepository b,BranchMembershipRepository m,SubscriptionPlanRepository pl,
-  TenantSubscriptionRepository s,TenantRepository t,AppUserRepository u,AuditEventRepository a,WarehouseRepository wr,TenantDomainRepository td,ObjectMapper om){
-  branches=b;memberships=m;plans=pl;subscriptions=s;tenants=t;users=u;audits=a;warehouses=wr;tenantDomains=td;mapper=om;
+  TenantSubscriptionRepository s,TenantRepository t,AppUserRepository u,AuditEventRepository a,WarehouseRepository wr,TenantDomainRepository td,ObjectMapper om,SubscriptionAssignmentHistoryRepository sh){
+  branches=b;memberships=m;plans=pl;subscriptions=s;tenants=t;users=u;audits=a;warehouses=wr;tenantDomains=td;mapper=om;subscriptionHistory=sh;
  }
  private void permission(Principal p,String code){if(p.permissions()==null||!p.permissions().contains(code))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Missing permission: "+code);}
  private UUID vendor(Principal p,String code){if(!"VENDOR".equals(p.accountType())||p.tenantId()==null)throw new ResponseStatusException(HttpStatus.FORBIDDEN);permission(p,code);return p.tenantId();}
@@ -63,14 +63,55 @@ public class EnterpriseSaasService {
  @Transactional public SubscriptionPlan createPlan(PlanInput x,Principal p){
   platform(p,"SUBSCRIPTION_MANAGE");String code=x.planCode().trim().toUpperCase(Locale.ROOT);
   if(plans.findByPlanCodeIgnoreCase(code).isPresent())throw new ResponseStatusException(HttpStatus.CONFLICT,"Plan code already exists");
+  validatePlan(x);
+  SubscriptionPlan q=new SubscriptionPlan();q.setId(UUID.randomUUID());applyPlan(q,x,code);q.setActive(true);q.setCreatedAt(Instant.now());q.setUpdatedAt(Instant.now());
+  plans.save(q);audit(p,null,"PLAN_CREATED","SUBSCRIPTION_PLAN",q.getId(),q);return q;
+ }
+ private void validatePlan(PlanInput x){
   if(!Set.of("MONTHLY","YEARLY").contains(x.billingCycle()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Billing cycle must be MONTHLY or YEARLY");
+  if(x.price()==null||x.price().signum()<0||x.maxUsers()<1||x.maxBranches()<1||x.maxWarehouses()<1||x.maxStorageMb()<0||x.maxProducts()<1||x.maxCustomers()<1||x.trialPeriodDays()<0||x.displayOrder()<0)
+   throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Plan price, limits, trial period or display order are invalid");
   try{mapper.readTree(x.entitlementsJson());}catch(Exception e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Entitlements must be valid JSON");}
-  SubscriptionPlan q=new SubscriptionPlan();q.setId(UUID.randomUUID());q.setPlanCode(code);q.setName(x.name().trim());q.setDescription(trim(x.description()));
-  q.setBillingCycle(x.billingCycle());q.setPrice(x.price());q.setCurrency(x.currency().toUpperCase(Locale.ROOT));q.setMaxUsers(x.maxUsers());
-  q.setMaxBranches(x.maxBranches());q.setMaxWarehouses(x.maxWarehouses());q.setMaxStorageMb(x.maxStorageMb());q.setEntitlementsJson(x.entitlementsJson());
-  q.setActive(true);q.setCreatedAt(Instant.now());q.setUpdatedAt(Instant.now());plans.save(q);audit(p,null,"PLAN_CREATED","SUBSCRIPTION_PLAN",q.getId(),q);return q;
+ }
+ private void applyPlan(SubscriptionPlan q,PlanInput x,String code){
+  q.setPlanCode(code);q.setName(x.name().trim());q.setDescription(trim(x.description()));q.setBillingCycle(x.billingCycle());q.setPrice(x.price());
+  q.setCurrency((x.currency()==null?"INR":x.currency()).toUpperCase(Locale.ROOT));q.setMaxUsers(x.maxUsers());q.setMaxBranches(x.maxBranches());
+  q.setMaxWarehouses(x.maxWarehouses());q.setMaxStorageMb(x.maxStorageMb());q.setMaxProducts(x.maxProducts());q.setMaxCustomers(x.maxCustomers());
+  q.setTrialPeriodDays(x.trialPeriodDays());q.setDisplayOrder(x.displayOrder());q.setEntitlementsJson(x.entitlementsJson());
  }
  public List<SubscriptionPlan> plans(){return plans.findByActiveTrueOrderByPriceAsc();}
+ public List<SubscriptionPlan> allPlans(Principal p){platform(p,"SUBSCRIPTION_MANAGE");return plans.findAllByOrderByDisplayOrderAscNameAsc();}
+ public SubscriptionPlan plan(UUID id,Principal p){platform(p,"SUBSCRIPTION_MANAGE");return plans.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Plan not found"));}
+ @Transactional public SubscriptionPlan updatePlan(UUID id,PlanInput x,Principal p){
+  platform(p,"SUBSCRIPTION_MANAGE");SubscriptionPlan q=plans.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Plan not found"));
+  String code=x.planCode().trim().toUpperCase(Locale.ROOT);plans.findByPlanCodeIgnoreCase(code).filter(v->!v.getId().equals(id)).ifPresent(v->{throw new ResponseStatusException(HttpStatus.CONFLICT,"Plan code already exists");});
+  validatePlan(x);applyPlan(q,x,code);q.setUpdatedAt(Instant.now());plans.save(q);audit(p,null,"PLAN_UPDATED","SUBSCRIPTION_PLAN",id,q);return q;
+ }
+ @Transactional public SubscriptionPlan setPlanActive(UUID id,boolean active,Principal p){
+  platform(p,"SUBSCRIPTION_MANAGE");SubscriptionPlan q=plans.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Plan not found"));
+  if(q.isActive()==active)return q;q.setActive(active);q.setUpdatedAt(Instant.now());plans.save(q);audit(p,null,active?"PLAN_ACTIVATED":"PLAN_DEACTIVATED","SUBSCRIPTION_PLAN",id,q);return q;
+ }
+ @Transactional public void deletePlan(UUID id,Principal p){
+  platform(p,"SUBSCRIPTION_MANAGE");SubscriptionPlan q=plans.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Plan not found"));
+  if(subscriptions.existsByPlanId(id))throw new ResponseStatusException(HttpStatus.CONFLICT,"Plan has subscription history; deactivate it instead of deleting");
+  plans.delete(q);audit(p,null,"PLAN_DELETED","SUBSCRIPTION_PLAN",id,Map.of("planCode",q.getPlanCode()));
+ }
+ public List<Tenant> searchTenants(String query,Principal p){
+  platform(p,"SUBSCRIPTION_MANAGE");String term=query==null?"":query.trim();if(term.length()<2)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Enter at least two characters to search tenants");
+  return tenants.findByNameContainingIgnoreCaseOrSlugContainingIgnoreCaseOrderByNameAsc(term,term).stream().limit(30).toList();
+ }
+ public List<TenantSubscription> tenantSubscriptions(UUID tenantId,Principal p){
+  platform(p,"SUBSCRIPTION_MANAGE");if(!tenants.existsById(tenantId))throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found");
+  return subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId);
+ }
+ public List<SubscriptionAssignmentHistory> subscriptionHistory(UUID tenantId,Principal p){
+  platform(p,"SUBSCRIPTION_MANAGE");if(!tenants.existsById(tenantId))throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found");
+  return subscriptionHistory.findByTenantIdOrderByCreatedAtDesc(tenantId);
+ }
+ private void history(Principal p,TenantSubscription s,String action,String previousStatus,UUID previousPlan,Object details){
+  SubscriptionAssignmentHistory h=new SubscriptionAssignmentHistory();h.setId(UUID.randomUUID());h.setTenantId(s.getTenantId());h.setSubscriptionId(s.getId());h.setActorId(p.userId());
+  h.setAction(action);h.setPreviousStatus(previousStatus);h.setNewStatus(s.getStatus());h.setPreviousPlanId(previousPlan);h.setNewPlanId(s.getPlanId());h.setDetailsJson(json(details));h.setCreatedAt(Instant.now());subscriptionHistory.save(h);
+ }
  @Transactional public TenantSubscription assignSubscription(UUID tenantId,UUID planId,SubscriptionInput x,Principal p){
   platform(p,"SUBSCRIPTION_MANAGE");tenants.findByIdForUpdate(tenantId).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
   SubscriptionPlan plan=plans.findById(planId).filter(SubscriptionPlan::isActive).orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"Active plan not found"));
@@ -310,6 +351,6 @@ public class EnterpriseSaasService {
  public record BrandingView(String displayName,String logoUrl,String primaryColor,String secondaryColor,String contactEmail,String contactPhone,String supportEmail,String supportPhone){}
  public record PublicStoreContext(String slug,BrandingView branding){}
  public record BranchInput(String code,String name,String address,String phone,String email){}
- public record PlanInput(String planCode,String name,String description,String billingCycle,BigDecimal price,String currency,int maxUsers,int maxBranches,int maxWarehouses,long maxStorageMb,String entitlementsJson){}
- public record SubscriptionInput(String status,Instant startsAt,Instant endsAt,Instant renewsAt,String externalReference){}
+ public record PlanInput(String planCode,String name,String description,String billingCycle,BigDecimal price,String currency,int maxUsers,int maxBranches,int maxWarehouses,long maxStorageMb,int maxProducts,int maxCustomers,int trialPeriodDays,int displayOrder,String entitlementsJson){}
+ public record SubscriptionInput(String status,Instant startsAt,Instant endsAt,Instant renewsAt,String externalReference,String billingCycle,Instant trialEndsAt,boolean autoRenew,String notes){}
 }
