@@ -47,7 +47,7 @@ public class TenantAdminService {
             .findFirst().orElse(null);
         return new TenantRow(t.getId(), t.getName(), t.getSlug(),
             admin==null?null:admin.getName(), admin==null?null:admin.getEmail(),
-            t.getStatus(), t.getCreatedAt(), t.getUpdatedAt());
+            t.getStatus(), t.getVerificationStatus(), t.getVerifiedAt(), t.getRejectionReason(), t.getCreatedAt(), t.getUpdatedAt());
     }
     public TenantPage page(Principal p, String search, String status, int page, int size) {
         authorize(p);
@@ -78,6 +78,32 @@ public class TenantAdminService {
         authorize(p);
         return row(tenants.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found")));
     }
+    @Transactional
+    public TenantRow verify(UUID id, String decision, String reason, Principal p) {
+        authorize(p);
+        Tenant t=tenants.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
+        String action=decision==null?"":decision.trim().toUpperCase(Locale.ROOT);
+        if ("APPROVE".equals(action)) {
+            t.setVerificationStatus("VERIFIED");
+            t.setVerifiedAt(Instant.now());
+            t.setVerifiedBy(p.userId());
+            t.setRejectionReason(null);
+            t.setStatus("ACTIVE");
+        } else if ("REJECT".equals(action)) {
+            if (reason==null || reason.isBlank())
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"A rejection reason is required");
+            t.setVerificationStatus("REJECTED");
+            t.setVerifiedAt(null);
+            t.setVerifiedBy(p.userId());
+            t.setRejectionReason(reason.trim().substring(0,Math.min(1000,reason.trim().length())));
+            t.setStatus("INACTIVE");
+        } else {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Decision must be APPROVE or REJECT");
+        }
+        t.setUpdatedAt(Instant.now());
+        return row(tenants.save(t));
+    }
+
     @Transactional
     public TenantRow update(UUID id, TenantUpdate input, Principal p) {
         authorize(p);
