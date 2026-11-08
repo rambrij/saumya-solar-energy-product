@@ -334,6 +334,12 @@ public class Controller {
         return tenantAdmin.update(id, input, p(a));
     }
 
+    @PostMapping("/platform/tenants/{id}/invitations/resend")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void resendVendorInvitation(@PathVariable UUID id, Authentication a) {
+        tenantAdmin.resendInvitation(id, p(a));
+    }
+
     @PostMapping("/platform/tenants/{id}/verification")
     com.saumyasolar.api.TenantAdminModels.TenantRow verifyPlatformTenant(@PathVariable UUID id,
             @RequestBody Map<String,String> input, Authentication a) {
