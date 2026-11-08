@@ -345,3 +345,82 @@ Proceed to Stage 2 only after review and explicit approval of this gap report. I
 - [ ] Waiting for explicit approval: **"Approved. Implement the Phase 2 gaps."**
 
 Stage 1 ends here. Do not begin Stage 2 until the user explicitly approves. The branch contained pre-existing Phase 2 work before this audit; no additional implementation was performed.
+
+
+---
+
+## 19. Stage 2 — implementation progress (approved 2026-11-08)
+
+The user explicitly approved implementation. The Stage 1 audit figures above remain the baseline snapshot; this section records the subsequent code changes and supersedes the earlier “awaiting approval” recommendation.
+
+**Post-implementation estimated coverage: 66%** (qualitative module estimate; not a claim that all acceptance criteria are satisfied).
+
+| Module | Stage 1 baseline | Post-implementation estimate | Main additions |
+|---|---:|---:|---|
+| Site survey | 55% | 70% | GPS/electrical fields surfaced in forms; survey lifecycle retained; survey approval can be linked to installation |
+| Installation scheduling | 55% | 70% | Two-hour engineer/team conflict checks, future-date validation, cancellation, schedule history, order rollback to MATERIAL_RESERVED |
+| Engineer assignment | 30% | 60% | Skills, certifications, territory, availability window and max concurrent workload profile; capacity displayed in UI |
+| Service tickets | 70% | 75% | Customer notifications on ticket creation, assignment and resolution |
+| Warranty management | 30% | 60% | Customer claim submission, vendor approval/rejection/resolution workflow |
+| Inventory transactions | 85% | 85% | Existing ledger/reservation/consumption implementation retained |
+| Payment tracking | 80% | 80% | Existing manual payment, receipt, refund and webhook capabilities retained |
+| Advanced reporting | 15% | 40% | Tenant-scoped, date-filtered operational KPI summary endpoint and UI |
+| SMS / WhatsApp | 0% | 55% | Twilio adapter, opt-in controls, channel delivery records and scheduled retries |
+
+### 19.1 Implementation file and schema inventory
+
+- `backend/src/main/resources/db/migration/V28__engineer_profiles_and_warranty_claims.sql`: engineer profile, warranty claim, installation schedule history and notification channel/idempotency columns.
+- `backend/src/main/resources/db/migration/V29__customer_messaging_consent.sql`: customer SMS/WhatsApp consent and persisted notification message body.
+- `backend/src/main/resources/db/migration/V30__installation_approved_survey_link.sql`: optional approved-survey FK on installation.
+- `backend/src/main/java/com/saumyasolar/api/Phase2OperationsController.java`: engineer profile, warranty claim, customer messaging-consent and operational report APIs.
+- `backend/src/main/java/com/saumyasolar/domain/EngineerProfile.java`, `WarrantyClaim.java`, `InstallationScheduleHistory.java` and their repositories.
+- `backend/src/main/java/com/saumyasolar/service/OperationsService.java`: schedule conflict/future-date checks, workload limit check, schedule history and cancellation handling; approved survey linkage is validated when supplied or linked through the quotation.
+- `backend/src/main/java/com/saumyasolar/service/NotificationService.java`: consent-gated Twilio SMS/WhatsApp sends and scheduled retry processing for email/SMS/WhatsApp.
+- `backend/src/main/resources/application.yml`: backend-only Twilio environment-variable bindings.
+- `frontend/src/Phase2AdminPanel.tsx`: engineer profile, warranty claim decision and reporting screens.
+- `frontend/src/OperationsPanel.tsx`: survey GPS/electrical fields, installation reschedule/cancel/history, engineer/claim/report tabs.
+- `frontend/src/main.tsx`: customer warranty-claim submission and SMS/WhatsApp preference controls.
+- `README.md`: provider configuration and operational limitations.
+
+### 19.2 New/extended API surface
+
+| API | Purpose | Access |
+|---|---|---|
+| `GET/POST /api/v1/engineers` | List/save tenant engineer profile and workload | Vendor operations manager/admin with SURVEY_MANAGE |
+| `GET /api/v1/warranty-claims` | List tenant claims | Vendor operations manager/admin/service manager |
+| `POST /api/v1/customer/warranty-claims` | Submit claim for customer's own active warranty | Customer, own tenant/profile only |
+| `GET /api/v1/customer/warranty-claims` | Customer claim history | Customer, own tenant/profile only |
+| `POST /api/v1/warranty-claims/{id}/approve` | Approve claim | Vendor operations role |
+| `POST /api/v1/warranty-claims/{id}/reject` | Reject claim | Vendor operations role |
+| `POST /api/v1/warranty-claims/{id}/resolve` | Resolve approved claim | Vendor operations role |
+| `GET /api/v1/reports/operations?from=&to=` | Tenant-scoped operational KPI snapshot | Vendor operations role |
+| `GET/PATCH /api/v1/customer/messaging-consent` | Read/update SMS and WhatsApp opt-in | Customer, own profile only |
+| `POST /api/v1/installations/{id}/cancel` | Cancel installation with reason/history | Assigned engineer or authorized operations role, subject to existing installation access checks |
+| `GET /api/v1/installations/{id}/schedule-history` | Read tenant-scoped schedule history | Authorized installation participant/operations role |
+
+### 19.3 Verification evidence
+
+GitHub Actions run **42480136783**, for implementation commit `5b35e81cae9fc7eeca0b663e2c42e55109bcde92`, completed all four workflow jobs successfully:
+
+- Backend compile and tests — PASS.
+- Frontend TypeScript check and production build — PASS.
+- Flyway migrations on clean MySQL 8.4 through V30 — PASS.
+- Spring Boot startup and health smoke against MySQL 8.4/Mailpit — PASS.
+
+Run: https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42480136783
+
+The subsequent commit `cfeb9f0f799423c77e69ee2bf11cd58665235c4b` changed only README documentation; it did not change application code. CI run 42480116054 also passed all four jobs for the immediately preceding application-code snapshot.
+
+### 19.4 Remaining acceptance gaps — do not treat this as full Phase 2 completion
+
+1. **Site survey:** no survey-specific protected image/document upload, no customer sign-off workflow, and the approved survey relationship remains optional for legacy orders/quotations that have no survey ID.
+2. **Installation scheduling:** conflict detection currently uses a fixed two-hour window and is a pre-check rather than a fully serialized reservation/locking algorithm. No calendar UI, team availability calendar, or complete assignment audit is provided. Schedule history is limited to reschedule/cancel events.
+3. **Engineer management:** availability and territory are stored but not enforced against actual job dates/locations; skills/certifications are profile text/JSON rather than normalized/verified credentials. Capacity check is installation-focused and not a unified workload across surveys, installations and service visits.
+4. **Service tickets:** customer notifications were added for create/assign/resolve. General threaded comments, internal/customer notification preferences by event, full notification history UI and service attachment-to-warranty linkage remain incomplete.
+5. **Warranty:** claim workflow is present, but warranty suspension/cancellation, expiry alert scheduler, claim attachment upload and formal warranty certificate/document lifecycle are not implemented.
+6. **Inventory:** formal externally visible transaction reference numbering, reversal/compensation endpoints and stronger concurrent multi-warehouse stress tests remain outstanding.
+7. **Reporting:** the new endpoint returns a KPI snapshot, not the complete requested report catalogue. Vendor/customer/product/project/engineer detail reports, CSV/XLSX/PDF export, pagination, sorting, caching and report performance testing remain outstanding.
+8. **SMS/WhatsApp:** Twilio is an optional global provider adapter, not tenant-specific provider/sender configuration. Provider credentials must be configured in deployment secrets. The implementation uses customer consent and E.164 phone validation; it does not include tenant-specific templates, provider delivery webhooks/handset delivery receipts, or an external durable queue/outbox. Provider acceptance is not proof of handset delivery. No live Twilio credentials were available for runtime delivery verification.
+9. **Cross-cutting:** no browser-based end-to-end test suite exercises the full ten workflows. The CI smoke verifies startup/health, not end-to-end business operations. Role/tenant negative tests for the new claims, engineer, reports and messaging APIs should be expanded. General audit-event coverage remains incomplete.
+
+**Final Stage 2 status:** implementation is in progress but Phase 2 is **not yet ready for acceptance**. CI proves compilation, existing backend test suite, frontend production build, clean migration execution and application health smoke for the implementation snapshot. It does not prove live SMS/WhatsApp delivery, browser E2E, load/concurrency behaviour, or every acceptance criterion. Continue with the remaining gaps above before calling Phase 2 complete.
