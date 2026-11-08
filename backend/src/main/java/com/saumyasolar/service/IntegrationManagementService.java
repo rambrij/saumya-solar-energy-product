@@ -35,7 +35,9 @@ public class IntegrationManagementService {
  }
  @Transactional public IntegrationSyncJob enqueue(UUID connectionId,JobInput x,Principal p){
   UUID t=tenant(p);IntegrationConnection c=connections.findByIdAndTenantId(connectionId,t).filter(v->"ACTIVE".equals(v.getStatus())).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Active integration not found"));
-  validateJson(x.payloadJson());if(x.idempotencyKey()==null||x.idempotencyKey().isBlank())throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Idempotency key is required");
+  if(x.entityType()==null||!x.entityType().matches("[A-Za-z][A-Za-z0-9_]{1,59}")||x.entityId()==null||x.entityId().isBlank()||x.entityId().length()>100||x.operation()==null||!x.operation().matches("[A-Za-z][A-Za-z0-9_]{1,29}")||x.idempotencyKey()==null||x.idempotencyKey().isBlank()||x.idempotencyKey().length()>160)
+   throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Entity type, entity ID, operation and idempotency key must be valid and within their length limits");
+  validateJson(x.payloadJson());
   Optional<IntegrationSyncJob> existing=jobs.findByTenantIdAndConnectionIdAndIdempotencyKey(t,connectionId,x.idempotencyKey());if(existing.isPresent())return existing.get();
   IntegrationSyncJob j=new IntegrationSyncJob();j.setId(UUID.randomUUID());j.setTenantId(t);j.setConnectionId(connectionId);j.setEntityType(x.entityType().toUpperCase(Locale.ROOT));j.setEntityId(x.entityId());j.setOperation(x.operation().toUpperCase(Locale.ROOT));j.setIdempotencyKey(x.idempotencyKey());j.setPayloadJson(x.payloadJson());j.setStatus("QUEUED");j.setAttemptCount(0);j.setNextAttemptAt(Instant.now());j.setCreatedAt(Instant.now());j.setUpdatedAt(Instant.now());jobs.save(j);
   audit(p,"INTEGRATION_SYNC_QUEUED","INTEGRATION_SYNC_JOB",j.getId(),Map.of("entityType",j.getEntityType(),"entityId",j.getEntityId(),"operation",j.getOperation()));return j;
