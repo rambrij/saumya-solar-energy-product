@@ -445,7 +445,7 @@ The following additional changes were made after the initial Stage 2 implementat
 - **Inventory traceability:** new ledger transactions receive generated `INV-...` references at persistence. Migration V33 backfills existing ledger rows and enforces a tenant-scoped unique reference. Added unit tests for reference generation and preservation.
 - **Verification:** Actions run `42484965607` passed backend compilation and 40 tests, frontend production build, clean MySQL 8.4 migrations through V34, and Spring Boot startup/health. Follow-up run `42485033857` validates the final type-whitelist hardening. Passing CI does not replace live provider, multi-instance race, security and browser E2E verification.
 
-**Acceptance remains open.** Remaining material work includes customer survey sign-off, durable shared object storage for survey/service/warranty evidence, installation calendar UI, geospatial territory matching and unified engineer workload, dedicated reservation/consumption/paired-transfer compensation workflows, complete detailed reports and XLSX/PDF export, tenant-specific SMS/WhatsApp provider/template configuration and delivery webhooks, and comprehensive cross-role/cross-tenant browser E2E coverage.
+**Acceptance remains open.** Remaining material work includes durable shared object storage for survey/service/warranty evidence, installation calendar UI, geospatial territory matching and unified engineer workload, dedicated reservation/consumption/paired-transfer compensation workflows, complete detailed reports and XLSX/PDF export, tenant-specific SMS/WhatsApp provider/template configuration and delivery webhooks, customer survey sign-off if adopted as a business control, and comprehensive cross-role/cross-tenant browser E2E coverage.
 
 
 ### 19.6 Inventory compensation and serialized scheduling — 2026-11-08
@@ -463,3 +463,13 @@ The following additional changes were made after the initial Stage 2 implementat
 - Added V35 to persist survey evidence metadata with tenant, survey and uploader foreign keys, unique storage key, size limit and query index.
 - Added integration coverage for PDF evidence upload/download, safe filename normalization and cross-tenant access denial.
 - Production caveat: this implementation stores bytes on the backend filesystem, matching the existing service attachment approach. Multi-instance/ephemeral deployments must configure durable shared object storage (for example S3-compatible storage), private access controls and retention/backup before production use.
+
+
+### 19.8 Warranty claim evidence — 2026-11-08
+
+- Added `WarrantyClaimAttachment`, tenant-scoped repository, private filesystem service and `WarrantyClaimAttachmentController` for upload/list/download at `/api/v1/warranty-claims/{claimId}/attachments`.
+- Customer access is restricted to the customer's own claim; vendor access requires the supported operations role and `SURVEY_MANAGE` permission. Metadata and file lookups are tenant/claim scoped.
+- Uploads enforce 10 MB, PDF/JPEG/PNG/WebP allowlisting, signature validation, safe filenames and generated storage keys. V36 adds claim/uploader/tenant foreign keys, a unique storage key, size constraint and scope index.
+- Integration coverage verifies customer upload/download, vendor listing, and denial to a different customer.
+- CI run `42485901046` passed all four jobs: 42 backend tests, frontend build, clean MySQL migrations through V36, and Spring Boot startup/health.
+- The same local-filesystem production caveat applies: configure shared durable object storage before multi-instance or ephemeral production deployment.
