@@ -106,7 +106,7 @@ public class DataSeeder {
  }
  private static void seedDefaultSubscriptionPlans(SubscriptionPlanRepository plans){
   String[][] rows={
-   {"STARTER","Starter","For small solar businesses starting digital operations","MONTHLY","999.00","5","1","1","512","100","100","14","1","{\"branches\":false,\"multiWarehouse\":false,\"customBranding\":false}"},
+   {"STARTER","Starter","For small solar businesses starting digital operations","MONTHLY","999.00","5","1","3","512","100","100","14","1","{\"branches\":false,\"multiWarehouse\":false,\"customBranding\":false}"},
    {"PROFESSIONAL","Professional","For growing solar businesses managing sales and field operations","MONTHLY","2999.00","25","3","3","5120","1000","1000","14","2","{\"branches\":true,\"multiWarehouse\":true,\"customBranding\":true,\"approvalWorkflows\":true}"},
    {"ENTERPRISE","Enterprise","For multi-location solar businesses with advanced operations","MONTHLY","9999.00","100","20","20","51200","10000","10000","30","3","{\"branches\":true,\"multiWarehouse\":true,\"customBranding\":true,\"customDomains\":true,\"approvalWorkflows\":true,\"accountingIntegration\":true,\"paymentGateway\":true,\"apiIntegrations\":true}"}
   };
