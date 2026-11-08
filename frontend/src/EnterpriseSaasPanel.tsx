@@ -9,13 +9,14 @@ async function request(path:string,s:Session,method='GET',body?:any){
 }
 export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'vendor';s:Session;error:(message:string)=>void}){
  const [branches,setBranches]=useState<any[]>([]),[plans,setPlans]=useState<any[]>([]),[subscription,setSubscription]=useState<any>(null),[audits,setAudits]=useState<any[]>([]),[branding,setBranding]=useState<any>({displayName:'',logoUrl:'',primaryColor:'#0B6B4B',secondaryColor:'#F6C85F',contactEmail:'',contactPhone:'',supportEmail:'',supportPhone:''}),[domains,setDomains]=useState<any[]>([]),[workflows,setWorkflows]=useState<any[]>([]);
+ const [approvalInstances,setApprovalInstances]=useState<any[]>([]),[selectedBranch,setSelectedBranch]=useState<string|null>(null),[branchMembers,setBranchMembers]=useState<any[]>([]);
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[panelError,setPanelError]=useState('');
  const load=async()=>{
   setLoading(true);setPanelError('');
   try{
    if(mode==='vendor'){
-    const perms=s.user?.permissions||[];const [b,sub,brand,domainRows,wf]=await Promise.all([perms.includes('BRANCH_MANAGE')?request('/branches',s):Promise.resolve([]),request('/subscription',s).catch(()=>null),perms.includes('BRANDING_MANAGE')?request('/vendor/branding',s):Promise.resolve(branding),perms.includes('BRANDING_MANAGE')?request('/vendor/domains',s):Promise.resolve([]),perms.includes('APPROVAL_WORKFLOW_MANAGE')?request('/approval-workflows',s):Promise.resolve([])]);
-    setBranches(b);setSubscription(sub);setBranding(brand);setDomains(domainRows);setWorkflows(wf);
+    const perms=s.user?.permissions||[];const [b,sub,brand,domainRows,wf,ai]=await Promise.all([perms.includes('BRANCH_MANAGE')?request('/branches',s):Promise.resolve([]),request('/subscription',s).catch(()=>null),perms.includes('BRANDING_MANAGE')?request('/vendor/branding',s):Promise.resolve(branding),perms.includes('BRANDING_MANAGE')?request('/vendor/domains',s):Promise.resolve([]),perms.includes('APPROVAL_WORKFLOW_MANAGE')?request('/approval-workflows',s):Promise.resolve([]),perms.includes('APPROVAL_WORKFLOW_MANAGE')?request('/approval-instances',s):Promise.resolve([])]);
+    setBranches(b);setSubscription(sub);setBranding(brand);setDomains(domainRows);setWorkflows(wf);setApprovalInstances(ai);
    }else setPlans(await request('/subscription-plans',s));
   }catch(e:any){setPanelError(e.message)}finally{setLoading(false)}
  };
@@ -23,6 +24,19 @@ export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'ven
  const createBranch=async(e:React.FormEvent<HTMLFormElement>)=>{
   e.preventDefault();const form=e.currentTarget;const x:any=Object.fromEntries(new FormData(form));setBusy(true);
   try{await request('/branches',s,'POST',x);form.reset();await load();error('Branch created.')}catch(e:any){setPanelError(e.message)}finally{setBusy(false)}
+ };
+ const loadBranchMembers=async(branchId:string)=>{
+  try{setSelectedBranch(branchId);setBranchMembers(await request('/branches/'+branchId+'/users',s));}
+  catch(e:any){setPanelError(e.message)}
+ };
+ const removeBranchMember=async(branchId:string,userId:string)=>{
+  try{await request('/branches/'+branchId+'/users/'+userId,s,'DELETE');await loadBranchMembers(branchId);error('Branch membership removed.');}
+  catch(e:any){setPanelError(e.message)}
+ };
+ const decideApproval=async(instanceId:string,decision:'APPROVE'|'REJECT')=>{
+  const comments=window.prompt('Optional decision comments')||'';
+  try{await request('/approval-instances/'+instanceId+'/decisions',s,'POST',{decision,comments});await load();error('Approval decision recorded.');}
+  catch(e:any){setPanelError(e.message)}
  };
  const createWorkflow=async(e:React.FormEvent<HTMLFormElement>)=>{
   e.preventDefault();const form=e.currentTarget;const x:any=Object.fromEntries(new FormData(form));setBusy(true);
@@ -63,6 +77,8 @@ export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'ven
    <div className="card"><h2>Current subscription</h2>{subscription?<><p><b>{subscription.plan?.name}</b> · {subscription.subscription?.status}</p><p>Billing: {subscription.plan?.billingCycle} · ₹{subscription.plan?.price} {subscription.plan?.currency}</p><p>Branch limit: {subscription.plan?.maxBranches} · Warehouse limit: {subscription.plan?.maxWarehouses} · User limit: {subscription.plan?.maxUsers}</p><p>Effective: {subscription.effective?'Yes':'No'}</p></>:<p>No active subscription is assigned. Contact the platform administrator.</p>}</div>
    {s.user?.permissions?.includes('APPROVAL_WORKFLOW_MANAGE')&&<div className="card"><h2>Approval workflows</h2>
     {workflows.map(w=><p key={w.id}><b>{w.name}</b> · {w.entityType} · {w.active?'Active':'Inactive'}</p>)}
+    <h3>Approval requests</h3>
+    {approvalInstances.length?<div className="table-wrap"><table><thead><tr><th>Entity</th><th>Status</th><th>Step</th><th>Requested</th><th>Actions</th></tr></thead><tbody>{approvalInstances.map(i=><tr key={i.id}><td>{i.entityType} · {i.entityId}</td><td>{i.status}</td><td>{i.currentStep}</td><td>{new Date(i.requestedAt).toLocaleString()}</td><td>{i.status==='PENDING'&&<><button type="button" onClick={()=>void decideApproval(i.id,'APPROVE')}>Approve</button> <button type="button" className="danger" onClick={()=>void decideApproval(i.id,'REJECT')}>Reject</button></>}</td></tr>)}</tbody></table></div>:<p>No approval requests yet.</p>}
     <form className="form" onSubmit={createWorkflow}><h3>Create quotation approval workflow</h3><input name="code" placeholder="Workflow code" required/><input name="name" placeholder="Workflow name" required/><input name="entityType" value="QUOTATION" readOnly/><textarea name="stepsJson" defaultValue={'[\n  { "approverRole": "VENDOR_ADMIN", "permissionCode": "DISCOUNT_APPROVE" },\n  { "approverRole": "VENDOR_ADMIN", "permissionCode": "DISCOUNT_APPROVE" }\n]'} required/><button disabled={busy}>{busy?'Saving…':'Create workflow'}</button></form>
    </div>}
    {s.user?.permissions?.includes("BRANDING_MANAGE")&&<div className="card"><h2>Vendor branding</h2><form className="form" onSubmit={saveBranding}>
@@ -79,7 +95,8 @@ export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'ven
    {s.user?.permissions?.includes("BRANDING_MANAGE")&&<div className="card"><h2>Custom domains</h2><form className="form" onSubmit={addDomain}><input name="domain" placeholder="shop.example.com" required/><button disabled={busy}>Register domain</button></form>
     {domains.map(d=><article key={d.id}><div><b>{d.domain}</b><small>{d.status} · TXT value: saumya-solar-verification={d.verificationToken}</small></div>{d.status!=='VERIFIED'&&<button type="button" className="secondary" onClick={()=>void verifyDomain(d.id)}>Verify DNS</button>}</article>)}
    </div>}
-   {s.user?.permissions?.includes("BRANCH_MANAGE")&&<div className="card"><h2>Branches</h2>{branches.length?<div className="table-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>Address</th><th>Status</th><th>Actions</th></tr></thead><tbody>{branches.map(b=><tr key={b.id}><td>{b.code}</td><td>{b.name}</td><td>{b.address||'—'}</td><td>{b.active?'Active':'Inactive'}</td><td><button type="button" className="secondary" onClick={()=>void assignUser(b.id)}>Assign user</button></td></tr>)}</tbody></table></div>:<p>No branches configured.</p>}
+   {s.user?.permissions?.includes("BRANCH_MANAGE")&&<div className="card"><h2>Branches</h2>{branches.length?<div className="table-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>Address</th><th>Status</th><th>Actions</th></tr></thead><tbody>{branches.map(b=><tr key={b.id}><td>{b.code}</td><td>{b.name}</td><td>{b.address||'—'}</td><td>{b.active?'Active':'Inactive'}</td><td><button type="button" className="secondary" onClick={()=>void assignUser(b.id)}>Assign user</button> <button type="button" className="secondary" onClick={()=>void loadBranchMembers(b.id)}>Members</button></td></tr>)}</tbody></table></div>:<p>No branches configured.</p>}
+    {selectedBranch&&<div className="card"><h3>Branch members</h3>{branchMembers.length?<ul>{branchMembers.map(m=><li key={m.id}>{m.userId} <button type="button" className="danger" onClick={()=>void removeBranchMember(selectedBranch,m.userId)}>Remove</button></li>)}</ul>:<p>No members assigned to this branch.</p>}</div>}
     <form className="form" onSubmit={createBranch}><h3>Create branch</h3><input name="code" placeholder="Branch code" maxLength={50} required/><input name="name" placeholder="Branch name" maxLength={150} required/><input name="address" placeholder="Address"/><input name="phone" placeholder="Phone"/><input name="email" type="email" placeholder="Contact email"/><button disabled={busy}>{busy?'Saving…':'Create branch'}</button></form>
    </div>}
   </>:<>
