@@ -38,6 +38,27 @@ The Compose file enables demo seeding with `SEED_DATA_ENABLED=true` for local de
 
 For a new production database, run Flyway migrations first. Then bootstrap the first platform administrator once using deployment secrets: set `PLATFORM_BOOTSTRAP_ENABLED=true`, `PLATFORM_BOOTSTRAP_EMAIL`, and `PLATFORM_BOOTSTRAP_PASSWORD` (minimum 16 characters), start the backend, verify the account can sign in, and immediately set `PLATFORM_BOOTSTRAP_ENABLED=false` and remove the bootstrap password. The bootstrap is disabled by default and fails if the email already exists.
 
+
+## Private operations evidence storage (Phase 2)
+
+Site-survey, service-ticket and warranty-claim evidence uses the private object-storage abstraction. The default provider remains local filesystem storage for development and backward compatibility. For a multi-instance or ephemeral production deployment, configure an S3-compatible private bucket; objects are not served by public URLs and reads are performed only after the owning tenant/resource authorization check.
+
+Set these backend environment variables (never commit credentials):
+
+| Variable | Purpose |
+|---|---|
+| `PRIVATE_STORAGE_PROVIDER` | `local` (default) or `s3` |
+| `PRIVATE_STORAGE_S3_BUCKET` | Private bucket name; required for `s3` |
+| `AWS_REGION` | Bucket region; defaults to `us-east-1` |
+| `PRIVATE_STORAGE_S3_ENDPOINT` | Optional S3-compatible endpoint (e.g. MinIO); leave unset for AWS S3 |
+| `PRIVATE_STORAGE_S3_PATH_STYLE` | Set `true` for compatible providers that require path-style addressing |
+
+The AWS SDK default credential chain is used (prefer an attached workload role/instance profile; do not store access keys in source control). Grant only the application role the bucket-level `s3:PutObject`, `s3:GetObject`, and `s3:DeleteObject` actions on the application prefix. The service requests AES-256 server-side encryption for new objects. Enable bucket versioning, lifecycle/retention, backups, and public-access blocking according to the organization's data policy.
+
+Existing local-storage records remain readable when the provider is switched to S3 because their legacy storage keys do not carry the `s3:` prefix. New S3 records use tenant/category-prefixed private object keys. Switching the provider does not automatically migrate existing local files; migrate those files and their database keys in a separately planned, verified operation before removing old storage.
+
+Local storage remains suitable for single-instance development only. S3 provider behavior is code-implemented; a live bucket, IAM role and upload/download round trip still need environment-specific deployment verification.
+
 ## Local demo accounts
 
 These credentials are for a disposable local environment only:
