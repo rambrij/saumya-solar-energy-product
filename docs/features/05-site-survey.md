@@ -24,6 +24,8 @@ SPA `/` → Vendor Site Surveys tab and survey detail; lifecycle actions are und
 ## 8. Request and response examples
 Illustrative create: `{"leadId":"<same-tenant-lead-uuid>","scheduledAt":"2026-12-02T09:30:00Z","assignedTo":"<same-tenant-user-uuid>"}`. Use DTO fields as authoritative.
 
+Response shape illustration: `{"id":"<survey-uuid>","leadId":"<lead-uuid>","status":"SCHEDULED","scheduledAt":"2026-12-02T09:30:00Z"}`.
+
 ## 9. Database entities and relationships
 `SiteSurvey` references tenant, lead/customer and assigned employee; `SiteSurveyHistory` records transitions; `SiteSurveyAttachment` stores private evidence metadata.
 
