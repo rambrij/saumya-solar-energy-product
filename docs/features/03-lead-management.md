@@ -24,6 +24,8 @@ SPA `/` → Vendor Leads tab and lead detail/history panel.
 ## 8. Request and response examples
 Illustrative update: `{"stage":"QUALIFIED","followUpAt":"2026-12-01T10:00:00Z","assignedTo":"<same-tenant-user-uuid>"}`. Confirm exact DTO fields in `Controller.java` before integration.
 
+Response shape illustration: `{"id":"<lead-uuid>","enquiryId":"<enquiry-uuid>","stage":"NEW","assignedUserId":"<same-tenant-user-uuid>"}`.
+
 ## 9. Database entities and relationships
 `SalesLead` references tenant, customer and source enquiry; `LeadHistory` stores assignment/change history; user references are tenant-validated.
 
