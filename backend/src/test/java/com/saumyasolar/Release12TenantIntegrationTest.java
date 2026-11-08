@@ -478,6 +478,51 @@ class Release12TenantIntegrationTest {
                         && row.getResponseStatus()==200));
     }
 
+    @Test
+    void employeeEndpointsCannotCrossTenantOrEscalateToPrivilegedRoles() throws Exception {
+        Tenant foreignTenant=newTenant();
+        AppUser foreignEmployee=new AppUser();
+        foreignEmployee.setId(UUID.randomUUID());
+        foreignEmployee.setTenantId(foreignTenant.getId());
+        foreignEmployee.setName("Foreign employee");
+        foreignEmployee.setEmail("foreign-user-"+UUID.randomUUID()+"@example.test");
+        foreignEmployee.setPasswordHash("not-used");
+        foreignEmployee.setAccountType("VENDOR");
+        foreignEmployee.setEnabled(true);
+        users.save(foreignEmployee);
+        String vendorToken=accessToken("admin@saumya.local","Admin@123");
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/users/"+foreignEmployee.getId())
+                .header("Authorization","Bearer "+vendorToken).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Taken over\",\"email\":\"takeover@example.test\",\"roleName\":\"VENDOR_ADMIN\"}"))
+                .andExpect(status().isNotFound());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/users/"+foreignEmployee.getId()+"/enabled")
+                .header("Authorization","Bearer "+vendorToken).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"active\":false}"))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/users").header("Authorization","Bearer "+vendorToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Escalation\",\"email\":\"escalation-"+UUID.randomUUID()+"@example.test\",\"password\":\"StrongEmployeePass-2026\",\"roleName\":\"VENDOR_ADMIN\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void platformAndCustomerPrincipalsCannotCallVendorOnlyApis() throws Exception {
+        String platformToken=accessToken("platform@saumya.local","Platform@123");
+        mvc.perform(get("/api/v1/orders").header("Authorization","Bearer "+platformToken))
+                .andExpect(status().isForbidden());
+        String customerEmail="rbac-"+UUID.randomUUID()+"@example.test";
+        String customerJson=mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"storeSlug":"saumya-solar","name":"RBAC Customer","email":"%s","password":"StrongCustomerPass-2026"}
+                        """.formatted(customerEmail)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String customerToken=json.readTree(customerJson).get("accessToken").asText();
+        mvc.perform(get("/api/v1/orders").header("Authorization","Bearer "+customerToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/users").header("Authorization","Bearer "+customerToken))
+                .andExpect(status().isForbidden());
+    }
+
     private String accessToken(String email, String password) throws Exception {
         var body = """
                 {"email":"%s","password":"%s"}
