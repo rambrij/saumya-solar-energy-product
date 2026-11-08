@@ -24,6 +24,7 @@ import java.security.MessageDigest;
 import java.util.Base64;
 @Service
 public class AuthLifecycleService {
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private EnterpriseSaasService enterpriseSaas;
     final RefreshTokenRepository refresh;
     final PasswordResetTokenRepository resets;
     final MfaChallengeRepository mfaChallenges;
@@ -267,6 +268,7 @@ public class AuthLifecycleService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select a supported employee role");
         if (users.findByEmailIgnoreCase(email).isPresent())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email exists");
+        if(enterpriseSaas!=null)enterpriseSaas.enforceCustomerLimit(t.getId());
         var role = roles.findByNameAndTenantId(roleName, tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role is not configured for this vendor"));
         var u = new AppUser();
