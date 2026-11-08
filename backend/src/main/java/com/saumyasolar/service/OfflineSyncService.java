@@ -32,10 +32,11 @@ public class OfflineSyncService {
                               ServiceRequestRepository tickets,
                               ServiceCommentRepository serviceComments,
                               CustomerProfileRepository customers,
+                              NotificationService notifications,
                               SurveyLifecycleService surveys,
                               ObjectMapper mapper) {
         this.operations = operations;
-        this.comments = new ServiceCommentControllerAccess(tickets, serviceComments, customers);
+        this.comments = new ServiceCommentControllerAccess(tickets, serviceComments, customers, notifications, mapper);
         this.surveys = surveys;
         this.mapper = mapper;
     }
@@ -153,12 +154,14 @@ public class OfflineSyncService {
         private final ServiceRequestRepository tickets;
         private final ServiceCommentRepository comments;
         private final CustomerProfileRepository customers;
+        private final NotificationService notifications;
+        private final ObjectMapper mapper;
         ServiceCommentControllerAccess(ServiceRequestRepository tickets, ServiceCommentRepository comments,
-                                       CustomerProfileRepository customers) {
-            this.tickets = tickets; this.comments = comments; this.customers = customers;
+                                       CustomerProfileRepository customers, NotificationService notifications, ObjectMapper mapper) {
+            this.tickets = tickets; this.comments = comments; this.customers = customers; this.notifications = notifications; this.mapper = mapper;
         }
         ServiceComment create(UUID ticketId, String payload, Principal actor) throws Exception {
-            var input = new ObjectMapper().readValue(payload, CommentPayload.class);
+            var input = mapper.readValue(payload, CommentPayload.class);
             if (input.body() == null || input.body().isBlank() || input.body().length() > 4000
                     || (input.visibility() != null && !Set.of("CUSTOMER", "INTERNAL").contains(input.visibility()))) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid service comment payload");
@@ -190,9 +193,10 @@ public class OfflineSyncService {
             comment.setCreatedAt(Instant.now());
             ServiceComment saved = comments.save(comment);
             if ("CUSTOMER".equals(visibility) && !"CUSTOMER".equals(actor.accountType())) {
-                // Existing notification is emitted by the standard comment controller; offline replay
-                // deliberately persists the same business record without exposing internal notes.
-                // Notification delivery is handled by the durable notification pipeline elsewhere.
+                customers.findByIdAndTenantId(ticket.getCustomerId(), actor.tenantId()).ifPresent(customer ->
+                        notifications.sendBusinessNotification(customer.getUserId(), actor.tenantId(),
+                                "SERVICE_TICKET_COMMENT", customer.getEmail(),
+                                "Update on service request " + ticket.getTicketNumber(), input.body().trim()));
             }
             return saved;
         }
