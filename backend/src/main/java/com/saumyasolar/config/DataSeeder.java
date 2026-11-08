@@ -64,12 +64,13 @@ public class DataSeeder {
   UUID tenantId=tenant.getId();
   if(serviceRequests.findByTicketNumberAndTenantId("SR-DEMO-2026-001",tenantId).isPresent())return;
   Product product=products.findByTenantIdOrderByIdDesc(tenantId).stream().filter(Product::isActive).findFirst().orElse(null);if(product==null)return;
+  java.time.Instant now=java.time.Instant.now();
   Warehouse warehouse=warehouses.findByTenantIdOrderByNameAsc(tenantId).stream().findFirst().orElse(null);
   if(warehouse!=null){
    InventoryBalance balance=inventoryBalances.findByTenantIdAndWarehouseIdAndProductId(tenantId,warehouse.getId(),product.getId()).orElseGet(()->{InventoryBalance b=new InventoryBalance();b.setId(UUID.randomUUID());b.setTenantId(tenantId);b.setWarehouseId(warehouse.getId());b.setProductId(product.getId());b.setOnHand(new java.math.BigDecimal("25"));b.setReserved(java.math.BigDecimal.ZERO);b.setDamaged(java.math.BigDecimal.ZERO);return inventoryBalances.save(b);});
    if(inventoryTransactions.findByTenantIdOrderByCreatedAtDesc(tenantId).stream().noneMatch(tx->"DEMO-OPENING-2026-001".equals(tx.getTransactionReference()))){InventoryTransaction tx=new InventoryTransaction();tx.setId(UUID.randomUUID());tx.setTransactionReference("DEMO-OPENING-2026-001");tx.setTenantId(tenantId);tx.setWarehouseId(warehouse.getId());tx.setProductId(product.getId());tx.setType("RECEIPT");tx.setQuantityDelta(new java.math.BigDecimal("25"));tx.setReservedDelta(java.math.BigDecimal.ZERO);tx.setDamagedDelta(java.math.BigDecimal.ZERO);tx.setReason("Opening stock for local solar lifecycle demonstration");tx.setActorId(sales.getId());tx.setCreatedAt(now);inventoryTransactions.save(tx);}
   }
-  java.time.Instant now=java.time.Instant.now();java.math.BigDecimal qty=new java.math.BigDecimal("10"),unit=product.getPrice()==null?new java.math.BigDecimal("18500"):product.getPrice();
+  java.math.BigDecimal qty=new java.math.BigDecimal("10"),unit=product.getPrice()==null?new java.math.BigDecimal("18500"):product.getPrice();
   java.math.BigDecimal subtotal=unit.multiply(qty),tax=subtotal.multiply(new java.math.BigDecimal("0.18")).setScale(2,java.math.RoundingMode.HALF_UP),total=subtotal.add(tax);
   Enquiry enquiry=enquiries.findByTenantIdOrderByIdDesc(tenantId).stream().filter(e->"DEMO-LIFECYCLE-2026".equals(e.getMessage())).findFirst().orElseGet(()->{
    Enquiry e=new Enquiry();e.setId(UUID.randomUUID());e.setTenantId(tenantId);e.setCustomerId(customer.getId());e.setName(customer.getName());e.setEmail(customer.getEmail());e.setPhone(customer.getPhone());e.setPropertyType("RESIDENTIAL");e.setMonthlyBill(new java.math.BigDecimal("6500"));e.setRequiredCapacityKw(new java.math.BigDecimal("5.00"));e.setMessage("DEMO-LIFECYCLE-2026: 5 kW rooftop solar enquiry for an Indore residence.");e.setStatus("CONVERTED");e.setCreatedAt(now.minusSeconds(86400*20L));return enquiries.save(e);
