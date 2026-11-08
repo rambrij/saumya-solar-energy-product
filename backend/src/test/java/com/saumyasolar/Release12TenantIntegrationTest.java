@@ -79,7 +79,7 @@ class Release12TenantIntegrationTest {
                 .filter(delivery -> "VENDOR_ADMIN_INVITATION".equals(delivery.getEventType()))
                 .filter(delivery -> delivery.getBody() != null)
                 .findFirst().orElseThrow();
-        var invitationMatcher = java.util.regex.Pattern.compile("vendorInviteToken=([A-Za-z0-9_-]+)")
+        var invitationMatcher = java.util.regex.Pattern.compile("#vendorInviteToken=([A-Za-z0-9_-]+)")
                 .matcher(invitationDelivery.getBody());
         assertTrue(invitationMatcher.find(), "Invitation email must contain a one-time setup token");
         var invitationToken = invitationMatcher.group(1);
