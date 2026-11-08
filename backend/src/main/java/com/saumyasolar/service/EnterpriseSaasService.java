@@ -82,7 +82,8 @@ public class EnterpriseSaasService {
    if(old.getStartsAt()!=null&&!old.getStartsAt().isBefore(start)){
     old.setStatus("CANCELLED");old.setUpdatedAt(now);subscriptions.save(old);
    }else if(start.isAfter(now)&&effective(old)){
-    old.setEndsAt(start);old.setUpdatedAt(now);subscriptions.save(old);
+    if(old.getEndsAt()==null||start.isBefore(old.getEndsAt()))old.setEndsAt(start);
+    old.setUpdatedAt(now);subscriptions.save(old);
    }else if(!start.isAfter(now)&&effective(old)){
     old.setStatus("CANCELLED");old.setUpdatedAt(now);subscriptions.save(old);
    }
@@ -93,10 +94,10 @@ public class EnterpriseSaasService {
  }
  public Map<String,Object> currentSubscription(Principal p){
   if(!"VENDOR".equals(p.accountType())||p.tenantId()==null)throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-  TenantSubscription s=subscriptions.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream()
+  TenantSubscription s=effectiveSubscription(p.tenantId()).orElseGet(()->subscriptions.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream()
    .filter(v->!"CANCELLED".equals(v.getStatus()))
    .max(Comparator.comparing(TenantSubscription::getStartsAt,Comparator.nullsFirst(Comparator.naturalOrder())))
-   .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"No subscription found"));
+   .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"No subscription found")));
   SubscriptionPlan plan=plans.findById(s.getPlanId()).orElseThrow();return Map.of("subscription",s,"plan",plan,"effective",effective(s));
  }
  public void assertWarehouseAccess(Warehouse warehouse,Principal p){
@@ -155,18 +156,31 @@ public class EnterpriseSaasService {
    .max(Comparator.comparing(TenantSubscription::getStartsAt));
  }
  private boolean effective(TenantSubscription s){Instant now=Instant.now();return ("ACTIVE".equals(s.getStatus())||"TRIAL".equals(s.getStatus()))&&s.getStartsAt()!=null&&!s.getStartsAt().isAfter(now)&&(s.getEndsAt()==null||s.getEndsAt().isAfter(now));}
+ private String camelKey(String value){
+  StringBuilder result=new StringBuilder();boolean upper=false;
+  for(char c:value.toLowerCase(Locale.ROOT).toCharArray()){
+   if(c=='_'||c=='-'||c==' '){upper=true;continue;}
+   result.append(upper?Character.toUpperCase(c):c);upper=false;
+  }
+  return result.toString();
+ }
  public void requireEntitlement(UUID tenantId,String featureCode){
   if(subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId).isEmpty())return;
   TenantSubscription active=effectiveSubscription(tenantId).orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"An active subscription is required for this feature"));
   SubscriptionPlan plan=plans.findById(active.getPlanId()).orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"Subscription plan is unavailable"));
   try{
    var root=mapper.readTree(plan.getEntitlementsJson()==null?"{}":plan.getEntitlementsJson());
-   String lower=featureCode.toLowerCase(Locale.ROOT);
-   var feature=root.get(featureCode);if(feature==null)feature=root.get(lower);
+   String lower=featureCode.toLowerCase(Locale.ROOT),camel=camelKey(featureCode);
+   var feature=root.get(featureCode);if(feature==null)feature=root.get(lower);if(feature==null)feature=root.get(camel);
    if(feature==null&&root.has("features")){
     var features=root.get("features");
-    feature=features.isObject()?features.get(featureCode):null;
-    if(feature==null&&features.isArray())for(var value:features)if(featureCode.equalsIgnoreCase(value.asText()))return;
+    if(features.isObject()){
+     feature=features.get(featureCode);if(feature==null)feature=features.get(lower);if(feature==null)feature=features.get(camel);
+     if(feature==null)throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Current subscription does not include "+featureCode);
+    }else if(features.isArray()){
+     boolean included=false;for(var value:features)if(featureCode.equalsIgnoreCase(value.asText())||lower.equals(value.asText().toLowerCase(Locale.ROOT)))included=true;
+     if(!included)throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Current subscription does not include "+featureCode);
+    }else throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Subscription feature list is invalid");
    }
    if(feature!=null&&feature.isBoolean()&&!feature.asBoolean())throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Current subscription does not include "+featureCode);
   }catch(ResponseStatusException e){throw e;}
