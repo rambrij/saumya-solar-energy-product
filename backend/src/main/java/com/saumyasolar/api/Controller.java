@@ -56,6 +56,7 @@ public class Controller {
     final CatalogAdminService catalog;
     final PackageImageStorageService packageImages;
     final TenantAdminService tenantAdmin;
+    final com.saumyasolar.service.SurveyLifecycleService surveyLifecycle;
     final boolean platformMfaEnabled;
     
     Controller(
@@ -71,6 +72,7 @@ public class Controller {
             CatalogAdminService catalog,
             PackageImageStorageService packageImages,
             TenantAdminService tenantAdmin,
+            com.saumyasolar.service.SurveyLifecycleService surveyLifecycle,
             @org.springframework.beans.factory.annotation.Value("${app.auth.platform-mfa-enabled:true}") boolean platformMfaEnabled
     ) {
         this.s = s;
@@ -85,6 +87,7 @@ public class Controller {
         this.catalog = catalog;
         this.packageImages = packageImages;
         this.tenantAdmin = tenantAdmin;
+        this.surveyLifecycle = surveyLifecycle;
         this.platformMfaEnabled = platformMfaEnabled;
     }
     
@@ -335,7 +338,10 @@ public class Controller {
     
     @PostMapping("/surveys")
     SiteSurvey survey(@RequestBody Input x, Authentication a) {
-        return s.survey(x, p(a));
+        Principal actor = p(a);
+        SiteSurvey created = s.survey(x, actor);
+        surveyLifecycle.recordCreated(created, actor);
+        return created;
     }
     
     @PostMapping("/quotations")
