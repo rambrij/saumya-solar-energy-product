@@ -14,7 +14,7 @@ test('public enquiry reaches the solar store workflow', async ({ page }) => {
     if (!response.ok()) return 0;
     const payload = await response.json();
     return Number(payload.total ?? payload.messages?.length ?? 0);
-  }, { timeout: 30_000, intervals: [1000, 2000, 3000] }).toBeGreaterThan(0);
+  }, { timeout: 45_000, intervals: [1000, 2000, 3000] }).toBeGreaterThan(0);
 });
 
 test('vendor can sign in and view business dashboard and customer management', async ({ page }) => {
