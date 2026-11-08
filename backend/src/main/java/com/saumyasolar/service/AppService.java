@@ -24,6 +24,8 @@ import java.util.UUID;
 public class AppService {
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     private IntegrationManagementService integrationManagement;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private EnterpriseSaasService enterpriseSaas;
 
     final TenantRepository tenants;
     final AppUserRepository users;
@@ -165,7 +167,7 @@ public class AppService {
             case "orders" -> requirePermission(p, "ORDER_CREATE");
             default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        return switch (type) {
+        Object rows = switch (type) {
             case "categories" -> cats.findByTenantIdOrderByIdDesc(p.tenantId());
             case "products" -> products.findByTenantIdOrderByIdDesc(p.tenantId());
             case "packages" -> packs.findByTenantIdOrderByIdDesc(p.tenantId());
@@ -176,6 +178,15 @@ public class AppService {
             case "quotations" -> quotes.findByTenantIdOrderByIdDesc(p.tenantId());
             case "orders" -> orders.findByTenantIdOrderByIdDesc(p.tenantId());
             default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        };
+        if (enterpriseSaas == null) return rows;
+        return switch (type) {
+            case "enquiries" -> enterpriseSaas.filterBranchRecords((List<Enquiry>)rows, Enquiry::getBranchId, p);
+            case "leads" -> enterpriseSaas.filterBranchRecords((List<SalesLead>)rows, SalesLead::getBranchId, p);
+            case "surveys" -> enterpriseSaas.filterBranchRecords((List<SiteSurvey>)rows, SiteSurvey::getBranchId, p);
+            case "quotations" -> enterpriseSaas.filterBranchRecords((List<Quotation>)rows, Quotation::getBranchId, p);
+            case "orders" -> enterpriseSaas.filterBranchRecords((List<CustomerOrder>)rows, CustomerOrder::getBranchId, p);
+            default -> rows;
         };
     }
     
