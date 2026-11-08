@@ -228,7 +228,8 @@ public class AuthLifecycleService {
         tenant.setId(UUID.randomUUID());
         tenant.setName(name.trim());
         tenant.setSlug(slug);
-        tenant.setStatus("ACTIVE");
+        tenant.setStatus("INACTIVE");
+        tenant.setVerificationStatus("PENDING_VERIFICATION");
         tenant.setCreatedAt(Instant.now());
         tenant.setUpdatedAt(Instant.now());
         tenants.save(tenant);
