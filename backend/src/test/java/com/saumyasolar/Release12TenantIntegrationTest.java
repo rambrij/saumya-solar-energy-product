@@ -299,7 +299,7 @@ class Release12TenantIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"code":"EMPTY-%s","name":"Invalid package","capacityKw":3,"packageType":"RESIDENTIAL","basePrice":25000,"items":[]}
+                                {"code":"EMPTY-%s","name":"Invalid package","capacityKw":3,"packageType":"RESIDENTIAL","basePrice":25000,"taxPercent":18,"items":[]}
                                 """.formatted(UUID.randomUUID())))
                 .andExpect(status().isBadRequest());
 
@@ -307,7 +307,7 @@ class Release12TenantIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"code":"PKG-%s","name":"Three kW package","capacityKw":3,"packageType":"RESIDENTIAL","basePrice":25000,"items":[{"productId":"%s","quantity":4,"optionalItem":false}]}
+                                {"code":"PKG-%s","name":"Three kW package","capacityKw":3,"packageType":"RESIDENTIAL","basePrice":25000,"taxPercent":18,"items":[{"productId":"%s","quantity":4,"optionalItem":false}]}
                                 """.formatted(UUID.randomUUID(), productId)))
                 .andExpect(status().isOk());
     }
