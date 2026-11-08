@@ -68,15 +68,30 @@ public class EnterpriseSaasService {
  @Transactional public TenantSubscription assignSubscription(UUID tenantId,UUID planId,SubscriptionInput x,Principal p){
   platform(p,"SUBSCRIPTION_MANAGE");tenants.findByIdForUpdate(tenantId).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
   SubscriptionPlan plan=plans.findById(planId).filter(SubscriptionPlan::isActive).orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"Active plan not found"));
-  Instant start=x.startsAt()==null?Instant.now():x.startsAt();if(x.endsAt()!=null&&!x.endsAt().isAfter(start))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Subscription end must be after start");
-  subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(tenantId,List.of("TRIAL","ACTIVE","PAST_DUE")).ifPresent(old->{old.setStatus("CANCELLED");old.setUpdatedAt(Instant.now());subscriptions.save(old);});
+  Instant now=Instant.now(),start=x.startsAt()==null?now:x.startsAt();
+  if(!Set.of("TRIAL","ACTIVE").contains(x.status()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"New subscriptions must be TRIAL or ACTIVE");
+  if(x.endsAt()!=null&&!x.endsAt().isAfter(start))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Subscription end must be after start");
+  if(x.renewsAt()!=null&&x.renewsAt().isBefore(start))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Renewal date cannot precede subscription start");
+  for(TenantSubscription old:subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId)){
+   if(!Set.of("TRIAL","ACTIVE","PAST_DUE").contains(old.getStatus()))continue;
+   if(old.getStartsAt()!=null&&!old.getStartsAt().isBefore(start)){
+    old.setStatus("CANCELLED");old.setUpdatedAt(now);subscriptions.save(old);
+   }else if(start.isAfter(now)&&effective(old)){
+    old.setEndsAt(start);old.setUpdatedAt(now);subscriptions.save(old);
+   }else if(!start.isAfter(now)&&effective(old)){
+    old.setStatus("CANCELLED");old.setUpdatedAt(now);subscriptions.save(old);
+   }
+  }
   TenantSubscription s=new TenantSubscription();s.setId(UUID.randomUUID());s.setTenantId(tenantId);s.setPlanId(planId);s.setStatus(x.status());s.setStartsAt(start);
-  s.setEndsAt(x.endsAt());s.setRenewsAt(x.renewsAt());s.setExternalReference(trim(x.externalReference()));s.setCreatedBy(p.userId());s.setCreatedAt(Instant.now());s.setUpdatedAt(Instant.now());
+  s.setEndsAt(x.endsAt());s.setRenewsAt(x.renewsAt());s.setExternalReference(trim(x.externalReference()));s.setCreatedBy(p.userId());s.setCreatedAt(now);s.setUpdatedAt(now);
   subscriptions.save(s);audit(p,tenantId,"SUBSCRIPTION_ASSIGNED","TENANT_SUBSCRIPTION",s.getId(),s);return s;
  }
  public Map<String,Object> currentSubscription(Principal p){
   if(!"VENDOR".equals(p.accountType())||p.tenantId()==null)throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-  TenantSubscription s=subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(p.tenantId(),List.of("TRIAL","ACTIVE","PAST_DUE")).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"No subscription found"));
+  TenantSubscription s=subscriptions.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream()
+   .filter(v->!"CANCELLED".equals(v.getStatus()))
+   .max(Comparator.comparing(TenantSubscription::getStartsAt,Comparator.nullsFirst(Comparator.naturalOrder())))
+   .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"No subscription found"));
   SubscriptionPlan plan=plans.findById(s.getPlanId()).orElseThrow();return Map.of("subscription",s,"plan",plan,"effective",effective(s));
  }
  public void assertWarehouseAccess(Warehouse warehouse,Principal p){
@@ -98,9 +113,8 @@ public class EnterpriseSaasService {
   List<TenantSubscription> history=subscriptions.findByTenantIdOrderByCreatedAtDesc(t);
   if(history.isEmpty())return; // Existing Phase 1/2 vendors remain grandfathered until subscription assignment.
   tenants.findByIdForUpdate(t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
-  TenantSubscription active=subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(t,List.of("TRIAL","ACTIVE"))
+  TenantSubscription active=effectiveSubscription(t)
    .orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"An active subscription is required to add vendor users"));
-  if(!effective(active))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Subscription is expired");
   SubscriptionPlan plan=plans.findById(active.getPlanId()).orElseThrow();
   long count=users.findByTenantId(t).stream().filter(u->"VENDOR".equals(u.getAccountType())&&u.isEnabled()).count();
   if(count>=plan.getMaxUsers())throw new ResponseStatusException(HttpStatus.FORBIDDEN,"User limit reached for current plan");
@@ -108,9 +122,9 @@ public class EnterpriseSaasService {
  public void enforceWarehouseLimit(UUID t){
   List<TenantSubscription> history=subscriptions.findByTenantIdOrderByCreatedAtDesc(t);
   if(history.isEmpty())return; // Preserve existing Phase 1/2 tenants until a platform subscription is assigned.
-  TenantSubscription s=subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(t,List.of("TRIAL","ACTIVE"))
+  tenants.findByIdForUpdate(t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
+  TenantSubscription s=effectiveSubscription(t)
    .orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"An active subscription is required for warehouse changes"));
-  if(!effective(s))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Subscription is expired");
   SubscriptionPlan plan=plans.findById(s.getPlanId()).orElseThrow();
   long active=warehouses.findByTenantIdOrderByNameAsc(t).stream().filter(Warehouse::isActive).count();
   if(active>=plan.getMaxWarehouses())throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Warehouse limit reached for current plan");
@@ -124,11 +138,19 @@ public class EnterpriseSaasService {
   w.setBranchId(branchId);warehouses.save(w);audit(p,t,"WAREHOUSE_BRANCH_ASSIGNED","WAREHOUSE",warehouseId,w);return w;
  }
  private void enforceBranchLimit(UUID t){
-  TenantSubscription s=subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(t,List.of("TRIAL","ACTIVE")).orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"Active subscription required"));
-  if(!effective(s))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Subscription is expired");
-  SubscriptionPlan plan=plans.findById(s.getPlanId()).orElseThrow();if(branches.countByTenantIdAndActiveTrue(t)>=plan.getMaxBranches())throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Branch limit reached for current plan");
+  if(subscriptions.findByTenantIdOrderByCreatedAtDesc(t).isEmpty())return; // Grandfather existing Phase 1/2 tenants until a plan is assigned.
+  TenantSubscription s=effectiveSubscription(t).orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"An active subscription is required to add branches"));
+  SubscriptionPlan plan=plans.findById(s.getPlanId()).orElseThrow();
+  if(branches.countByTenantIdAndActiveTrue(t)>=plan.getMaxBranches())throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Branch limit reached for current plan");
  }
- private boolean effective(TenantSubscription s){Instant now=Instant.now();return ("ACTIVE".equals(s.getStatus())||"TRIAL".equals(s.getStatus()))&&!s.getStartsAt().isAfter(now)&&(s.getEndsAt()==null||s.getEndsAt().isAfter(now));}
+ private Optional<TenantSubscription> effectiveSubscription(UUID tenantId){
+  Instant now=Instant.now();
+  return subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
+   .filter(s->("ACTIVE".equals(s.getStatus())||"TRIAL".equals(s.getStatus()))
+    &&s.getStartsAt()!=null&&!s.getStartsAt().isAfter(now)&&(s.getEndsAt()==null||s.getEndsAt().isAfter(now)))
+   .max(Comparator.comparing(TenantSubscription::getStartsAt));
+ }
+ private boolean effective(TenantSubscription s){Instant now=Instant.now();return ("ACTIVE".equals(s.getStatus())||"TRIAL".equals(s.getStatus()))&&s.getStartsAt()!=null&&!s.getStartsAt().isAfter(now)&&(s.getEndsAt()==null||s.getEndsAt().isAfter(now));}
  public List<AuditEvent> auditEvents(Principal p,Instant from,Instant to){
   if("PLATFORM".equals(p.accountType())){platform(p,"AUDIT_VIEW");return audits.findTop200ByCreatedAtBetweenOrderByCreatedAtDesc(from,to);}
   UUID t=vendor(p,"AUDIT_VIEW");return audits.findTop200ByTenantIdAndCreatedAtBetweenOrderByCreatedAtDesc(t,from,to);
