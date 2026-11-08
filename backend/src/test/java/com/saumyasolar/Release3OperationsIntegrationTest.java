@@ -102,7 +102,7 @@ class Release3OperationsIntegrationTest {
   operations.release(order.getId(),"Release reservation before cancellation",principal);
   var cancelled=operations.transition(order.getId(),transition,principal);
   assertEquals("CANCELLED",cancelled.getStatus());
-  assertEquals(BigDecimal.ZERO,balances.findByTenantIdAndWarehouseIdAndProductId(tenantId,warehouse.getId(),product.getId()).orElseThrow().getReserved());
+  assertEquals(0,BigDecimal.ZERO.compareTo(balances.findByTenantIdAndWarehouseIdAndProductId(tenantId,warehouse.getId(),product.getId()).orElseThrow().getReserved()));
  }
 
  @Test void vendorCannotReceiveStockForAnotherTenantsProduct() throws Exception {
