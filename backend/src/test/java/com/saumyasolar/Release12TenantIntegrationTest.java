@@ -13,6 +13,7 @@ import com.saumyasolar.repo.EnquiryRepository;
 import com.saumyasolar.repo.ProductCategoryRepository;
 import com.saumyasolar.repo.ProductRepository;
 import com.saumyasolar.repo.CustomerOrderRepository;
+import com.saumyasolar.repo.AuditLogRepository;
 import com.saumyasolar.repo.OrderItemRepository;
 import com.saumyasolar.repo.TenantRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,6 +48,7 @@ class Release12TenantIntegrationTest {
     @Autowired CustomerProfileRepository customerProfiles;
     @Autowired CustomerOrderRepository customerOrders;
     @Autowired OrderItemRepository orderItems;
+    @Autowired AuditLogRepository auditLogs;
 
     UUID vendorTenantId;
 
@@ -438,6 +440,44 @@ class Release12TenantIntegrationTest {
         assertEquals(2, json.readTree(invoiceLines).size());
     }
 
+    @Test
+    void rejectedVendorCannotLoginOrBypassVerificationWithStatusEndpoint() throws Exception {
+        String platformToken=accessToken("platform@saumya.local","Platform@123");
+        String suffix=UUID.randomUUID().toString().replace("-","");
+        String email="rejected-"+suffix+"@example.test";
+        String password="RejectedVendor-Pass-2026";
+        String body="""
+                {"name":"Rejected Vendor","slug":"rejected-%s","adminName":"Rejected Admin","adminEmail":"%s","adminPassword":"%s"}
+                """.formatted(suffix,email,password);
+        String tenantJson=mvc.perform(post("/api/v1/tenants").header("Authorization","Bearer "+platformToken)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String id=json.readTree(tenantJson).get("id").asText();
+        mvc.perform(post("/api/v1/platform/tenants/"+id+"/verification")
+                .header("Authorization","Bearer "+platformToken).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"decision\":\"REJECT\",\"reason\":\"GST certificate is missing\"}"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.verificationStatus").value("REJECTED"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/tenants/"+id+"/status")
+                .header("Authorization","Bearer "+platformToken).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"ACTIVE\"}"))
+                .andExpect(status().isConflict());
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\""+email+"\",\"password\":\""+password+"\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void authenticatedApiRequestsAreWrittenToTenantAwareAuditLog() throws Exception {
+        String token=accessToken("admin@saumya.local","Admin@123");
+        var user=users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        mvc.perform(get("/api/v1/me").header("Authorization","Bearer "+token)).andExpect(status().isOk());
+        assertTrue(auditLogs.findTop20ByActorIdOrderByCreatedAtDesc(user.getId()).stream()
+                .anyMatch(row -> "/api/v1/me".equals(row.getRequestPath())
+                        && vendorTenantId.equals(row.getTenantId())
+                        && row.getResponseStatus()==200));
+    }
+
     private String accessToken(String email, String password) throws Exception {
         var body = """
                 {"email":"%s","password":"%s"}
@@ -455,6 +495,7 @@ class Release12TenantIntegrationTest {
         tenant.setName("Integration tenant");
         tenant.setSlug("test-" + UUID.randomUUID().toString().replace("-", ""));
         tenant.setStatus("ACTIVE");
+        tenant.setVerificationStatus("VERIFIED");
         return tenants.save(tenant);
     }
 
