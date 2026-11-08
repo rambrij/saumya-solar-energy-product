@@ -22,6 +22,7 @@ import java.util.UUID;
 @NoArgsConstructor
 public class InventoryTransaction {
     @Id UUID id;
+    @Column(length = 50, nullable = false) String transactionReference;
     UUID tenantId;
     UUID warehouseId;
     UUID productId;
