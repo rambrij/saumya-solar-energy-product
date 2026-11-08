@@ -7,7 +7,8 @@
 **Baseline commit:** `d8c9c44d389779bb11d768c156f0c55f0b6c67e8`  
 **Validated remediation commit:** `0257dc04789fc65134a7e1f97bdff7002c429a62`  
 **Source audit:** `phase-1-commercial-mvp-audit/PHASE-1-COMMERCIAL-MVP-AUDIT.md`  
-**Remediation PR:** https://github.com/rambrij/saumya-solar-energy-product/pull/6  
+**Initial remediation PR:** https://github.com/rambrij/saumya-solar-energy-product/pull/6 (merged initial tranche)  
+**Follow-on remediation PR:** https://github.com/rambrij/saumya-solar-energy-product/pull/7 (open draft)  
 **CI run:** https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42465372813
 
 ---
