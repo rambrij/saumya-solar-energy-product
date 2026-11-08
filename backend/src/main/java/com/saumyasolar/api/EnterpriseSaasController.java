@@ -36,6 +36,7 @@ public class EnterpriseSaasController {
  @PostMapping("/branches/{id}/activate") public Map<String,Object> activate(@PathVariable UUID id,Authentication a){service.setBranchActive(id,true,p(a));return Map.of("updated",true);}
  @PostMapping("/branches/{id}/deactivate") public Map<String,Object> deactivate(@PathVariable UUID id,Authentication a){service.setBranchActive(id,false,p(a));return Map.of("updated",true);}
  @PostMapping("/branches/{id}/users") public Map<String,Object> assignUser(@PathVariable UUID id,@Valid @RequestBody BranchUserRequest x,Authentication a){service.assignUser(id,x.userId(),p(a));return Map.of("assigned",true);}
+ @DeleteMapping("/branches/{id}/users/{userId}") public Map<String,Object> removeUser(@PathVariable UUID id,@PathVariable UUID userId,Authentication a){service.removeUser(id,userId,p(a));return Map.of("removed",true);}
  @GetMapping("/subscription-plans") public List<SubscriptionPlan> plans(){return service.plans();}
  @PostMapping("/platform/subscription-plans") public SubscriptionPlan createPlan(@Valid @RequestBody PlanRequest x,Authentication a){return service.createPlan(new EnterpriseSaasService.PlanInput(x.planCode(),x.name(),x.description(),x.billingCycle(),x.price(),x.currency()==null?"INR":x.currency(),x.maxUsers(),x.maxBranches(),x.maxWarehouses(),x.maxStorageMb(),x.entitlementsJson()),p(a));}
  @PostMapping("/platform/tenants/{tenantId}/subscriptions") public TenantSubscription assignSubscription(@PathVariable UUID tenantId,@Valid @RequestBody SubscriptionRequest x,Authentication a){
