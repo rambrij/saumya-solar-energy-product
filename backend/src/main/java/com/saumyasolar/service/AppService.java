@@ -522,6 +522,7 @@ public class AppService {
         if (q.getCustomerId() == null) {
             CustomerProfile customer = customers.findByTenantIdAndEmailIgnoreCase(p.tenantId(), q.getEmail())
                     .orElseGet(() -> {
+                        if(enterpriseSaas!=null)enterpriseSaas.enforceCustomerLimit(p.tenantId());
                         var created = new CustomerProfile();
                         created.setId(UUID.randomUUID());
                         created.setTenantId(p.tenantId());
