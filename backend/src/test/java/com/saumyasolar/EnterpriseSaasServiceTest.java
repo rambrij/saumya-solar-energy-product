@@ -48,6 +48,7 @@ class EnterpriseSaasServiceTest {
         UUID tenantId = UUID.randomUUID();
         TenantSubscription subscription = subscription(tenantId);
         SubscriptionPlan plan = plan(1);
+        subscription.setPlanId(plan.getId());
         when(branches.existsByTenantIdAndCodeIgnoreCase(tenantId, "HQ")).thenReturn(false);
         when(subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(tenantId, List.of("TRIAL", "ACTIVE")))
                 .thenReturn(Optional.of(subscription));
@@ -67,6 +68,7 @@ class EnterpriseSaasServiceTest {
         UUID tenantId = UUID.randomUUID();
         TenantSubscription subscription = subscription(tenantId);
         SubscriptionPlan plan = plan(3);
+        subscription.setPlanId(plan.getId());
         when(branches.existsByTenantIdAndCodeIgnoreCase(tenantId, "HQ")).thenReturn(false);
         when(subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(tenantId, List.of("TRIAL", "ACTIVE")))
                 .thenReturn(Optional.of(subscription));
