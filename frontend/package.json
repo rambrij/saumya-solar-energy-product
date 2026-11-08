@@ -1,7 +1,8 @@
 {
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc && vite build"
+    "build": "tsc && vite build",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "react": "latest",
@@ -12,6 +13,7 @@
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "latest",
     "typescript": "latest",
-    "vite": "latest"
+    "vite": "latest",
+    "@playwright/test": "^1.56.1"
   }
 }
