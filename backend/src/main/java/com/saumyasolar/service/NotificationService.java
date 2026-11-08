@@ -63,29 +63,13 @@ public class NotificationService {
         record.setEventType(eventType);
         record.setRecipient(recipient.trim());
         record.setSubject(subject);
+        record.setBody(body);
         record.setStatus("PENDING");
         record.setAttemptCount(0);
         record.setCreatedAt(Instant.now());
+        record.setNextAttemptAt(Instant.now());
         deliveries.save(record);
-        try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(from);
-            message.setTo(recipient.trim());
-            message.setSubject(subject);
-            message.setText(body);
-            record.setAttemptCount(1);
-            mailSender.send(message);
-            record.setStatus("DELIVERED");
-            record.setSentAt(Instant.now());
-            record.setLastError(null);
-            deliveries.save(record);
-            return true;
-        } catch (MailException ex) {
-            record.setStatus("FAILED");
-            record.setLastError("SMTP delivery failed");
-            deliveries.save(record);
-            return false;
-        }
+        return true;
     }
 
     private String safeName(String name) {
