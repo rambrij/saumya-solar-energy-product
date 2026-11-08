@@ -256,6 +256,14 @@ jobs:
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V32__notification_inbox_read_state.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='notification_delivery' AND column_name='read_at'")" = "1"
+      - name: Apply V33 vendor legal profile migration
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V33__vendor_legal_profile_fields.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='tenant' AND column_name IN ('legal_name','contact_phone','registered_address','contact_email','website')")" = "5"
+      - name: Apply V34 vendor verification document migration
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V34__vendor_verification_documents.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='vendor_verification_document'")" = "1"
 
 
   mysql-app-startup:
