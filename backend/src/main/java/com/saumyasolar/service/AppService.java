@@ -178,6 +178,9 @@ public class AppService {
         if (!"ACTIVE".equals(status) && !"SUSPENDED".equals(status))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tenant status must be ACTIVE or SUSPENDED");
         var tenant = tenants.findById(tenantId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
+        if ("ACTIVE".equals(status) && tenant.getVerificationStatus()!=null
+                && !"VERIFIED".equals(tenant.getVerificationStatus()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Vendor verification must be approved before activation");
         tenant.setStatus(status);
         tenant.setUpdatedAt(Instant.now());
         return tenants.save(tenant);
