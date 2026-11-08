@@ -311,6 +311,32 @@ public class AppService {
                 .filter(SolarPackage::isActive).toList();
     }
 
+    public List<com.saumyasolar.api.CatalogModels.PublicProductView> publicProducts(String storeSlug) {
+        String normalized = storeSlug == null ? "" : storeSlug.trim().toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
+        var tenant = tenants.findBySlug(normalized)
+                .filter(value -> "ACTIVE".equals(value.getStatus()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Active store not found"));
+        var activeCategories = cats.findByTenantIdOrderByIdDesc(tenant.getId()).stream()
+                .filter(ProductCategory::isActive)
+                .collect(java.util.stream.Collectors.toMap(ProductCategory::getId, category -> category));
+        return products.findByTenantIdOrderByIdDesc(tenant.getId()).stream()
+                .filter(Product::isActive)
+                .map(product -> {
+                    ProductCategory category = activeCategories.get(product.getCategoryId());
+                    if (category == null) return null;
+                    return new com.saumyasolar.api.CatalogModels.PublicProductView(
+                            product.getId(), product.getSku(), product.getName(), product.getDescription(),
+                            product.getCategoryId().toString(), category.getName(), product.getManufacturer(),
+                            product.getModel(), product.getTechnology(), product.getPrice(),
+                            product.getDiscountPercent(), product.getTaxPercent(), product.getWarrantyYears(),
+                            product.getImageUrl(), product.getDatasheetUrl(), product.getUnitOfMeasure(),
+                            product.isSerialized(), product.getAttributesJson());
+                })
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
     @Transactional
     public Enquiry createPublicEnquiry(String storeSlug, Input input) {
         String normalized = storeSlug == null ? "" : storeSlug.trim().toLowerCase(java.util.Locale.ROOT)
