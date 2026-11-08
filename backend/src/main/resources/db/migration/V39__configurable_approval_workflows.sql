@@ -12,6 +12,7 @@ CREATE TABLE approval_instance (
  entity_type VARCHAR(60) NOT NULL, entity_id VARCHAR(100) NOT NULL, steps_snapshot_json LONGTEXT NOT NULL,
  status VARCHAR(20) NOT NULL, current_step INT NOT NULL, requested_by BINARY(16) NOT NULL,
  requested_at TIMESTAMP(6) NOT NULL, completed_at TIMESTAMP(6) NULL,
+ CONSTRAINT uq_approval_instance_tenant_id UNIQUE(tenant_id,id),
  CONSTRAINT fk_approval_instance_workflow FOREIGN KEY(tenant_id,workflow_id) REFERENCES approval_workflow(tenant_id,id),
  CONSTRAINT fk_approval_instance_actor FOREIGN KEY(requested_by) REFERENCES app_user(id),
  CONSTRAINT chk_approval_instance_status CHECK(status IN ('PENDING','APPROVED','REJECTED','CANCELLED')),
