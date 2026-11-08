@@ -24,6 +24,7 @@ Authentication `POST /api/v1/auth/login`; current user `GET /api/v1/me`; seed im
 ## 8. Request and response examples
 Local credentials: `platform@saumya.local / Platform@123`; `admin@saumya.local / Admin@123`; `sales@saumya.local / Sales@123`; `customer@saumya.local / Customer@123`. Change these before any shared environment.
 
+Successful login response shape: `{"accessToken":"<redacted-jwt>","user":{"id":"<user-uuid>","email":"customer@saumya.local","accountType":"CUSTOMER"}}`. Never paste live tokens into tickets or documentation.
 ## 9. Database entities and relationships
 Seed tenant `saumya-solar`; seeded roles/users, customer profiles, categories, products and warehouse/checklist templates; plans inserted by V45; assignments/history stored in V46 tables.
 
