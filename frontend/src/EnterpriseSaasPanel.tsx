@@ -8,14 +8,14 @@ async function request(path:string,s:Session,method='GET',body?:any){
  return data;
 }
 export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'vendor';s:Session;error:(message:string)=>void}){
- const [branches,setBranches]=useState<any[]>([]),[plans,setPlans]=useState<any[]>([]),[subscription,setSubscription]=useState<any>(null),[audits,setAudits]=useState<any[]>([]);
+ const [branches,setBranches]=useState<any[]>([]),[plans,setPlans]=useState<any[]>([]),[subscription,setSubscription]=useState<any>(null),[audits,setAudits]=useState<any[]>([]),[branding,setBranding]=useState<any>({displayName:'',logoUrl:'',primaryColor:'#0B6B4B',secondaryColor:'#F6C85F',contactEmail:'',contactPhone:'',supportEmail:'',supportPhone:''}),[domains,setDomains]=useState<any[]>([]);
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[panelError,setPanelError]=useState('');
  const load=async()=>{
   setLoading(true);setPanelError('');
   try{
    if(mode==='vendor'){
-    const [b,sub]=await Promise.all([request('/branches',s),request('/subscription',s).catch(()=>null)]);
-    setBranches(b);setSubscription(sub);
+    const [b,sub,brand,domainRows]=await Promise.all([request('/branches',s),request('/subscription',s).catch(()=>null),request('/vendor/branding',s),request('/vendor/domains',s)]);
+    setBranches(b);setSubscription(sub);setBranding(brand);setDomains(domainRows);
    }else setPlans(await request('/subscription-plans',s));
   }catch(e:any){setPanelError(e.message)}finally{setLoading(false)}
  };
@@ -23,6 +23,17 @@ export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'ven
  const createBranch=async(e:React.FormEvent<HTMLFormElement>)=>{
   e.preventDefault();const form=e.currentTarget;const x:any=Object.fromEntries(new FormData(form));setBusy(true);
   try{await request('/branches',s,'POST',x);form.reset();await load();error('Branch created.')}catch(e:any){setPanelError(e.message)}finally{setBusy(false)}
+ };
+ const saveBranding=async(e:React.FormEvent<HTMLFormElement>)=>{
+  e.preventDefault();const form=e.currentTarget;const x:any=Object.fromEntries(new FormData(form));setBusy(true);
+  try{const saved=await request('/vendor/branding',s,'PATCH',x);setBranding(saved);error('Vendor branding saved.')}catch(e:any){setPanelError(e.message)}finally{setBusy(false)}
+ };
+ const addDomain=async(e:React.FormEvent<HTMLFormElement>)=>{
+  e.preventDefault();const form=e.currentTarget;const x:any=Object.fromEntries(new FormData(form));setBusy(true);
+  try{const created=await request('/vendor/domains',s,'POST',x);setDomains(v=>[created,...v]);form.reset();error('Domain registered. Add the displayed TXT record in your DNS, then verify it.')}catch(e:any){setPanelError(e.message)}finally{setBusy(false)}
+ };
+ const verifyDomain=async(id:string)=>{
+  try{const updated=await request('/vendor/domains/'+id+'/verify',s,'POST');setDomains(v=>v.map(d=>d.id===id?updated:d));error('Domain verified.')}catch(e:any){setPanelError(e.message)}
  };
  const assignUser=async(branchId:string)=>{
   const userId=window.prompt('Enter the existing same-vendor user ID to assign to this branch');if(!userId)return;
@@ -46,6 +57,20 @@ export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'ven
   {panelError&&<div className="notice" role="alert">{panelError}<button type="button" onClick={()=>setPanelError('')}>×</button></div>}
   {loading?<div className="card">Loading enterprise settings…</div>:mode==='vendor'?<>
    <div className="card"><h2>Current subscription</h2>{subscription?<><p><b>{subscription.plan?.name}</b> · {subscription.subscription?.status}</p><p>Billing: {subscription.plan?.billingCycle} · ₹{subscription.plan?.price} {subscription.plan?.currency}</p><p>Branch limit: {subscription.plan?.maxBranches} · Warehouse limit: {subscription.plan?.maxWarehouses} · User limit: {subscription.plan?.maxUsers}</p><p>Effective: {subscription.effective?'Yes':'No'}</p></>:<p>No active subscription is assigned. Contact the platform administrator.</p>}</div>
+   <div className="card"><h2>Vendor branding</h2><form className="form" onSubmit={saveBranding}>
+    <input name="displayName" defaultValue={branding.displayName||''} placeholder="Public display name" required/>
+    <input name="logoUrl" defaultValue={branding.logoUrl||''} placeholder="Logo URL (HTTPS) or /uploads/ path"/>
+    <label>Primary color<input name="primaryColor" type="color" defaultValue={branding.primaryColor||'#0B6B4B'}/></label>
+    <label>Secondary color<input name="secondaryColor" type="color" defaultValue={branding.secondaryColor||'#F6C85F'}/></label>
+    <input name="contactEmail" type="email" defaultValue={branding.contactEmail||''} placeholder="Public contact email"/>
+    <input name="contactPhone" defaultValue={branding.contactPhone||''} placeholder="Public contact phone"/>
+    <input name="supportEmail" type="email" defaultValue={branding.supportEmail||''} placeholder="Support email"/>
+    <input name="supportPhone" defaultValue={branding.supportPhone||''} placeholder="Support phone"/>
+    <button disabled={busy}>{busy?'Saving…':'Save branding'}</button>
+   </form></div>
+   <div className="card"><h2>Custom domains</h2><form className="form" onSubmit={addDomain}><input name="domain" placeholder="shop.example.com" required/><button disabled={busy}>Register domain</button></form>
+    {domains.map(d=><article key={d.id}><div><b>{d.domain}</b><small>{d.status} · TXT value: saumya-solar-verification={d.verificationToken}</small></div>{d.status!=='VERIFIED'&&<button type="button" className="secondary" onClick={()=>void verifyDomain(d.id)}>Verify DNS</button>}</article>)}
+   </div>
    <div className="card"><h2>Branches</h2>{branches.length?<div className="table-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>Address</th><th>Status</th><th>Actions</th></tr></thead><tbody>{branches.map(b=><tr key={b.id}><td>{b.code}</td><td>{b.name}</td><td>{b.address||'—'}</td><td>{b.active?'Active':'Inactive'}</td><td><button type="button" className="secondary" onClick={()=>void assignUser(b.id)}>Assign user</button></td></tr>)}</tbody></table></div>:<p>No branches configured.</p>}
     <form className="form" onSubmit={createBranch}><h3>Create branch</h3><input name="code" placeholder="Branch code" maxLength={50} required/><input name="name" placeholder="Branch name" maxLength={150} required/><input name="address" placeholder="Address"/><input name="phone" placeholder="Phone"/><input name="email" type="email" placeholder="Contact email"/><button disabled={busy}>{busy?'Saving…':'Create branch'}</button></form>
    </div>
