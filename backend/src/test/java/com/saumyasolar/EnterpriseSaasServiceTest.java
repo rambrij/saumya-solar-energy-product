@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -120,6 +121,52 @@ class EnterpriseSaasServiceTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
         verify(tenants, never()).findByIdForUpdate(any());
+    }
+
+    @Test
+    void scheduledSubscriptionDoesNotEndCurrentSubscriptionEarlyOrExtendItsExistingEnd() {
+        UUID tenantId=UUID.randomUUID();
+        Tenant tenant=new Tenant();
+        when(tenants.findByIdForUpdate(tenantId)).thenReturn(Optional.of(tenant));
+        SubscriptionPlan plan=plan(3);
+        when(plans.findById(plan.getId())).thenReturn(Optional.of(plan));
+        Instant now=Instant.now();
+        TenantSubscription current=subscription(tenantId);
+        current.setEndsAt(now.plus(Duration.ofDays(10)));
+        when(subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(current));
+        when(subscriptions.save(any(TenantSubscription.class))).thenAnswer(invocation->invocation.getArgument(0));
+        when(audits.save(any(AuditEvent.class))).thenAnswer(invocation->invocation.getArgument(0));
+        Instant scheduledStart=now.plus(Duration.ofDays(5));
+        Principal platform=new Principal(UUID.randomUUID(),null,"platform@example.test","PLATFORM",
+                Set.of("PLATFORM_SUPER_ADMIN"),Set.of("SUBSCRIPTION_MANAGE"),0);
+
+        service.assignSubscription(tenantId,plan.getId(),
+                new EnterpriseSaasService.SubscriptionInput("ACTIVE",scheduledStart,null,null,"scheduled"),platform);
+
+        assertEquals("ACTIVE",current.getStatus());
+        assertEquals(scheduledStart,current.getEndsAt());
+    }
+
+    @Test
+    void branchWarehouseRequiresExplicitMembershipForNonAdmin() {
+        UUID tenantId=UUID.randomUUID(),userId=UUID.randomUUID(),branchId=UUID.randomUUID();
+        Warehouse warehouse=new Warehouse();warehouse.setTenantId(tenantId);warehouse.setBranchId(branchId);
+        when(memberships.findByTenantIdAndUserId(tenantId,userId)).thenReturn(List.of());
+        Principal employee=new Principal(userId,tenantId,"employee@example.test","VENDOR",Set.of("SALES"),Set.of(),0);
+        ResponseStatusException error=assertThrows(ResponseStatusException.class,()->service.assertWarehouseAccess(warehouse,employee));
+        assertEquals(HttpStatus.NOT_FOUND,error.getStatusCode());
+    }
+
+    @Test
+    void subscriptionFeatureCanBeDeniedByPlanEntitlements() {
+        UUID tenantId=UUID.randomUUID();
+        TenantSubscription active=subscription(tenantId);
+        SubscriptionPlan plan=plan(2);plan.setEntitlementsJson("{\"features\":{\"APPROVAL_WORKFLOWS\":false}}");
+        active.setPlanId(plan.getId());
+        when(subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(active));
+        when(plans.findById(plan.getId())).thenReturn(Optional.of(plan));
+        ResponseStatusException error=assertThrows(ResponseStatusException.class,()->service.requireEntitlement(tenantId,"APPROVAL_WORKFLOWS"));
+        assertEquals(HttpStatus.FORBIDDEN,error.getStatusCode());
     }
 
     private TenantSubscription subscription(UUID tenantId) {
