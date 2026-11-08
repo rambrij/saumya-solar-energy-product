@@ -6,10 +6,12 @@ on:
       - feature/release-1-2-complete-implementation
       - feature/release-3-operations
       - feature/release-4-finance-and-service
+      - phase-1-commercial-mvp-remediation
   pull_request:
     branches:
       - main
       - feature/release-3-operations
+      - phase-1-commercial-mvp-implementation
 
 permissions:
   contents: read
@@ -139,12 +141,20 @@ jobs:
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V24__platform_mfa_challenge.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='mfa_challenge'")" = "1"
+      - name: Apply V25 accepted quotation financial snapshots
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V25__accepted_quotation_financial_snapshots.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='customer_order' AND column_name IN ('subtotal','discount_percent','discount_amount','tax_total')")" = "4"
 
 
   mysql-app-startup:
-    name: Start Spring Boot against MySQL 8.4
+    name: Start Spring Boot against MySQL 8.4 and Mailpit
     runs-on: ubuntu-latest
     services:
+      mailpit:
+        image: axllent/mailpit:latest
+        ports:
+          - 1025:1025
       mysql:
         image: mysql:8.4
         env:
@@ -175,6 +185,10 @@ jobs:
           DB_PASSWORD: rootpass
           JWT_SECRET: ci-only-secret-with-at-least-sixty-four-characters-for-hmac-sha256-signing-key
           CORS_ORIGINS: http://localhost:5173
+          MAIL_HOST: 127.0.0.1
+          MAIL_PORT: 1025
+          MAIL_SMTP_AUTH: 'false'
+          MAIL_SMTP_STARTTLS: 'false'
           SEED_DATA_ENABLED: 'false'
           PLATFORM_BOOTSTRAP_ENABLED: 'false'
         run: |
