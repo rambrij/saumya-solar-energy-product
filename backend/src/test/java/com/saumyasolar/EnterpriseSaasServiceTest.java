@@ -171,6 +171,42 @@ class EnterpriseSaasServiceTest {
         assertEquals(HttpStatus.FORBIDDEN,error.getStatusCode());
     }
 
+    @Test
+    void platformCanCreatePlanWithValidatedLimitsAndAudit() {
+        when(plans.findByPlanCodeIgnoreCase("GROWTH")).thenReturn(Optional.empty());
+        when(plans.save(any(SubscriptionPlan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(audits.save(any(AuditEvent.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        Principal platform=new Principal(UUID.randomUUID(),null,"platform@example.test","PLATFORM",
+                Set.of("PLATFORM_SUPER_ADMIN"),Set.of("SUBSCRIPTION_MANAGE"),0);
+        var input=new EnterpriseSaasService.PlanInput("growth","Growth","Growing teams","MONTHLY",
+                java.math.BigDecimal.valueOf(4999),"INR",25,3,3,10240,2000,2000,14,4,"{\\"branches\\":true}");
+        SubscriptionPlan created=service.createPlan(input,platform);
+        assertEquals("GROWTH",created.getPlanCode());
+        assertEquals(2000,created.getMaxProducts());
+        assertTrue(created.isActive());
+        verify(audits).save(argThat(event->"PLAN_CREATED".equals(event.getAction())));
+    }
+
+    @Test
+    void planWithAssignmentHistoryCannotBePhysicallyDeleted() {
+        UUID planId=UUID.randomUUID();SubscriptionPlan plan=plan(2);plan.setId(planId);
+        when(plans.findById(planId)).thenReturn(Optional.of(plan));
+        when(subscriptions.existsByPlanId(planId)).thenReturn(true);
+        Principal platform=new Principal(UUID.randomUUID(),null,"platform@example.test","PLATFORM",
+                Set.of("PLATFORM_SUPER_ADMIN"),Set.of("SUBSCRIPTION_MANAGE"),0);
+        ResponseStatusException error=assertThrows(ResponseStatusException.class,()->service.deletePlan(planId,platform));
+        assertEquals(HttpStatus.CONFLICT,error.getStatusCode());
+        verify(plans,never()).delete(any(SubscriptionPlan.class));
+    }
+
+    @Test
+    void vendorCannotManagePlatformSubscriptionPlans() {
+        Principal vendor=principal(UUID.randomUUID(),Set.of("SUBSCRIPTION_MANAGE"));
+        ResponseStatusException error=assertThrows(ResponseStatusException.class,()->service.allPlans(vendor));
+        assertEquals(HttpStatus.FORBIDDEN,error.getStatusCode());
+        verify(plans,never()).findAllByOrderByDisplayOrderAscNameAsc();
+    }
+
     private TenantSubscription subscription(UUID tenantId) {
         TenantSubscription value = new TenantSubscription();
         value.setId(UUID.randomUUID());
