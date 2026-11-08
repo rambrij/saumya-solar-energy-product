@@ -286,6 +286,32 @@ public class AuthLifecycleService {
     }
 
     @Transactional
+    public void resendVendorInvitation(UUID tenantId, UUID invitedBy) {
+        Tenant tenant=tenants.findById(tenantId)
+                .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
+        if ("ACTIVE".equals(tenant.getStatus()) || "VERIFIED".equals(tenant.getVerificationStatus()))
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Verified vendor invitations cannot be resent");
+        AppUser admin=users.findByTenantId(tenantId).stream()
+                .filter(user->user.getRoles().stream().anyMatch(role->"VENDOR_ADMIN".equals(role.getName())))
+                .findFirst().orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Vendor administrator not found"));
+        admin.setEnabled(false);
+        admin.setTokenVersion(admin.getTokenVersion()+1);
+        users.save(admin);
+        vendorInvitations.findByTenantIdAndUserIdOrderByCreatedAtDesc(tenantId,admin.getId()).stream()
+                .filter(invitation->invitation.getAcceptedAt()==null&&invitation.getRevokedAt()==null)
+                .forEach(invitation->{invitation.setRevokedAt(Instant.now());vendorInvitations.save(invitation);});
+        byte[] randomToken=new byte[32];
+        new SecureRandom().nextBytes(randomToken);
+        String rawToken=Base64.getUrlEncoder().withoutPadding().encodeToString(randomToken);
+        VendorInvitation invitation=new VendorInvitation();
+        invitation.setId(UUID.randomUUID());invitation.setTenantId(tenantId);invitation.setUserId(admin.getId());
+        invitation.setTokenHash(hashResetToken(rawToken));invitation.setExpiresAt(Instant.now().plus(Duration.ofHours(24)));
+        invitation.setCreatedAt(Instant.now());invitation.setInvitedBy(invitedBy);vendorInvitations.save(invitation);
+        if(!notifications.sendVendorInvitation(admin.getId(),tenantId,admin.getEmail(),admin.getName(),rawToken))
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Unable to queue vendor administrator invitation");
+    }
+
+    @Transactional
     public void acceptVendorInvitation(String rawToken, String password) {
         if (rawToken == null || rawToken.isBlank() || password == null || password.length() < 12)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A valid invitation token and password of at least 12 characters are required");
