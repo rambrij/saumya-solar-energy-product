@@ -21,7 +21,7 @@ if("COMPENSATION".equals(original.getType()))throw new ResponseStatusException(H
 if(!Set.of("RECEIPT","RETURN","ISSUE","DAMAGE","ADJUSTMENT_INCREASE","ADJUSTMENT_DECREASE").contains(original.getType()))throw new ResponseStatusException(HttpStatus.CONFLICT,"This linked transaction requires its dedicated reversal workflow");
 if(transactions.existsByTenantIdAndReversalOfTransactionId(t,transactionId))throw new ResponseStatusException(HttpStatus.CONFLICT,"Inventory transaction has already been compensated");
 if(original.getWarehouseId()==null||original.getProductId()==null)throw new ResponseStatusException(HttpStatus.CONFLICT,"Transaction does not reference a stock balance and cannot be compensated automatically");
-warehouses.findForUpdate(original.getWarehouseId(),t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Warehouse not found"));
+warehouse(original.getWarehouseId(),t,p);warehouses.findForUpdate(original.getWarehouseId(),t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Warehouse not found"));
 InventoryBalance b=balances.findForUpdate(t,original.getWarehouseId(),original.getProductId()).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Inventory balance no longer exists"));
 BigDecimal q=original.getQuantityDelta()==null?BigDecimal.ZERO:original.getQuantityDelta();
 BigDecimal r=original.getReservedDelta()==null?BigDecimal.ZERO:original.getReservedDelta();
