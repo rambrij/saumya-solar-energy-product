@@ -34,6 +34,16 @@ public class Tenant {
     @Column(name = "updated_at")
     Instant updatedAt;
     String gstin;
+    @Column(name = "legal_name", length = 180)
+    String legalName;
+    @Column(name = "contact_phone", length = 20)
+    String contactPhone;
+    @Column(name = "registered_address", length = 500)
+    String registeredAddress;
+    @Column(name = "contact_email", length = 190)
+    String contactEmail;
+    @Column(length = 255)
+    String website;
     String invoicePrefix = "INV";
     Integer serviceReopenDays;
 }
