@@ -186,6 +186,16 @@ public class EnterpriseSaasService {
    .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Store not found"));
   return brandingView(t);
  }
+ public PublicStoreContext publicStoreContext(String host){
+  String domain=host==null?"":host.trim().toLowerCase(Locale.ROOT);
+  if(domain.isBlank()||domain.equals("localhost")||domain.matches("^[0-9.]+$"))
+   throw new ResponseStatusException(HttpStatus.NOT_FOUND,"No custom store domain is configured for this host");
+  TenantDomain mapping=tenantDomains.findFirstByDomainIgnoreCaseAndStatus(domain,"VERIFIED")
+   .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Store domain is not verified"));
+  Tenant tenant=tenants.findById(mapping.getTenantId()).filter(t->"ACTIVE".equals(t.getStatus()))
+   .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Store is not active"));
+  return new PublicStoreContext(tenant.getSlug(),brandingView(tenant));
+ }
  public BrandingView getBranding(Principal p){
   UUID t=vendor(p,"BRANDING_MANAGE");
   return brandingView(tenants.findById(t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found")));
@@ -236,6 +246,7 @@ public class EnterpriseSaasService {
  private String trim(String x){return x==null||x.isBlank()?null:x.trim();}
  public record BrandingInput(String displayName,String logoUrl,String primaryColor,String secondaryColor,String contactEmail,String contactPhone,String supportEmail,String supportPhone){}
  public record BrandingView(String displayName,String logoUrl,String primaryColor,String secondaryColor,String contactEmail,String contactPhone,String supportEmail,String supportPhone){}
+ public record PublicStoreContext(String slug,BrandingView branding){}
  public record BranchInput(String code,String name,String address,String phone,String email){}
  public record PlanInput(String planCode,String name,String description,String billingCycle,BigDecimal price,String currency,int maxUsers,int maxBranches,int maxWarehouses,long maxStorageMb,String entitlementsJson){}
  public record SubscriptionInput(String status,Instant startsAt,Instant endsAt,Instant renewsAt,String externalReference){}
