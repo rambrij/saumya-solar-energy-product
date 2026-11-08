@@ -25,10 +25,12 @@ public class TenantAdminService {
     private final AppUserRepository users;
     private final NotificationService notifications;
     private final VendorVerificationDocumentRepository verificationDocuments;
+    private final AuthLifecycleService lifecycle;
     public TenantAdminService(TenantRepository tenants, AppUserRepository users, NotificationService notifications,
-            VendorVerificationDocumentRepository verificationDocuments) {
+            VendorVerificationDocumentRepository verificationDocuments, AuthLifecycleService lifecycle) {
         this.tenants = tenants; this.users = users; this.notifications = notifications;
         this.verificationDocuments = verificationDocuments;
+        this.lifecycle = lifecycle;
     }
     private void authorize(Principal p) {
         if (!"PLATFORM".equals(p.accountType()) || p.roles()==null ||
@@ -128,6 +130,13 @@ public class TenantAdminService {
             notifications.sendBusinessNotification(admin.getId(),saved.getId(),event,admin.getEmail(),subject,message);
         }
         return row(saved);
+    }
+
+    @Transactional
+    public void resendInvitation(UUID id, Principal p) {
+        authorize(p);
+        tenants.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
+        lifecycle.resendVendorInvitation(id,p.userId());
     }
 
     @Transactional
