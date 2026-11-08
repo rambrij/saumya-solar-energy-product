@@ -96,11 +96,35 @@ class Release12TenantIntegrationTest {
                                 {"token":"%s","password":"%s"}
                                 """.formatted(invitationToken, adminPassword)))
                 .andExpect(status().isBadRequest());
-        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+        var onboardingLogin = mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"%s","password":"%s"}
                                 """.formatted(adminEmail, adminPassword)))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var onboardingToken = json.readTree(onboardingLogin).get("accessToken").asText();
+        mvc.perform(patch("/api/v1/vendor/profile")
+                        .header("Authorization", "Bearer " + onboardingToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"legalName":"New Vendor Solar Private Limited","contactPhone":"9876543210","registeredAddress":"12 Solar Park, Chennai","contactEmail":"%s","gstin":"33ABCDE1234F1Z5"}
+                                """.formatted(adminEmail)))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.legalName").value("New Vendor Solar Private Limited"));
+        mvc.perform(get("/api/v1/products").header("Authorization", "Bearer " + onboardingToken))
+                .andExpect(status().isForbidden());
+        var kycFile = new org.springframework.mock.web.MockMultipartFile("file", "gst-certificate.pdf",
+                "application/pdf", "%PDF-1.4\\nVendor GST certificate".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var kycResponse = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/v1/vendor/verification-documents")
+                        .file(kycFile).param("documentType", "GST_CERTIFICATE")
+                        .header("Authorization", "Bearer " + onboardingToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var kycId = json.readTree(kycResponse).get("id").asText();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                        "/api/v1/platform/verification-documents/" + kycId + "/review")
+                        .header("Authorization", "Bearer " + platformToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"decision\\":\\"APPROVED\\",\\"notes\\":\\"GST certificate verified\\"}"))
+                .andExpect(status().isOk());
         mvc.perform(post("/api/v1/platform/tenants/" + tenantId + "/verification")
                         .header("Authorization", "Bearer " + platformToken)
                         .contentType(MediaType.APPLICATION_JSON)
