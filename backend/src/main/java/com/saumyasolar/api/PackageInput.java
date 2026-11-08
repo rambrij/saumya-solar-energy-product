@@ -17,6 +17,7 @@ public record PackageInput(
         @NotNull @DecimalMin("0.01") BigDecimal capacityKw,
         @NotBlank @Size(max = 80) String packageType,
         @NotNull @DecimalMin("0.00") BigDecimal basePrice,
+        @NotNull @DecimalMin("0.00") @jakarta.validation.constraints.DecimalMax("100.00") BigDecimal taxPercent,
         Integer warrantyYears,
         String imageUrl,
         Boolean active,
