@@ -103,7 +103,7 @@ public class FinanceService {
         Invoice saved = invoices.save(invoice);
         notifications.sendBusinessNotification(cp.getUserId(), tenant, "INVOICE_ISSUED",
                 cp.getEmail(), "Your Soumya Solar invoice " + invoice.getInvoiceNumber() + " is ready",
-                "Hello " + cp.getName() + ",\\n\\nInvoice " + invoice.getInvoiceNumber()
+                "Hello " + cp.getName() + ",\n\nInvoice " + invoice.getInvoiceNumber()
                         + " has been issued for INR " + invoice.getGrandTotal()
                         + ". Sign in to your customer portal to download the invoice.");
         return saved;
