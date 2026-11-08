@@ -218,3 +218,14 @@ Do not claim 100% Phase 3 acceptance until these items and the follow-up validat
 - Follow-up payment-availability UI/API commits are undergoing the same workflow; final workflow evidence should be taken from the latest branch head before release.
 
 These checks do not replace deployed E2E, provider certification, branch-isolation or penetration testing.
+
+
+**Final code validation for this follow-up:** GitHub Actions workflow `42516142831` passed all four jobs on commit `97fca4f8a2fc3255ce373e9c170003fa52040445`:
+- Backend Maven compile and tests — passed.
+- Frontend TypeScript/production build — passed.
+- Flyway V1–V42 validation on MySQL 8.4 — passed.
+- Spring Boot startup and actuator health against MySQL 8.4 and Mailpit — passed.
+
+Workflow: https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42516142831
+
+This validates the branch's current application code and additive migrations. It does not certify a real gateway/accounting provider, production DNS, complete branch isolation, universal audit, or full offline conflict resolution.
