@@ -615,7 +615,7 @@ docker compose up --build
 
 Open frontend at http://localhost:3000, API health at http://localhost:8080/actuator/health and Swagger UI at http://localhost:8080/swagger-ui/index.html.
 
-Flyway applies migrations on backend startup. Confirm that V45 and V46 appear in `flyway_schema_history`. Do not manually re-run migration SQL against a database where Flyway already recorded those versions.
+Flyway applies migrations on backend startup. Confirm that V45, V46 and V47 appear in `flyway_schema_history`. Do not manually re-run migration SQL against a database where Flyway already recorded those versions.
 
 ### Environment variables
 
@@ -706,4 +706,4 @@ Subscription verification: sign in as Platform Super Admin; create/edit/deactiva
 
 ### Current validation caveat
 
-The GitHub branch contains backend/frontend source changes and documentation. Backend unit/API integration tests and frontend component tests are included in CI. Browser-level cross-role E2E still requires the documented manual run; the CI workflow also validates V45/V46 migrations and Spring Boot startup against MySQL 8.4. Do not mark this branch production-ready until the CI run and the manual E2E guide pass.
+The GitHub branch contains backend/frontend source changes and documentation. Backend unit/API integration tests and frontend component tests are included in CI. Browser-level cross-role E2E still requires the documented manual run; the CI workflow also validates V45/V46/V47 migrations and Spring Boot startup against MySQL 8.4. Do not mark this branch production-ready until the CI run and the manual E2E guide pass.
