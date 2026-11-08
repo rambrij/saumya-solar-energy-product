@@ -88,10 +88,18 @@ public class Phase2OperationsController {
   var ticketRows=tickets.findByTenantIdOrderByCreatedAtDesc(t).stream().filter(x->x.getCreatedAt()!=null&&!x.getCreatedAt().isBefore(start)&&x.getCreatedAt().isBefore(end)).toList();
   var invoiceRows=invoices.findByTenantIdOrderByCreatedAtDesc(t).stream().filter(x->x.getCreatedAt()!=null&&!x.getCreatedAt().isBefore(start)&&x.getCreatedAt().isBefore(end)).toList();
   var paymentRows=payments.findByTenantIdOrderByCreatedAtDesc(t).stream().filter(x->x.getCreatedAt()!=null&&!x.getCreatedAt().isBefore(start)&&x.getCreatedAt().isBefore(end)).toList();
-  var leadRows=leads.findByTenantIdOrderByIdDesc(t);
-  var warrantyRows=warranties.findByTenantIdOrderByStartDateDesc(t);
+  var leadRows=leads.findByTenantIdOrderByIdDesc(t).stream().filter(x->x.getCreatedAt()!=null&&!x.getCreatedAt().isBefore(start)&&x.getCreatedAt().isBefore(end)).toList();
+  var warrantyRows=warranties.findByTenantIdOrderByStartDateDesc(t).stream().filter(x->x.getStartDate()!=null&&!x.getStartDate().isBefore(from==null?LocalDate.MIN:from)&&!x.getStartDate().isAfter(to==null?LocalDate.MAX:to)).toList();
   var stockRows=inventory.findByTenantIdOrderByCreatedAtDesc(t).stream().filter(x->x.getCreatedAt()!=null&&!x.getCreatedAt().isBefore(start)&&x.getCreatedAt().isBefore(end)).toList();
   BigDecimal paymentTotal=paymentRows.stream().filter(x->"SUCCEEDED".equals(x.getStatus())||"PAID".equals(x.getStatus())).map(Payment::getAmount).filter(Objects::nonNull).reduce(BigDecimal.ZERO,BigDecimal::add);
   Map<String,Object> result=new LinkedHashMap<>();result.put("from",from);result.put("to",to);result.put("orders",orderRows.size());result.put("orderValue",orderRows.stream().map(CustomerOrder::getTotal).filter(Objects::nonNull).reduce(BigDecimal.ZERO,BigDecimal::add));result.put("leads",leadRows.size());result.put("installations",installationRows.size());result.put("installationsCompleted",installationRows.stream().filter(x->Set.of("COMPLETED","COMMISSIONED").contains(x.getStatus())).count());result.put("serviceTickets",ticketRows.size());result.put("serviceOpen",ticketRows.stream().filter(x->!Set.of("CLOSED","RESOLVED","CUSTOMER_CONFIRMED").contains(x.getStatus())).count());result.put("warranties",warrantyRows.size());result.put("invoices",invoiceRows.size());result.put("invoicedAmount",invoiceRows.stream().map(Invoice::getGrandTotal).filter(Objects::nonNull).reduce(BigDecimal.ZERO,BigDecimal::add));result.put("paymentsReceived",paymentTotal);result.put("inventoryTransactions",stockRows.size());return result;
  }
+
+ @GetMapping(value="/reports/operations/export.csv",produces="text/csv")
+ public ResponseEntity<byte[]> exportOperationsCsv(@RequestParam(required=false) LocalDate from,@RequestParam(required=false) LocalDate to,Authentication a){
+  Map<String,Object> report=operationsReport(from,to,a);StringBuilder csv=new StringBuilder("Metric,Value\\r\\n");
+  report.forEach((key,value)->csv.append('"').append(key.replace("\\\"","\\\"\\\"")).append('"').append(',').append('"').append(String.valueOf(value).replace("\\\"","\\\"\\\"")).append('"').append("\\r\\n"));
+  return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=operations-report.csv").contentType(MediaType.parseMediaType("text/csv; charset=UTF-8")).body(csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+ }
+
 }
