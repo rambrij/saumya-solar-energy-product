@@ -8,10 +8,10 @@ import java.time.Instant;import java.util.*;import java.math.BigDecimal;
 public class EnterpriseSaasService {
  private final BranchRepository branches;private final BranchMembershipRepository memberships;
  private final SubscriptionPlanRepository plans;private final TenantSubscriptionRepository subscriptions;
- private final TenantRepository tenants;private final AppUserRepository users;private final AuditEventRepository audits;private final WarehouseRepository warehouses;private final ObjectMapper mapper;
+ private final TenantRepository tenants;private final AppUserRepository users;private final AuditEventRepository audits;private final WarehouseRepository warehouses;private final TenantDomainRepository tenantDomains;private final ObjectMapper mapper;
  public EnterpriseSaasService(BranchRepository b,BranchMembershipRepository m,SubscriptionPlanRepository pl,
-  TenantSubscriptionRepository s,TenantRepository t,AppUserRepository u,AuditEventRepository a,WarehouseRepository wr,ObjectMapper om){
-  branches=b;memberships=m;plans=pl;subscriptions=s;tenants=t;users=u;audits=a;warehouses=wr;mapper=om;
+  TenantSubscriptionRepository s,TenantRepository t,AppUserRepository u,AuditEventRepository a,WarehouseRepository wr,TenantDomainRepository td,ObjectMapper om){
+  branches=b;memberships=m;plans=pl;subscriptions=s;tenants=t;users=u;audits=a;warehouses=wr;tenantDomains=td;mapper=om;
  }
  private void permission(Principal p,String code){if(p.permissions()==null||!p.permissions().contains(code))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Missing permission: "+code);}
  private UUID vendor(Principal p,String code){if(!"VENDOR".equals(p.accountType())||p.tenantId()==null)throw new ResponseStatusException(HttpStatus.FORBIDDEN);permission(p,code);return p.tenantId();}
@@ -98,7 +98,61 @@ public class EnterpriseSaasService {
   if("PLATFORM".equals(p.accountType())){platform(p,"AUDIT_VIEW");return audits.findTop200ByCreatedAtBetweenOrderByCreatedAtDesc(from,to);}
   UUID t=vendor(p,"AUDIT_VIEW");return audits.findTop200ByTenantIdAndCreatedAtBetweenOrderByCreatedAtDesc(t,from,to);
  }
+ public BrandingView publicBranding(String slug){
+  Tenant t=tenants.findBySlug(slug).filter(v->"ACTIVE".equals(v.getStatus()))
+   .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Store not found"));
+  return brandingView(t);
+ }
+ public BrandingView getBranding(Principal p){
+  UUID t=vendor(p,"BRANDING_MANAGE");
+  return brandingView(tenants.findById(t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found")));
+ }
+ @Transactional public BrandingView updateBranding(BrandingInput x,Principal p){
+  UUID id=vendor(p,"BRANDING_MANAGE");
+  Tenant t=tenants.findByIdForUpdate(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
+  if(x.logoUrl()!=null&&!x.logoUrl().isBlank()&&!x.logoUrl().startsWith("/uploads/")&&!x.logoUrl().startsWith("https://"))
+   throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Logo URL must use HTTPS or the application's private upload path");
+  if(!color(x.primaryColor())||!color(x.secondaryColor()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Brand colors must use six-digit hexadecimal values");
+  t.setDisplayName(trim(x.displayName()));t.setLogoUrl(trim(x.logoUrl()));t.setPrimaryColor(x.primaryColor().toUpperCase(Locale.ROOT));
+  t.setSecondaryColor(x.secondaryColor().toUpperCase(Locale.ROOT));t.setContactEmail(trim(x.contactEmail()));t.setContactPhone(trim(x.contactPhone()));
+  t.setSupportEmail(trim(x.supportEmail()));t.setSupportPhone(trim(x.supportPhone()));t.setUpdatedAt(Instant.now());tenants.save(t);
+  BrandingView view=brandingView(t);audit(p,id,"TENANT_BRANDING_UPDATED","TENANT",id,view);return view;
+ }
+ private boolean color(String value){return value!=null&&value.matches("#[0-9A-Fa-f]{6}");}
+ private BrandingView brandingView(Tenant t){return new BrandingView(t.getDisplayName()==null||t.getDisplayName().isBlank()?t.getName():t.getDisplayName(),
+  t.getLogoUrl(),t.getPrimaryColor()==null?"#0B6B4B":t.getPrimaryColor(),t.getSecondaryColor()==null?"#F6C85F":t.getSecondaryColor(),
+  t.getContactEmail(),t.getContactPhone(),t.getSupportEmail(),t.getSupportPhone());}
+ @Transactional public TenantDomain requestDomain(String value,Principal p){
+  UUID t=vendor(p,"BRANDING_MANAGE");String domain=value==null?"":value.trim().toLowerCase(Locale.ROOT);
+  if(!domain.matches("(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}"))
+   throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Enter a valid fully-qualified domain name");
+  if(tenantDomains.existsByDomainIgnoreCase(domain))throw new ResponseStatusException(HttpStatus.CONFLICT,"Domain is already registered");
+  TenantDomain d=new TenantDomain();d.setId(UUID.randomUUID());d.setTenantId(t);d.setDomain(domain);
+  d.setVerificationToken(UUID.randomUUID().toString().replace("-",""));d.setStatus("PENDING");d.setCreatedAt(Instant.now());
+  tenantDomains.save(d);audit(p,t,"CUSTOM_DOMAIN_REQUESTED","TENANT_DOMAIN",d.getId(),Map.of("domain",domain,"status","PENDING"));return d;
+ }
+ public List<TenantDomain> domains(Principal p){return tenantDomains.findByTenantIdOrderByCreatedAtDesc(vendor(p,"BRANDING_MANAGE"));}
+ @Transactional public TenantDomain verifyDomain(UUID id,Principal p){
+  UUID t=vendor(p,"BRANDING_MANAGE");TenantDomain d=tenantDomains.findByIdAndTenantId(id,t)
+   .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Domain not found"));
+  if("VERIFIED".equals(d.getStatus()))return d;
+  boolean verified=false;
+  try{
+   java.util.Hashtable<String,String> env=new java.util.Hashtable<>();env.put(javax.naming.Context.INITIAL_CONTEXT_FACTORY,"com.sun.jndi.dns.DnsContextFactory");
+   javax.naming.directory.DirContext context=new javax.naming.directory.InitialDirContext(env);
+   try{
+    javax.naming.directory.Attributes attrs=context.getAttributes(d.getDomain(),new String[]{"TXT"});
+    javax.naming.directory.Attribute txt=attrs.get("TXT");
+    if(txt!=null){javax.naming.NamingEnumeration<?> values=txt.getAll();while(values.hasMore()){String record=String.valueOf(values.next()).replace("\\\"","");if(record.contains("saumya-solar-verification="+d.getVerificationToken()))verified=true;}}
+   }finally{context.close();}
+  }catch(Exception ignored){verified=false;}
+  if(!verified)throw new ResponseStatusException(HttpStatus.CONFLICT,"DNS TXT verification record was not found");
+  d.setStatus("VERIFIED");d.setVerifiedAt(Instant.now());tenantDomains.save(d);
+  audit(p,t,"CUSTOM_DOMAIN_VERIFIED","TENANT_DOMAIN",id,Map.of("domain",d.getDomain(),"status","VERIFIED"));return d;
+ }
  private String trim(String x){return x==null||x.isBlank()?null:x.trim();}
+ public record BrandingInput(String displayName,String logoUrl,String primaryColor,String secondaryColor,String contactEmail,String contactPhone,String supportEmail,String supportPhone){}
+ public record BrandingView(String displayName,String logoUrl,String primaryColor,String secondaryColor,String contactEmail,String contactPhone,String supportEmail,String supportPhone){}
  public record BranchInput(String code,String name,String address,String phone,String email){}
  public record PlanInput(String planCode,String name,String description,String billingCycle,BigDecimal price,String currency,int maxUsers,int maxBranches,int maxWarehouses,long maxStorageMb,String entitlementsJson){}
  public record SubscriptionInput(String status,Instant startsAt,Instant endsAt,Instant renewsAt,String externalReference){}

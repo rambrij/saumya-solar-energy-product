@@ -19,6 +19,14 @@ public class Tenant {
     UUID id;
     String name;
     String slug;
+    String displayName;
+    String logoUrl;
+    String primaryColor;
+    String secondaryColor;
+    String contactEmail;
+    String contactPhone;
+    String supportEmail;
+    String supportPhone;
     String status;
     BigDecimal discountApprovalThreshold = BigDecimal.TEN;
     @Column(name = "created_at")

@@ -13,7 +13,17 @@ public class EnterpriseSaasController {
   @Min(1) @Max(10000) int maxUsers,@Min(1) @Max(1000) int maxBranches,@Min(1) @Max(1000) int maxWarehouses,
   @Min(0) long maxStorageMb,@NotBlank String entitlementsJson){}
  public record WarehouseBranchRequest(UUID branchId){}
+ public record BrandingRequest(@NotBlank @Size(max=150) String displayName,@Size(max=1000) String logoUrl,@NotBlank @Pattern(regexp="#[0-9A-Fa-f]{6}") String primaryColor,@NotBlank @Pattern(regexp="#[0-9A-Fa-f]{6}") String secondaryColor,@Email @Size(max=254) String contactEmail,@Size(max=40) String contactPhone,@Email @Size(max=254) String supportEmail,@Size(max=40) String supportPhone){}
+ public record DomainRequest(@NotBlank @Size(max=253) String domain){}
  public record SubscriptionRequest(@NotNull UUID planId,@NotBlank String status,Instant startsAt,Instant endsAt,Instant renewsAt,@Size(max=160) String externalReference){}
+ @GetMapping("/vendor/branding") public EnterpriseSaasService.BrandingView branding(Authentication a){return service.getBranding(p(a));}
+ @PatchMapping("/vendor/branding") public EnterpriseSaasService.BrandingView updateBranding(@Valid @RequestBody BrandingRequest x,Authentication a){
+  return service.updateBranding(new EnterpriseSaasService.BrandingInput(x.displayName(),x.logoUrl(),x.primaryColor(),x.secondaryColor(),x.contactEmail(),x.contactPhone(),x.supportEmail(),x.supportPhone()),p(a));
+ }
+ @GetMapping("/public/{slug}/branding") public EnterpriseSaasService.BrandingView publicBranding(@PathVariable String slug){return service.publicBranding(slug);}
+ @GetMapping("/vendor/domains") public List<TenantDomain> domains(Authentication a){return service.domains(p(a));}
+ @PostMapping("/vendor/domains") public TenantDomain requestDomain(@Valid @RequestBody DomainRequest x,Authentication a){return service.requestDomain(x.domain(),p(a));}
+ @PostMapping("/vendor/domains/{id}/verify") public TenantDomain verifyDomain(@PathVariable UUID id,Authentication a){return service.verifyDomain(id,p(a));}
  @GetMapping("/branches") public List<Branch> branches(Authentication a){return service.branches(p(a));}
  @PostMapping("/branches") public Branch createBranch(@Valid @RequestBody BranchRequest x,Authentication a){return service.createBranch(new EnterpriseSaasService.BranchInput(x.code(),x.name(),x.address(),x.phone(),x.email()),p(a));}
  @PutMapping("/branches/{id}") public Branch updateBranch(@PathVariable UUID id,@Valid @RequestBody BranchRequest x,Authentication a){return service.updateBranch(id,new EnterpriseSaasService.BranchInput(x.code(),x.name(),x.address(),x.phone(),x.email()),p(a));}
