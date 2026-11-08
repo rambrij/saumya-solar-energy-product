@@ -3,6 +3,7 @@ package com.saumyasolar.service;
 import com.saumyasolar.domain.AppUser;
 import com.saumyasolar.domain.CustomerProfile;
 import com.saumyasolar.domain.PasswordResetToken;
+import com.saumyasolar.domain.MfaChallenge;
 import com.saumyasolar.domain.RefreshToken;
 import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.domain.Permission;
@@ -25,6 +26,7 @@ import java.util.Base64;
 public class AuthLifecycleService {
     final RefreshTokenRepository refresh;
     final PasswordResetTokenRepository resets;
+    final MfaChallengeRepository mfaChallenges;
     final AppUserRepository users;
     final TenantRepository tenants;
     final RoleRepository roles;
@@ -37,6 +39,7 @@ public class AuthLifecycleService {
     AuthLifecycleService(
             RefreshTokenRepository r,
             PasswordResetTokenRepository p,
+            MfaChallengeRepository mfaChallenges,
             AppUserRepository u,
             TenantRepository t,
             RoleRepository rr,
@@ -48,6 +51,7 @@ public class AuthLifecycleService {
     ) {
         refresh = r;
         resets = p;
+        this.mfaChallenges = mfaChallenges;
         users = u;
         tenants = t;
         roles = rr;
@@ -129,6 +133,56 @@ public class AuthLifecycleService {
             notifications.sendPasswordReset(user.getId(), user.getTenantId(), user.getEmail(), user.getName(), rawToken);
         });
         return out;
+    }
+
+    public String createMfaChallenge(AppUser user) {
+        byte[] random = new byte[4];
+        new SecureRandom().nextBytes(random);
+        int value = java.nio.ByteBuffer.wrap(random).getInt() & 0x7fffffff;
+        String code = String.format(java.util.Locale.ROOT, "%06d", value % 1_000_000);
+        MfaChallenge challenge = new MfaChallenge();
+        challenge.setId(UUID.randomUUID());
+        challenge.setUserId(user.getId());
+        challenge.setCodeHash(hashResetToken(code));
+        challenge.setExpiresAt(Instant.now().plus(Duration.ofMinutes(5)));
+        challenge.setAttempts(0);
+        challenge.setUsed(false);
+        challenge.setCreatedAt(Instant.now());
+        mfaChallenges.save(challenge);
+        if (!notifications.sendMfaCode(user.getId(), user.getTenantId(), user.getEmail(), user.getName(), code)) {
+            challenge.setUsed(true);
+            mfaChallenges.save(challenge);
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Unable to send verification code");
+        }
+        return challenge.getId().toString();
+    }
+
+    @Transactional
+    public AppUser verifyMfaChallenge(String challengeId, String code) {
+        UUID id;
+        try { id = UUID.fromString(challengeId); }
+        catch (RuntimeException ex) { throw new ResponseStatusException(HttpStatus.UNAUTHORIZED); }
+        MfaChallenge challenge = mfaChallenges.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        if (challenge.isUsed() || !challenge.getExpiresAt().isAfter(Instant.now()) || challenge.getAttempts() >= 5) {
+            challenge.setUsed(true);
+            mfaChallenges.save(challenge);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Verification code expired or invalid");
+        }
+        challenge.setAttempts(challenge.getAttempts() + 1);
+        boolean matches = code != null && MessageDigest.isEqual(
+                hashResetToken(code).getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                challenge.getCodeHash().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        if (!matches) {
+            if (challenge.getAttempts() >= 5) challenge.setUsed(true);
+            mfaChallenges.save(challenge);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Verification code expired or invalid");
+        }
+        challenge.setUsed(true);
+        mfaChallenges.save(challenge);
+        return users.findById(challenge.getUserId()).filter(AppUser::isEnabled)
+                .filter(this::tenantIsActive)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
     }
 
     private String hashResetToken(String token) {
