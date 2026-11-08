@@ -256,6 +256,7 @@ public class AppService {
                 e.setCapacityKw(x.capacityKw());
                 e.setPackageType(x.packageType());
                 e.setBasePrice(x.basePrice());
+                e.setTaxPercent(x.taxPercent());
                 e.setWarrantyYears(x.warrantyYears());
                 e.setImageUrl(x.imageUrl());
                 e.setActive(true);
@@ -404,6 +405,7 @@ public class AppService {
         pack.setCapacityKw(x.capacityKw());
         pack.setPackageType(x.packageType());
         pack.setBasePrice(x.basePrice());
+        pack.setTaxPercent(x.taxPercent());
         pack.setWarrantyYears(x.warrantyYears());
         if (x.imageUrl() != null && !x.imageUrl().isBlank()) {
             if (!x.imageUrl().startsWith("https://") && !x.imageUrl().startsWith("/uploads/"))
@@ -675,7 +677,9 @@ public class AppService {
                 var solarPackage = packs.findByIdAndTenantId(a.packageId(), p.tenantId()).filter(SolarPackage::isActive)
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package is not active in this vendor"));
                 unitPrice = solarPackage.getBasePrice();
-                taxPercent = BigDecimal.ZERO;
+                taxPercent = solarPackage.getTaxPercent();
+                if (taxPercent == null || taxPercent.signum() < 0 || taxPercent.compareTo(new BigDecimal("100")) > 0)
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package tax rate must be configured between 0 and 100 percent");
                 description = solarPackage.getName();
             } else {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Each quotation item must reference a product or package");
