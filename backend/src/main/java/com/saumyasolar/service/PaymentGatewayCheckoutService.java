@@ -17,12 +17,12 @@ public class PaymentGatewayCheckoutService {
     private final InvoiceRepository invoices; private final PaymentRepository payments;
     private final RefundRepository refunds; private final CustomerProfileRepository customers;
     private final CustomerOrderRepository orders; private final IntegrationConnectionRepository connections;
-    private final PaymentGatewayRegistry adapters; private final EnterpriseSaasService entitlements; private final AuditEventRepository audits;
+    private final PaymentGatewayRegistry adapters; private final EnterpriseSaasService entitlements; private final AuditEventRepository audits; private final com.fasterxml.jackson.databind.ObjectMapper mapper;
     public PaymentGatewayCheckoutService(InvoiceRepository invoices,PaymentRepository payments,RefundRepository refunds,
             CustomerProfileRepository customers,CustomerOrderRepository orders,IntegrationConnectionRepository connections,
-            PaymentGatewayRegistry adapters,EnterpriseSaasService entitlements,AuditEventRepository audits) {
+            PaymentGatewayRegistry adapters,EnterpriseSaasService entitlements,AuditEventRepository audits,com.fasterxml.jackson.databind.ObjectMapper mapper) {
         this.invoices=invoices;this.payments=payments;this.refunds=refunds;this.customers=customers;this.orders=orders;
-        this.connections=connections;this.adapters=adapters;this.entitlements=entitlements;this.audits=audits;
+        this.connections=connections;this.adapters=adapters;this.entitlements=entitlements;this.audits=audits;this.mapper=mapper;
     }
     @Transactional
     public CheckoutResult create(UUID invoiceId,String providerCode,String idempotencyKey,Principal actor) {
@@ -70,8 +70,13 @@ public class PaymentGatewayCheckoutService {
         AuditEvent audit=new AuditEvent();audit.setId(UUID.randomUUID());audit.setTenantId(actor.tenantId());audit.setActorId(actor.userId());
         audit.setActorType(actor.accountType());audit.setAction("PAYMENT_GATEWAY_CHECKOUT_CREATED");audit.setEntityType("PAYMENT");
         audit.setEntityId(paymentId.toString());audit.setOutcome("SUCCESS");
-        audit.setAfterJson("{\\"providerCode\\":\\"" + connection.getProviderCode() + "\\",\\"invoiceId\\":\\"" + invoiceId
-                + "\\",\\"amount\\":\\"" + outstanding.toPlainString() + "\\",\\"currency\\":\\"" + invoice.getCurrency() + "\\"}");
+        try {
+            audit.setAfterJson(mapper.writeValueAsString(Map.of("providerCode", connection.getProviderCode(),
+                    "invoiceId", invoiceId.toString(), "amount", outstanding.toPlainString(),
+                    "currency", invoice.getCurrency())));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            throw new IllegalStateException("Unable to serialize payment audit event", ex);
+        }
         audit.setCreatedAt(Instant.now());audits.save(audit);
         return view(payment);
     }
