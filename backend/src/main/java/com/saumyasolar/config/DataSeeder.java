@@ -12,7 +12,7 @@ public class DataSeeder {
  @Value("${app.seed.enabled:false}") boolean seedEnabled;
  private static final List<String> PERMISSIONS=List.of("PLATFORM_MANAGE","SUBSCRIPTION_MANAGE","AUDIT_VIEW","CATALOG_MANAGE","CATALOG_VIEW","DISCOUNT_POLICY_MANAGE","CUSTOMER_MANAGE","LEAD_MANAGE","SURVEY_MANAGE","QUOTATION_MANAGE","DISCOUNT_APPROVE","ORDER_CREATE","USER_VIEW","USER_MANAGE","INVENTORY_MANAGE","SERVICE_MANAGE","FINANCE_MANAGE","PAYMENT_REFUND","REPORT_VIEW");
  private static final List<String> CATEGORIES=List.of("Solar Panels","Inverters","Batteries","Mounting Structures","Cables","AC/DC Distribution Boxes","Solar Accessories");
- @Bean CommandLineRunner seedData(TenantRepository tenants,PermissionRepository permissions,RoleRepository roles,AppUserRepository users,CustomerProfileRepository customers,ProductCategoryRepository categories,ProductRepository products,WarehouseRepository warehouses,InstallationChecklistTemplateRepository checklistTemplates,SubscriptionPlanRepository subscriptionPlans,PasswordEncoder encoder){
+ @Bean CommandLineRunner seedData(TenantRepository tenants,PermissionRepository permissions,RoleRepository roles,AppUserRepository users,CustomerProfileRepository customers,ProductCategoryRepository categories,ProductRepository products,WarehouseRepository warehouses,InstallationChecklistTemplateRepository checklistTemplates,SubscriptionPlanRepository subscriptionPlans,EnquiryRepository enquiries,SalesLeadRepository leads,QuotationRepository quotations,QuotationItemRepository quotationItems,SiteSurveyRepository surveys,CustomerOrderRepository orders,OrderItemRepository orderItems,InstallationJobRepository installations,ServiceRequestRepository serviceRequests,PasswordEncoder encoder){
   return args->{
    if(!seedEnabled) return;
    Tenant defaultTenant=tenants.findBySlug("saumya-solar").orElseGet(()->{Tenant t=new Tenant();t.setId(UUID.randomUUID());t.setName("Saumya Solar");t.setSlug("saumya-solar");t.setStatus("ACTIVE");t.setCreatedAt(java.time.Instant.now());t.setUpdatedAt(java.time.Instant.now());return tenants.save(t);});
@@ -33,8 +33,12 @@ public class DataSeeder {
    ensureUser(users,encoder,null,"Platform Admin","platform@saumya.local","Platform@123","PLATFORM",platform);
    ensureUser(users,encoder,defaultTenant.getId(),"Vendor Admin","admin@saumya.local","Admin@123","VENDOR",ensureRole(roles,defaultTenant.getId(),"VENDOR_ADMIN"));
    ensureUser(users,encoder,defaultTenant.getId(),"Sales User","sales@saumya.local","Sales@123","VENDOR",ensureRole(roles,defaultTenant.getId(),"SALES_EXECUTIVE"));
-   ensureUser(users,encoder,defaultTenant.getId(),"Demo Customer","customer@saumya.local","Customer@123","CUSTOMER",customer);
+   ensureUser(users,encoder,defaultTenant.getId(),"Aarav Sharma","customer@saumya.local","Customer@123","CUSTOMER",customer);
    for(AppUser u:users.findAll())if("CUSTOMER".equals(u.getAccountType())&&u.getTenantId()!=null)customers.findByTenantIdAndUserId(u.getTenantId(),u.getId()).orElseGet(()->{CustomerProfile cp=new CustomerProfile();cp.setId(UUID.randomUUID());cp.setTenantId(u.getTenantId());cp.setUserId(u.getId());cp.setName(u.getName());cp.setEmail(u.getEmail());return customers.save(cp);});
+   CustomerProfile demoCustomer=customers.findByTenantIdAndUserId(defaultTenant.getId(),users.findByEmailIgnoreCase("customer@saumya.local").orElseThrow().getId()).orElseThrow();
+   if(demoCustomer.getPhone()==null){demoCustomer.setPhone("+91 98765 43210");demoCustomer.setAddress("Flat 402, Shree Ganesh Residency, Vijay Nagar, Indore, Madhya Pradesh 452010");customers.save(demoCustomer);}
+   seedDemoLifecycle(defaultTenant,users.findByEmailIgnoreCase("sales@saumya.local").orElseThrow(),demoCustomer,products,enquiries,leads,quotations,quotationItems,surveys,orders,orderItems,installations,serviceRequests);
+
   };
  }
  public static Map<String,List<String>> employeeRolePermissions(){return Map.ofEntries(
@@ -48,6 +52,38 @@ public class DataSeeder {
   Map.entry("TECHNICIAN",List.of("SURVEY_MANAGE","SERVICE_MANAGE")),
   Map.entry("SERVICE_MANAGER",List.of("SURVEY_MANAGE","SERVICE_MANAGE","REPORT_VIEW")),
   Map.entry("OPERATIONS_MANAGER",List.of("ORDER_CREATE","SURVEY_MANAGE","INVENTORY_MANAGE","SERVICE_MANAGE","REPORT_VIEW")));
+ }
+ private static void seedDemoLifecycle(Tenant tenant,AppUser sales,CustomerProfile customer,ProductRepository products,EnquiryRepository enquiries,SalesLeadRepository leads,QuotationRepository quotations,QuotationItemRepository quotationItems,SiteSurveyRepository surveys,CustomerOrderRepository orders,OrderItemRepository orderItems,InstallationJobRepository installations,ServiceRequestRepository serviceRequests){
+  UUID tenantId=tenant.getId();
+  if(serviceRequests.findByTicketNumberAndTenantId("SR-DEMO-2026-001",tenantId).isPresent())return;
+  Product product=products.findByTenantIdOrderByIdDesc(tenantId).stream().filter(Product::isActive).findFirst().orElse(null);if(product==null)return;
+  java.time.Instant now=java.time.Instant.now();java.math.BigDecimal qty=new java.math.BigDecimal("10"),unit=product.getPrice()==null?new java.math.BigDecimal("18500"):product.getPrice();
+  java.math.BigDecimal subtotal=unit.multiply(qty),tax=subtotal.multiply(new java.math.BigDecimal("0.18")).setScale(2,java.math.RoundingMode.HALF_UP),total=subtotal.add(tax);
+  Enquiry enquiry=enquiries.findByTenantIdOrderByIdDesc(tenantId).stream().filter(e->"DEMO-LIFECYCLE-2026".equals(e.getMessage())).findFirst().orElseGet(()->{
+   Enquiry e=new Enquiry();e.setId(UUID.randomUUID());e.setTenantId(tenantId);e.setCustomerId(customer.getId());e.setName(customer.getName());e.setEmail(customer.getEmail());e.setPhone(customer.getPhone());e.setPropertyType("RESIDENTIAL");e.setMonthlyBill(new java.math.BigDecimal("6500"));e.setRequiredCapacityKw(new java.math.BigDecimal("5.00"));e.setMessage("DEMO-LIFECYCLE-2026: 5 kW rooftop solar enquiry for an Indore residence.");e.setStatus("CONVERTED");e.setCreatedAt(now.minusSeconds(86400*20L));return enquiries.save(e);
+  });
+  SalesLead lead=leads.findByTenantIdOrderByIdDesc(tenantId).stream().filter(l->enquiry.getId().equals(l.getEnquiryId())).findFirst().orElseGet(()->{
+   SalesLead l=new SalesLead();l.setId(UUID.randomUUID());l.setTenantId(tenantId);l.setEnquiryId(enquiry.getId());l.setCustomerId(customer.getId());l.setStage("QUALIFIED");l.setPriority("HIGH");l.setAssignedUserId(sales.getId());l.setNextFollowUp(now.plusSeconds(86400));l.setCreatedAt(now.minusSeconds(86400*19L));return leads.save(l);
+  });
+  SiteSurvey survey=surveys.findByLeadIdAndTenantIdOrderByIdDesc(lead.getId(),tenantId).stream().findFirst().orElseGet(()->{
+   SiteSurvey s=new SiteSurvey();s.setId(UUID.randomUUID());s.setTenantId(tenantId);s.setLeadId(lead.getId());s.setScheduledAt(now.minusSeconds(86400*15L));s.setAssignedUserId(sales.getId());s.setPropertyType("RESIDENTIAL");s.setRoofType("RCC");s.setUsableAreaSqft(new java.math.BigDecimal("850"));s.setShading("LOW");s.setSanctionedLoadKw(new java.math.BigDecimal("6.00"));s.setNotes("South-facing terrace; clear access to inverter location.");s.setStatus("APPROVED");s.setCompletedAt(now.minusSeconds(86400*14L));s.setSubmittedAt(now.minusSeconds(86400*14L));s.setReviewedBy(sales.getId());s.setReviewedAt(now.minusSeconds(86400*13L));s.setFindings("Roof structure suitable for 5 kW rooftop PV installation.");s.setRecommendation("Install 5 kW grid-connected system with 10 x 540 W modules.");return surveys.save(s);
+  });
+  Quotation quotation=quotations.findByTenantIdOrderByIdDesc(tenantId).stream().filter(q->"DEMO-QUO-2026-001".equals(q.getQuotationNumber())).findFirst().orElseGet(()->{
+   Quotation q=new Quotation();q.setId(UUID.randomUUID());q.setTenantId(tenantId);q.setQuoteGroupId(UUID.randomUUID());q.setQuotationNumber("DEMO-QUO-2026-001");q.setRevision(1);q.setCustomerId(customer.getId());q.setLeadId(lead.getId());q.setSurveyId(survey.getId());q.setStatus("ACCEPTED");q.setSubtotal(subtotal);q.setDiscountPercent(java.math.BigDecimal.ZERO);q.setDiscountAmount(java.math.BigDecimal.ZERO);q.setTaxAmount(tax);q.setGrandTotal(total);q.setValidUntil(java.time.LocalDate.now().plusDays(15));q.setApprovalRequired(false);q.setDecisionBy(customer.getUserId());q.setDecisionAt(now.minusSeconds(86400*10L));q.setCreatedBy(sales.getId());q.setCreatedAt(now.minusSeconds(86400*12L));return quotations.save(q);
+  });
+  if(quotationItems.findByTenantIdOrderByIdDesc(tenantId).stream().noneMatch(i->quotation.getId().equals(i.getQuotationId()))){
+   QuotationItem qi=new QuotationItem();qi.setId(UUID.randomUUID());qi.setTenantId(tenantId);qi.setQuotationId(quotation.getId());qi.setProductId(product.getId());qi.setDescription(product.getName());qi.setQuantity(10);qi.setUnitPrice(unit);qi.setTaxPercent(new java.math.BigDecimal("18"));qi.setLineTotal(total);qi.setDiscountAmount(java.math.BigDecimal.ZERO);qi.setTaxableAmount(subtotal);qi.setTaxAmount(tax);quotationItems.save(qi);
+  }
+  CustomerOrder order=orders.findByTenantIdOrderByIdDesc(tenantId).stream().filter(o->quotation.getId().equals(o.getQuotationId())).findFirst().orElseGet(()->{
+   CustomerOrder o=new CustomerOrder();o.setId(UUID.randomUUID());o.setTenantId(tenantId);o.setQuotationId(quotation.getId());o.setCustomerId(customer.getId());o.setOrderNumber("DEMO-ORD-2026-001");o.setStatus("CONFIRMED");o.setSubtotal(subtotal);o.setDiscountPercent(java.math.BigDecimal.ZERO);o.setDiscountAmount(java.math.BigDecimal.ZERO);o.setTaxTotal(tax);o.setTotal(total);o.setCreatedAt(now.minusSeconds(86400*9L));return orders.save(o);
+  });
+  if(orderItems.findByTenantIdOrderByIdDesc(tenantId).stream().noneMatch(i->order.getId().equals(i.getOrderId()))){
+   OrderItem oi=new OrderItem();oi.setId(UUID.randomUUID());oi.setTenantId(tenantId);oi.setOrderId(order.getId());oi.setProductId(product.getId());oi.setDescription(product.getName());oi.setQuantity(10);oi.setUnitPrice(unit);oi.setTaxPercent(new java.math.BigDecimal("18"));oi.setLineTotal(total);oi.setDiscountAmount(java.math.BigDecimal.ZERO);oi.setTaxableAmount(subtotal);oi.setTaxAmount(tax);orderItems.save(oi);
+  }
+  InstallationJob installation=installations.findByTenantIdAndOrderId(tenantId,order.getId()).orElseGet(()->{
+   InstallationJob j=new InstallationJob();j.setId(UUID.randomUUID());j.setTenantId(tenantId);j.setOrderId(order.getId());j.setCustomerId(customer.getId());j.setApprovedSurveyId(survey.getId());j.setSiteAddress(customer.getAddress());j.setScheduledAt(now.minusSeconds(86400*5L));j.setAssignedEngineerId(sales.getId());j.setCapacityKw(new java.math.BigDecimal("5.00"));j.setTeamName("Indore Solar Installation Team");j.setNotes("Demo commissioned 5 kW rooftop installation.");j.setStatus("COMMISSIONED");j.setCustomerSignedOff(true);j.setCompletedAt(now.minusSeconds(86400*3L));j.setCommissionedAt(now.minusSeconds(86400*2L));j.setCommissioningNotes("Grid synchronization and handover completed.");j.setCreatedAt(now.minusSeconds(86400*8L));return installations.save(j);
+  });
+  ServiceRequest request=new ServiceRequest();request.setId(UUID.randomUUID());request.setTenantId(tenantId);request.setTicketNumber("SR-DEMO-2026-001");request.setCustomerId(customer.getId());request.setInstallationId(installation.getId());request.setProductId(product.getId());request.setCategory("PERFORMANCE");request.setPriority("MEDIUM");request.setDescription("Customer reports intermittent generation drop during afternoon peak hours; please inspect inverter logs and DC connections.");request.setWarrantyStatus("IN_WARRANTY");request.setStatus("OPEN");request.setAssignedEngineerId(sales.getId());request.setCreatedAt(now.minusSeconds(86400));request.setUpdatedAt(now.minusSeconds(86400));serviceRequests.save(request);
  }
  private static void seedDefaultSubscriptionPlans(SubscriptionPlanRepository plans){
   String[][] rows={
