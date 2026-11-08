@@ -67,6 +67,7 @@ class EnterpriseSaasServiceTest {
     @Test
     void branchCreationPersistsWithinTenantAndWritesAuditEvent() {
         UUID tenantId = UUID.randomUUID();
+        when(tenants.findByIdForUpdate(tenantId)).thenReturn(Optional.of(new Tenant()));
         TenantSubscription subscription = subscription(tenantId);
         SubscriptionPlan plan = plan(3);
         subscription.setPlanId(plan.getId());
