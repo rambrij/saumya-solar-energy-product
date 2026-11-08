@@ -7,6 +7,7 @@ import com.saumyasolar.repo.AppUserRepository;
 import com.saumyasolar.repo.SalesLeadRepository;
 import com.saumyasolar.repo.SiteSurveyHistoryRepository;
 import com.saumyasolar.repo.SiteSurveyRepository;
+import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.security.Principal;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
@@ -25,15 +26,19 @@ public class SurveyLifecycleService {
     private final SiteSurveyHistoryRepository history;
     private final SalesLeadRepository leads;
     private final AppUserRepository users;
+    private final CustomerProfileRepository customers;
+    private final NotificationService notifications;
 
     public SurveyLifecycleService(SiteSurveyRepository surveys,
                                   SiteSurveyHistoryRepository history,
                                   SalesLeadRepository leads,
-                                  AppUserRepository users) {
+                                  AppUserRepository users,CustomerProfileRepository customers,NotificationService notifications) {
         this.surveys = surveys;
         this.history = history;
         this.leads = leads;
         this.users = users;
+        this.customers=customers;
+        this.notifications=notifications;
     }
 
     private void authorize(Principal actor) {
@@ -68,7 +73,7 @@ public class SurveyLifecycleService {
         if (survey == null || !actor.tenantId().equals(survey.getTenantId())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Survey not found");
         }
-        record(survey, actor, "CREATED", null, survey.getStatus(), "Survey scheduled");
+        record(survey, actor, "CREATED", null, survey.getStatus(), "Survey scheduled");notifyCustomer(survey,"SITE_SURVEY_SCHEDULED","Site survey scheduled","A site survey has been scheduled for "+survey.getScheduledAt()+".");
     }
 
     @Transactional
@@ -157,7 +162,7 @@ public class SurveyLifecycleService {
         transition(survey, actor, "SUBMITTED", "APPROVED", "APPROVED", "Survey approved");
         survey.setReviewedBy(actor.userId());
         survey.setReviewedAt(Instant.now());
-        return surveys.save(survey);
+        SiteSurvey saved=surveys.save(survey);notifyCustomer(saved,"SITE_SURVEY_APPROVED","Site survey approved","Your site survey has been approved. The vendor can now proceed with installation planning.");return saved;
     }
 
     @Transactional
@@ -169,7 +174,7 @@ public class SurveyLifecycleService {
         survey.setReviewedBy(actor.userId());
         survey.setReviewedAt(Instant.now());
         survey.setRejectionReason(reason.trim());
-        return surveys.save(survey);
+        SiteSurvey saved=surveys.save(survey);notifyCustomer(saved,"SITE_SURVEY_REJECTED","Site survey requires changes","Your site survey was rejected. Reason: "+reason.trim());return saved;
     }
 
     @Transactional
@@ -183,7 +188,14 @@ public class SurveyLifecycleService {
         String old = survey.getStatus();
         survey.setStatus("CANCELLED");
         record(survey, actor, "CANCELLED", old, "CANCELLED", reason.trim());
-        return surveys.save(survey);
+        SiteSurvey saved=surveys.save(survey);notifyCustomer(saved,"SITE_SURVEY_CANCELLED","Site survey cancelled","Your site survey has been cancelled. Reason: "+reason.trim());return saved;
+    }
+
+    private void notifyCustomer(SiteSurvey survey,String event,String subject,String body){
+        if(survey.getLeadId()==null)return;
+        leads.findByIdAndTenantId(survey.getLeadId(),survey.getTenantId()).map(lead->lead.getCustomerId()).filter(java.util.Objects::nonNull)
+            .flatMap(customerId->customers.findByIdAndTenantId(customerId,survey.getTenantId()))
+            .filter(customer->customer.isActive()).ifPresent(customer->notifications.sendBusinessNotification(customer.getUserId(),survey.getTenantId(),event,customer.getEmail(),subject,body));
     }
 
     private void transition(SiteSurvey survey, Principal actor, String expected, String target, String event, String reason) {
