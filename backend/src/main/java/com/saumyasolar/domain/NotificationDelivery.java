@@ -32,6 +32,7 @@ public class NotificationDelivery {
     int attemptCount;
     Instant createdAt;
     Instant sentAt;
+    Instant readAt;
     @Column(length = 1000)
     String lastError;
 }
