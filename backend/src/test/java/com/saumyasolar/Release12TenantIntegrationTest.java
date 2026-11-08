@@ -84,6 +84,23 @@ class Release12TenantIntegrationTest {
                 .matcher(invitationDelivery.getBody());
         assertTrue(invitationMatcher.find(), "Invitation email must contain a one-time setup token");
         var invitationToken = invitationMatcher.group(1);
+        mvc.perform(post("/api/v1/platform/tenants/" + tenantId + "/invitations/resend")
+                        .header("Authorization", "Bearer " + platformToken))
+                .andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/auth/vendor-invitations/accept")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"token":"%s","password":"%s"}
+                                """.formatted(invitationToken, "VendorAdmin-Pass-2026")))
+                .andExpect(status().isBadRequest());
+        var resentDelivery = notificationDeliveries.findTop100ByTenantIdOrderByCreatedAtDesc(UUID.fromString(tenantId)).stream()
+                .filter(delivery -> "VENDOR_ADMIN_INVITATION".equals(delivery.getEventType()))
+                .filter(delivery -> delivery.getBody() != null && !delivery.getBody().contains(invitationToken))
+                .findFirst().orElseThrow();
+        var resentMatcher = java.util.regex.Pattern.compile("#vendorInviteToken=([A-Za-z0-9_-]+)")
+                .matcher(resentDelivery.getBody());
+        assertTrue(resentMatcher.find());
+        invitationToken = resentMatcher.group(1);
         mvc.perform(post("/api/v1/auth/vendor-invitations/accept")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
