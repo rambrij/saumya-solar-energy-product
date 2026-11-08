@@ -4,7 +4,7 @@ import jakarta.validation.Valid;import jakarta.validation.constraints.*;import o
 import java.math.BigDecimal;import java.time.Instant;import java.util.*;
 @RestController @RequestMapping("/api/v1")
 public class EnterpriseSaasController {
- private final EnterpriseSaasService service;public EnterpriseSaasController(EnterpriseSaasService s){service=s;}
+ private final EnterpriseSaasService service;private final com.saumyasolar.service.ApprovalWorkflowService approvalWorkflows;public EnterpriseSaasController(EnterpriseSaasService s,com.saumyasolar.service.ApprovalWorkflowService a){service=s;approvalWorkflows=a;}
  private Principal p(Authentication a){return (Principal)a.getPrincipal();}
  public record BranchRequest(@NotBlank @Size(max=50) String code,@NotBlank @Size(max=150) String name,@Size(max=700) String address,@Size(max=40) String phone,@Email @Size(max=254) String email){}
  public record BranchUserRequest(@NotNull UUID userId){}
@@ -15,7 +15,13 @@ public class EnterpriseSaasController {
  public record WarehouseBranchRequest(UUID branchId){}
  public record BrandingRequest(@NotBlank @Size(max=150) String displayName,@Size(max=1000) String logoUrl,@NotBlank @Pattern(regexp="#[0-9A-Fa-f]{6}") String primaryColor,@NotBlank @Pattern(regexp="#[0-9A-Fa-f]{6}") String secondaryColor,@Email @Size(max=254) String contactEmail,@Size(max=40) String contactPhone,@Email @Size(max=254) String supportEmail,@Size(max=40) String supportPhone){}
  public record DomainRequest(@NotBlank @Size(max=253) String domain){}
+ public record WorkflowRequest(@NotBlank @Size(max=60) String code,@NotBlank @Size(max=150) String name,@NotBlank String entityType,@NotBlank String stepsJson){}
+ public record ApprovalDecisionRequest(@NotBlank String decision,@Size(max=1000) String comments){}
  public record SubscriptionRequest(@NotNull UUID planId,@NotBlank String status,Instant startsAt,Instant endsAt,Instant renewsAt,@Size(max=160) String externalReference){}
+ @GetMapping("/approval-workflows") public List<ApprovalWorkflow> approvalWorkflows(Authentication a){return approvalWorkflows.list(p(a));}
+ @PostMapping("/approval-workflows") public ApprovalWorkflow createApprovalWorkflow(@Valid @RequestBody WorkflowRequest x,Authentication a){return approvalWorkflows.create(new com.saumyasolar.service.ApprovalWorkflowService.WorkflowInput(x.code(),x.name(),x.entityType(),x.stepsJson()),p(a));}
+ @GetMapping("/approval-instances/{id}") public ApprovalInstance approvalInstance(@PathVariable UUID id,Authentication a){return approvalWorkflows.get(id,p(a));}
+ @PostMapping("/approval-instances/{id}/decisions") public ApprovalInstance decideApproval(@PathVariable UUID id,@Valid @RequestBody ApprovalDecisionRequest x,Authentication a){return approvalWorkflows.decide(id,x.decision().toUpperCase(Locale.ROOT),x.comments(),p(a));}
  @GetMapping("/vendor/branding") public EnterpriseSaasService.BrandingView branding(Authentication a){return service.getBranding(p(a));}
  @PatchMapping("/vendor/branding") public EnterpriseSaasService.BrandingView updateBranding(@Valid @RequestBody BrandingRequest x,Authentication a){
   return service.updateBranding(new EnterpriseSaasService.BrandingInput(x.displayName(),x.logoUrl(),x.primaryColor(),x.secondaryColor(),x.contactEmail(),x.contactPhone(),x.supportEmail(),x.supportPhone()),p(a));

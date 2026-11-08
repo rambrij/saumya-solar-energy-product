@@ -40,6 +40,7 @@ public class AppService {
     final RoleRepository roles;
     final OrderStatusHistoryRepository orderStatusHistory;
     final NotificationService notifications;
+    final ApprovalWorkflowService approvalWorkflows;
     
     public AppService(
             TenantRepository a,
@@ -60,7 +61,8 @@ public class AppService {
             IdempotencyRecordRepository p,
             RoleRepository roles,
             OrderStatusHistoryRepository orderStatusHistory,
-            NotificationService notifications
+            NotificationService notifications,
+            ApprovalWorkflowService approvalWorkflows
     ) {
         tenants = a;
         users = b;
@@ -81,6 +83,7 @@ public class AppService {
         this.roles = roles;
         this.orderStatusHistory = orderStatusHistory;
         this.notifications = notifications;
+        this.approvalWorkflows = approvalWorkflows;
     }
     
     void vendor(Principal p) {
@@ -723,6 +726,7 @@ public class AppService {
         q.setApprovalRequired(q.getDiscountPercent().compareTo(approvalThreshold) > 0);
         q.setStatus(q.isApprovalRequired() ? "PENDING_APPROVAL" : "DRAFT");
         quotes.save(q);
+        if(q.isApprovalRequired()) approvalWorkflows.startIfConfigured("QUOTATION",q.getId(),p);
         return new QuoteView(q, items);
     }
     
@@ -746,6 +750,13 @@ public class AppService {
             requirePermission(p, "DISCOUNT_APPROVE");
             if (!"PENDING_APPROVAL".equals(q.getStatus()) || !q.isApprovalRequired())
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Quotation is not awaiting approval");
+            var workflowStatus=approvalWorkflows.decideForEntity(p.tenantId(),"QUOTATION",q.getId(),
+                    "approve".equals(action)?"APPROVE":"REJECT",action,p);
+            if(workflowStatus.isPresent()){
+                if("APPROVED".equals(workflowStatus.get()))q.setStatus("DRAFT");
+                else if("REJECTED".equals(workflowStatus.get()))q.setStatus("APPROVAL_REJECTED");
+                return quotes.save(q);
+            }
         } else {
             requirePermission(p, "QUOTATION_MANAGE");
         }
