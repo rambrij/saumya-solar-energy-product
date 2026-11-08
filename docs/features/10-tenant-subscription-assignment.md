@@ -24,6 +24,8 @@ SPA `/` → Platform Subscription Administration → tenant search/assignment/hi
 ## 8. Request and response examples
 Example: `{"planId":"<active-plan-uuid>","status":"TRIAL","startsAt":"2026-12-01T00:00:00Z","trialEndsAt":"2026-12-15T00:00:00Z","billingCycle":"MONTHLY","autoRenew":true,"notes":"Pilot onboarding"}`.
 
+Response shape illustration: `{"id":"<tenant-subscription-uuid>","tenantId":"<tenant-uuid>","planId":"<plan-uuid>","status":"TRIAL","billingCycle":"MONTHLY","autoRenew":true}`.
+
 ## 9. Database entities and relationships
 `TenantSubscription` references tenant, plan and actor; `SubscriptionAssignmentHistory` stores action, previous/new status and plan, actor, JSON details and timestamp; replaced assignment links to successor UUID.
 
