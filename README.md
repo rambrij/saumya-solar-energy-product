@@ -678,7 +678,8 @@ Frontend:
 
 ```powershell
 cd frontend
-npm ci
+npm install
+npm test
 npm run build
 ```
 
@@ -705,4 +706,4 @@ Subscription verification: sign in as Platform Super Admin; create/edit/deactiva
 
 ### Current validation caveat
 
-The GitHub branch contains backend/frontend source changes and documentation. A successful build, database migration execution against MySQL 8.4, and role-separated browser E2E run have not yet been verified in this environment. Do not mark this branch production-ready until the CI run and the manual E2E guide pass.
+The GitHub branch contains backend/frontend source changes and documentation. Backend unit/API integration tests and frontend component tests are included in CI. Browser-level cross-role E2E still requires the documented manual run; the CI workflow also validates V45/V46 migrations and Spring Boot startup against MySQL 8.4. Do not mark this branch production-ready until the CI run and the manual E2E guide pass.
