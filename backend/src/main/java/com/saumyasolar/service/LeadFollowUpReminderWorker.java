@@ -19,7 +19,7 @@ public class LeadFollowUpReminderWorker {
     @Scheduled(fixedDelayString="${app.leads.follow-up-reminder-interval-ms:60000}")
     @Transactional
     public void sendDueReminders() {
-        for(var task:tasks.findTop50ByStatusAndDueAtLessThanEqualAndReminderSentAtIsNullOrderByDueAtAsc("OPEN",Instant.now())) {
+        for(var task:tasks.findDueFollowUpsForUpdate("OPEN",Instant.now(),org.springframework.data.domain.PageRequest.of(0,50))) {
             var user=users.findById(task.getAssignedTo()).filter(u->u.isEnabled()).orElse(null);
             if(user==null) { task.setReminderSentAt(Instant.now()); tasks.save(task); continue; }
             boolean queued=notifications.sendBusinessNotification(user.getId(),task.getTenantId(),"LEAD_FOLLOW_UP_DUE",
