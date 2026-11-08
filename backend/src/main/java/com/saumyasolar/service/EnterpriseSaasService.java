@@ -94,7 +94,7 @@ public class EnterpriseSaasService {
  @Transactional public void deletePlan(UUID id,Principal p){
   platform(p,"SUBSCRIPTION_MANAGE");SubscriptionPlan q=plans.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Plan not found"));
   if(subscriptions.existsByPlanId(id))throw new ResponseStatusException(HttpStatus.CONFLICT,"Plan has subscription history; deactivate it instead of deleting");
-  plans.delete(q);audit(p,null,"PLAN_DELETED","SUBSCRIPTION_PLAN",id,Map.of("planCode",q.getPlanCode()));
+  plans.delete(q);audit(p,null,"PLAN_DELETED","SUBSCRIPTION_PLAN",id,Map.of("planCode",Objects.toString(q.getPlanCode(),"")));
  }
  public List<Tenant> searchTenants(String query,Principal p){
   platform(p,"SUBSCRIPTION_MANAGE");String term=query==null?"":query.trim();if(term.length()<2)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Enter at least two characters to search tenants");
