@@ -254,7 +254,7 @@ public class EnterpriseSaasService {
   t.getLogoUrl(),t.getPrimaryColor()==null?"#0B6B4B":t.getPrimaryColor(),t.getSecondaryColor()==null?"#F6C85F":t.getSecondaryColor(),
   t.getContactEmail(),t.getContactPhone(),t.getSupportEmail(),t.getSupportPhone());}
  @Transactional public TenantDomain requestDomain(String value,Principal p){
-  UUID t=vendor(p,"BRANDING_MANAGE");String domain=value==null?"":value.trim().toLowerCase(Locale.ROOT);
+  UUID t=vendor(p,"BRANDING_MANAGE");assertFeatureEnabled(t,"customDomains");String domain=value==null?"":value.trim().toLowerCase(Locale.ROOT);
   if(!domain.matches("(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}"))
    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Enter a valid fully-qualified domain name");
   if(tenantDomains.existsByDomainIgnoreCase(domain))throw new ResponseStatusException(HttpStatus.CONFLICT,"Domain is already registered");
