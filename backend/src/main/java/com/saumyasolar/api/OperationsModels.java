@@ -10,6 +10,7 @@ public record DamageInput(@NotNull UUID warehouseId,@NotNull UUID productId,@Not
 public record AdjustmentInput(@NotNull UUID warehouseId,@NotNull UUID productId,@NotNull @DecimalMin("0.0001") BigDecimal quantity,@NotNull @Pattern(regexp="INCREASE|DECREASE") String direction,@NotBlank String reason){}
 public record TransferInput(@NotNull UUID sourceWarehouseId,@NotNull UUID targetWarehouseId,@NotNull UUID productId,@NotNull @DecimalMin("0.0001") BigDecimal quantity,@NotBlank String reason){}
 public record ReservationInput(@NotNull UUID warehouseId,@NotBlank String reason){}
+public record InventoryReversalInput(@NotBlank @Size(max=500) String reason){}
 public record CustomerProductOrderInput(@NotNull UUID productId,@NotNull @Min(1) @Max(1000) Integer quantity){}
 public record OrderDecisionInput(@NotBlank @Pattern(regexp="ACCEPT|REJECT") String decision,@NotBlank @Size(max=500) String reason){}
 public record OrderTransitionInput(@NotBlank String status,@NotBlank String reason){}
