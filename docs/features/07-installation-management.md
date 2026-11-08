@@ -24,6 +24,8 @@ SPA `/` → Vendor Installations/Operations tab; Customer installation view; che
 ## 8. Request and response examples
 Illustrative create body: `{"orderId":"<same-tenant-order-uuid>","scheduledAt":"2026-12-05T08:00:00Z","teamId":"<team-uuid>"}`; use controller `InstallationInput` for exact field contract.
 
+Response shape illustration: `{"id":"<installation-uuid>","orderId":"<order-uuid>","status":"SCHEDULED","capacityKw":5.0}`.
+
 ## 9. Database entities and relationships
 `InstallationJob` references tenant/order/team; `InstallationChecklistItem` references job/template; `InstallationScheduleHistory` records schedule changes; warranty is created/linked according to commissioning flow.
 
