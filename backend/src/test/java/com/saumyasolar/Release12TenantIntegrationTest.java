@@ -84,6 +84,7 @@ class Release12TenantIntegrationTest {
                 .matcher(invitationDelivery.getBody());
         assertTrue(invitationMatcher.find(), "Invitation email must contain a one-time setup token");
         var invitationToken = invitationMatcher.group(1);
+        final String originalInvitationToken = invitationToken;
         mvc.perform(post("/api/v1/platform/tenants/" + tenantId + "/invitations/resend")
                         .header("Authorization", "Bearer " + platformToken))
                 .andExpect(status().isNoContent());
@@ -95,7 +96,7 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isBadRequest());
         var resentDelivery = notificationDeliveries.findTop100ByTenantIdOrderByCreatedAtDesc(UUID.fromString(tenantId)).stream()
                 .filter(delivery -> "VENDOR_ADMIN_INVITATION".equals(delivery.getEventType()))
-                .filter(delivery -> delivery.getBody() != null && !delivery.getBody().contains(invitationToken))
+                .filter(delivery -> delivery.getBody() != null && !delivery.getBody().contains(originalInvitationToken))
                 .findFirst().orElseThrow();
         var resentMatcher = java.util.regex.Pattern.compile("#vendorInviteToken=([A-Za-z0-9_-]+)")
                 .matcher(resentDelivery.getBody());
