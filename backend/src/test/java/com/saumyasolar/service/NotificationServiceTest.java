@@ -26,7 +26,7 @@ class NotificationServiceTest {
 
         assertTrue(sent);
         verify(sender).send(any(SimpleMailMessage.class));
-        verify(repository, times(2)).save(argThat(record -> "DELIVERED".equals(record.getStatus())));
+        verify(repository).save(argThat(record -> "DELIVERED".equals(record.getStatus())));
     }
 
     @Test
@@ -41,6 +41,6 @@ class NotificationServiceTest {
                 "QUOTE_SENT", "customer@example.test", "Your quotation", "Quotation details");
 
         assertFalse(sent);
-        verify(repository, times(2)).save(argThat(record -> "FAILED".equals(record.getStatus())));
+        verify(repository).save(argThat(record -> "FAILED".equals(record.getStatus())));
     }
 }
