@@ -24,6 +24,8 @@ SPA `/` → Vendor Quotations tab; Customer Quotations area; PDF action from quo
 ## 8. Request and response examples
 Illustrative create payload: `{"customerId":"<uuid>","leadId":"<optional-uuid>","surveyId":"<optional-uuid>","items":[{"productId":"<uuid>","quantity":10}]}`. Backend calculates price and tax; do not send trusted totals from the browser.
 
+Response shape illustration: `{"id":"<quotation-uuid>","quotationNumber":"QUO-...","status":"DRAFT","grandTotal":218300.00,"revision":1}`.
+
 ## 9. Database entities and relationships
 `Quotation` 1—N `QuotationItem`; revisions store immutable item/financial snapshots; quotation references tenant/customer and optionally lead/survey; accepted quotation links to `CustomerOrder`.
 
