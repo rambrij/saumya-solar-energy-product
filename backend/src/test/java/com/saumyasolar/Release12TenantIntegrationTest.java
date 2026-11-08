@@ -628,5 +628,14 @@ class Release12TenantIntegrationTest {
         assertTrue(customerOrderView.get("items").get(0).get("description").asText().contains(product.get("name").asText()));
         mvc.perform(get("/api/v1/customer/product-orders/"+orderId).header("Authorization","Bearer "+customerToken))
                 .andExpect(status().isOk()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.items[0].quantity").value(2));
+        String otherCustomerEmail="order-owner-"+UUID.randomUUID()+"@example.test";
+        String otherCustomerJson=mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"storeSlug":"saumya-solar","name":"Other Customer","email":"%s","password":"StrongCustomerPass-2026"}
+                        """.formatted(otherCustomerEmail)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String otherCustomerToken=json.readTree(otherCustomerJson).get("accessToken").asText();
+        mvc.perform(get("/api/v1/customer/product-orders/"+orderId).header("Authorization","Bearer "+otherCustomerToken))
+                .andExpect(status().isNotFound());
     }
 }
