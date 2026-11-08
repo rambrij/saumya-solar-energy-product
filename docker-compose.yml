@@ -36,10 +36,14 @@ services:
       SEED_DATA_ENABLED: "true"
       UPLOAD_DIR: /var/lib/saumya/uploads
       SERVICE_ATTACHMENT_DIR: /var/lib/saumya/private-service-attachments
+      SURVEY_ATTACHMENT_DIR: /var/lib/saumya/private-survey-attachments
+      WARRANTY_ATTACHMENT_DIR: /var/lib/saumya/private-warranty-attachments
     ports: [ "8080:8080" ]
     volumes:
       - solar_uploads:/var/lib/saumya/uploads
       - solar_private_service_attachments:/var/lib/saumya/private-service-attachments
+      - solar_private_survey_attachments:/var/lib/saumya/private-survey-attachments
+      - solar_private_warranty_attachments:/var/lib/saumya/private-warranty-attachments
     depends_on:
       mysql: { condition: service_healthy }
       mailpit: { condition: service_started }
@@ -47,4 +51,4 @@ services:
     build: ./frontend
     ports: [ "3000:80" ]
     depends_on: [ backend ]
-volumes: { mysql_data: { }, solar_uploads: { }, solar_private_service_attachments: { } }
+volumes: { mysql_data: { }, solar_uploads: { }, solar_private_service_attachments: { }, solar_private_survey_attachments: { }, solar_private_warranty_attachments: { } }
