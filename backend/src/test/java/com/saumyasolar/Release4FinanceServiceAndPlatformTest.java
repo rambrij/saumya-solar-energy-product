@@ -161,4 +161,29 @@ class Release4FinanceServiceAndPlatformTest {
         String other=token(otherEmail,"OtherWarranty@2026");
         mvc.perform(get("/api/v1/warranty-claims/"+claimId+"/attachments/"+attachmentId).header("Authorization","Bearer "+other)).andExpect(status().isNotFound());
     }
+
+    @Test void operationalReportsSupportCsvExcelAndPdfWithTenantAuthorization() throws Exception {
+        String admin=token("admin@saumya.local","Admin@123");
+        mvc.perform(get("/api/v1/reports/operations").header("Authorization","Bearer "+admin))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.orders").isNumber())
+            .andExpect(jsonPath("$.paymentsReceived").isNumber());
+        byte[] csv=mvc.perform(get("/api/v1/reports/operations/export.csv").header("Authorization","Bearer "+admin))
+            .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith("text/csv"))
+            .andReturn().getResponse().getContentAsByteArray();
+        assertTrue(new String(csv,StandardCharsets.UTF_8).startsWith("Metric,Value"));
+        byte[] excel=mvc.perform(get("/api/v1/reports/operations/export.xlsx").header("Authorization","Bearer "+admin))
+            .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+            .andReturn().getResponse().getContentAsByteArray();
+        assertTrue(excel.length>100);
+        assertEquals('P',excel[0]);assertEquals('K',excel[1],"XLSX must be a valid ZIP-based workbook");
+        byte[] pdf=mvc.perform(get("/api/v1/reports/operations/export.pdf").header("Authorization","Bearer "+admin))
+            .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PDF))
+            .andReturn().getResponse().getContentAsByteArray();
+        assertTrue(new String(pdf,0,Math.min(5,pdf.length),StandardCharsets.US_ASCII).startsWith("%PDF-"));
+        mvc.perform(get("/api/v1/reports/operations").header("Authorization","Bearer "+admin)
+            .param("from","2026-12-31").param("to","2026-01-01")).andExpect(status().isBadRequest());
+        String customer=token("customer@saumya.local","Customer@123");
+        mvc.perform(get("/api/v1/reports/operations").header("Authorization","Bearer "+customer))
+            .andExpect(status().isForbidden());
+    }
 }
