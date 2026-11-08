@@ -29,6 +29,7 @@ public class InventoryTransaction {
     UUID orderId;
     UUID installationId;
     UUID serviceRequestId;
+    UUID reversalOfTransactionId;
     String type;
     BigDecimal quantityDelta;
     BigDecimal reservedDelta;
