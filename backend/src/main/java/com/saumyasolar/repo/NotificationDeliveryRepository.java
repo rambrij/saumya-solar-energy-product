@@ -14,6 +14,8 @@ import java.util.UUID;
 
 public interface NotificationDeliveryRepository extends JpaRepository<NotificationDelivery, UUID> {
     List<NotificationDelivery> findTop100ByTenantIdOrderByCreatedAtDesc(UUID tenantId);
+    List<NotificationDelivery> findTop100ByUserIdOrderByCreatedAtDesc(UUID userId);
+    java.util.Optional<NotificationDelivery> findByIdAndUserId(UUID id, UUID userId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select d from NotificationDelivery d where d.status in ('PENDING','FAILED') and d.attemptCount < :maxAttempts and (d.nextAttemptAt is null or d.nextAttemptAt <= :now) order by d.createdAt asc")
