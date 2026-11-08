@@ -500,3 +500,8 @@ The implementation direction was updated to use local file storage rather than S
 Docker Compose now mounts persistent named volumes for service-ticket, site-survey and warranty-claim evidence separately. Spring configuration exposes `SERVICE_ATTACHMENT_DIR`, `SURVEY_ATTACHMENT_DIR` and `WARRANTY_ATTACHMENT_DIR`. The README documents local persistent-disk requirements and backup/restore expectations. Tests cover local round trips, tenant/category directory separation, traversal rejection and legacy flat-key compatibility.
 
 **Operational constraint:** local filesystem storage is suitable for a single backend instance with a persistent mounted disk/volume. It is not shared across multiple backend replicas. On any hosting platform, mount durable storage and point all three directory settings to it; ephemeral container storage will lose evidence during redeploy/replacement. Database and all evidence directories must be backed up/restored together.
+
+
+### 19.11 Notification delivery schema alignment — 2026-11-08
+
+Added forward-only Flyway migration V37 to align the `notification_delivery` table with the delivery entity/retry service. It adds the channel, idempotency key, provider message ID and next-attempt timestamp fields, preserving existing rows as EMAIL by default, plus indexes for idempotency, retry selection and provider-message lookup. This closes the schema gap between the SMS/WhatsApp retry implementation and the earlier V23/V29 table definition. V37 is subject to the current MySQL 8.4 migration CI run; do not deploy until that run passes.
