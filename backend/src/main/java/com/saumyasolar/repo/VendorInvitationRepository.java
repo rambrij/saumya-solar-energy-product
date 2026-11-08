@@ -17,4 +17,5 @@ public interface VendorInvitationRepository extends JpaRepository<VendorInvitati
     Optional<VendorInvitation> findByTokenHashForUpdate(@Param("tokenHash") String tokenHash);
 
     List<VendorInvitation> findByTenantIdAndUserIdAndAcceptedAtIsNullAndRevokedAtIsNull(UUID tenantId, UUID userId);
+    List<VendorInvitation> findByTenantIdAndUserIdOrderByCreatedAtDesc(UUID tenantId, UUID userId);
 }
