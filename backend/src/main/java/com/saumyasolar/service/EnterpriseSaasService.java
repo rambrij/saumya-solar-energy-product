@@ -92,6 +92,18 @@ public class EnterpriseSaasService {
   s.setEndsAt(x.endsAt());s.setRenewsAt(x.renewsAt());s.setExternalReference(trim(x.externalReference()));s.setCreatedBy(p.userId());s.setCreatedAt(now);s.setUpdatedAt(now);
   subscriptions.save(s);audit(p,tenantId,"SUBSCRIPTION_ASSIGNED","TENANT_SUBSCRIPTION",s.getId(),s);return s;
  }
+ @Transactional public TenantSubscription cancelSubscription(UUID tenantId,UUID subscriptionId,Principal p){
+  platform(p,"SUBSCRIPTION_MANAGE");
+  TenantSubscription subscription=subscriptions.findById(subscriptionId).filter(x->tenantId.equals(x.getTenantId()))
+   .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Subscription not found"));
+  if(!Set.of("TRIAL","ACTIVE","PAST_DUE").contains(subscription.getStatus()))throw new ResponseStatusException(HttpStatus.CONFLICT,"Subscription cannot be cancelled from its current state");
+  subscription.setStatus("CANCELLED");subscription.setUpdatedAt(Instant.now());subscriptions.save(subscription);
+  audit(p,tenantId,"SUBSCRIPTION_CANCELLED","TENANT_SUBSCRIPTION",subscriptionId,subscription);return subscription;
+ }
+ @Transactional public SubscriptionPlan deactivatePlan(UUID planId,Principal p){
+  platform(p,"SUBSCRIPTION_MANAGE");SubscriptionPlan plan=plans.findById(planId).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Plan not found"));
+  plan.setActive(false);plan.setUpdatedAt(Instant.now());plans.save(plan);audit(p,null,"SUBSCRIPTION_PLAN_DEACTIVATED","SUBSCRIPTION_PLAN",planId,plan);return plan;
+ }
  public Map<String,Object> currentSubscription(Principal p){
   if(!"VENDOR".equals(p.accountType())||p.tenantId()==null)throw new ResponseStatusException(HttpStatus.FORBIDDEN);
   TenantSubscription s=effectiveSubscription(p.tenantId()).orElseGet(()->subscriptions.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream()
