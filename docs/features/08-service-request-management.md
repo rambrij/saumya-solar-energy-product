@@ -24,6 +24,8 @@ Service and service-request controller routes are exposed through the operations
 ## 8. Request and response examples
 Illustrative customer issue: `{"subject":"Inverter showing fault code","description":"System stopped generating today","installationId":"<own-installation-uuid>"}`. Check active request DTO for exact field names.
 
+Response shape illustration: `{"id":"<service-request-uuid>","ticketNumber":"SR-...","status":"OPEN","priority":"MEDIUM"}`.
+
 ## 9. Database entities and relationships
 `ServiceRequest` references tenant/customer and optional installation/warranty; `ServiceEvent`, `ServiceComment`, `ServiceVisit`, `ServiceAttachment` retain activity and evidence; `WarrantyClaim` is a distinct workflow.
 
