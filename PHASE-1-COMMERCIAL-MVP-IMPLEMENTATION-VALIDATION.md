@@ -1,212 +1,276 @@
-# Phase 1 Commercial MVP — Implementation Validation & Independent Re-Audit
+# Phase 1 Commercial MVP — Implementation Validation and Independent Re-Audit
 
 **Validation date:** 2026-11-08  
 **Repository:** `rambrij/saumya-solar-energy-product`  
-**Baseline implementation branch:** `phase-1-commercial-mvp-implementation`  
+**Baseline branch:** `phase-1-commercial-mvp-implementation`  
 **Remediation branch:** `phase-1-commercial-mvp-remediation`  
-**Baseline commit:** `d8c9c44d389779bb11d768c156f0c55f0b6c67e8`  
-**Validated remediation commit:** `0257dc04789fc65134a7e1f97bdff7002c429a62`  
+**Validated code commit:** `4ad0e12ea70f37a210fd8cda137930b5e98a0c0b`  
 **Source audit:** `phase-1-commercial-mvp-audit/PHASE-1-COMMERCIAL-MVP-AUDIT.md`  
-**Initial remediation PR:** https://github.com/rambrij/saumya-solar-energy-product/pull/6 (merged initial tranche)  
-**Follow-on remediation PR:** https://github.com/rambrij/saumya-solar-energy-product/pull/7 (open draft)  
-**CI run:** https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42465372813
+**Follow-on remediation PR:** https://github.com/rambrij/saumya-solar-energy-product/pull/7  
+**Successful CI run:** https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42469334656
+
+> This report assesses the implementation on the remediation branch against the complete source audit. It does not claim that 100% completion or zero defects is achievable or proven. No production deployment or merge was performed.
 
 ---
 
 ## 1. Executive summary
 
-The remediation branch resolves several material defects identified by the Phase 1 audit and adds meaningful coverage across vendor verification, custom RBAC, customer/vendor dashboards, financial snapshots, notification delivery, audit logging and browser-based workflows.
+The remediation branch now contains substantial implementation beyond the original first tranche. It closes or materially reduces the principal defects from the source audit:
 
-<badge color="success">Latest CI: all five jobs passed</badge>
+- Quotation discounts and tax are persisted as accepted financial snapshots through order and invoice creation.
+- Package tax is configurable rather than hard-coded to zero.
+- Vendor administrators are provisioned through expiring one-time invitations rather than a platform-supplied password.
+- Pending vendors receive restricted onboarding access only; normal business APIs remain forbidden until platform approval.
+- Vendor legal profiles and private verification documents can be submitted and reviewed.
+- Vendor activation requires a completed legal profile and at least one approved verification document.
+- Notification delivery has a durable retry/outbox workflow and a recipient-scoped in-app inbox.
+- Lead follow-up tasks and scheduled due reminders are implemented.
+- Vendor and customer dashboard summaries are served by backend endpoints with permission/account scoping.
+- General authenticated API audit history has an authorized API and vendor UI.
+- Order cancellation is tested against inventory reservation release.
 
-| Validation area | Latest result |
-|---|---:|
-| Backend compilation and automated tests | Passed — 38 tests, 0 failures/errors/skips |
-| Frontend TypeScript and production build | Passed |
-| Flyway migrations on clean MySQL 8.4 schema | Passed — V1 through V30 |
-| Spring Boot startup against MySQL 8.4 + Mailpit | Passed |
-| Playwright browser workflows | Passed — 3 tests |
+<badge color="success">Latest CI: 5 of 5 jobs passed</badge>
+
+| Validation area | Result |
+|---|---|
+| Backend compile and automated tests | PASS — 43 tests, 0 failures, 0 errors, 0 skipped |
+| Frontend TypeScript and production build | PASS |
+| Flyway migrations on clean MySQL 8.4 | PASS — V1 through V35 |
+| Spring Boot startup against MySQL 8.4 and Mailpit | PASS — health UP |
+| Browser end-to-end workflows | PASS — 3 Playwright tests |
 | Total CI jobs | 5 / 5 passed |
 
-**Estimated Phase 1 completion: 80%.** This is a qualitative requirement-completion estimate, not a code-coverage metric, security certification, or guarantee of zero defects. The arithmetic mean of the 13 primary module estimates below is 80%.
+**Estimated Phase 1 completion: 84%.** This is a qualitative estimate across the Phase 1 modules and supporting capabilities listed in this report. It is not a code-coverage figure, penetration-test result, accounting certification, or guarantee of defect-free operation.
 
-**Disposition: Partially Implemented — not yet ready for production acceptance.** The branch has passed the available automated validation, but several documented Phase 1 requirements and production-only checks remain open. Keep PR #6 in draft until the remaining items are reviewed and accepted.
+**Disposition: Implemented but Not Fully Verified — not yet approved for production acceptance.** Core remediation has passed automated validation. Several requirements remain partial, and production infrastructure, security, accounting and operational acceptance checks have not been performed.
+
+---
 
 ## 2. Status definitions
 
-- **Fully Implemented and Verified:** the scoped requirement is implemented and supported by relevant code and automated runtime evidence.
-- **Implemented but Not Fully Verified:** core behavior is implemented and some tests pass, but important edge cases or acceptance evidence are missing.
-- **Partially Implemented:** meaningful implementation exists, but a material portion of the requirement remains incomplete.
+- **Fully Implemented and Verified:** the scoped requirement is implemented across the relevant layers and has direct automated runtime evidence for its acceptance behavior.
+- **Implemented but Not Fully Verified:** the core behavior is implemented and tested, but material edge cases, business sign-off, scale or production evidence remain.
+- **Partially Implemented:** meaningful implementation exists, but an important part of the expected behavior or acceptance scope remains incomplete.
 - **Implemented but Defective:** implementation exists but a confirmed defect remains.
 - **Not Implemented:** no implementation evidence was found.
 - **Not Applicable:** outside the agreed Phase 1 scope.
 
-Percentages represent estimated behavior delivered for the Phase 1 scope. They are not percentages of source files or tests.
+Percentages below estimate delivered Phase 1 behavior. They are not source-file or test-count percentages.
+
+---
 
 ## 3. Requirement-wise completion
 
-| Phase 1 requirement | Estimated completion | Status | Principal remaining gap |
+| Phase 1 requirement | Estimated completion | Status | Remaining gap |
 |---|---:|---|---|
-| Multi-tenant architecture | 80% | Partially Implemented | Global email uniqueness and missing composite tenant-aware foreign keys; endpoint matrix is not exhaustive |
-| Authentication | 75% | Partially Implemented | Login/reset throttling, safer browser token storage, refresh UX and security hardening |
-| Vendor management | 80% | Partially Implemented | Document collection, secure invitation/first-login workflow and full vendor profile |
-| User and RBAC management | 85% | Partially Implemented | Full role-by-endpoint permission matrix and platform user governance |
-| Customer management | 80% | Partially Implemented | Customer activity/communication history and richer address/profile workflow |
-| Solar product and package management | 85% | Partially Implemented | Full package specification/publication lifecycle and server-side catalogue filtering |
-| Enquiries and lead management | 75% | Partially Implemented | Activity timeline, follow-up tasks/reminders and conversion concurrency tests |
-| Quotations | 85% | Partially Implemented | Branded PDF terms/payment schedule, latest-revision concurrency tests and attachments |
-| Orders | 85% | Partially Implemented | Full transition/cancellation matrix and complete vendor order-detail UX |
-| Basic inventory | 85% | Implemented but Not Fully Verified | Transfer rollback, multi-line reservation rollback and cancellation-release edge cases |
-| Invoice generation | 80% | Implemented but Not Fully Verified | Statutory/accounting review, broader payment/credit-note/PDF/concurrency coverage |
-| Email notifications | 75% | Partially Implemented | HTML templates, attachment delivery, provider abstraction and full event coverage |
-| Basic dashboard | 70% | Partially Implemented | Dedicated tenant-scoped aggregate APIs, date filters, performance validation and KPI sign-off |
+| Multi-tenant architecture | 80% | Partially Implemented | Global user email uniqueness, incomplete composite tenant-aware foreign keys, and non-exhaustive IDOR matrix |
+| Authentication | 80% | Partially Implemented | Login/reset throttling, safer browser token storage, automatic refresh UX and auth-abuse testing |
+| Vendor management | 95% | Implemented but Not Fully Verified | KYC policy/legal validation, malware scanning, persistent production document storage and operational review controls |
+| User and RBAC management | 85% | Partially Implemented | Exhaustive role × endpoint × HTTP status matrix and platform user governance |
+| Customer management | 80% | Partially Implemented | Customer activity/communication history, multi-address workflow and identity uniqueness decision |
+| Solar product and package management | 85% | Implemented but Not Fully Verified | Legacy package tax review, complete specification/publication lifecycle and catalogue query performance |
+| Enquiries and lead management | 85% | Implemented but Not Fully Verified | Full activity timeline, conversion race coverage and reminder delivery under real provider outages |
+| Quotations | 90% | Implemented but Not Fully Verified | Complete branded PDF terms/payment schedule, attachment delivery and latest-revision concurrency coverage |
+| Orders | 90% | Implemented but Not Fully Verified | Full transition/state matrix and additional cancellation/payment/inventory combinations |
+| Basic inventory | 90% | Implemented but Not Fully Verified | Transfer rollback, multi-line reservation rollback and production warehouse acceptance |
+| Invoice generation | 90% | Implemented but Not Fully Verified | Accountant/statutory review, full credit-note/void/partial-payment/concurrency matrix |
+| Email notifications | 90% | Implemented but Not Fully Verified | Production provider, HTML templates, attachment support, bounce/complaint handling and event coverage |
+| Basic dashboard | 90% | Implemented but Not Fully Verified | Database-level aggregate optimization, agreed KPI definitions, date filters and realistic-scale performance tests |
+
+---
 
 ## 4. Audit finding traceability
 
+The source audit's 13 primary requirements are mapped to F01–F13 in the same order as source-audit sections 3.1–3.13. Supporting Phase 1 SRS capabilities are mapped to S01–S06.
+
 | Audit Finding ID | Phase 1 Requirement | Expected Fix | Implementation Status | Backend Evidence | Frontend Evidence | Database Evidence | Test Evidence | Remaining Gap | Severity | Required Action |
 |---|---|---|---|---|---|---|---|---|---|---|
-| A01 | Multi-tenant isolation | Enforce tenant scope on protected requests and prevent IDOR/cross-tenant access | Partially Implemented | `JwtFilter`, `Principal`, tenant-scoped repositories/services; customer order detail uses `findByIdAndTenantId` and customer ownership check | Vendor/customer/platform route separation and permission-driven tabs in `frontend/src/main.tsx` | Tenant-owned tables remain tenant-keyed; V1 baseline schema | `Release12TenantIntegrationTest`: foreign tenant employee mutation, customer order ownership and tenant access tests; existing operations/security tests | No complete automated enumeration of every endpoint, export, attachment, invoice, payment and query parameter; global email uniqueness remains; composite tenant-aware FKs are not generally present | Critical | Build a route-by-route IDOR matrix; decide email uniqueness model; add composite unique/FK constraints where safe |
-| A02 | Authentication | Remove reset-token disclosure; deliver reset instructions securely; preserve MFA and token lifecycle | Partially Implemented | `AuthLifecycleService.forgot` returns generic response and queues reset email; MFA challenge uses hashed code and queues email; JWT/refresh lifecycle remains | `frontend/src/main.tsx` no longer needs a reset token returned by the forgot-password API; platform MFA flow | Existing `password_reset_token`, `refresh_token`, MFA challenge migration V24 | `NotificationServiceTest`, `Release2SecurityTest`, Mailpit browser workflow | No login/reset rate limiting or progressive lockout; access/refresh tokens remain browser localStorage; access token lifetime and refresh UX require review; failed-login audit absent | Critical | Add distributed rate limiting, harden token storage/refresh, add auth abuse tests and security headers |
-| A03 | Vendor onboarding | Create vendor pending verification; allow platform approval/rejection; block login before approval | Partially Implemented | `AuthLifecycleService.createTenant` creates tenant as INACTIVE/PENDING_VERIFICATION; `TenantAdminService.verify` supports APPROVE/REJECT; `AppService.updateTenantStatus` blocks ACTIVE before verification; notification on decision | Platform tenant actions in `frontend/src/main.tsx` include Verify vendor/Review again and rejection reason display | V29 `vendor_verification_lifecycle` adds verification status, verifier, timestamp and rejection reason | `Release12TenantIntegrationTest`: pending login rejected, approval activates; rejection cannot be bypassed by status API | No document upload/checklist, legal/vendor profile completion, secure admin invitation or first-login acceptance | High | Agree required vendor KYC fields/documents; implement secure invitation and onboarding checklist |
-| A04 | User and RBAC management | Tenant-scoped custom roles with strict permission allow-list; prevent privilege escalation | Partially Implemented | `VendorRoleAdminService` provides create/update/delete and permission allow-list; disallows PLATFORM_MANAGE and USER_MANAGE delegation; tenant-scoped role lookup | `RoleManager` in `frontend/src/main.tsx` supports create/edit/delete custom roles and permission selection | Existing `role`, `permission`, `user_role`, `role_permission` tables reused | `Release12TenantIntegrationTest`: rejects platform/user-admin permission escalation and tests cross-tenant employee ID | No exhaustive permission matrix across every API for all standard roles; no permission simulation/preview; platform-wide role governance not complete | Critical | Add automated role × endpoint × expected HTTP status matrix; review every controller and service guard |
-| A05 | Customer management | Vendor CRUD and customer-owned self-service data with full order details | Partially Implemented | Customer ownership checks; `OperationsService.customerOrderDetails` and `customerOrderView` expose only customer-owned order lines and derived payment status | Customer overview dashboard and order line/payment display in `frontend/src/main.tsx` | Existing customer_profile, order_item, invoice and payment tables | `Release12TenantIntegrationTest`: customer A order detail accessible; customer B receives 404 | Customer notes, activity/communication history, multi-address workflow and tenant-specific duplicate email identity remain | Medium | Add customer activity and address model; decide cross-vendor identity strategy |
-| A06 | Product and package management | Maintain package tax correctly; ensure quote uses configured package tax | Partially Implemented | `SolarPackage.taxPercent`; `AppService.quote` uses configured package tax and rejects invalid/unconfigured rates | `PackageForm` collects package tax rate | V30 `solar_package.tax_percent` | `Release12TenantIntegrationTest.vendorAdminCanCreateCategorizedProductAndConfigurablePackage` verifies 18% package tax and 10% discount calculation | Existing packages migrate with 0.00 tax and must be reviewed; public package detail/specification and lifecycle remain incomplete | High | Review legacy package tax values; add full package specification and publication tests |
-| A07 | Enquiries and lead management | Route enquiries to vendor; notify vendor; maintain lead conversion | Partially Implemented | `AppService.createPublicEnquiry` and `createCustomerEnquiry` queue vendor-admin notifications; existing lead conversion/assignment/history services remain | Public enquiry form in `PublicHome.tsx`; lead and enquiry screens in `main.tsx` | Existing `enquiry`, `sales_lead`, `lead_history` tables | Playwright public enquiry flow; `Release12TenantIntegrationTest` sales pipeline coverage | No full CRM activity timeline, follow-up tasks/reminders or proven concurrent duplicate conversion prevention | High | Add activity/follow-up records and idempotent conversion locking/tests |
-| A08 | Quotations | Preserve per-line discount/tax snapshots and send quotation notification | Partially Implemented | `AppService.quote`, quotation send action and `QuotationRevisionService` preserve per-line financial snapshots and queue customer email | Quote creation, approval, send, revision and PDF actions in `main.tsx` | V25 accepted quotation financial snapshots; V26 per-line discount/tax snapshots | `Release12TenantIntegrationTest` discounted quotation/order/invoice and package tax scenario | PDF branding, detailed terms, payment schedule, warranty terms and latest-revision concurrency/expiry tests remain | High | Complete PDF content and add revision/acceptance race tests; attach PDFs to notification delivery |
-| A09 | Orders | Preserve quote totals; expose customer order lines/payment status; notify on order events | Partially Implemented | `AppService.order` copies quote financial snapshots; `OperationsService` sends order-created/status/decision notifications; customer order DTO is ownership-filtered | Customer My Orders now shows line descriptions, amount, payment status and status | V25/V26 order header and line financial snapshot columns | `Release12TenantIntegrationTest`: idempotent quote conversion, customer order line DTO, customer B IDOR and vendor decision | Full order transition/cancellation matrix and richer vendor order detail actions remain | High | Add complete state-transition matrix, cancellation/release tests and vendor order detail screen |
-| A10 | Basic inventory | Preserve stock ledger and reservation correctness | Implemented but Not Fully Verified | `OperationsService` tenant-scoped stock receipt/issue/return/damage/adjustment/transfer/reservation/release | `OperationsPanel.tsx` | warehouse, inventory_balance, inventory_transaction, inventory_reservation | Existing `Release3OperationsIntegrationTest` covers stock movements, tenant boundary and concurrent reservation | Not every rollback/transfer/multi-line cancellation edge case is automated | Medium | Add transfer rollback and multi-line reservation failure/cancellation tests |
-| A11 | Invoice generation | Reconcile invoice total to accepted quotation/order and allocate invoice numbers safely | Implemented but Not Fully Verified | `FinanceService.createInvoice` validates line snapshots and reconciles subtotal/tax/total; JPA pessimistic row locks in `InvoiceSequenceRepository` and tenant lock | `FinanceServicePanel.tsx` invoice issue/download/payment flows; customer invoice download | V25/V26 financial snapshots; V18/V20 invoice/payment/credit-note; invoice sequence schema | `Release12TenantIntegrationTest` asserts discounted order and invoice amounts/lines; MySQL 8.4 startup and migration CI | GST/statutory compliance, tax treatment review, invoice PDF content, concurrent sequence and complete partial payment/credit-note/void matrix need independent verification | Critical | Accountant review; add concurrency and full finance lifecycle tests before production |
-| A12 | Email notifications | Durable asynchronous email queue with retry and delivery history | Partially Implemented | `NotificationService` queues messages; `NotificationOutboxWorker` polls with row locks, bounded exponential retry, DEAD state, SMTP send; event hooks for reset/MFA, vendor verification, enquiry, quotation, order, invoice and payment | User-facing actions trigger notifications; no notification inbox yet | V23 notification_delivery; V27 body, next_attempt_at, due index and retry state | `NotificationServiceTest`, `NotificationOutboxWorkerTest`; Playwright public enquiry test asserts Mailpit receives email | No HTML templates, attachment/PDF support, provider abstraction, tenant templates/preferences, full event coverage or in-app notification inbox; production SMTP credentials/delivery not verified | High | Add provider adapter/templates/attachments, in-app inbox and production SMTP validation |
-| A13 | Basic dashboard | Vendor and customer dashboard with tenant-scoped business metrics | Partially Implemented | Uses tenant-scoped existing APIs for customers, enquiries, leads, quotes, orders, inventory, invoices, payments, refunds and service tickets | Vendor Business Dashboard and customer My Solar Dashboard in `frontend/src/main.tsx`; vendor dashboard navigation fixed | Existing business source tables; no aggregate projection table | Playwright vendor/customer dashboard visibility tests; frontend build pass | Metrics are currently aggregated client-side; no dedicated dashboard API, date filters, KPI definitions or large-data performance testing | High | Define KPI semantics; add server-side aggregate API and role/tenant dashboard tests |
-| A14 | General audit logging | Persist actor, tenant, method, path, status and source IP for authenticated API activity | Partially Implemented | `AuditLogInterceptor`, `AuditLogService`, `AuditLogRepository`; records authenticated API request completion in REQUIRES_NEW transaction | No audit viewer/search UI | V28 `audit_log` with tenant/actor indexes and FKs | `Release12TenantIntegrationTest.authenticatedApiRequestsAreWrittenToTenantAwareAuditLog` | No unauthenticated/failed-login security event stream, before/after field diffs, retention policy or authorized audit search UI | High | Add security event capture, retention and platform/vendor audit viewer with strict access control |
-| A15 | Operational monitoring and release validation | Prove build, migrations and app startup in CI | Implemented but Not Fully Verified | Spring Boot health endpoint; release validation workflow starts backend against MySQL and Mailpit | Vite production build and Playwright test runner | MySQL 8.4 clean migration workflow V1–V30 | CI run 42465372813 passed all five jobs | No production infrastructure, secrets, backups/restore, load, DAST or penetration test was performed | Medium | Run deployment-specific acceptance, security assessment, load and backup/restore tests |
+| F01 | Multi-tenant architecture | Enforce tenant scope on every protected read/write/download/export and prevent IDOR | Partially Implemented | `security/JwtFilter.java`, `security/Principal.java`; tenant-scoped service/repository access in `AppService`, `OperationsService`, `FinanceService`; pending-vendor route restriction; `DashboardService` | Account/permission-specific navigation in `frontend/src/main.tsx`; customer/vendor/platform portals | V1 baseline tenant tables; V25–V35 additive tenant-owned records and indexes | `Release12TenantIntegrationTest`, `Release3OperationsIntegrationTest`, `Release4FinanceServiceAndPlatformTest`; 43-test suite passed | No exhaustive route-by-route cross-tenant test for every invoice, payment, export, attachment, query filter and request parameter. Global `app_user.email` uniqueness and incomplete composite tenant FKs remain | Critical | Complete API × resource × tenant IDOR matrix; decide email identity model; add composite tenant-aware constraints where safe |
+| F02 | Authentication | Secure reset/invitation, MFA and token lifecycle; do not disclose reset tokens | Partially Implemented | `AuthLifecycleService.forgot`, reset-token consumption, refresh rotation/reuse handling, MFA challenge, `JwtService`, `JwtFilter`; vendor invitation token hashing and one-time acceptance | Login/register/forgot/reset/MFA and vendor-invitation acceptance flows in `frontend/src/main.tsx` | Existing user/refresh/reset/MFA tables; V31 invitation token hash and expiry | `Release2SecurityTest`, `Release12TenantIntegrationTest`; invitation reuse/revocation tested | No distributed login/reset rate limiter or progressive lockout; browser tokens remain in localStorage; no full XSS/CSRF/browser token threat assessment; no production MFA/provider test | Critical | Add rate limiting and security-event audit; review token storage and refresh strategy; run authentication abuse testing |
+| F03 | Vendor management | Pending → invited → profile/KYC submitted → document review → verified/active lifecycle | Implemented but Not Fully Verified | `AuthLifecycleService.createTenant`, `acceptVendorInvitation`, `resendVendorInvitation`; `VendorProfileService`; `VendorVerificationDocumentService`; `TenantAdminService.verify`; `JwtFilter` limits pending vendors to profile/document endpoints | Platform tenant detail includes legal profile, document download/review, verification and invitation resend; vendor Settings includes profile/document upload | V29 verification lifecycle; V31 invitation; V33 legal profile; V34 private verification documents | `Release12TenantIntegrationTest.platformCanProvisionTenantAndVendorAdminCanManageSalesEmployee` tests invitation revoke/resend, acceptance, pending-route restrictions, profile completion, KYC review and activation; Playwright vendor profile/document upload | No malware scanning, external company/GST verification, required-document policy by vendor type or production persistent-volume test. Document storage is local private filesystem configured by `VENDOR_KYC_DIR` | High | Configure persistent private storage; add malware scanning and business-approved KYC checklist; test recovery and retention |
+| F04 | User and RBAC management | Enforce role-to-permission allow-list and backend authorization for each operation | Partially Implemented | `VendorRoleAdminService`, `TenantAdminService`, `JwtFilter`; custom role creation/edit/delete and permission delegation restrictions | Role manager and permission-driven navigation in `frontend/src/main.tsx` | Existing role/permission/user-role tables | `Release12TenantIntegrationTest.rolePermissionMatrixRejectsPrivilegedActionsForSalesCustomerAndPlatformUsers`; cross-tenant employee assignment and escalation rejection | The matrix tests representative roles/endpoints, not every standard/custom role × every route. Platform user lifecycle and permission simulation remain incomplete | Critical | Generate exhaustive API × role matrix including expected 401/403/404 and negative IDOR cases |
+| F05 | Customer management | Vendor-managed customer records and customer-owned self-service data | Partially Implemented | Customer CRUD/ownership checks in `AppService`, `CatalogAdminService`; customer order detail ownership filtering; customer dashboard in `DashboardService` | Customer portal, My Orders, invoices, service requests, notification inbox and dashboard in `frontend/src/main.tsx` | Existing customer/profile/order/invoice/payment tables | `Release12TenantIntegrationTest` customer ownership, notification recipient isolation and dashboard role tests; Playwright customer portal test | Customer notes, contact/communication activity history, multi-address workflow and cross-vendor identity model remain | Medium | Add customer activity/address model and tenant-aware identity policy |
+| F06 | Solar product and package management | Correct package tax, vendor catalogue CRUD and public catalogue behavior | Implemented but Not Fully Verified | `SolarPackage.taxPercent`; `AppService.quote` uses configured package tax; catalogue services remain tenant-scoped | Product/package forms in `frontend/src/main.tsx`; public catalogue in `frontend/src/PublicHome.tsx` | V30 `solar_package.tax_percent` | `Release12TenantIntegrationTest.vendorAdminCanCreateCategorizedProductAndConfigurablePackage`; frontend build passed | Existing packages migrated with 0.00 tax need business review; full publication/specification lifecycle and large catalogue performance remain | High | Review migrated tax rates; approve product/package data and add publication/query tests |
+| F07 | Enquiries and lead management | Enquiry routing, lead history, assigned follow-up tasks and reminders | Implemented but Not Fully Verified | `LeadFollowUpTaskService`, `LeadFollowUpReminderWorker`, `NotificationService`; tenant and assignee validation; row-locked due-task query | Lead follow-up action in vendor CRM; notification inbox | V35 `lead_follow_up_task`; V23/V27/V32 notification delivery/inbox schema | `Release12TenantIntegrationTest` creates/lists/completes follow-up tasks; `NotificationOutboxWorkerTest`; full backend suite passed | Reminder scheduler is not stress-tested with multiple worker instances or a real SMTP outage; no complete CRM activity timeline or concurrent duplicate conversion matrix | High | Add worker concurrency/failure tests and CRM activity timeline |
+| F08 | Quotations | Preserve accepted discount/tax snapshots through revisions, orders and invoices | Implemented but Not Fully Verified | `AppService.quote`, `QuotationRevisionService`, `FinanceService.createInvoice`; per-line rounded discount/tax reconciliation | Quote creation, approval, send, revision and PDF actions in `frontend/src/main.tsx` | V25 accepted quotation snapshots; V26 quotation/order line snapshots | `Release12TenantIntegrationTest` tests discounted quote → order → invoice and rounding edge case | PDF branding, full commercial/warranty terms, payment schedule, attached email PDFs and latest-revision concurrency/expiry remain | High | Complete commercial PDF specification and revision race/expiry tests |
+| F09 | Orders | Preserve quote values, enforce status transitions and release stock before cancellation | Implemented but Not Fully Verified | `AppService.order`, `OperationsService.transition`, reservation/release and status history | Vendor/customer order panels and customer order line/payment details in `frontend/src/main.tsx` | V25/V26 financial snapshots; existing order/status/inventory ledger schema | `Release12TenantIntegrationTest` quote conversion and customer ownership; `Release3OperationsIntegrationTest.orderCancellationRequiresReservationReleaseAndThenUpdatesInventoryLedger` | Not every status transition, payment interaction, multi-line cancellation or partial fulfillment combination is covered | High | Complete state-transition and cancellation test matrix |
+| F10 | Basic inventory | Maintain tenant-scoped stock ledger, reservation and rollback correctness | Implemented but Not Fully Verified | `OperationsService` receipt/issue/return/damage/adjust/transfer/reserve/release paths | `frontend/src/OperationsPanel.tsx` | Existing warehouse, balance, transaction and reservation tables | `Release3OperationsIntegrationTest` stock movement, tenant boundary, concurrent reservation and cancellation-release tests | Transfer rollback and multi-line partial-failure cases remain; no production warehouse reconciliation | Medium | Add rollback/failure injection tests and stock reconciliation acceptance |
+| F11 | Invoice generation | Reconcile invoice lines/header to accepted order/quotation and allocate invoice numbers safely | Implemented but Not Fully Verified | `FinanceService.createInvoice` validates snapshots and totals; `InvoiceSequenceRepository` and `TenantRepository` use row locks for tenant/fiscal sequence allocation | Invoice create/download/payment panels and customer invoice views | V18/V20 finance schema; V25/V26 accepted financial snapshots | `Release12TenantIntegrationTest` discounted invoice line/header reconciliation; MySQL 8.4 startup and V1–V35 migration validation | No accountant/statutory GST sign-off, IRN/e-invoice, HSN/SAC, invoice-sequence load test or complete partial-payment/credit-note/void matrix | Critical | Obtain accountant approval and add concurrent numbering/payment/credit-note tests |
+| F12 | Email notifications | Durable asynchronous delivery, bounded retry, delivery history and in-app inbox | Implemented but Not Fully Verified | `NotificationService`, `NotificationOutboxWorker`, `NotificationInboxService`; retry/dead-letter and recipient-scoped read state | Notification center in vendor/customer shell; email-triggering workflows | V23 delivery; V27 retry/outbox; V32 read state | `NotificationServiceTest`, `NotificationOutboxWorkerTest`; Playwright public enquiry email observed in Mailpit; 43 backend tests | No production SMTP provider abstraction, HTML templates, attachment delivery, bounce/complaint handling or sender-domain verification. Queue payloads contain sensitive message bodies until delivery/dead-letter; retention/encryption needs review | High | Configure production SMTP, add templates/attachments/provider monitoring and sensitive payload retention/encryption |
+| F13 | Basic dashboard | Provide vendor/customer KPI summaries with role/account/tenant scope | Implemented but Not Fully Verified | `DashboardService.vendor`, `DashboardService.customer`; endpoints `GET /api/v1/dashboard/vendor` and `GET /api/v1/dashboard/customer`; metrics are omitted when the user lacks the related permission | Vendor Business Dashboard and customer My Solar Dashboard in `frontend/src/main.tsx` | Uses tenant-scoped business tables; no separate materialized aggregate table | `Release12TenantIntegrationTest.rolePermissionMatrixRejectsPrivilegedActionsForSalesCustomerAndPlatformUsers`; Playwright vendor/customer dashboard test | Service currently loads tenant-scoped lists and aggregates in application memory; no date filters, KPI owner sign-off or large-tenant performance test | High | Move heavy aggregation to database queries, define KPI semantics and load-test representative tenants |
+| F14 | General audit logging | Record authenticated API actor, tenant, method, path, status and source IP; restrict review access | Implemented but Not Fully Verified | `AuditLogInterceptor`, `AuditLogService`, `AuditLogController`; vendor admin sees own tenant, platform super admin sees platform history | Vendor Audit Log tab in `frontend/src/main.tsx` | V28 `audit_log` | `Release12TenantIntegrationTest.authenticatedApiRequestsAreWrittenToTenantAwareAuditLog` and audit viewer authorization test; Playwright audit tab | Failed-login/unauthenticated security events, before/after field diffs, retention policy, export and search filters remain | High | Add security-event capture, immutable change events, retention and searchable filters |
+| S01 | Site survey basics | Capture survey inputs and link them to lead/quotation | Partially Implemented | Existing `SiteSurvey` and `AppService.survey` | Survey form and quotation references | Existing site_survey schema | Existing sales workflow tests; no complete survey checklist evidence | Photos, customer acknowledgement, checklist and full survey completion lifecycle not verified | Medium | Complete survey checklist and attachment/acknowledgement flow |
+| S02 | Customer portal | Customer self-service for catalogue, enquiries, quotes, orders, invoices, payments and service | Implemented but Not Fully Verified | Customer ownership checks, order details, customer dashboard and notification APIs | Customer portal routes/screens in `frontend/src/main.tsx` | Customer, order, invoice, payment and notification tables | Playwright customer login/dashboard/quotation workflow; Release12 customer ownership tests | Full browser flow for quote acceptance → order → invoice/payment → service is not covered in one E2E journey | High | Add one end-to-end customer commercial lifecycle test |
+| S03 | In-app notifications | User-specific inbox with read state and no cross-user disclosure | Implemented but Not Fully Verified | `NotificationInboxService`, `NotificationController`; GET list and POST read endpoints filter by recipient and tenant; response omits message body | NotificationCenter in `frontend/src/main.tsx` | V32 `read_at`, V23/V27 delivery schema | Recipient isolation and read-state test in `Release12TenantIntegrationTest`; Playwright inbox test | No notification preferences, pagination, category filters or push/real-time updates | Medium | Add pagination/preferences after delivery provider coverage |
+| S04 | Operational monitoring | Health, deployment checks and operational readiness | Partially Implemented | Actuator health, scheduled notification/follow-up workers, CI startup check | Frontend build and Playwright workflow | V1–V35 migrations validated | MySQL 8.4 + Mailpit startup health passed | No production metrics/tracing/alerts, load/soak test, backup/restore or DR exercise | High | Configure production monitoring/alerts and rehearse backup restore |
+| S05 | Reporting and exports | Platform/vendor reports with tenant and permission scope | Partially Implemented | Existing platform tenant export; dashboard summary APIs | Platform exports and dashboard screens; vendor audit log | Existing tenant/business tables | Existing platform export tests and dashboard authorization tests | Vendor sales, lead conversion, inventory valuation and finance report center not implemented | Medium | Agree report catalogue and add tenant-scoped report endpoints |
+| S06 | Release/build/database configuration | Reproducible build, clean migrations, startup and E2E validation | Implemented but Not Fully Verified | Maven compile/tests; Spring Boot health endpoint; MySQL 8.4 startup | TypeScript/Vite production build; Playwright | Flyway V1–V35 clean MySQL validation | CI run 42469334656: 43 backend tests, 3 Playwright tests, migrations, startup and frontend build all passed | CI uses H2 for the Maven integration-test profile; MySQL migration/startup are separate CI jobs. Production deployment/secrets/backups are not validated | Medium | Add MySQL Testcontainers for backend integration tests and run production deployment acceptance |
 
-## 5. Resolved findings
+---
 
-The following specific defects from the baseline audit have code-level and automated test evidence of resolution on this branch:
+## 5. Fully resolved findings
 
-1. **Password-reset token disclosure:** `AuthLifecycleService.forgot` returns only a generic message and queues the reset email; it no longer returns `devResetToken`.
-2. **Quotation discount lost during invoicing:** V25/V26 and order-line snapshots preserve the accepted quotation discount/tax values; invoice generation reconciles line and header totals.
-3. **Package quotation tax hard-coded to zero:** package tax is now vendor-configurable, persisted by V30, and used by quotation calculation.
-4. **Vendor tenant immediately active:** new tenants are created INACTIVE/PENDING_VERIFICATION; platform approval is required before activation; rejection cannot be bypassed using the tenant status API.
-5. **No custom vendor roles:** tenant-scoped custom role APIs and UI exist with a strict allow-list that blocks platform and user-administration privilege delegation.
-6. **No general authenticated API audit trail:** V28 audit log and interceptor persist actor/tenant/request outcome.
-7. **No vendor/customer dashboard landing pages:** both dashboard views exist and are included in Playwright browser tests.
-8. **Customer order response missing line/payment information:** customer-owned order list/detail returns order lines and payment status derived from invoice/payment/refund records.
-9. **No reliable email retry mechanism:** durable notification delivery records, row-locked polling, retry scheduling and dead-letter status are implemented; Mailpit delivery is exercised by E2E.
+The following original defects have been materially resolved with code and automated evidence:
 
-These are resolved implementation findings, not proof that every broader requirement in the corresponding module is complete.
+1. **Password-reset token disclosure:** forgot-password no longer returns the reset token to the client; reset delivery is queued through the notification service.
+2. **Quotation discount/tax lost before invoice:** accepted header and per-line snapshots persist through quote revision, order and invoice; invoice creation rejects inconsistent snapshots.
+3. **Package tax hard-coded to zero:** package tax is configurable and used in quotation calculation.
+4. **Vendor immediately ACTIVE:** new tenants start INACTIVE/PENDING_VERIFICATION; activation requires completed legal profile and an approved verification document.
+5. **No secure vendor administrator setup:** one-time expiring invitation, token hashing, resend/revocation and password acceptance are implemented.
+6. **No custom vendor roles:** tenant-scoped role administration and privilege allow-list exist.
+7. **No reliable email retry:** durable outbox, scheduled retry and dead-letter behavior exist.
+8. **No in-app notification inbox:** recipient-scoped inbox and read state exist.
+9. **No general authenticated API audit history:** interceptor, persistence, API and vendor audit screen exist.
+10. **No vendor/customer dashboard:** backend summary APIs and role/account-aware screens exist.
+11. **No lead follow-up task workflow:** tenant-scoped tasks, assignee checks and due reminder worker exist.
+12. **Order cancellation could leave reserved stock:** cancellation is blocked while reservation remains; release-before-cancel is covered by an integration test.
+
+These are resolved scoped findings; they do not mean the broader modules are 100% complete.
+
+---
 
 ## 6. CI and runtime evidence
 
-**Latest successful run:** https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42465372813
+**Successful CI run:** https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42469334656
 
-| Job | Result | Evidence |
+| CI job | Result | Evidence |
 |---|---|---|
-| Backend compile and tests | PASS | 38 tests, 0 failures, 0 errors, 0 skipped; Maven BUILD SUCCESS |
-| Frontend typecheck and production build | PASS | `tsc && vite build` |
-| Flyway migrations on clean MySQL 8.4 | PASS | V1–V30 applied and checked |
-| Spring Boot startup with MySQL 8.4 and Mailpit | PASS | Actuator health returned UP |
-| Frontend-to-backend Playwright workflows | PASS | 3 tests: public enquiry + Mailpit email, vendor login/dashboard/navigation, customer login/dashboard/quotations |
+| Backend compile and tests | PASS | Maven BUILD SUCCESS; 43 tests, 0 failures/errors/skips |
+| Frontend TypeScript and production build | PASS | TypeScript check and Vite production build |
+| Flyway migrations | PASS | V1–V35 applied to clean MySQL 8.4 schema |
+| Spring Boot startup | PASS | Backend started against MySQL 8.4 and Mailpit; health endpoint UP |
+| Browser end-to-end workflows | PASS | 3 Playwright tests passed (12.8 seconds) |
+| Total | **5 / 5 PASS** | Run 42469334656 |
 
-### Runtime behavior verified in CI
+### Runtime behavior verified
 
-- Public contact enquiry submits through the browser to the backend and persists through the application workflow.
-- Vendor and customer authentication complete against a seeded MySQL-backed application.
-- Vendor dashboard and customer dashboard render in the browser.
-- Public enquiry notification is delivered through SMTP to Mailpit and appears in its API.
-- Backend starts against MySQL 8.4 with Flyway migrations applied.
-- Backend integration tests cover vendor verification, role escalation rejection, tenant-aware audit log, customer order ownership, discounted invoice reconciliation and package tax calculation.
+- Platform creates vendor tenant with INACTIVE/PENDING_VERIFICATION state.
+- Vendor administrator invitation is emailed, can be resent, and old unaccepted token is rejected.
+- Invitation acceptance sets the vendor administrator password.
+- Pending vendor can update legal profile and submit KYC document, but a business catalogue API returns 403 before approval.
+- Platform Super Admin can download/review vendor KYC evidence.
+- Vendor approval is blocked until legal profile and approved evidence exist; successful approval activates the tenant.
+- Recipient notification inbox is scoped to authenticated user and supports read state.
+- Vendor/customer dashboard APIs reject the wrong account type.
+- Representative sales/customer/platform role-to-endpoint cases return the expected authorization status.
+- Lead follow-up task create/list/complete works in integration tests.
+- Order cancellation requires stock reservation release.
+- Discounted quotation → order → invoice totals and per-line values reconcile.
+- Frontend vendor profile, KYC upload, audit log and customer portal screens run in Playwright.
+- Mailpit receives the public enquiry notification in the browser E2E workflow.
 
-### Not verified
+### Code-only or partially verified behavior
 
-- Production Vercel/Render deployment or production secrets.
-- Real production SMTP provider account, sender-domain authentication, deliverability, bounce/complaint handling or attachments.
-- GST statutory compliance, e-invoice/IRN, HSN/SAC and accountant-approved tax classification.
-- Penetration test, DAST, load/stress test, backup restoration and disaster recovery.
-- Full browser journey for every quotation/order/inventory/invoice/payment transition.
-- Production tenant data migration/upgrade rehearsal and rollback.
+- Scheduler timing, multi-instance reminder contention and retry under prolonged SMTP outage were not stress-tested.
+- The complete role × endpoint matrix has not been enumerated.
+- Not every foreign-tenant ID/filter/download/export path has a negative test.
+- Dashboard aggregate behavior is tested, but performance with large tenant datasets is not.
+- Vendor KYC is not checked against external GST/company registries.
+- SMTP behavior is verified with Mailpit, not a production mail provider.
 
-## 7. Remaining defects, gaps and regression risks
+---
 
-1. **Tenant data model:** `app_user.email` remains globally unique; composite tenant-aware foreign keys are not consistently enforced. Service-layer scoping is still a major isolation control.
-2. **Authorization coverage:** custom roles are supported, but every endpoint has not been tested against every standard/custom role. A systematic API × role × expected HTTP status matrix remains necessary.
-3. **Vendor KYC/onboarding:** no document upload/checklist, legal profile completion, secure invitation or first-login acceptance workflow.
-4. **Notification scope:** email outbox is implemented, but HTML templates, attachments, PDF attachments, provider abstraction, in-app notification inbox, delivery preferences and complete event coverage remain.
-5. **Email payload security:** queued reset/MFA message content is persisted until successful delivery or dead-lettering. Restrict database access, retention and backups; consider envelope encryption for sensitive queued payloads.
-6. **Audit scope:** authenticated API activity is recorded, but unauthenticated requests, failed login events, before/after data changes, retention and audit search UI are absent.
-7. **Dashboard scale:** KPI aggregation is performed in the frontend from tenant-scoped list endpoints. This is not appropriate for very large tenants without server-side aggregate queries, pagination and performance testing. Outstanding-payment visibility is restricted to roles allowed to view refunds.
-8. **Package migration:** existing packages receive 0.00 tax by migration default. Each existing package must be reviewed and assigned the correct tax rate before a quotation is issued.
-9. **Customer/CRM depth:** customer activity history, lead source, call/task timeline, follow-up reminders and duplicate conversion race tests remain.
-10. **Quotation and invoice documents:** PDF branding, payment schedule, detailed commercial terms, warranty terms and attached email PDFs remain incomplete. Statutory tax treatment needs an accountant's approval.
-11. **Authentication hardening:** no distributed rate limiter/progressive lockout is included; browser token storage remains localStorage; security headers/CSP and refresh UX require review.
-12. **Operational assurance:** CI validates MySQL 8.4, but it does not establish production backup/restore, monitoring/alerting, secrets rotation, WAF or network isolation.
+## 7. Remaining gaps, defects and risks
+
+1. **Tenant database isolation:** global email uniqueness remains; composite tenant-aware FKs are not consistently applied. Application-level scoping and selected IDOR tests are not a substitute for an exhaustive security review.
+2. **RBAC matrix:** representative vendor/customer/sales/platform checks pass, but every API has not been tested against every standard/custom role.
+3. **Authentication abuse controls:** login/reset throttling and progressive lockout are absent. Browser access/refresh tokens remain in localStorage. A security review of token lifetime, XSS exposure and refresh rotation is still required.
+4. **KYC/document security:** private storage is configured through `VENDOR_KYC_DIR`; production must mount a persistent private volume. Antivirus scanning, external GST/company verification, document retention and recovery are not implemented.
+5. **Notification security/reliability:** outbox payloads contain sensitive message bodies until delivery/dead-letter. Restrict DB/backup access and consider envelope encryption and retention. Production SMTP, bounces, complaints, HTML templates and attachments remain.
+6. **Customer management:** customer activity/communication history, multi-address support and cross-vendor identity model remain.
+7. **CRM:** lead follow-up tasks are implemented, but full activity timeline, conversion concurrency and reminder worker load tests remain.
+8. **Quotation documents:** detailed commercial terms, warranty terms, payment schedules, PDF branding and PDF email attachments remain.
+9. **Orders/inventory:** broader status, partial fulfillment, multi-line reservation rollback and transfer failure matrix remains.
+10. **Finance:** invoice totals reconcile to accepted snapshots, but statutory GST treatment, HSN/SAC, IRN/e-invoice, credit note, void, partial payment and concurrency need accounting/product acceptance.
+11. **Dashboard scale:** `DashboardService` returns backend-calculated metrics, but obtains several tenant-scoped lists and aggregates them in memory. Large tenants need database-level aggregation, pagination/date filters and load testing.
+12. **Audit:** authenticated request logging exists; failed login/unauthenticated security events, before/after data diffs, retention and audit export/search remain.
+13. **Operations:** production metrics/tracing/alerting, backups/restore, disaster recovery and load/soak tests have not been run.
+14. **Test database parity:** backend integration tests run under the H2 test profile; MySQL 8.4 is separately validated for migrations and application startup. A MySQL Testcontainers backend test profile would improve parity.
+15. **Production deployment:** no production Vercel/Render secrets, persistent disk, SMTP provider, backup policy or production deployment was accessed or verified.
+
+---
 
 ## 8. Prioritized remediation plan
 
 ### P0 — before production use
-- Complete tenant isolation review, global email uniqueness decision and composite tenant-aware database constraints.
-- Complete role × endpoint authorization matrix and IDOR tests for invoices, payments, exports, attachments, customer records and all order/quotation IDs.
-- Configure production SMTP securely; implement attachment delivery, delivery monitoring and dead-letter operations.
-- Have an accountant approve GST/package tax rules and invoice content; review all migrated package tax values.
-- Run penetration testing, auth throttling tests and production security configuration review.
+
+- Complete endpoint-by-endpoint tenant IDOR and role × endpoint authorization matrices.
+- Decide tenant-specific customer identity/email uniqueness and add composite tenant-aware constraints where safe.
+- Add distributed authentication rate limiting and review browser token storage.
+- Obtain accountant approval for GST/tax treatment, invoice numbering and statutory invoice content.
+- Configure production SMTP, sender-domain authentication, monitoring and secret rotation.
+- Configure persistent private KYC storage, access policy, backup and malware scanning.
 
 ### P1 — before Phase 1 product acceptance
-- Add vendor document verification and secure initial-admin invitation.
-- Add in-app notifications and complete notification event coverage.
-- Move dashboard aggregation to tenant-scoped backend APIs with agreed KPI definitions and date filters.
-- Complete customer address/activity history and lead activity/follow-up workflows.
-- Complete quotation revision, order transition/cancellation, inventory rollback and finance lifecycle test matrices.
-- Complete invoice PDF branding, terms, payment schedule and email attachment behavior.
 
-### P2 — scale and operational maturity
-- Add server-side pagination/filtering for catalogue and business lists.
-- Add dashboard query performance tests and observability.
-- Add backup/restore and disaster-recovery rehearsal.
-- Add audit viewer, retention and before/after change records.
+- Complete customer address/activity/communication history.
+- Add CRM activity timeline and test follow-up scheduler under concurrency/outage.
+- Complete quotation PDF terms, warranty, payment schedule and email attachment behavior.
+- Complete order state-transition and inventory rollback test matrices.
+- Optimize dashboard aggregates in SQL and add date filters/KPI sign-off.
+- Add audit failed-login events, before/after changes, retention and search.
+- Run a full browser customer journey from enquiry through quotation, order, inventory, invoice and payment.
 
-## 9. Confirmed implementation vs runtime vs code-only vs assumptions
+### P2 — operational maturity
 
-### Confirmed implementation (code)
-- Vendor verification states and approve/reject service.
-- Custom tenant-scoped role CRUD and permission allow-list.
-- Per-line quotation/order discount and tax snapshots.
-- Configurable package tax rate.
-- Durable email outbox, scheduled worker and bounded retry/dead-letter logic.
-- Vendor/customer dashboard UI.
-- General authenticated API audit logging.
-- Customer-owned order detail DTO and payment-status derivation.
+- Add MySQL Testcontainers for backend integration tests.
+- Add production observability, alerting and load/soak tests.
+- Rehearse backup/restore and disaster recovery.
+- Add report catalogue and tenant-scoped sales/inventory/finance exports.
+- Add notification preferences, pagination and real-time updates if required.
+
+---
+
+## 9. Confirmed implementation vs runtime vs assumptions
+
+### Confirmed implementation (source code)
+
+- Vendor invitation and restricted pending-onboarding routes.
+- Vendor legal profile and private KYC document upload/review.
+- Custom tenant-scoped RBAC and privilege allow-list.
+- Accepted quotation/order per-line financial snapshots and invoice reconciliation.
+- Notification outbox, retry/dead-letter and recipient-scoped inbox.
+- Lead follow-up tasks and scheduled reminders.
+- Role/account-aware vendor/customer dashboard APIs.
+- Authenticated API audit interceptor, persistence, API and vendor audit screen.
+- Inventory reservation release guard on order cancellation.
 
 ### Verified runtime behavior
-- The five CI jobs in run 42465372813 all passed.
-- 38 backend tests passed.
-- Three Playwright tests passed.
-- MySQL 8.4 clean migrations V1–V30 passed.
-- Spring Boot health check passed against MySQL 8.4.
-- Mailpit received the public enquiry email in the Playwright workflow.
 
-### Code-only / not exhaustively verified
-- All possible endpoint-by-role combinations.
-- Every cross-tenant ID, filter, export and download path.
-- All notification event types and all retry/dead-letter timing branches under real SMTP outages.
-- Full invoice/payment/credit-note/void concurrency and statutory correctness.
-- Dashboard performance at realistic tenant scale.
+- Successful CI run 42469334656.
+- 43 backend tests passed.
+- 3 Playwright browser tests passed.
+- MySQL 8.4 clean migrations V1–V35 passed.
+- Spring Boot startup with MySQL 8.4 and Mailpit passed.
+- Frontend TypeScript and production build passed.
+- Mailpit received public enquiry email.
 
-### Assumptions not treated as evidence
-- No production email delivery is inferred from Mailpit success.
-- No production deployment is inferred from a successful local/CI application startup.
-- No legal GST compliance is inferred from printable invoice generation.
-- No full tenant isolation is inferred solely from UI hiding or selected negative tests.
-- No zero-defect guarantee is made from automated test success.
+### Unable to verify
+
+- Production hosting/deployment and secrets.
+- Production SMTP deliverability and bounce/complaint behavior.
+- Persistent volume and backup/restore for KYC documents.
+- Production GST statutory compliance and accountant sign-off.
+- Penetration test, DAST, load/stress test and disaster recovery.
+- Full role × endpoint and cross-tenant resource matrix.
+- Realistic large-tenant dashboard performance.
+
+### Assumptions explicitly not treated as evidence
+
+- Mailpit success does not prove production email deliverability.
+- CI startup does not prove production deployment correctness.
+- Invoice PDF generation does not prove statutory GST compliance.
+- Selected IDOR tests do not prove complete tenant isolation.
+- Passing automated tests do not guarantee zero defects.
+
+---
 
 ## 10. Final independent re-audit conclusion
 
-The remediation branch has materially improved the Phase 1 implementation and resolved the most serious baseline defects around reset-token disclosure, quotation-to-invoice financial reconciliation, package tax configuration, vendor activation control, missing notification retry, missing general audit logging, missing vendor/customer dashboards and customer order details.
+The remediation branch now addresses the highest-risk original findings and has passed the current automated validation pipeline: **43 backend tests, 3 Playwright tests, frontend production build, MySQL 8.4 migrations V1–V35 and Spring Boot startup with Mailpit.**
 
-The available automated evidence is positive: **38 backend tests, three browser E2E tests, clean MySQL 8.4 migrations V1–V30, frontend production build and application startup all pass in the latest CI run.**
+The most important additional workflows—secure vendor invitation and verification, notification inbox, lead follow-ups, backend dashboard summaries and audit review—are now implemented and have representative automated coverage.
 
-However, the application is **not yet independently certifiable as 100% complete or defect-free**. Tenant database constraints, comprehensive RBAC/IDOR coverage, vendor KYC/invitations, in-app notifications, production SMTP, statutory invoice review, dashboard server-side aggregation and several workflow edge cases remain open.
+**Final disposition: Phase 1 Commercial MVP — approximately 84% complete; core remediation tranche validated; production acceptance remains conditional on P0/P1 remediation and product-owner review.**
 
-**Final disposition: Phase 1 Commercial MVP — approximately 80% complete; core remediation tranche validated; production acceptance remains conditional on P0/P1 actions and product-owner review.**
-
-No production deployment or merge was performed.
+This is not a 100% completion or zero-defect certification. No production deployment or merge was performed.
