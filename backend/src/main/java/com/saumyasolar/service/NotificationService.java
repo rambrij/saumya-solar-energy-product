@@ -34,7 +34,7 @@ public class NotificationService {
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
     public NotificationService(JavaMailSender mailSender,NotificationDeliveryRepository deliveries,String from,String publicBaseUrl) {
-        this(mailSender,deliveries,from,publicBaseUrl,null,"","","","");
+        this(mailSender,deliveries,null,from,publicBaseUrl,"","","","");
     }
     @Autowired
     public NotificationService(JavaMailSender mailSender,NotificationDeliveryRepository deliveries,CustomerProfileRepository customers,
