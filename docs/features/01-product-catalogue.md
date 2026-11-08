@@ -19,7 +19,7 @@ Vendor opens catalogue, creates/updates categories and products, then optionally
 SPA `/` → vendor Catalogue tab; customer Available Products selector; public `/products` catalogue page.
 
 ## 7. Backend APIs
-`GET /api/v1` (tenant-scoped catalogue list); `POST /api/v1/catalog/products`; `PATCH /api/v1/products/{id}`; `DELETE /api/v1/products/{id}`; `PATCH /api/v1/categories/{id}`; `DELETE /api/v1/categories/{id}`; public `GET /api/v1/public/{storeSlug}/products` and `/packages`.
+`GET /api/v1/products`; `GET /api/v1/categories`; `POST /api/v1/catalog/products`; `PATCH /api/v1/products/{id}`; `DELETE /api/v1/products/{id}`; `PATCH /api/v1/categories/{id}`; `DELETE /api/v1/categories/{id}`; public `GET /api/v1/public/{storeSlug}/products` and `/packages`.
 
 ## 8. Request and response examples
 `POST /api/v1/catalog/products` illustrative body: `{"name":"540W Mono PERC Solar Panel","sku":"SP-540-MONO","price":18500,"taxPercent":18,"categoryId":"<same-tenant-category-uuid>"}`. Response is the persisted product DTO/entity; use actual returned UUIDs for later workflow records.
