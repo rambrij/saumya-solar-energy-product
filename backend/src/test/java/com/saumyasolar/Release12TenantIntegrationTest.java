@@ -440,6 +440,55 @@ class Release12TenantIntegrationTest {
         assertEquals(2, json.readTree(invoiceLines).size());
     }
 
+    @Test
+    void platformCanManagePlansAndAssignReplacementWithHistory() throws Exception {
+        String platformToken=accessToken("platform@saumya.local","Platform@123");
+        String vendorToken=accessToken("admin@saumya.local","Admin@123");
+        var plansJson=mvc.perform(get("/api/v1/platform/subscription-plans").header("Authorization","Bearer "+platformToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var plansNode=json.readTree(plansJson);
+        assertTrue(plansNode.size()>=3);
+        String starterId=null;
+        for(JsonNode item:plansNode)if("STARTER".equals(item.path("planCode").asText()))starterId=item.path("id").asText();
+        assertNotNull(starterId);
+        mvc.perform(get("/api/v1/platform/subscription-plans").header("Authorization","Bearer "+vendorToken))
+                .andExpect(status().isForbidden());
+
+        String first=mvc.perform(post("/api/v1/platform/tenants/"+vendorTenantId+"/subscriptions")
+                .header("Authorization","Bearer "+platformToken).contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {"planId":"%s","status":"ACTIVE","billingCycle":"MONTHLY","autoRenew":true,"notes":"Integration test initial assignment"}
+                  """.formatted(starterId)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String firstId=json.readTree(first).path("id").asText();
+        String second=mvc.perform(post("/api/v1/platform/tenants/"+vendorTenantId+"/subscriptions")
+                .header("Authorization","Bearer "+platformToken).contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                  {"planId":"%s","status":"TRIAL","billingCycle":"MONTHLY","trialEndsAt":"2027-01-15T00:00:00Z","autoRenew":false,"notes":"Integration test replacement"}
+                  """.formatted(starterId)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertNotEquals(firstId,json.readTree(second).path("id").asText());
+        var history=mvc.perform(get("/api/v1/platform/tenants/"+vendorTenantId+"/subscription-history")
+                .header("Authorization","Bearer "+platformToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(history.contains("ASSIGNED"));
+        assertTrue(history.contains("REPLACED"));
+        mvc.perform(get("/api/v1/subscription").header("Authorization","Bearer "+vendorToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.plan.planCode").value("STARTER"));
+    }
+
+    @Test
+    void platformPlanCreateRejectsDuplicatePlanCode() throws Exception {
+        String platformToken=accessToken("platform@saumya.local","Platform@123");
+        String payload="""
+          {"planCode":"STARTER","name":"Duplicate Starter","billingCycle":"MONTHLY","price":1200,"currency":"INR",
+           "maxUsers":5,"maxBranches":1,"maxWarehouses":1,"maxStorageMb":512,"maxProducts":100,"maxCustomers":100,
+           "trialPeriodDays":14,"displayOrder":1,"entitlementsJson":"{\\"branches\\":false}"}
+          """;
+        mvc.perform(post("/api/v1/platform/subscription-plans").header("Authorization","Bearer "+platformToken)
+                .contentType(MediaType.APPLICATION_JSON).content(payload)).andExpect(status().isConflict());
+    }
+
     private String accessToken(String email, String password) throws Exception {
         var body = """
                 {"email":"%s","password":"%s"}
