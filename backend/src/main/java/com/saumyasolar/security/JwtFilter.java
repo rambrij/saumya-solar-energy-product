@@ -44,9 +44,28 @@ public class JwtFilter extends OncePerRequestFilter {
                     || !java.util.Objects.equals(user.getAccountType(), tokenPrincipal.accountType())
                     || user.getTokenVersion() != tokenPrincipal.tokenVersion())
                 throw new IllegalArgumentException("User security context changed or token was revoked");
-            if (user.getTenantId() != null && tenants.findById(user.getTenantId())
-                    .filter(t -> "ACTIVE".equals(t.getStatus())).isEmpty())
-                throw new IllegalArgumentException("Tenant is suspended");
+            if (user.getTenantId() != null) {
+                var tenant = tenants.findById(user.getTenantId())
+                        .orElseThrow(() -> new IllegalArgumentException("Tenant no longer exists"));
+                if (!"ACTIVE".equals(tenant.getStatus())) {
+                    boolean pendingVerification = "INACTIVE".equals(tenant.getStatus())
+                            && java.util.Set.of("PENDING_VERIFICATION", "REJECTED").contains(tenant.getVerificationStatus())
+                            && "VENDOR".equals(user.getAccountType())
+                            && user.getRoles().stream().anyMatch(role -> "VENDOR_ADMIN".equals(role.getName()));
+                    boolean allowedOnboardingPath = ("/api/v1/vendor/profile".equals(r.getServletPath())
+                                && ("GET".equals(r.getMethod()) || "PATCH".equals(r.getMethod())))
+                            || ("/api/v1/vendor/verification-documents".equals(r.getServletPath())
+                                && ("GET".equals(r.getMethod()) || "POST".equals(r.getMethod())));
+                    if (!pendingVerification)
+                        throw new IllegalArgumentException("Tenant is suspended or awaiting verification");
+                    if (!allowedOnboardingPath) {
+                        s.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                        s.setContentType("application/json");
+                        s.getWriter().write("{\\"status\\":403,\\"error\\":\\"Forbidden\\",\\"detail\\":\\"Only vendor profile and verification document onboarding actions are available before platform approval.\\"}");
+                        return;
+                    }
+                }
+            }
             var roleNames = new java.util.HashSet<String>();
             var permissionCodes = new java.util.HashSet<String>();
             user.getRoles().forEach(role -> {
