@@ -37,9 +37,12 @@ class Release4FinanceServiceAndPlatformTest {
             .andExpect(status().isOk()).andExpect(jsonPath("$.total").isNumber()).andExpect(jsonPath("$.active").isNumber()).andExpect(jsonPath("$.items").isArray());
         String exportSlug="export-"+UUID.randomUUID().toString().substring(0,8);
         String exportEmail="export-"+UUID.randomUUID()+"@example.test";
-        mvc.perform(post("/api/v1/tenants").header("Authorization","Bearer "+platform).contentType(MediaType.APPLICATION_JSON)
+        String createdTenant=mvc.perform(post("/api/v1/tenants").header("Authorization","Bearer "+platform).contentType(MediaType.APPLICATION_JSON)
             .content("{\"name\":\"Export Tenant\",\"slug\":\""+exportSlug+"\",\"adminName\":\"Export Admin\",\"adminEmail\":\""+exportEmail+"\",\"adminPassword\":\"ExportAdmin@2026\"}"))
-            .andExpect(status().isOk());
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String newTenantId=json.readTree(createdTenant).get("id").asText();
+        mvc.perform(post("/api/v1/platform/tenants/"+newTenantId+"/verification").header("Authorization","Bearer "+platform)
+            .contentType(MediaType.APPLICATION_JSON).content("{\"decision\":\"APPROVE\"}")).andExpect(status().isOk());
         String csv=mvc.perform(get("/api/v1/platform/tenants/export").header("Authorization","Bearer "+platform).param("status","ACTIVE"))
             .andExpect(status().isOk()).andExpect(header().string("Content-Disposition",org.hamcrest.Matchers.containsString("tenants-active-"+LocalDate.now()))).andExpect(content().contentTypeCompatibleWith("text/csv"))
             .andReturn().getResponse().getContentAsString();
