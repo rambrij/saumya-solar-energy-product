@@ -502,6 +502,8 @@ Docker Compose now mounts persistent named volumes for service-ticket, site-surv
 **Operational constraint:** local filesystem storage is suitable for a single backend instance with a persistent mounted disk/volume. It is not shared across multiple backend replicas. On any hosting platform, mount durable storage and point all three directory settings to it; ephemeral container storage will lose evidence during redeploy/replacement. Database and all evidence directories must be backed up/restored together.
 
 
-### 19.11 Notification delivery schema alignment — 2026-11-08
+### 19.11 Notification delivery schema validation correction — 2026-11-08
 
-Added forward-only Flyway migration V37 to align the `notification_delivery` table with the delivery entity/retry service. It adds the channel, idempotency key, provider message ID and next-attempt timestamp fields, preserving existing rows as EMAIL by default, plus indexes for idempotency, retry selection and provider-message lookup. This closes the schema gap between the SMS/WhatsApp retry implementation and the earlier V23/V29 table definition. V37 is subject to the current MySQL 8.4 migration CI run; do not deploy until that run passes.
+An attempted V37 migration was rejected and removed after the Spring Boot/MySQL startup test correctly reported duplicate `channel` column. Investigation confirmed V28 already adds `channel`, `idempotency_key`, `provider_message_id`, `next_attempt_at`, and the retry/idempotency indexes. No new migration is required for these fields. The V37 file was deleted; existing V28 remains unchanged. The earlier CI migration-validation job stopped at V27, which did not cover the Phase 2 migrations V28–V36; extending that coverage is still required.
+
+**Current verified status:** the local filesystem storage implementation, frontend build, backend unit/integration test suite and MySQL migration sequence through V27 have passed on the latest relevant run. The application startup job failed only because of the now-removed duplicate V37 migration. A fresh full startup and migration run after V37 removal is required before acceptance.
