@@ -96,24 +96,43 @@ public class FinanceService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,"Order subtotal and discount snapshots do not reconcile");
 
         BigDecimal taxTotal=order.getTaxTotal();
-        BigDecimal allocatedDiscount=BigDecimal.ZERO,allocatedTax=BigDecimal.ZERO;
+        boolean hasPerLineSnapshots=lines.stream().allMatch(line->line.getDiscountAmount()!=null
+                &&line.getTaxableAmount()!=null&&line.getTaxAmount()!=null);
+        BigDecimal allocatedDiscount=BigDecimal.ZERO,allocatedTax=BigDecimal.ZERO,allocatedTaxable=BigDecimal.ZERO;
         List<BigDecimal> taxableAmounts=new ArrayList<>(),taxAmounts=new ArrayList<>();
         for(int index=0;index<lines.size();index++){
             OrderItem line=lines.get(index);
             BigDecimal gross=line.getLineTotal()==null?line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity())):line.getLineTotal();
-            BigDecimal lineDiscount=index==lines.size()-1?discountAmount.subtract(allocatedDiscount)
-                    :gross.multiply(discountAmount).divide(grossSubtotal,2,RoundingMode.HALF_UP);
-            BigDecimal taxable=gross.subtract(lineDiscount);
-            if(taxable.signum()<0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Order line discount exceeds line value");
+            BigDecimal lineDiscount;
+            BigDecimal taxable;
+            BigDecimal tax;
             BigDecimal rate=line.getTaxPercent()==null?BigDecimal.ZERO:line.getTaxPercent();
             if(rate.signum()<0||rate.compareTo(new BigDecimal("100"))>0)
                 throw new ResponseStatusException(HttpStatus.CONFLICT,"Order tax snapshot is invalid");
-            BigDecimal tax=taxable.multiply(rate).divide(new BigDecimal("100"),2,RoundingMode.HALF_UP);
-            if(index==lines.size()-1&&taxTotal!=null)tax=taxTotal.subtract(allocatedTax);
+            if(hasPerLineSnapshots){
+                lineDiscount=line.getDiscountAmount();
+                taxable=line.getTaxableAmount();
+                tax=line.getTaxAmount();
+                if(lineDiscount.signum()<0||taxable.signum()<0||tax.signum()<0
+                        ||gross.subtract(lineDiscount).compareTo(taxable)!=0
+                        ||taxable.multiply(rate).divide(new BigDecimal("100"),2,RoundingMode.HALF_UP).compareTo(tax)!=0)
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,"Order line financial snapshot is invalid");
+            }else{
+                lineDiscount=index==lines.size()-1?discountAmount.subtract(allocatedDiscount)
+                        :gross.multiply(discountAmount).divide(grossSubtotal,2,RoundingMode.HALF_UP);
+                taxable=gross.subtract(lineDiscount);
+                if(taxable.signum()<0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Order line discount exceeds line value");
+                tax=taxable.multiply(rate).divide(new BigDecimal("100"),2,RoundingMode.HALF_UP);
+                if(index==lines.size()-1&&taxTotal!=null)tax=taxTotal.subtract(allocatedTax);
+            }
             if(tax.signum()<0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Order tax snapshot does not reconcile");
             taxableAmounts.add(taxable);taxAmounts.add(tax);
-            allocatedDiscount=allocatedDiscount.add(lineDiscount);allocatedTax=allocatedTax.add(tax);
+            allocatedDiscount=allocatedDiscount.add(lineDiscount);
+            allocatedTaxable=allocatedTaxable.add(taxable);
+            allocatedTax=allocatedTax.add(tax);
         }
+        if(allocatedDiscount.compareTo(discountAmount)!=0||allocatedTaxable.compareTo(subtotal)!=0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Order line discount/taxable snapshots do not reconcile");
         if(taxTotal==null)taxTotal=allocatedTax;
         if(allocatedTax.compareTo(taxTotal)!=0)
             throw new ResponseStatusException(HttpStatus.CONFLICT,"Order line tax does not reconcile with accepted quotation tax");
