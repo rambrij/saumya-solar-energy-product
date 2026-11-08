@@ -163,6 +163,14 @@ public class Controller {
         return new Session(jwt.issue(u), lifecycle.newRefresh(u), new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), Set.of("CUSTOMER"), Set.of()));
     }
     
+    public record VendorInvitationAccept(@NotBlank String token, @NotBlank @jakarta.validation.constraints.Size(min=12,max=100) String password) {}
+
+    @PostMapping("/auth/vendor-invitations/accept")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void acceptVendorInvitation(@Valid @RequestBody VendorInvitationAccept input) {
+        lifecycle.acceptVendorInvitation(input.token(), input.password());
+    }
+
     @PostMapping("/auth/forgot-password")
     Map<String, String> forgot(@Valid @RequestBody PasswordReset x) {
         return lifecycle.forgot(x.email());
@@ -318,7 +326,7 @@ public class Controller {
                 || !principal.permissions().contains("PLATFORM_MANAGE"))
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Platform Super Admin permission is required");
-        return lifecycle.createTenant(x.name(), x.slug(), x.adminName(), x.adminEmail(), x.adminPassword());
+        return lifecycle.createTenant(x.name(), x.slug(), x.adminName(), x.adminEmail(), principal.userId());
     }
 
     @PostMapping("/{type:categories|products|packages|customers|enquiries}")
