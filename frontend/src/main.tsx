@@ -91,7 +91,7 @@ function Customer({s,error}:any){
  const [orders,setOrders]=useState<any[]>([]);
  const [enquiries,setEnquiries]=useState<any[]>([]);
  const [installations,setInstallations]=useState<any[]>([]);
- const [warranties,setWarranties]=useState<any[]>([]);const [invoices,setInvoices]=useState<any[]>([]);const [payments,setPayments]=useState<any[]>([]);const [serviceTickets,setServiceTickets]=useState<any[]>([]);const [serviceAttachments,setServiceAttachments]=useState<any>({});
+ const [warranties,setWarranties]=useState<any[]>([]);const [invoices,setInvoices]=useState<any[]>([]);const [payments,setPayments]=useState<any[]>([]);const [serviceTickets,setServiceTickets]=useState<any[]>([]);const [serviceAttachments,setServiceAttachments]=useState<any>({});const [dashboardSummary,setDashboardSummary]=useState<any>({});
  const [busy,setBusy]=useState(false);
  const [tab,setTab]=useState('overview');const[productSearch,setProductSearch]=useState('');const[categoryFilter,setCategoryFilter]=useState('ALL');const[brandFilter,setBrandFilter]=useState('ALL');const[minPrice,setMinPrice]=useState('');const[maxPrice,setMaxPrice]=useState('');const visibleProducts=catalog.products.filter((p:any)=>{const q=productSearch.trim().toLowerCase();const text=[p.name,p.description,p.sku,p.manufacturer,p.model,p.technology].filter(Boolean).join(' ').toLowerCase();const price=Number(p.price||0);return(!q||text.includes(q))&&(categoryFilter==='ALL'||p.categoryId===categoryFilter)&&(brandFilter==='ALL'||p.manufacturer===brandFilter)&&(minPrice===''||price>=Number(minPrice))&&(maxPrice===''||price<=Number(maxPrice))});
  const load=async()=>{
