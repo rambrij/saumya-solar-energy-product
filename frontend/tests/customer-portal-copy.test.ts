@@ -1,0 +1,23 @@
+import {readFileSync} from 'node:fs';
+import {describe,expect,it} from 'vitest';
+import {fileURLToPath} from 'node:url';
+import {dirname,resolve} from 'node:path';
+const here=dirname(fileURLToPath(import.meta.url));
+const customerPortal=readFileSync(resolve(here,'../src/main.tsx'),'utf8');
+const publicHome=readFileSync(resolve(here,'../src/PublicHome.tsx'),'utf8');
+describe('Customer catalogue and quotation copy regressions',()=>{
+ it('keeps product categories in the available-products selector without a duplicate section',()=>{
+  expect(customerPortal).toContain('Available Products');
+  expect(customerPortal).not.toContain('<h2>Product categories</h2>');
+ });
+ it('uses Our Products in customer and public navigation',()=>{
+  expect(customerPortal).toContain('Our Products');
+  expect(publicHome).toContain('Our Products');
+  expect(customerPortal).not.toContain('Solar Catalogue');
+  expect(publicHome).not.toContain('Solar Catalogue');
+ });
+ it('uses the single Solar Quotation workflow label',()=>{
+  expect(customerPortal).toContain('Request a Solar Quotation');
+  expect(customerPortal).not.toContain('Request a Solar Quote');
+ });
+});
