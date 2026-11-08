@@ -747,7 +747,7 @@ public class AppService {
             CustomerProfile recipient = requireCustomer(q.getCustomerId(), p.tenantId());
             notifications.sendBusinessNotification(recipient.getUserId(), p.tenantId(), "QUOTATION_SENT",
                     recipient.getEmail(), "Your solar quotation is ready",
-                    "Hello " + recipient.getName() + ",\\n\\nYour quotation " + q.getQuotationNumber()
+                    "Hello " + recipient.getName() + ",\n\nYour quotation " + q.getQuotationNumber()
                             + " is ready. Total: INR " + q.getGrandTotal()
                             + ". Sign in to your customer portal to review and accept or reject it.");
         }
