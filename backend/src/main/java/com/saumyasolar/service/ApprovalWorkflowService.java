@@ -6,8 +6,8 @@ import java.time.Instant;import java.util.*;import java.math.BigDecimal;
 @Service
 public class ApprovalWorkflowService {
  private final ApprovalWorkflowRepository workflows;private final ApprovalInstanceRepository instances;
- private final ApprovalDecisionRepository decisions;private final AuditEventRepository audits;private final ObjectMapper mapper;
- public ApprovalWorkflowService(ApprovalWorkflowRepository w,ApprovalInstanceRepository i,ApprovalDecisionRepository d,AuditEventRepository a,ObjectMapper m){workflows=w;instances=i;decisions=d;audits=a;mapper=m;}
+ private final ApprovalDecisionRepository decisions;private final AuditEventRepository audits;private final ObjectMapper mapper;private final EnterpriseSaasService enterpriseSaas;
+ public ApprovalWorkflowService(ApprovalWorkflowRepository w,ApprovalInstanceRepository i,ApprovalDecisionRepository d,AuditEventRepository a,ObjectMapper m,EnterpriseSaasService e){workflows=w;instances=i;decisions=d;audits=a;mapper=m;enterpriseSaas=e;}
  private UUID vendor(Principal p){if(!"VENDOR".equals(p.accountType())||p.tenantId()==null||p.permissions()==null||!p.permissions().contains("APPROVAL_WORKFLOW_MANAGE"))throw new ResponseStatusException(HttpStatus.FORBIDDEN);return p.tenantId();}
  private String json(Object v){try{return mapper.writeValueAsString(v);}catch(Exception e){return "{}";}}
  private void audit(Principal p,String action,String type,UUID id,Object value){AuditEvent a=new AuditEvent();a.setId(UUID.randomUUID());a.setTenantId(p.tenantId());a.setActorId(p.userId());a.setActorType(p.accountType());a.setAction(action);a.setEntityType(type);a.setEntityId(id.toString());a.setOutcome("SUCCESS");a.setAfterJson(json(value));a.setCreatedAt(Instant.now());audits.save(a);}
@@ -29,7 +29,7 @@ public class ApprovalWorkflowService {
   }catch(Exception e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Workflow steps must be a JSON array of 1 to 20 steps; each step must define exactly one approverRole or permissionCode and valid amount bounds");}
  }
  @Transactional public ApprovalWorkflow create(WorkflowInput x,Principal p){
-  UUID t=vendor(p);String code=x.code().trim().toUpperCase(Locale.ROOT);String type=x.entityType().trim().toUpperCase(Locale.ROOT);
+  UUID t=vendor(p);enterpriseSaas.requireEntitlement(t,"APPROVAL_WORKFLOWS");String code=x.code().trim().toUpperCase(Locale.ROOT);String type=x.entityType().trim().toUpperCase(Locale.ROOT);
   if(!Set.of("QUOTATION","ORDER","INVOICE","PURCHASE_ORDER","SERVICE_REQUEST").contains(type))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Unsupported approval entity type");
   if(workflows.existsByTenantIdAndCodeIgnoreCase(t,code))throw new ResponseStatusException(HttpStatus.CONFLICT,"Workflow code already exists");
   parseSteps(x.stepsJson());ApprovalWorkflow w=new ApprovalWorkflow();w.setId(UUID.randomUUID());w.setTenantId(t);w.setCode(code);w.setName(x.name().trim());w.setEntityType(type);w.setStepsJson(x.stepsJson());w.setActive(true);w.setCreatedAt(Instant.now());w.setUpdatedAt(Instant.now());
@@ -38,6 +38,7 @@ public class ApprovalWorkflowService {
  public List<ApprovalWorkflow> list(Principal p){return workflows.findByTenantIdOrderByCreatedAtDesc(vendor(p));}
  @Transactional public Optional<ApprovalInstance> startIfConfigured(String entityType,UUID entityId,Principal p){
   if(!"VENDOR".equals(p.accountType())||p.tenantId()==null)throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+  enterpriseSaas.requireEntitlement(p.tenantId(),"APPROVAL_WORKFLOWS");
   Optional<ApprovalInstance> pending=instances.findFirstByTenantIdAndEntityTypeAndEntityIdAndStatusOrderByRequestedAtDesc(p.tenantId(),entityType,entityId.toString(),"PENDING");
   if(pending.isPresent())return pending;
   Optional<ApprovalWorkflow> found=workflows.findFirstByTenantIdAndEntityTypeAndActiveTrueOrderByUpdatedAtDesc(p.tenantId(),entityType);
