@@ -21,6 +21,7 @@ public class SiteSurvey {
     @Id
     UUID id;
     UUID tenantId;
+    UUID branchId;
     UUID leadId;
     Instant scheduledAt;
     UUID assignedUserId;
