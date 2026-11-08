@@ -14,6 +14,7 @@ import com.saumyasolar.repo.ProductCategoryRepository;
 import com.saumyasolar.repo.ProductRepository;
 import com.saumyasolar.repo.CustomerOrderRepository;
 import com.saumyasolar.repo.AuditLogRepository;
+import com.saumyasolar.repo.NotificationDeliveryRepository;
 import com.saumyasolar.repo.OrderItemRepository;
 import com.saumyasolar.repo.TenantRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,6 +50,7 @@ class Release12TenantIntegrationTest {
     @Autowired CustomerOrderRepository customerOrders;
     @Autowired OrderItemRepository orderItems;
     @Autowired AuditLogRepository auditLogs;
+    @Autowired NotificationDeliveryRepository notificationDeliveries;
 
     UUID vendorTenantId;
 
@@ -65,14 +67,34 @@ class Release12TenantIntegrationTest {
         var adminEmail = "admin-" + suffix + "@example.test";
         var adminPassword = "VendorAdmin-Pass-2026";
         var tenantBody = """
-                {"name":"New Vendor","slug":"vendor-%s","adminName":"New Vendor Admin","adminEmail":"%s","adminPassword":"%s"}
-                """.formatted(suffix, adminEmail, adminPassword);
+                {"name":"New Vendor","slug":"vendor-%s","adminName":"New Vendor Admin","adminEmail":"%s"}
+                """.formatted(suffix, adminEmail);
         var tenantResponse = mvc.perform(post("/api/v1/tenants")
                         .header("Authorization", "Bearer " + platformToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(tenantBody))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var tenantId = json.readTree(tenantResponse).get("id").asText();
+        var invitationDelivery = notificationDeliveries.findTop100ByTenantIdOrderByCreatedAtDesc(UUID.fromString(tenantId)).stream()
+                .filter(delivery -> "VENDOR_ADMIN_INVITATION".equals(delivery.getEventType()))
+                .filter(delivery -> delivery.getBody() != null)
+                .findFirst().orElseThrow();
+        var invitationMatcher = java.util.regex.Pattern.compile("vendorInviteToken=([A-Za-z0-9_-]+)")
+                .matcher(invitationDelivery.getBody());
+        assertTrue(invitationMatcher.find(), "Invitation email must contain a one-time setup token");
+        var invitationToken = invitationMatcher.group(1);
+        mvc.perform(post("/api/v1/auth/vendor-invitations/accept")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"token":"%s","password":"%s"}
+                                """.formatted(invitationToken, adminPassword)))
+                .andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/auth/vendor-invitations/accept")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"token":"%s","password":"%s"}
+                                """.formatted(invitationToken, adminPassword)))
+                .andExpect(status().isBadRequest());
         mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"%s","password":"%s"}
