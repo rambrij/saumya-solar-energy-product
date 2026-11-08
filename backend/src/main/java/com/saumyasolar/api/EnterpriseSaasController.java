@@ -16,12 +16,14 @@ public class EnterpriseSaasController {
  public record BrandingRequest(@NotBlank @Size(max=150) String displayName,@Size(max=1000) String logoUrl,@NotBlank @Pattern(regexp="#[0-9A-Fa-f]{6}") String primaryColor,@NotBlank @Pattern(regexp="#[0-9A-Fa-f]{6}") String secondaryColor,@Email @Size(max=254) String contactEmail,@Size(max=40) String contactPhone,@Email @Size(max=254) String supportEmail,@Size(max=40) String supportPhone){}
  public record DomainRequest(@NotBlank @Size(max=253) String domain){}
  public record IntegrationRequest(@NotBlank @Size(max=60) String providerCode,@NotBlank String integrationType,@NotBlank @Size(max=150) String displayName,@Size(max=500) String secretReference,@NotBlank String configJson){}
+ public record IntegrationStatusRequest(@NotBlank String status){}
  public record IntegrationJobRequest(@NotBlank String entityType,@NotBlank @Size(max=100) String entityId,@NotBlank String operation,@NotBlank @Size(max=160) String idempotencyKey,@NotBlank String payloadJson){}
  public record WorkflowRequest(@NotBlank @Size(max=60) String code,@NotBlank @Size(max=150) String name,@NotBlank String entityType,@NotBlank String stepsJson){}
  public record ApprovalDecisionRequest(@NotBlank String decision,@Size(max=1000) String comments){}
  public record SubscriptionRequest(@NotNull UUID planId,@NotBlank String status,Instant startsAt,Instant endsAt,Instant renewsAt,@Size(max=160) String externalReference){}
  @GetMapping("/integrations") public List<IntegrationConnection> integrations(Authentication a){return integrations.list(p(a));}
  @PostMapping("/integrations") public IntegrationConnection createIntegration(@Valid @RequestBody IntegrationRequest x,Authentication a){return integrations.create(new com.saumyasolar.service.IntegrationManagementService.ConnectionInput(x.providerCode(),x.integrationType(),x.displayName(),x.secretReference(),x.configJson()),p(a));}
+ @PatchMapping("/integrations/{id}/status") public IntegrationConnection setIntegrationStatus(@PathVariable UUID id,@Valid @RequestBody IntegrationStatusRequest x,Authentication a){return integrations.setStatus(id,x.status().toUpperCase(Locale.ROOT),p(a));}
  @GetMapping("/integrations/{id}/sync-jobs") public List<IntegrationSyncJob> integrationJobs(@PathVariable UUID id,Authentication a){return integrations.jobs(id,p(a));}
  @PostMapping("/integrations/{id}/sync-jobs") public IntegrationSyncJob enqueueIntegrationJob(@PathVariable UUID id,@Valid @RequestBody IntegrationJobRequest x,Authentication a){return integrations.enqueue(id,new com.saumyasolar.service.IntegrationManagementService.JobInput(x.entityType(),x.entityId(),x.operation(),x.idempotencyKey(),x.payloadJson()),p(a));}
  @PostMapping("/integrations/sync-jobs/{jobId}/retry") public IntegrationSyncJob retryIntegrationJob(@PathVariable UUID jobId,Authentication a){return integrations.retry(jobId,p(a));}
