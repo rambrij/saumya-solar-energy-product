@@ -36,7 +36,7 @@ class ApprovalWorkflowServiceTest {
     @BeforeEach
     void setUp() {
         service = new ApprovalWorkflowService(workflows, instances, decisions, audits, new ObjectMapper(), enterpriseSaas);
-        doNothing().when(enterpriseSaas).requireEntitlement(any(UUID.class), eq("APPROVAL_WORKFLOWS"));
+        lenient().doNothing().when(enterpriseSaas).requireEntitlement(any(UUID.class), eq("APPROVAL_WORKFLOWS"));
     }
 
     @Test
