@@ -150,6 +150,10 @@ jobs:
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V26__quotation_and_order_line_financial_snapshots.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='quotation_item' AND column_name IN ('discount_amount','taxable_amount','tax_amount')")" = "3"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='order_item' AND column_name IN ('discount_amount','taxable_amount','tax_amount')")" = "3"
+      - name: Apply V27 notification outbox retry migration
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V27__notification_outbox_retry.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='notification_delivery' AND column_name IN ('body','next_attempt_at')")" = "2"
 
 
   mysql-app-startup:
