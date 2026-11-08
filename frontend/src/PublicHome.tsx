@@ -10,7 +10,7 @@ function capacity(product:PublicProduct){try{const a=JSON.parse(product.attribut
 export default function PublicHome({onLogin,onRegister}: {onLogin:()=>void;onRegister:()=>void}) {
  const configuredStoreSlug=import.meta.env.VITE_PUBLIC_STORE_SLUG||'';
  const [storeSlug,setStoreSlug]=useState(configuredStoreSlug||'saumya-solar');
- const [storeResolved,setStoreResolved]=useState(Boolean(configuredStoreSlug));
+ const [storeResolved,setStoreResolved]=useState(false);
  const path=window.location.pathname.replace(/\/+$/,'')||'/';
  const productDetailId=path.startsWith('/products/')?decodeURIComponent(path.slice('/products/'.length)):null;
  const page=productDetailId?'product-detail':path==='/products'?'products':path==='/packages'?'packages':path==='/about'?'about':path==='/mounting-structures'?'mounting-structures':path==='/solar-technology'?'solar-technology':path==='/contact'?'contact':'home';
@@ -32,7 +32,6 @@ export default function PublicHome({onLogin,onRegister}: {onLogin:()=>void;onReg
  const [enquiryMessage,setEnquiryMessage]=useState('');
  const submitEnquiry=async(e:React.FormEvent<HTMLFormElement>)=>{e.preventDefault();const form=e.currentTarget;const values:any=Object.fromEntries(new FormData(form));setEnquiryBusy(true);setEnquiryMessage('');try{const response=await fetch(API_BASE+'/api/v1/public/'+encodeURIComponent(storeSlug)+'/enquiries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...values,monthlyBill:values.monthlyBill?Number(values.monthlyBill):null,requiredCapacityKw:values.requiredCapacityKw?Number(values.requiredCapacityKw):null})});const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.detail||body.message||'Unable to submit your enquiry');form.reset();setEnquiryMessage('Thank you. Your enquiry has been sent to the selected solar store.');}catch(e:any){setEnquiryMessage(e.message||'Unable to submit your enquiry.')}finally{setEnquiryBusy(false)}};
  useEffect(()=>{
-  if(configuredStoreSlug){setStoreResolved(true);return}
   let alive=true;
   fetch(API_BASE+'/api/v1/public/store-context').then(async r=>r.ok?r.json():null).then(context=>{
    if(!alive)return;
