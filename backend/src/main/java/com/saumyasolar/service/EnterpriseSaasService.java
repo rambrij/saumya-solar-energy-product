@@ -51,7 +51,7 @@ public class EnterpriseSaasService {
  }
  @Transactional public void assignUser(UUID branchId,UUID userId,Principal p){
   UUID t=vendor(p,"BRANCH_MANAGE");branches.findByIdAndTenantId(branchId,t).filter(Branch::isActive).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Active branch not found"));
-  users.findById(userId).filter(u->t.equals(u.getTenantId())&&u.isEnabled()).orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"Enabled same-tenant user not found"));
+  users.findById(userId).filter(u->t.equals(u.getTenantId())&&u.isEnabled()&&"VENDOR".equals(u.getAccountType())).orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"Enabled same-tenant vendor user not found"));
   if(!memberships.existsByTenantIdAndBranchIdAndUserId(t,branchId,userId)){BranchMembership m=new BranchMembership();m.setId(UUID.randomUUID());m.setTenantId(t);m.setBranchId(branchId);m.setUserId(userId);m.setCreatedAt(Instant.now());memberships.save(m);audit(p,t,"BRANCH_USER_ASSIGNED","BRANCH_USER",m.getId(),Map.of("branchId",branchId,"userId",userId));}
  }
  @Transactional public SubscriptionPlan createPlan(PlanInput x,Principal p){
@@ -99,13 +99,12 @@ public class EnterpriseSaasService {
   if(p.roles()!=null&&p.roles().contains("VENDOR_ADMIN"))return;
   if(warehouse.getBranchId()==null)return; // Unassigned legacy warehouses remain available to existing vendor operations.
   List<BranchMembership> assigned=memberships.findByTenantIdAndUserId(p.tenantId(),p.userId());
-  if(!assigned.isEmpty()&&assigned.stream().noneMatch(m->warehouse.getBranchId().equals(m.getBranchId())))
+  if(assigned.stream().noneMatch(m->warehouse.getBranchId().equals(m.getBranchId())))
    throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Warehouse not found");
  }
  public List<Warehouse> filterWarehouses(List<Warehouse> rows,Principal p){
   if(p.roles()!=null&&p.roles().contains("VENDOR_ADMIN"))return rows;
   List<BranchMembership> assigned=memberships.findByTenantIdAndUserId(p.tenantId(),p.userId());
-  if(assigned.isEmpty())return rows;
   Set<UUID> branchIds=new HashSet<>();assigned.forEach(m->branchIds.add(m.getBranchId()));
   return rows.stream().filter(w->w.getBranchId()==null||branchIds.contains(w.getBranchId())).toList();
  }
