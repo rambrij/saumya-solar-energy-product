@@ -71,6 +71,16 @@ public class EnterpriseSaasService {
   TenantSubscription s=subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(p.tenantId(),List.of("TRIAL","ACTIVE","PAST_DUE")).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"No subscription found"));
   SubscriptionPlan plan=plans.findById(s.getPlanId()).orElseThrow();return Map.of("subscription",s,"plan",plan,"effective",effective(s));
  }
+ public void enforceUserLimit(UUID t){
+  List<TenantSubscription> history=subscriptions.findByTenantIdOrderByCreatedAtDesc(t);
+  if(history.isEmpty())return; // Existing Phase 1/2 vendors remain grandfathered until subscription assignment.
+  TenantSubscription active=subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(t,List.of("TRIAL","ACTIVE"))
+   .orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"An active subscription is required to add vendor users"));
+  if(!effective(active))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Subscription is expired");
+  SubscriptionPlan plan=plans.findById(active.getPlanId()).orElseThrow();
+  long count=users.findByTenantId(t).stream().filter(u->"VENDOR".equals(u.getAccountType())&&u.isEnabled()).count();
+  if(count>=plan.getMaxUsers())throw new ResponseStatusException(HttpStatus.FORBIDDEN,"User limit reached for current plan");
+ }
  public void enforceWarehouseLimit(UUID t){
   List<TenantSubscription> history=subscriptions.findByTenantIdOrderByCreatedAtDesc(t);
   if(history.isEmpty())return; // Preserve existing Phase 1/2 tenants until a platform subscription is assigned.
