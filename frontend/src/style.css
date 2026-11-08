@@ -303,3 +303,22 @@ header .brand-home img{width:220px;max-width:48vw}
 @media(max-width:900px){.public-site-header{min-height:74px}.public-menu-toggle{display:flex;margin-left:auto}.public-header-cta{display:none}.public-site-nav{display:none;position:absolute;top:100%;right:0;left:0;align-items:stretch;flex-direction:column;gap:0;margin:0;padding:10px 20px 18px;background:#fff;border-bottom:1px solid #e2ece5;box-shadow:0 12px 20px rgba(20,61,39,.09)}.public-site-nav.is-open{display:flex}.public-site-nav a{padding:12px 5px;border-bottom:1px solid #edf2ee;font-size:.95rem}.public-site-nav a:after{display:none}.public-site-nav .public-login-link{margin-top:10px}.public-products-layout{grid-template-columns:220px minmax(0,1fr);gap:18px}.public-product-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.public-brand img{width:180px;max-width:60vw}.public-products-layout{grid-template-columns:1fr;padding-top:18px}.public-filter-panel{position:static;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.filter-title{grid-column:1/-1}.public-filter-panel label:first-of-type{grid-column:1/-1}.price-filter{grid-column:1/-1}.public-product-grid{grid-template-columns:1fr}.public-product-image{height:230px}.public-product-detail{grid-template-columns:1fr}.public-product-detail>img{max-height:360px}.home-cta{align-items:flex-start;flex-direction:column}.public-site-footer{align-items:flex-start;flex-direction:column}.public-site-footer>div{gap:12px}.public-site-footer>div a{font-size:.8rem}.public-about,.public-detail-section{grid-template-columns:1fr}.public-page-intro{padding-top:42px}}
 @media(max-width:420px){.public-filter-panel{grid-template-columns:1fr}.public-filter-panel label:first-of-type,.filter-title,.price-filter{grid-column:auto}.product-card-bottom{align-items:flex-start;flex-direction:column}.public-product-detail dl{grid-template-columns:1fr}}
+
+
+/* Phase 3 PWA install and connectivity controls */
+.public-install-prompt {
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ flex-wrap:wrap;
+ gap:12px;
+ padding:12px 18px;
+ background:var(--surface-soft, #f3f7f5);
+ color:var(--text, #1b2b24);
+ border-bottom:1px solid var(--border, #dce6df);
+}
+.public-install-prompt button { min-height:36px; }
+@media (max-width:600px) {
+ .public-install-prompt { justify-content:space-between; font-size:13px; }
+ .public-install-prompt button { flex:0 0 auto; }
+}
