@@ -11,9 +11,9 @@ import java.util.*;
 @Service
 public class PaymentGatewayWebhookService {
  private final PaymentGatewayRegistry adapters;private final PaymentRepository payments;
- private final PaymentWebhookEventRepository events;private final InvoiceRepository invoices;
- public PaymentGatewayWebhookService(PaymentGatewayRegistry adapters,PaymentRepository payments,PaymentWebhookEventRepository events,InvoiceRepository invoices){
-  this.adapters=adapters;this.payments=payments;this.events=events;this.invoices=invoices;
+ private final PaymentWebhookEventRepository events;private final InvoiceRepository invoices;private final AuditEventRepository audits;
+ public PaymentGatewayWebhookService(PaymentGatewayRegistry adapters,PaymentRepository payments,PaymentWebhookEventRepository events,InvoiceRepository invoices,AuditEventRepository audits){
+  this.adapters=adapters;this.payments=payments;this.events=events;this.invoices=invoices;this.audits=audits;
  }
  @Transactional public Map<String,Object> accept(String provider,String raw,String signature){
   PaymentGatewayAdapter adapter=adapters.require(provider);
@@ -41,6 +41,12 @@ public class PaymentGatewayWebhookService {
    invoice.setStatus(total.compareTo(invoice.getGrandTotal())>=0?"PAID":total.signum()>0?"PARTIALLY_PAID":"ISSUED");invoices.save(invoice);
   }
   record.setProcessingStatus("PROCESSED");record.setProcessedAt(Instant.now());events.save(record);
+  AuditEvent audit=new AuditEvent();audit.setId(UUID.randomUUID());audit.setTenantId(payment.getTenantId());
+  audit.setActorType("SYSTEM");audit.setAction("PAYMENT_GATEWAY_WEBHOOK_"+event.status());audit.setEntityType("PAYMENT");
+  audit.setEntityId(payment.getId().toString());audit.setOutcome("SUCCESS");
+  audit.setAfterJson("{\\"providerCode\\":\\"" + code + "\\",\\"eventIdHash\\":\\"" + hash(event.eventId())
+          + "\\",\\"paymentStatus\\":\\"" + payment.getStatus() + "\\"}");
+  audit.setCreatedAt(Instant.now());audits.save(audit);
   return Map.of("accepted",true,"matched",true,"duplicate",false);
  }
  private String hash(String raw){try{return HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8)));}catch(Exception ex){throw new IllegalStateException(ex);}}
