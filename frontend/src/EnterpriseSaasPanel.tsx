@@ -85,6 +85,8 @@ export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'ven
  const assignSubscription=async(e:React.FormEvent<HTMLFormElement>)=>{
   e.preventDefault();const form=e.currentTarget;const x:any=Object.fromEntries(new FormData(form));
   const current=tenantSubscriptions.find(v=>v.id!==editingAssignmentId&&['ACTIVE','TRIAL','PAST_DUE'].includes(v.status));
+  const edited=tenantSubscriptions.find(v=>v.id===editingAssignmentId);
+  if(editingAssignmentId&&edited&&edited.planId!==x.planId&&['ACTIVE','TRIAL','PAST_DUE'].includes(edited.status)&&!window.confirm('Replace the active plan on this assignment? The previous plan and status will be retained in assignment history.'))return;
   if(!editingAssignmentId&&current&&!window.confirm('This tenant has an existing '+current.status+' subscription. Confirm replacement? The previous assignment will be retained in history.'))return;
   setBusy(true);try{const payload={planId:x.planId,status:x.status,startsAt:x.startsAt?new Date(x.startsAt).toISOString():new Date().toISOString(),endsAt:x.endsAt?new Date(x.endsAt).toISOString():null,renewsAt:x.renewsAt?new Date(x.renewsAt).toISOString():null,trialEndsAt:x.trialEndsAt?new Date(x.trialEndsAt).toISOString():null,billingCycle:x.billingCycle,autoRenew:x.autoRenew==='on',notes:x.notes||null,externalReference:x.externalReference||null};
    await request('/platform/tenants/'+selectedTenantId+'/subscriptions'+(editingAssignmentId?'/'+editingAssignmentId:''),s,editingAssignmentId?'PUT':'POST',payload);
