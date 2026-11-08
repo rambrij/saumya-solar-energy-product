@@ -48,7 +48,9 @@ class Release3OperationsIntegrationTest {
  private Tenant otherTenant(){Tenant t=new Tenant();t.setId(UUID.randomUUID());t.setName("Other vendor");t.setSlug("other-"+UUID.randomUUID());t.setStatus("ACTIVE");return tenants.save(t);}
  @Test void warehouseReceiptCreatesBalanceAndImmutableLedger() throws Exception {
   String auth=token();String warehouseBody="{\"code\":\"WH-"+UUID.randomUUID()+"\",\"name\":\"Test warehouse\",\"address\":\"Mumbai\"}";
-  String warehouseJson=mvc.perform(post("/api/v1/warehouses").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content(warehouseBody)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+  var warehouseResult=mvc.perform(post("/api/v1/warehouses").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content(warehouseBody)).andReturn();
+  assertEquals(200,warehouseResult.getResponse().getStatus(),warehouseResult.getResponse().getContentAsString());
+  String warehouseJson=warehouseResult.getResponse().getContentAsString();
   UUID warehouseId=UUID.fromString(json.readTree(warehouseJson).get("id").asText());
   Product product=products.findByTenantIdOrderByIdDesc(tenantId).stream().filter(p->"DEMO-PV-550".equals(p.getSku())).findFirst().orElseThrow();
   mvc.perform(post("/api/v1/inventory/receipts").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content("{\"warehouseId\":\""+warehouseId+"\",\"productId\":\""+product.getId()+"\",\"quantity\":25,\"reason\":\"PO-TEST-001\"}")).andExpect(status().isOk());
