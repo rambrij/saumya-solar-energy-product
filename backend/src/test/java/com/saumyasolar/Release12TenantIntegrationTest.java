@@ -603,6 +603,19 @@ class Release12TenantIntegrationTest {
     }
 
     @Test
+    void auditLogViewerIsRestrictedToVendorAndPlatformAdministrators() throws Exception {
+        var vendorToken = accessToken("admin@saumya.local", "Admin@123");
+        var platformToken = accessToken("platform@saumya.local", "Platform@123");
+        var customerToken = accessToken("customer@saumya.local", "Customer@123");
+        mvc.perform(get("/api/v1/audit-logs").header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/audit-logs").header("Authorization", "Bearer " + platformToken))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/audit-logs").header("Authorization", "Bearer " + customerToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void authenticatedApiRequestsAreWrittenToTenantAwareAuditLog() throws Exception {
         String token=accessToken("admin@saumya.local","Admin@123");
         var user=users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
