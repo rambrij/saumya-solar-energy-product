@@ -223,6 +223,12 @@ public class Controller {
         return tenantAdmin.update(id, input, p(a));
     }
 
+    @PostMapping("/platform/tenants/{id}/verification")
+    com.saumyasolar.api.TenantAdminModels.TenantRow verifyPlatformTenant(@PathVariable UUID id,
+            @RequestBody Map<String,String> input, Authentication a) {
+        return tenantAdmin.verify(id, input.get("decision"), input.get("reason"), p(a));
+    }
+
     @GetMapping(value="/platform/tenants/export", produces="text/csv")
     ResponseEntity<byte[]> exportTenantsCsv(@RequestParam(defaultValue="") String search,
             @RequestParam(defaultValue="ALL") String status, Authentication a) {
