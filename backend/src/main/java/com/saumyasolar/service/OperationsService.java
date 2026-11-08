@@ -18,6 +18,7 @@ private void movement(UUID t,UUID w,UUID pr,UUID o,UUID ins,String type,BigDecim
 UUID t=tenant(p);permission(p,"INVENTORY_MANAGE");
 InventoryTransaction original=transactions.findByIdAndTenantId(transactionId,t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Inventory transaction not found"));
 if("COMPENSATION".equals(original.getType()))throw new ResponseStatusException(HttpStatus.CONFLICT,"A compensation entry cannot itself be reversed");
+if(!Set.of("RECEIPT","RETURN","ISSUE","DAMAGE","ADJUSTMENT_INCREASE","ADJUSTMENT_DECREASE").contains(original.getType()))throw new ResponseStatusException(HttpStatus.CONFLICT,"This linked transaction requires its dedicated reversal workflow");
 if(transactions.existsByTenantIdAndReversalOfTransactionId(t,transactionId))throw new ResponseStatusException(HttpStatus.CONFLICT,"Inventory transaction has already been compensated");
 if(original.getWarehouseId()==null||original.getProductId()==null)throw new ResponseStatusException(HttpStatus.CONFLICT,"Transaction does not reference a stock balance and cannot be compensated automatically");
 warehouses.findForUpdate(original.getWarehouseId(),t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Warehouse not found"));
