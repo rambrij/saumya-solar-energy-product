@@ -56,6 +56,7 @@ public class Controller {
     final CatalogAdminService catalog;
     final PackageImageStorageService packageImages;
     final TenantAdminService tenantAdmin;
+    final boolean platformMfaEnabled;
     
     Controller(
             AppService s,
@@ -69,7 +70,8 @@ public class Controller {
             OperationsService operations,
             CatalogAdminService catalog,
             PackageImageStorageService packageImages,
-            TenantAdminService tenantAdmin
+            TenantAdminService tenantAdmin,
+            @org.springframework.beans.factory.annotation.Value("${app.auth.platform-mfa-enabled:true}") boolean platformMfaEnabled
     ) {
         this.s = s;
         users = u;
@@ -83,6 +85,7 @@ public class Controller {
         this.catalog = catalog;
         this.packageImages = packageImages;
         this.tenantAdmin = tenantAdmin;
+        this.platformMfaEnabled = platformMfaEnabled;
     }
     
     Principal p(Authentication a) {
@@ -92,7 +95,7 @@ public class Controller {
     @PostMapping("/auth/login")
     Object login(@Valid @RequestBody Login x) {
         var u = users.findByEmailIgnoreCase(x.email()).filter(v -> v.isEnabled() && lifecycle.tenantIsActive(v) && enc.matches(x.password(), v.getPasswordHash())).orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED));
-        if ("PLATFORM".equals(u.getAccountType())) {
+        if (platformMfaEnabled && "PLATFORM".equals(u.getAccountType())) {
             return new MfaChallengeRequired(true, lifecycle.createMfaChallenge(u));
         }
         var rs = new HashSet<String>();
