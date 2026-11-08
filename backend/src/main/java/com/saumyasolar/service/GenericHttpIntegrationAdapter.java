@@ -95,6 +95,8 @@ public class GenericHttpIntegrationAdapter implements IntegrationAdapter {
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             throw new IllegalStateException("Integration endpoint returned HTTP " + response.statusCode());
         }
+        response.headers().firstValue("Location").ifPresent(location ->
+                job.setExternalReference(location.length() > 160 ? location.substring(0, 160) : location));
     }
 
     private String required(JsonNode config, String field) {
