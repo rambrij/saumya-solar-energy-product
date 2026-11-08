@@ -24,6 +24,8 @@ app:
   cors-origins: "${CORS_ORIGINS}"
   payment:
     webhook-secret: "${PAYMENT_WEBHOOK_SECRET:}"
+  vendor:
+    kyc-location: ${VENDOR_KYC_DIR:./data/private-vendor-verification}
   service:
     sla-check-interval-ms: ${SERVICE_SLA_CHECK_INTERVAL_MS:60000}
     attachment-location: ${SERVICE_ATTACHMENT_DIR:./data/private-service-attachments}
