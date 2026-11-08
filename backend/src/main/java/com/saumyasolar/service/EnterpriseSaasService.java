@@ -143,7 +143,7 @@ public class EnterpriseSaasService {
    try{
     javax.naming.directory.Attributes attrs=context.getAttributes(d.getDomain(),new String[]{"TXT"});
     javax.naming.directory.Attribute txt=attrs.get("TXT");
-    if(txt!=null){javax.naming.NamingEnumeration<?> values=txt.getAll();while(values.hasMore()){String record=String.valueOf(values.next()).replace("\\\"","");if(record.contains("saumya-solar-verification="+d.getVerificationToken()))verified=true;}}
+    if(txt!=null){javax.naming.NamingEnumeration<?> values=txt.getAll();while(values.hasMore()){String record=String.valueOf(values.next()).replace("\"","");if(record.contains("saumya-solar-verification="+d.getVerificationToken()))verified=true;}}
    }finally{context.close();}
   }catch(Exception ignored){verified=false;}
   if(!verified)throw new ResponseStatusException(HttpStatus.CONFLICT,"DNS TXT verification record was not found");
