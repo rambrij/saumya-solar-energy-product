@@ -71,6 +71,23 @@ public class EnterpriseSaasService {
   TenantSubscription s=subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(p.tenantId(),List.of("TRIAL","ACTIVE","PAST_DUE")).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"No subscription found"));
   SubscriptionPlan plan=plans.findById(s.getPlanId()).orElseThrow();return Map.of("subscription",s,"plan",plan,"effective",effective(s));
  }
+ public void enforceWarehouseLimit(UUID t){
+  List<TenantSubscription> history=subscriptions.findByTenantIdOrderByCreatedAtDesc(t);
+  if(history.isEmpty())return; // Preserve existing Phase 1/2 tenants until a platform subscription is assigned.
+  TenantSubscription s=subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(t,List.of("TRIAL","ACTIVE"))
+   .orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"An active subscription is required for warehouse changes"));
+  if(!effective(s))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Subscription is expired");
+  SubscriptionPlan plan=plans.findById(s.getPlanId()).orElseThrow();
+  long active=warehouses.findByTenantIdOrderByNameAsc(t).stream().filter(Warehouse::isActive).count();
+  if(active>=plan.getMaxWarehouses())throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Warehouse limit reached for current plan");
+ }
+ @Transactional public Warehouse assignWarehouseBranch(UUID warehouseId,UUID branchId,Principal p){
+  UUID t=vendor(p,"INVENTORY_MANAGE");
+  Warehouse w=warehouses.findByIdAndTenantId(warehouseId,t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Warehouse not found"));
+  if(branchId!=null)branches.findByIdAndTenantId(branchId,t).filter(Branch::isActive)
+   .orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"Active branch must belong to this vendor"));
+  w.setBranchId(branchId);warehouses.save(w);audit(p,t,"WAREHOUSE_BRANCH_ASSIGNED","WAREHOUSE",warehouseId,w);return w;
+ }
  private void enforceBranchLimit(UUID t){
   TenantSubscription s=subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(t,List.of("TRIAL","ACTIVE")).orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"Active subscription required"));
   if(!effective(s))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Subscription is expired");
