@@ -114,6 +114,14 @@ public class EnterpriseSaasService {
   Set<UUID> branchIds=new HashSet<>();assigned.forEach(m->branchIds.add(m.getBranchId()));
   return rows.stream().filter(w->w.getBranchId()==null||branchIds.contains(w.getBranchId())).toList();
  }
+ public void assertFeatureEnabled(UUID tenantId,String feature){
+  List<TenantSubscription> history=subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId);
+  if(history.isEmpty())return;
+  TenantSubscription subscription=effectiveSubscription(tenantId).orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"An active subscription is required"));
+  SubscriptionPlan plan=plans.findById(subscription.getPlanId()).orElseThrow();
+  try{JsonNode root=mapper.readTree(plan.getEntitlementsJson());if(!root.path(feature).asBoolean(false))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"The current subscription plan does not include "+feature);}
+  catch(ResponseStatusException ex){throw ex;}catch(Exception ex){throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,"Subscription entitlements are invalid");}
+ }
  public void enforceUserLimit(UUID t){
   List<TenantSubscription> history=subscriptions.findByTenantIdOrderByCreatedAtDesc(t);
   if(history.isEmpty())return; // Existing Phase 1/2 vendors remain grandfathered until subscription assignment.
@@ -126,7 +134,8 @@ public class EnterpriseSaasService {
  }
  public void enforceWarehouseLimit(UUID t){
   List<TenantSubscription> history=subscriptions.findByTenantIdOrderByCreatedAtDesc(t);
-  if(history.isEmpty())return; // Preserve existing Phase 1/2 tenants until a platform subscription is assigned.
+  if(history.isEmpty())return;
+  assertFeatureEnabled(t,"multiWarehouse"); // Preserve existing Phase 1/2 tenants until a platform subscription is assigned.
   tenants.findByIdForUpdate(t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
   TenantSubscription s=effectiveSubscription(t)
    .orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"An active subscription is required for warehouse changes"));
@@ -143,7 +152,8 @@ public class EnterpriseSaasService {
   w.setBranchId(branchId);warehouses.save(w);audit(p,t,"WAREHOUSE_BRANCH_ASSIGNED","WAREHOUSE",warehouseId,w);return w;
  }
  private void enforceBranchLimit(UUID t){
-  if(subscriptions.findByTenantIdOrderByCreatedAtDesc(t).isEmpty())return; // Grandfather existing Phase 1/2 tenants until a plan is assigned.
+  if(subscriptions.findByTenantIdOrderByCreatedAtDesc(t).isEmpty())return;
+  assertFeatureEnabled(t,"branches"); // Grandfather existing Phase 1/2 tenants until a plan is assigned.
   TenantSubscription s=effectiveSubscription(t).orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"An active subscription is required to add branches"));
   SubscriptionPlan plan=plans.findById(s.getPlanId()).orElseThrow();
   if(branches.countByTenantIdAndActiveTrue(t)>=plan.getMaxBranches())throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Branch limit reached for current plan");
@@ -216,6 +226,7 @@ public class EnterpriseSaasService {
  }
  @Transactional public BrandingView updateBranding(BrandingInput x,Principal p){
   UUID id=vendor(p,"BRANDING_MANAGE");
+  assertFeatureEnabled(id,"customBranding");
   if(x.logoUrl()!=null&&!x.logoUrl().isBlank()&&!x.logoUrl().startsWith("/uploads/")&&!x.logoUrl().startsWith("https://"))
    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Logo URL must use HTTPS or the application's private upload path");
   if(!color(x.primaryColor())||!color(x.secondaryColor()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Brand colors must use six-digit hexadecimal values");
