@@ -10,6 +10,8 @@ import com.saumyasolar.repo.TenantRepository;
 import com.saumyasolar.repo.AppUserRepository;
 import com.saumyasolar.security.Principal;
 import com.saumyasolar.service.SurveyLifecycleService;
+import com.saumyasolar.service.SurveyAttachmentService;
+import org.springframework.mock.web.MockMultipartFile;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @ActiveProfiles("test")
 class SurveyLifecycleIntegrationTest {
     @Autowired SurveyLifecycleService lifecycle;
+    @Autowired SurveyAttachmentService attachments;
     @Autowired SiteSurveyRepository surveys;
     @Autowired SalesLeadRepository leads;
     @Autowired TenantRepository tenants;
@@ -133,5 +136,22 @@ class SurveyLifecycleIntegrationTest {
         ResponseStatusException conflict = assertThrows(ResponseStatusException.class,
                 () -> lifecycle.cancel(surveyId, "Cancelled after approval", actor));
         assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
+    }
+
+    @Test
+    void surveyEvidenceUploadDownloadAndTenantIsolation() {
+        byte[] pdf = "%PDF-1.4\\nSurvey evidence\\n%%EOF".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        MockMultipartFile file = new MockMultipartFile("file", "../../roof-evidence.pdf", "application/pdf", pdf);
+        var stored = attachments.upload(surveyId, file, actor);
+        assertEquals("roof-evidence.pdf", stored.getOriginalName());
+        assertEquals(1, attachments.list(surveyId, actor).size());
+        var downloaded = attachments.download(surveyId, stored.getId(), actor);
+        assertArrayEquals(pdf, downloaded.content());
+
+        Principal foreign = new Principal(actorId, UUID.randomUUID(), "foreign@example.test", "VENDOR",
+                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_MANAGE"));
+        ResponseStatusException hidden = assertThrows(ResponseStatusException.class,
+                () -> attachments.download(surveyId, stored.getId(), foreign));
+        assertEquals(HttpStatus.NOT_FOUND, hidden.getStatusCode());
     }
 }
