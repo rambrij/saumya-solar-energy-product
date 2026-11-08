@@ -131,8 +131,13 @@ public class OfflineSyncService {
         audit.setId(UUID.randomUUID()); audit.setTenantId(actor.tenantId()); audit.setActorId(actor.userId());
         audit.setActorType(actor.accountType()); audit.setAction("OFFLINE_SYNC_" + type);
         audit.setEntityType("OFFLINE_SYNC_OPERATION"); audit.setEntityId(row.getId().toString());
-        audit.setOutcome("SUCCESS"); audit.setAfterJson("{\\"operationId\\":\\"" + command.operationId()
-                + "\\",\\"resourceId\\":\\"" + command.resourceId() + "\\",\\"payloadHash\\":\\"" + hash + "\\"}");
+        audit.setOutcome("SUCCESS");
+        try {
+            audit.setAfterJson(mapper.writeValueAsString(Map.of("operationId", command.operationId().toString(),
+                    "resourceId", command.resourceId().toString(), "payloadHash", hash)));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            throw new IllegalStateException("Unable to serialize offline sync audit event", ex);
+        }
         audit.setCreatedAt(Instant.now()); audits.save(audit);
         return result(row);
     }
