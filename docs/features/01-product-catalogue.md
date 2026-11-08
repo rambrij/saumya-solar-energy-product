@@ -24,6 +24,8 @@ SPA `/` → vendor Catalogue tab; customer Available Products selector; public `
 ## 8. Request and response examples
 `POST /api/v1/catalog/products` illustrative body: `{"name":"540W Mono PERC Solar Panel","sku":"SP-540-MONO","price":18500,"taxPercent":18,"categoryId":"<same-tenant-category-uuid>"}`. Response is the persisted product DTO/entity; use actual returned UUIDs for later workflow records.
 
+Response shape illustration: `{"id":"<product-uuid>","tenantId":"<tenant-uuid>","sku":"SP-540-MONO","name":"540W Mono PERC Solar Panel","active":true}`.
+
 ## 9. Database entities and relationships
 `ProductCategory` 1—N `Product`; `SolarPackage` 1—N `PackageItem`; product and category rows carry `tenant_id`.
 
