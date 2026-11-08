@@ -31,7 +31,9 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -357,6 +359,17 @@ class Release12TenantIntegrationTest {
                                 """.formatted(leadId, vendor.getId(), Instant.now().plusSeconds(86400))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var surveyId = json.readTree(surveyResponse).get("id").asText();
+
+        mvc.perform(patch("/api/v1/surveys/" + surveyId).header("Authorization", "Bearer " + vendorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sanctionedLoadKw\":5,\"findings\":\"Roof structure and shading assessed\",\"recommendation\":\"Proceed with 3 kW rooftop installation\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/surveys/" + surveyId + "/start").header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/surveys/" + surveyId + "/submit").header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("SUBMITTED"));
+        mvc.perform(post("/api/v1/surveys/" + surveyId + "/approve").header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("APPROVED"));
 
         var categoriesJson = mvc.perform(get("/api/v1/categories").header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();

@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.PreRemove;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.Getter;
@@ -21,12 +22,14 @@ import java.util.UUID;
 @NoArgsConstructor
 public class InventoryTransaction {
     @Id UUID id;
+    @Column(length = 50, nullable = false) String transactionReference;
     UUID tenantId;
     UUID warehouseId;
     UUID productId;
     UUID orderId;
     UUID installationId;
     UUID serviceRequestId;
+    UUID reversalOfTransactionId;
     String type;
     BigDecimal quantityDelta;
     BigDecimal reservedDelta;
@@ -34,6 +37,13 @@ public class InventoryTransaction {
     @Column(length = 500) String reason;
     UUID actorId;
     Instant createdAt;
+
+    @PrePersist
+    private void assignTransactionReference() {
+        if (transactionReference == null || transactionReference.isBlank()) {
+            transactionReference = "INV-" + UUID.randomUUID().toString().replace("-", "").toUpperCase(java.util.Locale.ROOT);
+        }
+    }
 
     /** Ledger rows are append-only; corrections must be recorded as new movements. */
     @PreUpdate

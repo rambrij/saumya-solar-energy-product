@@ -38,6 +38,27 @@ The Compose file enables demo seeding with `SEED_DATA_ENABLED=true` for local de
 
 For a new production database, run Flyway migrations first. Then bootstrap the first platform administrator once using deployment secrets: set `PLATFORM_BOOTSTRAP_ENABLED=true`, `PLATFORM_BOOTSTRAP_EMAIL`, and `PLATFORM_BOOTSTRAP_PASSWORD` (minimum 16 characters), start the backend, verify the account can sign in, and immediately set `PLATFORM_BOOTSTRAP_ENABLED=false` and remove the bootstrap password. The bootstrap is disabled by default and fails if the email already exists.
 
+
+## Private operations evidence storage (Phase 2)
+
+Site-survey, service-ticket and warranty-claim evidence is stored on the backend's **local filesystem**. S3 and external object-storage providers are not used. The storage service writes private files under tenant/category-specific directories; downloads are served only after the corresponding survey, ticket or claim authorization check. Files are not exposed through the public `/uploads` static resource path.
+
+### Local Docker Compose
+
+Docker Compose provisions persistent named volumes for private evidence:
+
+| Purpose | Container path | Compose volume |
+|---|---|---|
+| Service ticket evidence | `/var/lib/saumya/private-service-attachments` | `solar_private_service_attachments` |
+| Site survey evidence | `/var/lib/saumya/private-survey-attachments` | `solar_private_survey_attachments` |
+| Warranty claim evidence | `/var/lib/saumya/private-warranty-attachments` | `solar_private_warranty_attachments` |
+
+The backend defaults are `SERVICE_ATTACHMENT_DIR`, `SURVEY_ATTACHMENT_DIR` and `WARRANTY_ATTACHMENT_DIR`. Set these to writable persistent directories when running outside Compose. Keep private evidence directories outside the frontend web root and never expose them via a static file server.
+
+For a single-instance VM or Render persistent disk, mount a persistent disk at a durable path (for example `/var/lib/saumya-data`) and set all three directory variables to separate subdirectories beneath it. The application process must have read/write permission. A container's ephemeral filesystem is not durable across redeploys/restarts; do not use it for customer evidence.
+
+New files are stored in `<tenant UUID>/<category>/<generated filename>` directories. Existing legacy flat file keys remain readable and deletable from their configured local root; no database migration or file-copy operation is required for the compatibility path. Back up the database and all three private evidence directories together, and test restore procedures. Filesystem storage is intended for a single application instance; shared multi-instance storage requires a separately designed shared filesystem solution.
+
 ## Local demo accounts
 
 These credentials are for a disposable local environment only:
@@ -275,7 +296,7 @@ Configuration:
 
 Docker Compose mounts the named `solar_uploads` volume at `/var/lib/saumya/uploads`, so rebuilding containers does not remove package images. Do not use `docker compose down -v` if you need to retain this volume.
 
-For a Vercel frontend with a separately hosted Spring Boot API, set `VITE_API_BASE_URL` to the backend origin at frontend build time, set `PUBLIC_BASE_URL` to the same backend origin, and include the exact Vercel origin in backend `CORS_ORIGINS`. Configure a persistent disk at `UPLOAD_DIR` on the backend host; ephemeral container filesystems are not suitable for production uploads. A future object-storage adapter (for example S3) can replace the filesystem provider without changing package image URLs.
+For a Vercel frontend with a separately hosted Spring Boot API, set `VITE_API_BASE_URL` to the backend origin at frontend build time, set `PUBLIC_BASE_URL` to the same backend origin, and include the exact Vercel origin in backend `CORS_ORIGINS`. Configure a persistent disk at `UPLOAD_DIR` on the backend host; ephemeral container filesystems are not suitable for production uploads. Package images continue to use the existing local upload directory. Phase 2 private evidence is stored in local persistent directories; S3 is not configured or required.
 
 ## Frontend routing and proxy
 
@@ -505,7 +526,7 @@ The local Compose configuration sets `MAIL_SMTP_AUTH=false`, `MAIL_SMTP_STARTTLS
 
 - Password reset: `POST /api/v1/auth/forgot-password` always returns a generic response. A 256-bit random, single-use reset token is stored as a SHA-256 hash, expires after 30 minutes, and is sent as a link to the account email. The raw token is never returned by the API.
 - Platform administrator MFA: after valid credentials, platform sign-in requires a six-digit email code. The code is stored as a hash, expires after five minutes, is single-use, and is locked after five failed attempts.
-- Notification delivery attempts are persisted in `notification_delivery`; failed SMTP attempts are recorded as FAILED. This initial implementation does not yet provide a background retry queue.
+- Notification delivery attempts are persisted in `notification_delivery`; failed email, SMS and WhatsApp attempts are retried by a scheduled worker with exponential backoff and a five-attempt limit.
 
 ### Production SMTP configuration
 
@@ -518,3 +539,33 @@ Mailpit is local-only. For real delivery, configure an SMTP provider and set the
 - `PUBLIC_BASE_URL` to the deployed frontend URL used in password-reset links
 
 Never use the Compose Mailpit host, local credentials, or a localhost public URL in production. Verify sender-domain SPF, DKIM and DMARC with the chosen provider before enabling customer-facing notifications.
+
+
+## Phase 2 Operations — engineer, warranty and messaging additions
+
+The Phase 2 branch adds (with remaining gaps documented in the Phase 2 report):
+- Tenant-scoped engineer profiles (skills, certifications, territory, availability window and concurrent-job limit) at `GET/POST /api/v1/engineers`.
+- Warranty claims submitted by customers at `POST /api/v1/customer/warranty-claims`; vendor operations users can list, approve, reject and resolve claims at `/api/v1/warranty-claims`.
+- An operational KPI snapshot at `GET /api/v1/reports/operations?from=YYYY-MM-DD&to=YYYY-MM-DD`.
+- Installation schedule conflict checks for the same engineer/team, rescheduling/cancellation history and an optional approved-survey link.
+- Customer opt-in controls at `GET/PATCH /api/v1/customer/messaging-consent`.
+
+### SMS and WhatsApp provider configuration
+
+The backend supports Twilio's Messages API when the following backend-only environment variables are configured:
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_SMS_FROM` — provider-approved SMS sender/number
+- `TWILIO_WHATSAPP_FROM` — approved WhatsApp sender, for example `whatsapp:+14155238886` in a Twilio sandbox
+
+The registered customer phone number must be in E.164 format (for example `+919876543210`). SMS and WhatsApp are sent only when the customer has explicitly opted in to the respective channel. If Twilio credentials or sender IDs are absent, those channels are skipped; email remains the existing notification channel. Delivery attempts are recorded per channel, and failed email/SMS/WhatsApp sends are retried by the scheduled worker with exponential backoff, up to five attempts. Twilio sandbox/production approval, WhatsApp templates, per-tenant sender credentials, provider delivery webhooks, and a durable external queue/outbox are not provided by this implementation. Do not claim delivery to a handset from an HTTP acceptance response alone.
+
+### Messaging security and operational notes
+
+Keep Twilio credentials in the deployment secret manager; never place them in frontend environment variables or commit them to source control. Ask customers to save consent only after presenting the intended notification purpose. Revoke consent using the same preferences endpoint. Provider HTTP responses are recorded as provider-accepted, not handset-delivered/read receipts.
+
+
+### Service ticket comments and warranty expiry
+
+- Customer and authorized vendor staff can read/post service ticket comments at `/api/v1/service-requests/{ticketId}/comments`. Internal comments are hidden from customers; all comment access is tenant- and ticket-scoped.
+- Warranty expiry is evaluated daily using `app.warranty.expiry-alert-cron` and `app.warranty.expiry-alert-zone` (defaults to 08:15 Asia/Kolkata). The scheduler marks ended ACTIVE warranties EXPIRED and sends 30-day, 7-day and 1-day reminders through configured customer-consented channels. Email idempotency keys suppress duplicate reminder deliveries for the same warranty/event.

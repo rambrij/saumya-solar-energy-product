@@ -20,6 +20,11 @@ public class NotificationDelivery {
     UUID userId;
     @Column(nullable = false, length = 60)
     String eventType;
+    @Column(nullable=false,length=20) String channel = "EMAIL";
+    @Column(length=120) String idempotencyKey;
+    @Column(length=120) String providerMessageId;
+    @Column(columnDefinition="TEXT") String messageBody;
+    Instant nextAttemptAt;
     @Column(nullable = false, length = 320)
     String recipient;
     @Column(nullable = false, length = 255)

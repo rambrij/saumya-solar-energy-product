@@ -56,6 +56,7 @@ public class Controller {
     final CatalogAdminService catalog;
     final PackageImageStorageService packageImages;
     final TenantAdminService tenantAdmin;
+    final com.saumyasolar.service.SurveyLifecycleService surveyLifecycle;
     final boolean platformMfaEnabled;
     
     Controller(
@@ -71,6 +72,7 @@ public class Controller {
             CatalogAdminService catalog,
             PackageImageStorageService packageImages,
             TenantAdminService tenantAdmin,
+            com.saumyasolar.service.SurveyLifecycleService surveyLifecycle,
             @org.springframework.beans.factory.annotation.Value("${app.auth.platform-mfa-enabled:true}") boolean platformMfaEnabled
     ) {
         this.s = s;
@@ -85,6 +87,7 @@ public class Controller {
         this.catalog = catalog;
         this.packageImages = packageImages;
         this.tenantAdmin = tenantAdmin;
+        this.surveyLifecycle = surveyLifecycle;
         this.platformMfaEnabled = platformMfaEnabled;
     }
     
@@ -334,8 +337,12 @@ public class Controller {
     }
     
     @PostMapping("/surveys")
+    @org.springframework.transaction.annotation.Transactional
     SiteSurvey survey(@RequestBody Input x, Authentication a) {
-        return s.survey(x, p(a));
+        Principal actor = p(a);
+        SiteSurvey created = s.survey(x, actor);
+        surveyLifecycle.recordCreated(created, actor);
+        return created;
     }
     
     @PostMapping("/quotations")
@@ -475,6 +482,7 @@ public class Controller {
     @PostMapping("/warehouses") com.saumyasolar.domain.Warehouse createWarehouse(@Valid @RequestBody WarehouseInput x,Authentication a){return operations.createWarehouse(x,p(a));}
     @GetMapping("/inventory/balances") List<com.saumyasolar.domain.InventoryBalance> inventoryBalances(Authentication a){return operations.balances(p(a));}
     @GetMapping("/inventory/transactions") List<com.saumyasolar.domain.InventoryTransaction> inventoryLedger(Authentication a){return operations.ledger(p(a));}
+    @PostMapping("/inventory/transactions/{id}/reverse") com.saumyasolar.domain.InventoryTransaction reverseInventoryTransaction(@PathVariable UUID id,@Valid @RequestBody InventoryReversalInput x,Authentication a){return operations.reverseInventoryTransaction(id,x,p(a));}
     @PostMapping("/inventory/receipts") com.saumyasolar.domain.InventoryBalance inventoryReceipt(@Valid @RequestBody ReceiptInput x,Authentication a){return operations.receive(x,p(a));}
     @PostMapping("/inventory/returns") com.saumyasolar.domain.InventoryBalance inventoryReturn(@Valid @RequestBody ReceiptInput x,Authentication a){return operations.returnStock(x,p(a));}
     @PostMapping("/inventory/issues") com.saumyasolar.domain.InventoryBalance inventoryIssue(@Valid @RequestBody IssueInput x,Authentication a){return operations.issue(x,p(a));}
@@ -488,6 +496,7 @@ public class Controller {
     @GetMapping("/orders/{id}/history") List<com.saumyasolar.domain.OrderStatusHistory> orderHistory(@PathVariable UUID id,Authentication a){return operations.orderHistory(id,p(a));}
     @GetMapping("/installation-teams") List<com.saumyasolar.domain.InstallationTeam> installationTeams(Authentication a){return operations.teams(p(a));}
     @PostMapping("/installation-teams") com.saumyasolar.domain.InstallationTeam createInstallationTeam(@Valid @RequestBody TeamInput x,Authentication a){return operations.createTeam(x,p(a));}
+    @PatchMapping("/installation-teams/{id}") com.saumyasolar.domain.InstallationTeam updateInstallationTeam(@PathVariable UUID id,@Valid @RequestBody TeamInput x,Authentication a){return operations.updateTeam(id,x,p(a));}
     @GetMapping("/installation-checklist-templates") List<com.saumyasolar.domain.InstallationChecklistTemplate> checklistTemplates(Authentication a){return operations.checklistTemplates(p(a));}
     @PostMapping("/installation-checklist-templates") com.saumyasolar.domain.InstallationChecklistTemplate createChecklistTemplate(@Valid @RequestBody ChecklistTemplateInput x,Authentication a){return operations.createChecklistTemplate(x,p(a));}
     @DeleteMapping("/installation-checklist-templates/{id}") com.saumyasolar.domain.InstallationChecklistTemplate archiveChecklistTemplate(@PathVariable UUID id,Authentication a){return operations.archiveChecklistTemplate(id,p(a));}
@@ -496,6 +505,8 @@ public class Controller {
     @GetMapping("/installations/{id}/checklist") List<com.saumyasolar.domain.InstallationChecklistItem> installationChecklist(@PathVariable UUID id,Authentication a){return operations.checklist(id,p(a));}
     @PatchMapping("/installations/{id}/checklist/{itemId}") com.saumyasolar.domain.InstallationChecklistItem updateChecklist(@PathVariable UUID id,@PathVariable UUID itemId,@RequestBody ChecklistUpdateInput x,Authentication a){return operations.updateChecklist(id,itemId,x,p(a));}
     @PostMapping("/installations/{id}/reschedule") com.saumyasolar.domain.InstallationJob rescheduleInstallation(@PathVariable UUID id,@Valid @RequestBody RescheduleInput x,Authentication a){return operations.reschedule(id,x,p(a));}
+    @PostMapping("/installations/{id}/cancel") com.saumyasolar.domain.InstallationJob cancelInstallation(@PathVariable UUID id,@RequestBody Map<String,String> x,Authentication a){return operations.cancelInstallation(id,x.get("reason"),p(a));}
+    @GetMapping("/installations/{id}/schedule-history") List<com.saumyasolar.domain.InstallationScheduleHistory> installationScheduleHistory(@PathVariable UUID id,Authentication a){return operations.scheduleHistory(id,p(a));}
     @PostMapping("/installations/{id}/complete") com.saumyasolar.domain.InstallationJob completeInstallation(@PathVariable UUID id,@RequestBody Map<String,String> x,Authentication a){return operations.completeInstallation(id,x.getOrDefault("reason","Installation checklist completed"),p(a));}
     @PostMapping("/installations/{id}/commission") com.saumyasolar.domain.InstallationJob commissionInstallation(@PathVariable UUID id,@Valid @RequestBody CommissionInput x,Authentication a){return operations.commission(id,x,p(a));}
     @GetMapping("/warranties") List<com.saumyasolar.domain.Warranty> warranties(Authentication a){return operations.warranties(p(a));}

@@ -21,5 +21,8 @@ public class CustomerProfile {
     String phone;
     String address;
     String gstin;
+    boolean smsConsent = false;
+    boolean whatsappConsent = false;
+    java.time.Instant messagingConsentUpdatedAt;
     boolean active = true;
 }

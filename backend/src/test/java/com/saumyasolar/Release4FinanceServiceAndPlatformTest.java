@@ -2,6 +2,16 @@ package com.saumyasolar;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import com.saumyasolar.domain.Warranty;
+import com.saumyasolar.domain.CustomerOrder;
+import com.saumyasolar.domain.InstallationJob;
+import com.saumyasolar.domain.Product;
+import com.saumyasolar.repo.CustomerOrderRepository;
+import com.saumyasolar.repo.InstallationJobRepository;
+import com.saumyasolar.repo.ProductRepository;
+import com.saumyasolar.repo.AppUserRepository;
+import com.saumyasolar.repo.CustomerProfileRepository;
+import com.saumyasolar.repo.WarrantyRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -25,6 +35,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class Release4FinanceServiceAndPlatformTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
+    @Autowired AppUserRepository users;
+    @Autowired CustomerProfileRepository customerProfiles;
+    @Autowired WarrantyRepository warranties;
+    @Autowired CustomerOrderRepository orders;
+    @Autowired InstallationJobRepository installations;
+    @Autowired ProductRepository products;
     private String token(String email,String password)throws Exception{
         String result=mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
             .content("{\"email\":\""+email+"\",\"password\":\""+password+"\"}"))
@@ -93,7 +109,7 @@ class Release4FinanceServiceAndPlatformTest {
         mvc.perform(get("/api/v1/service-requests/"+id).header("Authorization","Bearer "+vendor)).andExpect(status().isOk());
         String otherEmail="other-customer-"+UUID.randomUUID()+"@example.test";
         mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
-            .content("{\"storeSlug\":\"saumya-solar\",\"name\":\"Other Customer\",\"email\":\""+otherEmail+"\",\"password\":\"OtherCustomer@2026\"}"))
+            .content(json.writeValueAsString(java.util.Map.of("storeSlug","saumya-solar","name","Other Customer","email",otherEmail,"password","OtherCustomer@2026"))))
             .andExpect(status().isOk());
         String other=token(otherEmail,"OtherCustomer@2026");
         mvc.perform(get("/api/v1/service-requests/"+id).header("Authorization","Bearer "+other)).andExpect(status().isNotFound());
@@ -112,4 +128,62 @@ class Release4FinanceServiceAndPlatformTest {
             .andExpect(status().isUnauthorized());
     }
 
+
+    @Test void warrantyClaimEvidenceIsPrivateAndTenantScoped() throws Exception {
+        String vendor=token("admin@saumya.local","Admin@123");
+        String email="warranty-evidence-"+UUID.randomUUID()+"@example.test";
+        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(java.util.Map.of("storeSlug","saumya-solar","name","Warranty Customer","email",email,"password","WarrantyCustomer@2026"))))
+            .andExpect(status().isOk());
+        String customer=token(email,"WarrantyCustomer@2026");
+        var user=users.findByEmailIgnoreCase(email).orElseThrow();
+        var profile=customerProfiles.findByTenantIdAndUserId(user.getTenantId(),user.getId()).orElseThrow();
+        var vendorUser=users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        Product product=products.findByTenantIdOrderByIdDesc(user.getTenantId()).stream().filter(v->"DEMO-PV-550".equals(v.getSku())).findFirst().orElseThrow();
+        CustomerOrder order=new CustomerOrder();order.setId(UUID.randomUUID());order.setTenantId(user.getTenantId());order.setCustomerId(profile.getId());order.setOrderNumber("WARRANTY-EVIDENCE-"+UUID.randomUUID());order.setStatus("COMMISSIONED");order.setTotal(java.math.BigDecimal.TEN);order.setCreatedAt(java.time.Instant.now());orders.save(order);
+        InstallationJob installation=new InstallationJob();installation.setId(UUID.randomUUID());installation.setTenantId(user.getTenantId());installation.setOrderId(order.getId());installation.setCustomerId(profile.getId());installation.setSiteAddress("Test warranty installation");installation.setScheduledAt(java.time.Instant.now());installation.setAssignedEngineerId(vendorUser.getId());installation.setTeamName("Warranty test team");installation.setStatus("COMMISSIONED");installation.setCreatedAt(java.time.Instant.now());installations.save(installation);
+        Warranty warranty=new Warranty();warranty.setId(UUID.randomUUID());warranty.setTenantId(user.getTenantId());warranty.setOrderId(order.getId());warranty.setInstallationId(installation.getId());warranty.setCustomerId(profile.getId());warranty.setProductId(product.getId());warranty.setQuantity(1);warranty.setStartDate(LocalDate.now().minusDays(1));warranty.setEndDate(LocalDate.now().plusDays(30));warranty.setTerms("Test warranty");warranty.setStatus("ACTIVE");warranty.setActivatedAt(java.time.Instant.now());warranties.save(warranty);
+        String claim=mvc.perform(post("/api/v1/customer/warranty-claims").header("Authorization","Bearer "+customer).contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(java.util.Map.of("warrantyId",warranty.getId(),"subject","Panel output issue","description","Output is lower than expected"))))
+            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String claimId=json.readTree(claim).get("id").asText();
+        MockMultipartFile evidence=new MockMultipartFile("file","warranty-proof.pdf","application/pdf","%PDF-1.4\\nproof\\n%%EOF".getBytes(StandardCharsets.US_ASCII));
+        String attachment=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/v1/warranty-claims/"+claimId+"/attachments").file(evidence).header("Authorization","Bearer "+customer))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.contentType").value("application/pdf")).andReturn().getResponse().getContentAsString();
+        String attachmentId=json.readTree(attachment).get("id").asText();
+        mvc.perform(get("/api/v1/warranty-claims/"+claimId+"/attachments/"+attachmentId).header("Authorization","Bearer "+customer))
+            .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PDF));
+        mvc.perform(get("/api/v1/warranty-claims/"+claimId+"/attachments").header("Authorization","Bearer "+vendor)).andExpect(status().isOk());
+        String otherEmail="warranty-other-"+UUID.randomUUID()+"@example.test";
+        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(java.util.Map.of("storeSlug","saumya-solar","name","Other Warranty Customer","email",otherEmail,"password","OtherWarranty@2026"))))
+            .andExpect(status().isOk());
+        String other=token(otherEmail,"OtherWarranty@2026");
+        mvc.perform(get("/api/v1/warranty-claims/"+claimId+"/attachments/"+attachmentId).header("Authorization","Bearer "+other)).andExpect(status().isNotFound());
+    }
+
+    @Test void operationalReportsSupportCsvExcelAndPdfWithTenantAuthorization() throws Exception {
+        String admin=token("admin@saumya.local","Admin@123");
+        mvc.perform(get("/api/v1/reports/operations").header("Authorization","Bearer "+admin))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.orders").isNumber())
+            .andExpect(jsonPath("$.paymentsReceived").isNumber());
+        byte[] csv=mvc.perform(get("/api/v1/reports/operations/export.csv").header("Authorization","Bearer "+admin))
+            .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith("text/csv"))
+            .andReturn().getResponse().getContentAsByteArray();
+        assertTrue(new String(csv,StandardCharsets.UTF_8).startsWith("Metric,Value"));
+        byte[] excel=mvc.perform(get("/api/v1/reports/operations/export.xlsx").header("Authorization","Bearer "+admin))
+            .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+            .andReturn().getResponse().getContentAsByteArray();
+        assertTrue(excel.length>100);
+        assertEquals('P',excel[0]);assertEquals('K',excel[1],"XLSX must be a valid ZIP-based workbook");
+        byte[] pdf=mvc.perform(get("/api/v1/reports/operations/export.pdf").header("Authorization","Bearer "+admin))
+            .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PDF))
+            .andReturn().getResponse().getContentAsByteArray();
+        assertTrue(new String(pdf,0,Math.min(5,pdf.length),StandardCharsets.US_ASCII).startsWith("%PDF-"));
+        mvc.perform(get("/api/v1/reports/operations").header("Authorization","Bearer "+admin)
+            .param("from","2026-12-31").param("to","2026-01-01")).andExpect(status().isBadRequest());
+        String customer=token("customer@saumya.local","Customer@123");
+        mvc.perform(get("/api/v1/reports/operations").header("Authorization","Bearer "+customer))
+            .andExpect(status().isForbidden());
+    }
 }
