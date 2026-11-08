@@ -3,6 +3,10 @@ package com.saumyasolar;
 import com.saumyasolar.repo.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.test.util.ReflectionTestUtils;
+import com.saumyasolar.config.DataSeeder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import static org.junit.jupiter.api.Assertions.*;
@@ -10,6 +14,8 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest(properties = "app.seed.enabled=true")
 @ActiveProfiles("test")
 class DemoLifecycleSeedIntegrationTest {
+ @Autowired DataSeeder dataSeeder;
+ @Autowired @Qualifier("seedData") CommandLineRunner seedRunner;
  @Autowired TenantRepository tenants;
  @Autowired EnquiryRepository enquiries;
  @Autowired SalesLeadRepository leads;
@@ -24,7 +30,8 @@ class DemoLifecycleSeedIntegrationTest {
  @Autowired SubscriptionPlanRepository plans;
 
  @Test
- void optInDemoSeedCreatesOneConnectedSolarLifecycleAndTenantPlan() {
+ void optInDemoSeedCreatesOneConnectedSolarLifecycleAndTenantPlan() throws Exception {
+  ReflectionTestUtils.setField(dataSeeder,"seedEnabled",true);seedRunner.run();
   var tenant=tenants.findBySlug("saumya-solar").orElseThrow();
   var enquiry=enquiries.findByTenantIdOrderByIdDesc(tenant.getId()).stream()
     .filter(e->"DEMO-LIFECYCLE-2026".equals(e.getMessage())).findFirst().orElseThrow();
