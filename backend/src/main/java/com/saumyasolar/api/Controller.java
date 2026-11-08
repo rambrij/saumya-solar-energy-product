@@ -56,6 +56,7 @@ public class Controller {
     final CatalogAdminService catalog;
     final PackageImageStorageService packageImages;
     final TenantAdminService tenantAdmin;
+    final com.saumyasolar.service.VendorRoleAdminService roleAdmin;
     final boolean platformMfaEnabled;
     
     Controller(
@@ -71,6 +72,7 @@ public class Controller {
             CatalogAdminService catalog,
             PackageImageStorageService packageImages,
             TenantAdminService tenantAdmin,
+            com.saumyasolar.service.VendorRoleAdminService roleAdmin,
             @org.springframework.beans.factory.annotation.Value("${app.auth.platform-mfa-enabled:true}") boolean platformMfaEnabled
     ) {
         this.s = s;
@@ -85,6 +87,7 @@ public class Controller {
         this.catalog = catalog;
         this.packageImages = packageImages;
         this.tenantAdmin = tenantAdmin;
+        this.roleAdmin = roleAdmin;
         this.platformMfaEnabled = platformMfaEnabled;
     }
     
@@ -196,6 +199,28 @@ public class Controller {
     @GetMapping("/roles")
     List<com.saumyasolar.domain.Role> employeeRoles(Authentication a) {
         return s.employeeRoles(p(a));
+    }
+
+    @GetMapping("/roles/permissions")
+    java.util.Set<String> assignableRolePermissions(Authentication a) {
+        return roleAdmin.assignablePermissions(p(a));
+    }
+
+    @PostMapping("/roles")
+    com.saumyasolar.domain.Role createVendorRole(@Valid @RequestBody com.saumyasolar.api.RoleAdminModels.RoleInput input, Authentication a) {
+        return roleAdmin.create(input,p(a));
+    }
+
+    @PatchMapping("/roles/{id}")
+    com.saumyasolar.domain.Role updateVendorRole(@PathVariable UUID id,
+            @Valid @RequestBody com.saumyasolar.api.RoleAdminModels.RoleInput input, Authentication a) {
+        return roleAdmin.update(id,input,p(a));
+    }
+
+    @DeleteMapping("/roles/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void deleteVendorRole(@PathVariable UUID id, Authentication a) {
+        roleAdmin.delete(id,p(a));
     }
 
     @PostMapping("/customer/enquiries")
