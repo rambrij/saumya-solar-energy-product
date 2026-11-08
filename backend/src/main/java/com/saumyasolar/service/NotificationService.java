@@ -43,11 +43,11 @@ public class NotificationService {
 
     public boolean sendVendorInvitation(UUID userId, UUID tenantId, String recipient, String displayName, String token) {
         String link = publicBaseUrl + "/?vendorInviteToken=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
-        String body = "Hello " + safeName(displayName) + ",\\n\\n"
+        String body = "Hello " + safeName(displayName) + ",\n\n"
                 + "You have been invited to administer a Soumya Solar vendor workspace. "
                 + "Set your password using the one-time link below within 24 hours. "
-                + "The vendor workspace remains unavailable until platform verification is approved.\\n\\n"
-                + link + "\\n\\nIf you were not expecting this invitation, ignore this email.\\n";
+                + "The vendor workspace remains unavailable until platform verification is approved.\n\n"
+                + link + "\n\nIf you were not expecting this invitation, ignore this email.\n";
         return deliver(userId, tenantId, "VENDOR_ADMIN_INVITATION", recipient,
                 "Complete your Soumya Solar vendor administrator invitation", body);
     }
