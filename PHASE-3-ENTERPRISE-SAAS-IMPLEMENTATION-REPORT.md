@@ -204,3 +204,17 @@ Do not claim 100% Phase 3 acceptance until these items and the follow-up validat
 **Resilience caveat:** the circuit breaker is process-local. In a multi-replica deployment, each replica has independent breaker state; use a shared coordination store or provider-level rate limiting before claiming cluster-wide circuit-breaker semantics. No concrete payment/accounting adapters are installed, so capability lists remain empty until adapter implementations are deployed.
 
 **Migration correction:** V41 `payload_hash` is `VARCHAR(64)` to match Hibernate's validated mapping. The V41/V42 workflow includes both migrations on MySQL 8.4. No existing Phase 1/2 table or record is dropped or rewritten by V41/V42.
+
+
+## 11. Online payment availability and latest verification
+
+- Added a tenant-scoped availability endpoint that reports only whether an active integration has a matching installed payment adapter; it does not disclose secrets or provider configuration.
+- Customer invoice UI displays the Pay Online action only when the tenant has both an active gateway connection and a matching installed adapter. Otherwise it explains that online payment is not configured, instead of offering a checkout that is known to fail.
+- Vendor integration UI exposes installed payment/accounting adapter codes. Provider-neutral interfaces remain empty until a concrete adapter is deployed.
+
+**Automated validation evidence:**
+- Workflow `42515909963` passed all four jobs on commit `828a95833bb64d34fa7ea573536ffc78f47780a3`: backend Maven compile/tests, frontend production build, MySQL 8.4 migration validation including V41/V42, and Spring Boot startup/health smoke test against MySQL 8.4 and Mailpit.
+- Workflow `42515971756` passed frontend build, backend compile/tests and MySQL migration validation on commit `26def1c34998a734dfb8fd47746573ecf1fbff1c`; its Spring Boot startup job also completed successfully.
+- Follow-up payment-availability UI/API commits are undergoing the same workflow; final workflow evidence should be taken from the latest branch head before release.
+
+These checks do not replace deployed E2E, provider certification, branch-isolation or penetration testing.
