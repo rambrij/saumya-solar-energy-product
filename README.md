@@ -41,23 +41,23 @@ For a new production database, run Flyway migrations first. Then bootstrap the f
 
 ## Private operations evidence storage (Phase 2)
 
-Site-survey, service-ticket and warranty-claim evidence uses the private object-storage abstraction. The default provider remains local filesystem storage for development and backward compatibility. For a multi-instance or ephemeral production deployment, configure an S3-compatible private bucket; objects are not served by public URLs and reads are performed only after the owning tenant/resource authorization check.
+Site-survey, service-ticket and warranty-claim evidence is stored on the backend's **local filesystem**. S3 and external object-storage providers are not used. The storage service writes private files under tenant/category-specific directories; downloads are served only after the corresponding survey, ticket or claim authorization check. Files are not exposed through the public `/uploads` static resource path.
 
-Set these backend environment variables (never commit credentials):
+### Local Docker Compose
 
-| Variable | Purpose |
-|---|---|
-| `PRIVATE_STORAGE_PROVIDER` | `local` (default) or `s3` |
-| `PRIVATE_STORAGE_S3_BUCKET` | Private bucket name; required for `s3` |
-| `AWS_REGION` | Bucket region; defaults to `us-east-1` |
-| `PRIVATE_STORAGE_S3_ENDPOINT` | Optional S3-compatible endpoint (e.g. MinIO); leave unset for AWS S3 |
-| `PRIVATE_STORAGE_S3_PATH_STYLE` | Set `true` for compatible providers that require path-style addressing |
+Docker Compose provisions persistent named volumes for private evidence:
 
-The AWS SDK default credential chain is used (prefer an attached workload role/instance profile; do not store access keys in source control). Grant only the application role the bucket-level `s3:PutObject`, `s3:GetObject`, and `s3:DeleteObject` actions on the application prefix. The service requests AES-256 server-side encryption for new objects. Enable bucket versioning, lifecycle/retention, backups, and public-access blocking according to the organization's data policy.
+| Purpose | Container path | Compose volume |
+|---|---|---|
+| Service ticket evidence | `/var/lib/saumya/private-service-attachments` | `solar_private_service_attachments` |
+| Site survey evidence | `/var/lib/saumya/private-survey-attachments` | `solar_private_survey_attachments` |
+| Warranty claim evidence | `/var/lib/saumya/private-warranty-attachments` | `solar_private_warranty_attachments` |
 
-Existing local-storage records remain readable when the provider is switched to S3 because their legacy storage keys do not carry the `s3:` prefix. New S3 records use tenant/category-prefixed private object keys. Switching the provider does not automatically migrate existing local files; migrate those files and their database keys in a separately planned, verified operation before removing old storage.
+The backend defaults are `SERVICE_ATTACHMENT_DIR`, `SURVEY_ATTACHMENT_DIR` and `WARRANTY_ATTACHMENT_DIR`. Set these to writable persistent directories when running outside Compose. Keep private evidence directories outside the frontend web root and never expose them via a static file server.
 
-Local storage remains suitable for single-instance development only. S3 provider behavior is code-implemented; a live bucket, IAM role and upload/download round trip still need environment-specific deployment verification.
+For a single-instance VM or Render persistent disk, mount a persistent disk at a durable path (for example `/var/lib/saumya-data`) and set all three directory variables to separate subdirectories beneath it. The application process must have read/write permission. A container's ephemeral filesystem is not durable across redeploys/restarts; do not use it for customer evidence.
+
+New files are stored in `<tenant UUID>/<category>/<generated filename>` directories. Existing legacy flat file keys remain readable and deletable from their configured local root; no database migration or file-copy operation is required for the compatibility path. Back up the database and all three private evidence directories together, and test restore procedures. Filesystem storage is intended for a single application instance; shared multi-instance storage requires a separately designed shared filesystem solution.
 
 ## Local demo accounts
 
@@ -296,7 +296,7 @@ Configuration:
 
 Docker Compose mounts the named `solar_uploads` volume at `/var/lib/saumya/uploads`, so rebuilding containers does not remove package images. Do not use `docker compose down -v` if you need to retain this volume.
 
-For a Vercel frontend with a separately hosted Spring Boot API, set `VITE_API_BASE_URL` to the backend origin at frontend build time, set `PUBLIC_BASE_URL` to the same backend origin, and include the exact Vercel origin in backend `CORS_ORIGINS`. Configure a persistent disk at `UPLOAD_DIR` on the backend host; ephemeral container filesystems are not suitable for production uploads. A future object-storage adapter (for example S3) can replace the filesystem provider without changing package image URLs.
+For a Vercel frontend with a separately hosted Spring Boot API, set `VITE_API_BASE_URL` to the backend origin at frontend build time, set `PUBLIC_BASE_URL` to the same backend origin, and include the exact Vercel origin in backend `CORS_ORIGINS`. Configure a persistent disk at `UPLOAD_DIR` on the backend host; ephemeral container filesystems are not suitable for production uploads. Package images continue to use the existing local upload directory. Phase 2 private evidence is stored in local persistent directories; S3 is not configured or required.
 
 ## Frontend routing and proxy
 
