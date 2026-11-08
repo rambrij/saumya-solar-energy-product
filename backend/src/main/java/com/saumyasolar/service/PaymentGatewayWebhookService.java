@@ -11,9 +11,9 @@ import java.util.*;
 @Service
 public class PaymentGatewayWebhookService {
  private final PaymentGatewayRegistry adapters;private final PaymentRepository payments;
- private final PaymentWebhookEventRepository events;private final InvoiceRepository invoices;private final AuditEventRepository audits;
- public PaymentGatewayWebhookService(PaymentGatewayRegistry adapters,PaymentRepository payments,PaymentWebhookEventRepository events,InvoiceRepository invoices,AuditEventRepository audits){
-  this.adapters=adapters;this.payments=payments;this.events=events;this.invoices=invoices;this.audits=audits;
+ private final PaymentWebhookEventRepository events;private final InvoiceRepository invoices;private final AuditEventRepository audits;private final com.fasterxml.jackson.databind.ObjectMapper mapper;
+ public PaymentGatewayWebhookService(PaymentGatewayRegistry adapters,PaymentRepository payments,PaymentWebhookEventRepository events,InvoiceRepository invoices,AuditEventRepository audits,com.fasterxml.jackson.databind.ObjectMapper mapper){
+  this.adapters=adapters;this.payments=payments;this.events=events;this.invoices=invoices;this.audits=audits;this.mapper=mapper;
  }
  @Transactional public Map<String,Object> accept(String provider,String raw,String signature){
   PaymentGatewayAdapter adapter=adapters.require(provider);
@@ -44,8 +44,12 @@ public class PaymentGatewayWebhookService {
   AuditEvent audit=new AuditEvent();audit.setId(UUID.randomUUID());audit.setTenantId(payment.getTenantId());
   audit.setActorType("SYSTEM");audit.setAction("PAYMENT_GATEWAY_WEBHOOK_"+event.status());audit.setEntityType("PAYMENT");
   audit.setEntityId(payment.getId().toString());audit.setOutcome("SUCCESS");
-  audit.setAfterJson("{\\"providerCode\\":\\"" + code + "\\",\\"eventIdHash\\":\\"" + hash(event.eventId())
-          + "\\",\\"paymentStatus\\":\\"" + payment.getStatus() + "\\"}");
+  try {
+   audit.setAfterJson(mapper.writeValueAsString(Map.of("providerCode",code,"eventIdHash",hash(event.eventId()),
+           "paymentStatus",payment.getStatus())));
+  } catch(com.fasterxml.jackson.core.JsonProcessingException ex) {
+   throw new IllegalStateException("Unable to serialize payment webhook audit event",ex);
+  }
   audit.setCreatedAt(Instant.now());audits.save(audit);
   return Map.of("accepted",true,"matched",true,"duplicate",false);
  }
