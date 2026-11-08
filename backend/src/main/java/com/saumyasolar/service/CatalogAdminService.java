@@ -14,6 +14,7 @@ import java.util.*;
 
 @Service
 public class CatalogAdminService {
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private EnterpriseSaasService enterpriseSaas;
     private final ProductRepository products; private final ProductCategoryRepository categories;
     private final CustomerProfileRepository customers; private final AppUserRepository users;
     private final RoleRepository roles; private final PasswordEncoder encoder;
@@ -36,6 +37,7 @@ public class CatalogAdminService {
     }
     @Transactional public Product createProduct(ProductInput x,Principal p){
         UUID t=tenant(p);require(p,"CATALOG_MANAGE");
+        if(enterpriseSaas!=null)enterpriseSaas.enforceProductLimit(t);
         if(categories.findByIdAndTenantId(x.categoryId(),t).filter(ProductCategory::isActive).isEmpty())throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Select an active category belonging to this vendor");
         if(products.findByTenantIdOrderByIdDesc(t).stream().anyMatch(v->v.getSku().equalsIgnoreCase(x.sku())))throw new ResponseStatusException(HttpStatus.CONFLICT,"SKU already exists");
         secureUrl(x.imageUrl(),"Image URL");secureUrl(x.datasheetUrl(),"Datasheet URL");
