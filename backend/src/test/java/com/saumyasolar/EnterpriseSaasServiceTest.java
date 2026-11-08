@@ -51,6 +51,7 @@ class EnterpriseSaasServiceTest {
         TenantSubscription subscription = subscription(tenantId);
         SubscriptionPlan plan = plan(1);
         subscription.setPlanId(plan.getId());
+        when(subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(subscription));
         when(branches.existsByTenantIdAndCodeIgnoreCase(tenantId, "HQ")).thenReturn(false);
         when(subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(subscription));
 
