@@ -52,9 +52,9 @@ public class JwtFilter extends OncePerRequestFilter {
                             && java.util.Set.of("PENDING_VERIFICATION", "REJECTED").contains(tenant.getVerificationStatus())
                             && "VENDOR".equals(user.getAccountType())
                             && user.getRoles().stream().anyMatch(role -> "VENDOR_ADMIN".equals(role.getName()));
-                    boolean allowedOnboardingPath = ("/api/v1/vendor/profile".equals(r.getServletPath())
+                    boolean allowedOnboardingPath = ("/api/v1/vendor/profile".equals(r.getRequestURI())
                                 && ("GET".equals(r.getMethod()) || "PATCH".equals(r.getMethod())))
-                            || ("/api/v1/vendor/verification-documents".equals(r.getServletPath())
+                            || ("/api/v1/vendor/verification-documents".equals(r.getRequestURI())
                                 && ("GET".equals(r.getMethod()) || "POST".equals(r.getMethod())));
                     if (!pendingVerification)
                         throw new IllegalArgumentException("Tenant is suspended or awaiting verification");
