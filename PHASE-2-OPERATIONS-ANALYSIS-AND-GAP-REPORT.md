@@ -491,3 +491,12 @@ The following additional changes were made after the initial Stage 2 implementat
 **Important remaining caveats:** a live S3 bucket/IAM-role upload-download round trip has not been run; S3 deployment is code/configuration ready, not provider-runtime verified. No automatic migration of existing local files is included. Reporting remains a tenant KPI summary export rather than a complete catalogue of paginated vendor/customer/product/project/engineer/inventory/service reports. Twilio configuration remains global rather than tenant-specific and delivery webhooks/templates are outstanding. Full browser E2E and comprehensive role/tenant matrix tests are still outstanding.
 
 **Current status:** Phase 2 remains **not accepted**. The new storage, report export and evidence UI improvements are code- and CI-verified within the limits above; live provider and full business workflow verification remain required.
+
+
+### 19.10 Storage decision update — local filesystem only (2026-11-08)
+
+The implementation direction was updated to use local file storage rather than S3. The previous S3 adapter and AWS SDK dependency have been removed. `PrivateObjectStorageService` now writes evidence under tenant/category-scoped directories and rejects path separators/traversal in generated filenames. Existing legacy flat storage keys remain readable and deletable; no migration of existing evidence records is needed for that compatibility path.
+
+Docker Compose now mounts persistent named volumes for service-ticket, site-survey and warranty-claim evidence separately. Spring configuration exposes `SERVICE_ATTACHMENT_DIR`, `SURVEY_ATTACHMENT_DIR` and `WARRANTY_ATTACHMENT_DIR`. The README documents local persistent-disk requirements and backup/restore expectations. Tests cover local round trips, tenant/category directory separation, traversal rejection and legacy flat-key compatibility.
+
+**Operational constraint:** local filesystem storage is suitable for a single backend instance with a persistent mounted disk/volume. It is not shared across multiple backend replicas. On any hosting platform, mount durable storage and point all three directory settings to it; ephemeral container storage will lose evidence during redeploy/replacement. Database and all evidence directories must be backed up/restored together.
