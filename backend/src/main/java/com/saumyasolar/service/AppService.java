@@ -367,7 +367,16 @@ public class AppService {
         enquiry.setMessage(input.message());
         enquiry.setStatus("NEW");
         enquiry.setCreatedAt(Instant.now());
-        return enquiries.save(enquiry);
+        Enquiry saved=enquiries.save(enquiry);
+        notifyVendorAdmins(tenant.getId(),"PUBLIC_ENQUIRY_RECEIVED","New solar enquiry received",
+                "A new public enquiry was received from "+enquiry.getName()+" ("+enquiry.getEmail()+"). Review it in the vendor portal.");
+        return saved;
+    }
+
+    private void notifyVendorAdmins(UUID tenantId,String eventType,String subject,String body) {
+        users.findByTenantId(tenantId).stream()
+                .filter(user->user.isEnabled()&&user.getRoles().stream().anyMatch(role->"VENDOR_ADMIN".equals(role.getName())))
+                .forEach(admin->notifications.sendBusinessNotification(admin.getId(),tenantId,eventType,admin.getEmail(),subject,body));
     }
 
     private UUID requirePackageManager(Principal p) {
@@ -493,7 +502,10 @@ public class AppService {
         enquiry.setMessage(x.message());
         enquiry.setStatus("NEW");
         enquiry.setCreatedAt(Instant.now());
-        return enquiries.save(enquiry);
+        Enquiry saved=enquiries.save(enquiry);
+        notifyVendorAdmins(p.tenantId(),"CUSTOMER_ENQUIRY_RECEIVED","New customer enquiry received",
+                "Customer "+profile.getName()+" submitted a new enquiry. Review it in the vendor portal.");
+        return saved;
     }
 
     @Transactional
