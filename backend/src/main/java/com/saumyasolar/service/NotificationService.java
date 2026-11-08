@@ -154,7 +154,7 @@ public class NotificationService {
             deliveries.save(record);
         }
     }
-\n    private String encForm(String value){return URLEncoder.encode(value,StandardCharsets.UTF_8);}
+    private String encForm(String value){return URLEncoder.encode(value,StandardCharsets.UTF_8);}
 
     private String safeName(String name) {
         return name == null || name.isBlank() ? "there" : name.replaceAll("[\\r\\n]", " ").trim();
