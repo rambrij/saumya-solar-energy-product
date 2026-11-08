@@ -579,6 +579,7 @@ class Release12TenantIntegrationTest {
     @Test
     void rolePermissionMatrixRejectsPrivilegedActionsForSalesCustomerAndPlatformUsers() throws Exception {
         var salesToken = accessToken("sales@saumya.local", "Sales@123");
+        var vendorToken = accessToken("admin@saumya.local", "Admin@123");
         var customerToken = accessToken("customer@saumya.local", "Customer@123");
         var platformToken = accessToken("platform@saumya.local", "Platform@123");
 
