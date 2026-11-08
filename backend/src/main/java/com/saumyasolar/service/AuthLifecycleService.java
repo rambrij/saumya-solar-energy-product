@@ -157,7 +157,7 @@ public class AuthLifecycleService {
         return challenge.getId().toString();
     }
 
-    @Transactional
+    @Transactional(dontRollbackOn = ResponseStatusException.class)
     public AppUser verifyMfaChallenge(String challengeId, String code) {
         UUID id;
         try { id = UUID.fromString(challengeId); }
