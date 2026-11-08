@@ -22,7 +22,7 @@ public class EnterpriseSaasService {
   e.setAction(action);e.setEntityType(type);e.setEntityId(id==null?null:id.toString());e.setOutcome("SUCCESS");e.setAfterJson(json(after));e.setCreatedAt(Instant.now());audits.save(e);
  }
  @Transactional public Branch createBranch(BranchInput x,Principal p){
-  UUID t=vendor(p,"BRANCH_MANAGE");String code=x.code().trim().toUpperCase(Locale.ROOT);
+  UUID t=vendor(p,"BRANCH_MANAGE");tenants.findByIdForUpdate(t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));String code=x.code().trim().toUpperCase(Locale.ROOT);
   if(branches.existsByTenantIdAndCodeIgnoreCase(t,code))throw new ResponseStatusException(HttpStatus.CONFLICT,"Branch code already exists");
   enforceBranchLimit(t);Branch b=new Branch();b.setId(UUID.randomUUID());b.setTenantId(t);b.setCode(code);b.setName(x.name().trim());
   b.setAddress(trim(x.address()));b.setPhone(trim(x.phone()));b.setEmail(trim(x.email()));b.setActive(true);b.setCreatedAt(Instant.now());b.setUpdatedAt(Instant.now());
@@ -71,9 +71,25 @@ public class EnterpriseSaasService {
   TenantSubscription s=subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(p.tenantId(),List.of("TRIAL","ACTIVE","PAST_DUE")).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"No subscription found"));
   SubscriptionPlan plan=plans.findById(s.getPlanId()).orElseThrow();return Map.of("subscription",s,"plan",plan,"effective",effective(s));
  }
+ public void assertWarehouseAccess(Warehouse warehouse,Principal p){
+  if(!"VENDOR".equals(p.accountType())||!Objects.equals(warehouse.getTenantId(),p.tenantId()))throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Warehouse not found");
+  if(p.roles()!=null&&p.roles().contains("VENDOR_ADMIN"))return;
+  if(warehouse.getBranchId()==null)return; // Unassigned legacy warehouses remain available to existing vendor operations.
+  List<BranchMembership> assigned=memberships.findByTenantIdAndUserId(p.tenantId(),p.userId());
+  if(!assigned.isEmpty()&&assigned.stream().noneMatch(m->warehouse.getBranchId().equals(m.getBranchId())))
+   throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Warehouse not found");
+ }
+ public List<Warehouse> filterWarehouses(List<Warehouse> rows,Principal p){
+  if(p.roles()!=null&&p.roles().contains("VENDOR_ADMIN"))return rows;
+  List<BranchMembership> assigned=memberships.findByTenantIdAndUserId(p.tenantId(),p.userId());
+  if(assigned.isEmpty())return rows;
+  Set<UUID> branchIds=new HashSet<>();assigned.forEach(m->branchIds.add(m.getBranchId()));
+  return rows.stream().filter(w->w.getBranchId()==null||branchIds.contains(w.getBranchId())).toList();
+ }
  public void enforceUserLimit(UUID t){
   List<TenantSubscription> history=subscriptions.findByTenantIdOrderByCreatedAtDesc(t);
   if(history.isEmpty())return; // Existing Phase 1/2 vendors remain grandfathered until subscription assignment.
+  tenants.findByIdForUpdate(t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Tenant not found"));
   TenantSubscription active=subscriptions.findFirstByTenantIdAndStatusInOrderByStartsAtDesc(t,List.of("TRIAL","ACTIVE"))
    .orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"An active subscription is required to add vendor users"));
   if(!effective(active))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Subscription is expired");
