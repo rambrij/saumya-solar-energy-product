@@ -41,6 +41,13 @@ public class EnterpriseSaasService {
   if(!active&&memberships.countByTenantIdAndBranchId(t,id)>0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Remove branch memberships before deactivation");
   b.setActive(active);b.setUpdatedAt(Instant.now());branches.save(b);audit(p,t,active?"BRANCH_ACTIVATED":"BRANCH_DEACTIVATED","BRANCH",id,b);
  }
+ @Transactional public void removeUser(UUID branchId,UUID userId,Principal p){
+  UUID t=vendor(p,"BRANCH_MANAGE");
+  branches.findByIdAndTenantId(branchId,t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Branch not found"));
+  if(!memberships.existsByTenantIdAndBranchIdAndUserId(t,branchId,userId))throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Branch membership not found");
+  memberships.deleteByTenantIdAndBranchIdAndUserId(t,branchId,userId);
+  audit(p,t,"BRANCH_USER_REMOVED","BRANCH",branchId,Map.of("userId",userId));
+ }
  @Transactional public void assignUser(UUID branchId,UUID userId,Principal p){
   UUID t=vendor(p,"BRANCH_MANAGE");branches.findByIdAndTenantId(branchId,t).filter(Branch::isActive).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Active branch not found"));
   users.findById(userId).filter(u->t.equals(u.getTenantId())&&u.isEnabled()).orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"Enabled same-tenant user not found"));
