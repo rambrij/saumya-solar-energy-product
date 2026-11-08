@@ -494,7 +494,7 @@ class Release12TenantIntegrationTest {
                 .content("{\"status\":\"ACTIVE\"}"))
                 .andExpect(status().isConflict());
         mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"email\":\""+email+"\",\"password\":\""+password+"\"}"))
+                .content("{\"email\":\""+email+"\",\"password\":\"NotAccepted-Password-2026\"}"))
                 .andExpect(status().isUnauthorized());
     }
 
