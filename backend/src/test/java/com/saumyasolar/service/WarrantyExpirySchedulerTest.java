@@ -9,7 +9,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.*;import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class WarrantyExpirySchedulerTest {
  @Test void marksEndedActiveWarrantyExpired(){
@@ -17,7 +17,7 @@ class WarrantyExpirySchedulerTest {
   Warranty w=new Warranty();w.setId(UUID.randomUUID());w.setTenantId(UUID.randomUUID());w.setCustomerId(UUID.randomUUID());w.setStatus("ACTIVE");w.setEndDate(LocalDate.now(ZoneId.of("Asia/Kolkata")).minusDays(1));
   when(warranties.findAll()).thenReturn(List.of(w));
   new WarrantyExpiryScheduler(warranties,customers,notifications,"Asia/Kolkata").evaluateWarrantyExpiry();
-  assert "EXPIRED".equals(w.getStatus());verify(warranties).save(w);verifyNoInteractions(notifications);
+  assertEquals("EXPIRED",w.getStatus());verify(warranties).save(w);verifyNoInteractions(notifications);
  }
  @Test void sendsThirtyDayExpiryReminder(){
   WarrantyRepository warranties=mock(WarrantyRepository.class);CustomerProfileRepository customers=mock(CustomerProfileRepository.class);NotificationService notifications=mock(NotificationService.class);
