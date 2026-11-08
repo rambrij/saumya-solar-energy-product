@@ -10,15 +10,15 @@ import java.util.*;
 @Configuration
 public class DataSeeder {
  @Value("${app.seed.enabled:false}") boolean seedEnabled;
- private static final List<String> PERMISSIONS=List.of("PLATFORM_MANAGE","CATALOG_MANAGE","CATALOG_VIEW","DISCOUNT_POLICY_MANAGE","CUSTOMER_MANAGE","LEAD_MANAGE","SURVEY_MANAGE","QUOTATION_MANAGE","DISCOUNT_APPROVE","ORDER_CREATE","USER_VIEW","USER_MANAGE","INVENTORY_MANAGE","SERVICE_MANAGE","FINANCE_MANAGE","PAYMENT_REFUND","REPORT_VIEW");
+ private static final List<String> PERMISSIONS=List.of("PLATFORM_MANAGE","SUBSCRIPTION_MANAGE","AUDIT_VIEW","CATALOG_MANAGE","CATALOG_VIEW","DISCOUNT_POLICY_MANAGE","CUSTOMER_MANAGE","LEAD_MANAGE","SURVEY_MANAGE","QUOTATION_MANAGE","DISCOUNT_APPROVE","ORDER_CREATE","USER_VIEW","USER_MANAGE","INVENTORY_MANAGE","SERVICE_MANAGE","FINANCE_MANAGE","PAYMENT_REFUND","REPORT_VIEW");
  private static final List<String> CATEGORIES=List.of("Solar Panels","Inverters","Batteries","Mounting Structures","Cables","AC/DC Distribution Boxes","Solar Accessories");
- @Bean CommandLineRunner seedData(TenantRepository tenants,PermissionRepository permissions,RoleRepository roles,AppUserRepository users,CustomerProfileRepository customers,ProductCategoryRepository categories,ProductRepository products,WarehouseRepository warehouses,InstallationChecklistTemplateRepository checklistTemplates,PasswordEncoder encoder){
+ @Bean CommandLineRunner seedData(TenantRepository tenants,PermissionRepository permissions,RoleRepository roles,AppUserRepository users,CustomerProfileRepository customers,ProductCategoryRepository categories,ProductRepository products,WarehouseRepository warehouses,InstallationChecklistTemplateRepository checklistTemplates,SubscriptionPlanRepository subscriptionPlans,PasswordEncoder encoder){
   return args->{
    if(!seedEnabled) return;
    Tenant defaultTenant=tenants.findBySlug("saumya-solar").orElseGet(()->{Tenant t=new Tenant();t.setId(UUID.randomUUID());t.setName("Saumya Solar");t.setSlug("saumya-solar");t.setStatus("ACTIVE");t.setCreatedAt(java.time.Instant.now());t.setUpdatedAt(java.time.Instant.now());return tenants.save(t);});
    Map<String,Permission> pm=new HashMap<>();
    for(String code:PERMISSIONS){Permission p=permissions.findByCode(code).orElseGet(()->{Permission x=new Permission();x.setId(UUID.randomUUID());x.setCode(code);return permissions.save(x);});pm.put(code,p);}
-   Role platform=ensureRole(roles,null,"PLATFORM_SUPER_ADMIN");grant(platform,List.of("PLATFORM_MANAGE"),pm);roles.save(platform);
+   Role platform=ensureRole(roles,null,"PLATFORM_SUPER_ADMIN");grant(platform,List.of("PLATFORM_MANAGE","SUBSCRIPTION_MANAGE","AUDIT_VIEW"),pm);roles.save(platform);
    Role customer=roles.findByNameAndTenantIdIsNull("CUSTOMER").orElseGet(()->{Role r=new Role();r.setId(UUID.randomUUID());r.setName("CUSTOMER");return roles.save(r);});
    for(Tenant tenant:tenants.findAll()){
     Role admin=ensureRole(roles,tenant.getId(),"VENDOR_ADMIN");grant(admin,PERMISSIONS.stream().filter(x->!x.equals("PLATFORM_MANAGE")).toList(),pm);roles.save(admin);
@@ -29,6 +29,7 @@ public class DataSeeder {
    }
    // Illustrative catalogue entries. Generic stock photographs are not manufacturer product images or certification evidence.
    seedDemoProducts(defaultTenant.getId(),categories,products);
+   seedDefaultSubscriptionPlans(subscriptionPlans);
    ensureUser(users,encoder,null,"Platform Admin","platform@saumya.local","Platform@123","PLATFORM",platform);
    ensureUser(users,encoder,defaultTenant.getId(),"Vendor Admin","admin@saumya.local","Admin@123","VENDOR",ensureRole(roles,defaultTenant.getId(),"VENDOR_ADMIN"));
    ensureUser(users,encoder,defaultTenant.getId(),"Sales User","sales@saumya.local","Sales@123","VENDOR",ensureRole(roles,defaultTenant.getId(),"SALES_EXECUTIVE"));
@@ -47,6 +48,14 @@ public class DataSeeder {
   Map.entry("TECHNICIAN",List.of("SURVEY_MANAGE","SERVICE_MANAGE")),
   Map.entry("SERVICE_MANAGER",List.of("SURVEY_MANAGE","SERVICE_MANAGE","REPORT_VIEW")),
   Map.entry("OPERATIONS_MANAGER",List.of("ORDER_CREATE","SURVEY_MANAGE","INVENTORY_MANAGE","SERVICE_MANAGE","REPORT_VIEW")));
+ }
+ private static void seedDefaultSubscriptionPlans(SubscriptionPlanRepository plans){
+  String[][] rows={
+   {"STARTER","Starter","For small solar businesses starting digital operations","MONTHLY","999.00","5","1","1","512","100","100","14","1","{\\"branches\\":false,\\"multiWarehouse\\":false,\\"customBranding\\":false}"},
+   {"PROFESSIONAL","Professional","For growing solar businesses managing sales and field operations","MONTHLY","2999.00","25","3","3","5120","1000","1000","14","2","{\\"branches\\":true,\\"multiWarehouse\\":true,\\"customBranding\\":true,\\"approvalWorkflows\\":true}"},
+   {"ENTERPRISE","Enterprise","For multi-location solar businesses with advanced operations","MONTHLY","9999.00","100","20","20","51200","10000","10000","30","3","{\\"branches\\":true,\\"multiWarehouse\\":true,\\"customBranding\\":true,\\"customDomains\\":true,\\"approvalWorkflows\\":true,\\"accountingIntegration\\":true,\\"paymentGateway\\":true,\\"apiIntegrations\\":true}"}
+  };
+  for(String[] r:rows){if(plans.findByPlanCodeIgnoreCase(r[0]).isPresent())continue;SubscriptionPlan p=new SubscriptionPlan();p.setId(UUID.randomUUID());p.setPlanCode(r[0]);p.setName(r[1]);p.setDescription(r[2]);p.setBillingCycle(r[3]);p.setPrice(new java.math.BigDecimal(r[4]));p.setCurrency("INR");p.setMaxUsers(Integer.parseInt(r[5]));p.setMaxBranches(Integer.parseInt(r[6]));p.setMaxWarehouses(Integer.parseInt(r[7]));p.setMaxStorageMb(Long.parseLong(r[8]));p.setMaxProducts(Integer.parseInt(r[9]));p.setMaxCustomers(Integer.parseInt(r[10]));p.setTrialPeriodDays(Integer.parseInt(r[11]));p.setDisplayOrder(Integer.parseInt(r[12]));p.setEntitlementsJson(r[13]);p.setActive(true);p.setCreatedAt(java.time.Instant.now());p.setUpdatedAt(java.time.Instant.now());plans.save(p);}
  }
  private static void seedDemoProducts(UUID tenantId,ProductCategoryRepository categories,ProductRepository products){
   record Demo(String category,String sku,String name,String manufacturer,String model,String technology,String description,String image,java.math.BigDecimal purchase,java.math.BigDecimal price,java.math.BigDecimal discount,int warranty,String unit,String hsn,String attrs){}
