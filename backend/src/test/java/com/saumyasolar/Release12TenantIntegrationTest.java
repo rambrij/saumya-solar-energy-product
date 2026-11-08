@@ -51,6 +51,7 @@ class Release12TenantIntegrationTest {
     @Autowired OrderItemRepository orderItems;
     @Autowired AuditLogRepository auditLogs;
     @Autowired NotificationDeliveryRepository notificationDeliveries;
+    @Autowired com.saumyasolar.service.NotificationService notifications;
 
     UUID vendorTenantId;
 
@@ -496,6 +497,42 @@ class Release12TenantIntegrationTest {
         mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\""+email+"\",\"password\":\"NotAccepted-Password-2026\"}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void notificationInboxIsScopedToAuthenticatedRecipientAndSupportsReadState() throws Exception {
+        var vendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        var customer = users.findByEmailIgnoreCase("customer@saumya.local").orElseThrow();
+        notifications.sendBusinessNotification(vendor.getId(), vendorTenantId, "TEST_VENDOR_NOTICE",
+                vendor.getEmail(), "Vendor notice", "Private test message");
+        notifications.sendBusinessNotification(customer.getId(), vendorTenantId, "TEST_CUSTOMER_NOTICE",
+                customer.getEmail(), "Customer notice", "Private customer message");
+
+        var vendorToken = accessToken("admin@saumya.local", "Admin@123");
+        var customerToken = accessToken("customer@saumya.local", "Customer@123");
+        var vendorResponse = mvc.perform(get("/api/v1/notifications")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(vendorResponse.contains("TEST_VENDOR_NOTICE"));
+        assertFalse(vendorResponse.contains("TEST_CUSTOMER_NOTICE"));
+        var vendorRows = json.readTree(vendorResponse);
+        var vendorNoticeId = vendorRows.findValuesAsText("id").stream()
+                .filter(id -> vendorRows.toString().contains("TEST_VENDOR_NOTICE"))
+                .findFirst().orElseThrow();
+
+        var customerResponse = mvc.perform(get("/api/v1/notifications")
+                        .header("Authorization", "Bearer " + customerToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(customerResponse.contains("TEST_CUSTOMER_NOTICE"));
+        assertFalse(customerResponse.contains("TEST_VENDOR_NOTICE"));
+
+        mvc.perform(post("/api/v1/notifications/" + vendorNoticeId + "/read")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.readAt").isNotEmpty());
+        mvc.perform(post("/api/v1/notifications/" + vendorNoticeId + "/read")
+                        .header("Authorization", "Bearer " + customerToken))
+                .andExpect(status().isNotFound());
     }
 
     @Test
