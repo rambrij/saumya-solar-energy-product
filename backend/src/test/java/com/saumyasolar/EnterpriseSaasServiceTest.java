@@ -179,7 +179,7 @@ class EnterpriseSaasServiceTest {
         Principal platform=new Principal(UUID.randomUUID(),null,"platform@example.test","PLATFORM",
                 Set.of("PLATFORM_SUPER_ADMIN"),Set.of("SUBSCRIPTION_MANAGE"),0);
         var input=new EnterpriseSaasService.PlanInput("growth","Growth","Growing teams","MONTHLY",
-                java.math.BigDecimal.valueOf(4999),"INR",25,3,3,10240,2000,2000,14,4,"{\\"branches\\":true}");
+                java.math.BigDecimal.valueOf(4999),"INR",25,3,3,10240,2000,2000,14,4,"{\"branches\":true}");
         SubscriptionPlan created=service.createPlan(input,platform);
         assertEquals("GROWTH",created.getPlanCode());
         assertEquals(2000,created.getMaxProducts());
