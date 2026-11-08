@@ -22,7 +22,7 @@ public class PrivateObjectStorageService {
                       byte[] content, String contentType) throws IOException {
         if (tenantId == null || category == null || !category.matches("[a-z0-9-]{1,50}")
                 || generatedKey == null || generatedKey.isBlank()
-                || generatedKey.contains("/") || generatedKey.contains("\\\\")
+                || generatedKey.contains("/") || generatedKey.contains("\\")
                 || generatedKey.equals(".") || generatedKey.equals("..")) {
             throw new IOException("Invalid private evidence storage key");
         }
