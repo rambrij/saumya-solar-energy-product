@@ -71,6 +71,17 @@ class Release12TenantIntegrationTest {
                         .content(tenantBody))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var tenantId = json.readTree(tenantResponse).get("id").asText();
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(adminEmail, adminPassword)))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/platform/tenants/" + tenantId + "/verification")
+                        .header("Authorization", "Bearer " + platformToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"APPROVE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.verificationStatus").value("VERIFIED"));
 
         var vendorToken = accessToken(adminEmail, adminPassword);
         var rolesResponse = mvc.perform(get("/api/v1/roles").header("Authorization", "Bearer " + vendorToken))
