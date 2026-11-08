@@ -150,6 +150,24 @@ public class EnterpriseSaasService {
    .max(Comparator.comparing(TenantSubscription::getStartsAt));
  }
  private boolean effective(TenantSubscription s){Instant now=Instant.now();return ("ACTIVE".equals(s.getStatus())||"TRIAL".equals(s.getStatus()))&&s.getStartsAt()!=null&&!s.getStartsAt().isAfter(now)&&(s.getEndsAt()==null||s.getEndsAt().isAfter(now));}
+ public void requireEntitlement(UUID tenantId,String featureCode){
+  if(subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId).isEmpty())return;
+  TenantSubscription active=effectiveSubscription(tenantId).orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"An active subscription is required for this feature"));
+  SubscriptionPlan plan=plans.findById(active.getPlanId()).orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"Subscription plan is unavailable"));
+  try{
+   var root=mapper.readTree(plan.getEntitlementsJson()==null?"{}":plan.getEntitlementsJson());
+   String camel=featureCode.toLowerCase(Locale.ROOT).replaceAll("_([a-z])",m->m.group(1).toUpperCase(Locale.ROOT));
+   var feature=root.get(featureCode);if(feature==null)feature=root.get(camel);
+   if(feature==null&&root.has("features")){
+    var features=root.get("features");
+    feature=features.isObject()?features.get(featureCode):null;
+    if(feature==null&&features.isArray())for(var value:features)if(featureCode.equalsIgnoreCase(value.asText()))return;
+   }
+   if(feature!=null&&feature.isBoolean()&&!feature.asBoolean())throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Current subscription does not include "+featureCode);
+  }catch(ResponseStatusException e){throw e;}
+  catch(Exception e){throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Subscription entitlements are invalid; contact the platform administrator");}
+ }
+
  public List<AuditEvent> auditEvents(Principal p,Instant from,Instant to,UUID actorId,String action,String entityType,String outcome){
   UUID tenant=null;
   if("PLATFORM".equals(p.accountType()))platform(p,"AUDIT_VIEW");
