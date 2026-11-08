@@ -161,8 +161,8 @@ public class EnterpriseSaasService {
   SubscriptionPlan plan=plans.findById(active.getPlanId()).orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN,"Subscription plan is unavailable"));
   try{
    var root=mapper.readTree(plan.getEntitlementsJson()==null?"{}":plan.getEntitlementsJson());
-   String camel=featureCode.toLowerCase(Locale.ROOT).replaceAll("_([a-z])",m->m.group(1).toUpperCase(Locale.ROOT));
-   var feature=root.get(featureCode);if(feature==null)feature=root.get(camel);
+   String lower=featureCode.toLowerCase(Locale.ROOT);
+   var feature=root.get(featureCode);if(feature==null)feature=root.get(lower);
    if(feature==null&&root.has("features")){
     var features=root.get("features");
     feature=features.isObject()?features.get(featureCode):null;
