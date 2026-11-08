@@ -102,4 +102,30 @@ public class Phase2OperationsController {
   return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=operations-report.csv").contentType(MediaType.parseMediaType("text/csv; charset=UTF-8")).body(csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
  }
 
+
+ @GetMapping(value="/reports/operations/export.xlsx",produces="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+ public ResponseEntity<byte[]> exportOperationsExcel(@RequestParam(required=false) LocalDate from,@RequestParam(required=false) LocalDate to,Authentication a){
+  Map<String,Object> report=operationsReport(from,to,a);
+  try(java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();org.apache.poi.xssf.usermodel.XSSFWorkbook workbook=new org.apache.poi.xssf.usermodel.XSSFWorkbook()){
+   var sheet=workbook.createSheet("Operations");var header=sheet.createRow(0);header.createCell(0).setCellValue("Metric");header.createCell(1).setCellValue("Value");
+   int row=1;for(var entry:report.entrySet()){var cells=sheet.createRow(row++);cells.createCell(0).setCellValue(entry.getKey());cells.createCell(1).setCellValue(entry.getValue()==null?"":String.valueOf(entry.getValue()));}
+   sheet.setColumnWidth(0,24*256);sheet.setColumnWidth(1,32*256);workbook.write(out);
+   return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=operations-report.xlsx").contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")).body(out.toByteArray());
+  }catch(java.io.IOException ex){throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,"Unable to generate Excel report",ex);}
+ }
+ @GetMapping(value="/reports/operations/export.pdf",produces="application/pdf")
+ public ResponseEntity<byte[]> exportOperationsPdf(@RequestParam(required=false) LocalDate from,@RequestParam(required=false) LocalDate to,Authentication a){
+  Map<String,Object> report=operationsReport(from,to,a);
+  try(java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream()){
+   com.lowagie.text.Document document=new com.lowagie.text.Document();
+   com.lowagie.text.pdf.PdfWriter.getInstance(document,out);document.open();
+   document.add(new com.lowagie.text.Paragraph("Soumya Solar — Operations Report"));
+   document.add(new com.lowagie.text.Paragraph("Period: "+(from==null?"Beginning":from)+" to "+(to==null?"Today":to)));
+   com.lowagie.text.pdf.PdfPTable table=new com.lowagie.text.pdf.PdfPTable(2);table.setWidthPercentage(100);
+   table.addCell("Metric");table.addCell("Value");
+   for(var entry:report.entrySet()){table.addCell(entry.getKey());table.addCell(entry.getValue()==null?"":String.valueOf(entry.getValue()));}
+   document.add(table);document.close();
+   return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=operations-report.pdf").contentType(MediaType.APPLICATION_PDF).body(out.toByteArray());
+  }catch(Exception ex){throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,"Unable to generate PDF report",ex);}
+ }
 }
