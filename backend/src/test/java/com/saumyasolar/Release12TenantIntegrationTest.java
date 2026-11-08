@@ -123,7 +123,9 @@ class Release12TenantIntegrationTest {
                         "/api/v1/platform/verification-documents/" + kycId + "/review")
                         .header("Authorization", "Bearer " + platformToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\"decision\\":\\"APPROVED\\",\\"notes\\":\\"GST certificate verified\\"}"))
+                        .content("""
+                                {"decision":"APPROVED","notes":"GST certificate verified"}
+                                """))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/v1/platform/tenants/" + tenantId + "/verification")
                         .header("Authorization", "Bearer " + platformToken)
