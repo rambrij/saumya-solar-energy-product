@@ -68,7 +68,14 @@ public class AuthLifecycleService {
     
     public boolean tenantIsActive(AppUser user) {
         if (user.getTenantId() == null) return "PLATFORM".equals(user.getAccountType());
-        return tenants.findById(user.getTenantId()).map(t -> "ACTIVE".equals(t.getStatus())).orElse(false);
+        return tenants.findById(user.getTenantId()).map(tenant -> {
+            if ("ACTIVE".equals(tenant.getStatus())) return true;
+            boolean onboardingState = "INACTIVE".equals(tenant.getStatus())
+                    && java.util.Set.of("PENDING_VERIFICATION", "REJECTED").contains(tenant.getVerificationStatus());
+            boolean vendorAdmin = "VENDOR".equals(user.getAccountType())
+                    && user.getRoles().stream().anyMatch(role -> "VENDOR_ADMIN".equals(role.getName()));
+            return onboardingState && vendorAdmin && user.isEnabled();
+        }).orElse(false);
     }
 
     public String newRefresh(AppUser u) {
