@@ -523,6 +523,27 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void vendorAdminCanCreateScopedCustomRolesButCannotDelegatePlatformPrivileges() throws Exception {
+        String admin=accessToken("admin@saumya.local","Admin@123");
+        mvc.perform(post("/api/v1/roles").header("Authorization","Bearer "+admin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"CUSTOM_CATALOG_VIEWER\",\"permissionCodes\":[\"CATALOG_VIEW\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.name").value("CUSTOM_CATALOG_VIEWER"));
+        mvc.perform(post("/api/v1/roles").header("Authorization","Bearer "+admin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"CUSTOM_PLATFORM_ADMIN\",\"permissionCodes\":[\"PLATFORM_MANAGE\"]}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/roles").header("Authorization","Bearer "+admin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"CUSTOM_USER_ADMIN\",\"permissionCodes\":[\"USER_MANAGE\"]}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/roles/permissions").header("Authorization","Bearer "+admin))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$").isArray());
+    }
+
     private String accessToken(String email, String password) throws Exception {
         var body = """
                 {"email":"%s","password":"%s"}
