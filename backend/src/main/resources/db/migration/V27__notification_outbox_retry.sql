@@ -18,3 +18,8 @@ ALTER TABLE notification_delivery
 
 CREATE INDEX ix_notification_delivery_due
     ON notification_delivery(status, next_attempt_at, created_at);
+
+-- Legacy synchronous deliveries did not persist their payload and cannot be retried safely.
+UPDATE notification_delivery
+SET status = 'DEAD', last_error = 'Legacy delivery has no persisted message payload'
+WHERE body IS NULL AND status IN ('PENDING', 'FAILED');
