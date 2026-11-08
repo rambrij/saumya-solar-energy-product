@@ -2,6 +2,7 @@ package com.saumyasolar;
 
 import com.saumyasolar.api.SurveyModels.UpdateRequest;
 import com.saumyasolar.domain.SiteSurvey;
+import com.saumyasolar.domain.SalesLead;
 import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.SalesLeadRepository;
 import com.saumyasolar.repo.SiteSurveyRepository;
@@ -45,7 +46,13 @@ class SurveyLifecycleIntegrationTest {
         actorId = admin.getId();
         actor = new Principal(actorId, tenantId, admin.getEmail(), "VENDOR",
                 Set.of("VENDOR_ADMIN"), Set.of("SURVEY_MANAGE"));
-        var lead = leads.findByTenantIdOrderByIdDesc(tenantId).stream().findFirst().orElseThrow();
+        SalesLead lead = new SalesLead();
+        lead.setId(UUID.randomUUID());
+        lead.setTenantId(tenantId);
+        lead.setStage("NEW");
+        lead.setPriority("MEDIUM");
+        lead.setCreatedAt(Instant.now());
+        leads.save(lead);
         SiteSurvey survey = new SiteSurvey();
         surveyId = UUID.randomUUID();
         survey.setId(surveyId);
