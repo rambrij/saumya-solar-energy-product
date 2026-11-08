@@ -303,13 +303,23 @@ class Release12TenantIntegrationTest {
                                 """.formatted(UUID.randomUUID())))
                 .andExpect(status().isBadRequest());
 
-        mvc.perform(post("/api/v1/packages")
+        var packageResponse=mvc.perform(post("/api/v1/packages")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"code":"PKG-%s","name":"Three kW package","capacityKw":3,"packageType":"RESIDENTIAL","basePrice":25000,"taxPercent":18,"items":[{"productId":"%s","quantity":4,"optionalItem":false}]}
                                 """.formatted(UUID.randomUUID(), productId)))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String packageId=json.readTree(packageResponse).get("id").asText();
+        var customer=customerProfiles.findByTenantIdOrderByIdDesc(vendorTenantId).get(0);
+        var quoteResponse=mvc.perform(post("/api/v1/quotations").header("Authorization","Bearer "+token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerId":"%s","discountPercent":10,"validUntil":"%s","items":[{"packageId":"%s","quantity":1}]}
+                                """.formatted(customer.getId(),java.time.LocalDate.now().plusDays(30),packageId)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertEquals(4050.0,json.readTree(quoteResponse).get("quotation").get("taxAmount").asDouble());
+        assertEquals(26550.0,json.readTree(quoteResponse).get("quotation").get("grandTotal").asDouble());
     }
 
     @Test
