@@ -632,7 +632,7 @@ For disposable local development only:
 | Vendor Sales User | sales@saumya.local | Sales@123 |
 | Customer | customer@saumya.local | Customer@123 |
 
-Passwords are encoded through the configured PasswordEncoder. Seeded baseline data includes the Saumya Solar tenant, roles, these accounts, customer profiles, product categories/products, warehouse/checklist templates and V45 plan catalogue. The opt-in local DataSeeder creates a linked demonstration graph: enquiry → qualified lead → approved site survey → accepted quotation and item → confirmed order and item → paid invoice and confirmed manual UPI payment → commissioned installation → open service request. The records are tenant-owned and seeded idempotently. The UI/API manual E2E guide is still required to validate the complete interactive workflow. Do not treat demo credentials as production credentials.
+Passwords are encoded through the configured PasswordEncoder. Seeded baseline data includes the Saumya Solar tenant, roles, these accounts, customer profiles, product categories/products, warehouse/checklist templates, an opening inventory balance/receipt ledger and V45 plan catalogue. The opt-in local DataSeeder creates a linked demonstration graph: enquiry → qualified lead → approved site survey → accepted quotation and item → confirmed order and item → paid invoice and confirmed manual UPI payment → commissioned installation → open service request. The records are tenant-owned and seeded idempotently. The UI/API manual E2E guide is still required to validate the complete interactive workflow. Do not treat demo credentials as production credentials.
 
 ### Role navigation
 
