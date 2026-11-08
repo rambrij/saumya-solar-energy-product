@@ -577,7 +577,7 @@ Keep Twilio credentials in the deployment secret manager; never place them in fr
 
 ### Subscription plans
 
-Flyway migration **V45** seeds the default Starter, Professional and Enterprise plans by unique plan code. Re-running application startup or Flyway does not create duplicate plans. Migration **V46**, **V47** and **V48** adds product/customer limits, trial period, display order, assignment billing metadata and an append-only assignment-history table. Existing plan and tenant-subscription IDs are preserved.
+Flyway migration **V45** seeds the default Starter, Professional and Enterprise plans by unique plan code. Re-running application startup or Flyway does not create duplicate plans. **V46** adds product/customer limits, trial period, display order and assignment-history storage; **V47** aligns the Starter warehouse allowance with its multi-warehouse entitlement; **V48** protects assignment history with append-only database triggers. Existing plan and tenant-subscription IDs are preserved.
 
 The Platform Super Admin manages plans from **Platform → Subscription administration**. Plan fields include name/code, description, monthly/yearly billing, INR price, user/branch/warehouse/product/customer limits, storage allowance, trial days, entitlements JSON, active status and display order. A plan referenced by a tenant subscription cannot be physically deleted; deactivate it instead.
 
