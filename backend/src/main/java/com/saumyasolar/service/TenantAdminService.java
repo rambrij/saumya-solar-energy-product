@@ -109,11 +109,11 @@ public class TenantAdminService {
         if (admin!=null) {
             String event="APPROVE".equals(action)?"VENDOR_VERIFIED":"VENDOR_VERIFICATION_REJECTED";
             String subject="APPROVE".equals(action)?"Your vendor account is verified":"Vendor verification needs attention";
-            String message="Hello "+admin.getName()+",\\n\\n"
+            String message="Hello "+admin.getName()+",\n\n"
                     + ("APPROVE".equals(action)
                     ? "Your Soumya Solar vendor account has been verified and is now active."
                     : "Your vendor verification was not approved. Reason: "+saved.getRejectionReason())
-                    + "\\n\\nPlease contact the platform administrator if you need assistance.";
+                    + "\n\nPlease contact the platform administrator if you need assistance.";
             notifications.sendBusinessNotification(admin.getId(),saved.getId(),event,admin.getEmail(),subject,message);
         }
         return row(saved);
