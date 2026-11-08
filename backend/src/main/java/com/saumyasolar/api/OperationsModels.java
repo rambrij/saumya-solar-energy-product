@@ -13,7 +13,7 @@ public record ReservationInput(@NotNull UUID warehouseId,@NotBlank String reason
 public record CustomerProductOrderInput(@NotNull UUID productId,@NotNull @Min(1) @Max(1000) Integer quantity){}
 public record OrderDecisionInput(@NotBlank @Pattern(regexp="ACCEPT|REJECT") String decision,@NotBlank @Size(max=500) String reason){}
 public record OrderTransitionInput(@NotBlank String status,@NotBlank String reason){}
-public record InstallationInput(@NotNull UUID orderId,@NotBlank String siteAddress,@NotNull Instant scheduledAt,@NotNull UUID assignedEngineerId,@NotNull UUID teamId,String teamName,BigDecimal capacityKw,String notes){}
+public record InstallationInput(@NotNull UUID orderId,@NotBlank String siteAddress,@NotNull Instant scheduledAt,@NotNull UUID assignedEngineerId,@NotNull UUID teamId,String teamName,BigDecimal capacityKw,String notes,UUID surveyId){public InstallationInput(UUID orderId,String siteAddress,Instant scheduledAt,UUID assignedEngineerId,UUID teamId,String teamName,BigDecimal capacityKw,String notes){this(orderId,siteAddress,scheduledAt,assignedEngineerId,teamId,teamName,capacityKw,notes,null);}}
 public record RescheduleInput(@NotNull Instant scheduledAt,@NotBlank String reason){}
 public record ChecklistUpdateInput(Boolean completed,String evidenceUrl,String notes){}
 public record EquipmentInput(@NotNull UUID productId,String serialNumber){}
