@@ -14,7 +14,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class OfflineSyncServiceTest {
-    @Test void appliesSurveyStartOnceAndReturnsStoredResultForDuplicateOperation() {
+    @Test void appliesSurveyStartOnceAndReturnsStoredResultForDuplicateOperation() throws Exception {
         OfflineSyncOperationRepository operations = mock(OfflineSyncOperationRepository.class);
         ServiceRequestRepository tickets = mock(ServiceRequestRepository.class);
         ServiceCommentRepository comments = mock(ServiceCommentRepository.class);
