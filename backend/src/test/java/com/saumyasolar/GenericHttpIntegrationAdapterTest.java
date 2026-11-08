@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.saumyasolar.domain.IntegrationConnection;
 import com.saumyasolar.domain.IntegrationSyncJob;
 import com.saumyasolar.service.GenericHttpIntegrationAdapter;
+import com.saumyasolar.service.SecretProviderRegistry;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GenericHttpIntegrationAdapterTest {
-    private final GenericHttpIntegrationAdapter adapter = new GenericHttpIntegrationAdapter(new ObjectMapper());
+    private final GenericHttpIntegrationAdapter adapter = new GenericHttpIntegrationAdapter(new ObjectMapper(),new SecretProviderRegistry(List.of()));
 
     @Test
     void rejectsPlainHttpEndpoints() {
