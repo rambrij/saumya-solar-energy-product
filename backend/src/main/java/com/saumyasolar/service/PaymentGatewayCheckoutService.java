@@ -24,6 +24,14 @@ public class PaymentGatewayCheckoutService {
         this.invoices=invoices;this.payments=payments;this.refunds=refunds;this.customers=customers;this.orders=orders;
         this.connections=connections;this.adapters=adapters;this.entitlements=entitlements;this.audits=audits;this.mapper=mapper;
     }
+    public Map<String,Object> availability(Principal actor) {
+        if(actor==null||actor.tenantId()==null||!Set.of("VENDOR","CUSTOMER").contains(actor.accountType()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        List<String> available=connections.findByTenantIdAndIntegrationTypeAndStatus(actor.tenantId(),"PAYMENT_GATEWAY","ACTIVE")
+                .stream().map(IntegrationConnection::getProviderCode).filter(code->adapters.find(code).isPresent()).distinct().toList();
+        return Map.of("available",!available.isEmpty(),"providers",available);
+    }
+
     @Transactional
     public CheckoutResult create(UUID invoiceId,String providerCode,String idempotencyKey,Principal actor) {
         if(actor==null||actor.tenantId()==null||actor.userId()==null)throw new ResponseStatusException(HttpStatus.FORBIDDEN);
