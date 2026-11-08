@@ -190,6 +190,37 @@ class EnterpriseSaasServiceTest {
     }
 
     @Test
+    void platformCanUpdateAndTogglePlanActivation() {
+        UUID id=UUID.randomUUID();SubscriptionPlan existing=plan(2);existing.setId(id);existing.setPlanCode("GROWTH");
+        when(plans.findById(id)).thenReturn(Optional.of(existing));
+        when(plans.findByPlanCodeIgnoreCase("GROWTH")).thenReturn(Optional.of(existing));
+        when(plans.save(any(SubscriptionPlan.class))).thenAnswer(invocation->invocation.getArgument(0));
+        when(audits.save(any(AuditEvent.class))).thenAnswer(invocation->invocation.getArgument(0));
+        Principal platform=new Principal(UUID.randomUUID(),null,"platform@example.test","PLATFORM",
+                Set.of("PLATFORM_SUPER_ADMIN"),Set.of("SUBSCRIPTION_MANAGE"),0);
+        var input=new EnterpriseSaasService.PlanInput("growth","Growth Updated","Updated description","YEARLY",
+                java.math.BigDecimal.valueOf(39999),"INR",40,5,5,20480,4000,4000,30,5,"{\"branches\":true}");
+        SubscriptionPlan updated=service.updatePlan(id,input,platform);
+        assertEquals("Growth Updated",updated.getName());
+        assertEquals("YEARLY",updated.getBillingCycle());
+        assertEquals(4000,updated.getMaxCustomers());
+        assertFalse(service.setPlanActive(id,false,platform).isActive());
+        assertTrue(service.setPlanActive(id,true,platform).isActive());
+    }
+
+    @Test
+    void unassignedPlanCanBeDeleted() {
+        UUID id=UUID.randomUUID();SubscriptionPlan existing=plan(2);existing.setId(id);
+        when(plans.findById(id)).thenReturn(Optional.of(existing));
+        when(subscriptions.existsByPlanId(id)).thenReturn(false);
+        when(audits.save(any(AuditEvent.class))).thenAnswer(invocation->invocation.getArgument(0));
+        Principal platform=new Principal(UUID.randomUUID(),null,"platform@example.test","PLATFORM",
+                Set.of("PLATFORM_SUPER_ADMIN"),Set.of("SUBSCRIPTION_MANAGE"),0);
+        assertDoesNotThrow(()->service.deletePlan(id,platform));
+        verify(plans).delete(existing);
+    }
+
+    @Test
     void planWithAssignmentHistoryCannotBePhysicallyDeleted() {
         UUID planId=UUID.randomUUID();SubscriptionPlan plan=plan(2);plan.setId(planId);
         when(plans.findById(planId)).thenReturn(Optional.of(plan));
