@@ -34,7 +34,7 @@ class OfflineSyncServiceTest {
                 .thenReturn(Optional.empty(), Optional.of(stored));
         when(operations.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(surveys.start(surveyId, actor)).thenReturn(survey);
-        OfflineSyncService service = new OfflineSyncService(operations, tickets, comments, customers,
+        OfflineSyncService service = new OfflineSyncService(operations, mock(AuditEventRepository.class), tickets, comments, customers,
                 notifications, surveys, new ObjectMapper());
         OfflineSyncService.SyncCommand command = new OfflineSyncService.SyncCommand(
                 operationId, "SURVEY_START", surveyId, "{}", Instant.now());
@@ -47,7 +47,7 @@ class OfflineSyncServiceTest {
     }
 
     @Test void rejectsOfflineCommandsFromPlatformAccounts() {
-        OfflineSyncService service = new OfflineSyncService(mock(OfflineSyncOperationRepository.class),
+        OfflineSyncService service = new OfflineSyncService(mock(OfflineSyncOperationRepository.class), mock(AuditEventRepository.class),
                 mock(ServiceRequestRepository.class), mock(ServiceCommentRepository.class),
                 mock(CustomerProfileRepository.class), mock(NotificationService.class),
                 mock(SurveyLifecycleService.class), new ObjectMapper());
