@@ -58,6 +58,7 @@ private void createWarranty(CustomerOrder o,InstallationJob j,Product pr,int qua
 private CustomerProfile customer(Principal p){if(!"CUSTOMER".equals(p.accountType())||p.tenantId()==null)throw new ResponseStatusException(HttpStatus.FORBIDDEN);CustomerProfile cp=customers.findByTenantIdAndUserId(p.tenantId(),p.userId()).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Customer profile not found"));if(!cp.isActive())throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Customer account is inactive");return cp;}
 @Transactional public CustomerOrder createCustomerProductOrder(CustomerProductOrderInput x,Principal p){
 CustomerProfile cp=customer(p);
+UUID t=p.tenantId();
 Product pr=products.findByIdAndTenantId(x.productId(),p.tenantId()).filter(Product::isActive).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Product is not available in this vendor catalogue"));
 BigDecimal discount=pr.getDiscountPercent()==null?BigDecimal.ZERO:pr.getDiscountPercent();
 if(pr.getPrice()==null||pr.getPrice().signum()<0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Product sale price configuration is invalid");
