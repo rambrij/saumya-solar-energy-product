@@ -43,7 +43,7 @@ Expected: each stage links to the previous record; only one order exists for an 
 ```mermaid\nflowchart TD\n A[Platform setup] --> B[Tenant subscription]\n B --> C[Product setup]\n C --> D[Customer enquiry]\n D --> E[Lead qualification]\n E --> F[Quotation and approval]\n F --> G[Site survey]\n G --> H[Order conversion]\n H --> I[Installation and commissioning]\n I --> J[Service request]\n```
 
 ## 15. Business flow diagram
-Automated browser E2E coverage is not currently configured in the repository. The current demo seeder does not yet populate the complete linked lifecycle; create test records through the supported UI/APIs until the lifecycle seeder and browser suite are added.
+Automated browser E2E coverage is not currently configured in the repository. The opt-in local DataSeeder now creates one linked lifecycle graph; the manual guide remains necessary to validate browser interactions and role-specific behavior.
 
 ## 16. Known limitations
 undefined
