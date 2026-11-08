@@ -24,6 +24,7 @@ Authentication `POST /api/v1/auth/login`, `GET /api/v1/me`; platform tenant rout
 ## 8. Request and response examples
 Example permission-gated operation: Platform plan create requires authenticated principal with account type `PLATFORM`, role `PLATFORM_SUPER_ADMIN` and permission `SUBSCRIPTION_MANAGE`; missing permission returns 403.
 
+Unauthorized API response shape: `{"status":403,"error":"Forbidden","message":"Missing permission: SUBSCRIPTION_MANAGE"}`. Actual error fields follow the global API exception handler.
 ## 9. Database entities and relationships
 `AppUser` N—M `Role`; `Role` N—M `Permission`; vendor business records include `tenant_id`; customer profile maps authenticated user to customer-owned records.
 
