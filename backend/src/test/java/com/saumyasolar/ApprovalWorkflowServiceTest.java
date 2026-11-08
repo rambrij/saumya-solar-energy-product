@@ -30,7 +30,6 @@ class ApprovalWorkflowServiceTest {
     @Mock ApprovalInstanceRepository instances;
     @Mock ApprovalDecisionRepository decisions;
     @Mock AuditEventRepository audits;
-    @Mock com.saumyasolar.service.EnterpriseSaasService entitlements;
     @Mock EnterpriseSaasService enterpriseSaas;
     ApprovalWorkflowService service;
 
