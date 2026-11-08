@@ -8,14 +8,14 @@ async function request(path:string,s:Session,method='GET',body?:any){
  return data;
 }
 export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'vendor';s:Session;error:(message:string)=>void}){
- const [branches,setBranches]=useState<any[]>([]),[plans,setPlans]=useState<any[]>([]),[subscription,setSubscription]=useState<any>(null),[audits,setAudits]=useState<any[]>([]),[branding,setBranding]=useState<any>({displayName:'',logoUrl:'',primaryColor:'#0B6B4B',secondaryColor:'#F6C85F',contactEmail:'',contactPhone:'',supportEmail:'',supportPhone:''}),[domains,setDomains]=useState<any[]>([]);
+ const [branches,setBranches]=useState<any[]>([]),[plans,setPlans]=useState<any[]>([]),[subscription,setSubscription]=useState<any>(null),[audits,setAudits]=useState<any[]>([]),[branding,setBranding]=useState<any>({displayName:'',logoUrl:'',primaryColor:'#0B6B4B',secondaryColor:'#F6C85F',contactEmail:'',contactPhone:'',supportEmail:'',supportPhone:''}),[domains,setDomains]=useState<any[]>([]),[workflows,setWorkflows]=useState<any[]>([]);
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[panelError,setPanelError]=useState('');
  const load=async()=>{
   setLoading(true);setPanelError('');
   try{
    if(mode==='vendor'){
-    const [b,sub,brand,domainRows]=await Promise.all([request('/branches',s),request('/subscription',s).catch(()=>null),request('/vendor/branding',s),request('/vendor/domains',s)]);
-    setBranches(b);setSubscription(sub);setBranding(brand);setDomains(domainRows);
+    const perms=s.user?.permissions||[];const [b,sub,brand,domainRows,wf]=await Promise.all([perms.includes('BRANCH_MANAGE')?request('/branches',s):Promise.resolve([]),request('/subscription',s).catch(()=>null),perms.includes('BRANDING_MANAGE')?request('/vendor/branding',s):Promise.resolve(branding),perms.includes('BRANDING_MANAGE')?request('/vendor/domains',s):Promise.resolve([]),perms.includes('APPROVAL_WORKFLOW_MANAGE')?request('/approval-workflows',s):Promise.resolve([])]);
+    setBranches(b);setSubscription(sub);setBranding(brand);setDomains(domainRows);setWorkflows(wf);
    }else setPlans(await request('/subscription-plans',s));
   }catch(e:any){setPanelError(e.message)}finally{setLoading(false)}
  };
@@ -23,6 +23,10 @@ export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'ven
  const createBranch=async(e:React.FormEvent<HTMLFormElement>)=>{
   e.preventDefault();const form=e.currentTarget;const x:any=Object.fromEntries(new FormData(form));setBusy(true);
   try{await request('/branches',s,'POST',x);form.reset();await load();error('Branch created.')}catch(e:any){setPanelError(e.message)}finally{setBusy(false)}
+ };
+ const createWorkflow=async(e:React.FormEvent<HTMLFormElement>)=>{
+  e.preventDefault();const form=e.currentTarget;const x:any=Object.fromEntries(new FormData(form));setBusy(true);
+  try{const created=await request('/approval-workflows',s,'POST',x);setWorkflows(v=>[created,...v]);form.reset();error('Approval workflow created.')}catch(e:any){setPanelError(e.message)}finally{setBusy(false)}
  };
  const saveBranding=async(e:React.FormEvent<HTMLFormElement>)=>{
   e.preventDefault();const form=e.currentTarget;const x:any=Object.fromEntries(new FormData(form));setBusy(true);
@@ -57,7 +61,11 @@ export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'ven
   {panelError&&<div className="notice" role="alert">{panelError}<button type="button" onClick={()=>setPanelError('')}>×</button></div>}
   {loading?<div className="card">Loading enterprise settings…</div>:mode==='vendor'?<>
    <div className="card"><h2>Current subscription</h2>{subscription?<><p><b>{subscription.plan?.name}</b> · {subscription.subscription?.status}</p><p>Billing: {subscription.plan?.billingCycle} · ₹{subscription.plan?.price} {subscription.plan?.currency}</p><p>Branch limit: {subscription.plan?.maxBranches} · Warehouse limit: {subscription.plan?.maxWarehouses} · User limit: {subscription.plan?.maxUsers}</p><p>Effective: {subscription.effective?'Yes':'No'}</p></>:<p>No active subscription is assigned. Contact the platform administrator.</p>}</div>
-   <div className="card"><h2>Vendor branding</h2><form className="form" onSubmit={saveBranding}>
+   {s.user?.permissions?.includes('APPROVAL_WORKFLOW_MANAGE')&&<div className="card"><h2>Approval workflows</h2>
+    {workflows.map(w=><p key={w.id}><b>{w.name}</b> · {w.entityType} · {w.active?'Active':'Inactive'}</p>)}
+    <form className="form" onSubmit={createWorkflow}><h3>Create quotation approval workflow</h3><input name="code" placeholder="Workflow code" required/><input name="name" placeholder="Workflow name" required/><input name="entityType" value="QUOTATION" readOnly/><textarea name="stepsJson" defaultValue={'[\n  { "approverRole": "VENDOR_ADMIN", "permissionCode": "DISCOUNT_APPROVE" },\n  { "approverRole": "VENDOR_ADMIN", "permissionCode": "DISCOUNT_APPROVE" }\n]'} required/><button disabled={busy}>{busy?'Saving…':'Create workflow'}</button></form>
+   </div>}
+   {s.user?.permissions?.includes("BRANDING_MANAGE")&&<div className="card"><h2>Vendor branding</h2><form className="form" onSubmit={saveBranding}>
     <input name="displayName" defaultValue={branding.displayName||''} placeholder="Public display name" required/>
     <input name="logoUrl" defaultValue={branding.logoUrl||''} placeholder="Logo URL (HTTPS) or /uploads/ path"/>
     <label>Primary color<input name="primaryColor" type="color" defaultValue={branding.primaryColor||'#0B6B4B'}/></label>
@@ -67,13 +75,13 @@ export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'ven
     <input name="supportEmail" type="email" defaultValue={branding.supportEmail||''} placeholder="Support email"/>
     <input name="supportPhone" defaultValue={branding.supportPhone||''} placeholder="Support phone"/>
     <button disabled={busy}>{busy?'Saving…':'Save branding'}</button>
-   </form></div>
-   <div className="card"><h2>Custom domains</h2><form className="form" onSubmit={addDomain}><input name="domain" placeholder="shop.example.com" required/><button disabled={busy}>Register domain</button></form>
+   </form></div>}
+   {s.user?.permissions?.includes("BRANDING_MANAGE")&&<div className="card"><h2>Custom domains</h2><form className="form" onSubmit={addDomain}><input name="domain" placeholder="shop.example.com" required/><button disabled={busy}>Register domain</button></form>
     {domains.map(d=><article key={d.id}><div><b>{d.domain}</b><small>{d.status} · TXT value: saumya-solar-verification={d.verificationToken}</small></div>{d.status!=='VERIFIED'&&<button type="button" className="secondary" onClick={()=>void verifyDomain(d.id)}>Verify DNS</button>}</article>)}
-   </div>
-   <div className="card"><h2>Branches</h2>{branches.length?<div className="table-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>Address</th><th>Status</th><th>Actions</th></tr></thead><tbody>{branches.map(b=><tr key={b.id}><td>{b.code}</td><td>{b.name}</td><td>{b.address||'—'}</td><td>{b.active?'Active':'Inactive'}</td><td><button type="button" className="secondary" onClick={()=>void assignUser(b.id)}>Assign user</button></td></tr>)}</tbody></table></div>:<p>No branches configured.</p>}
+   </div>}
+   {s.user?.permissions?.includes("BRANCH_MANAGE")&&<div className="card"><h2>Branches</h2>{branches.length?<div className="table-wrap"><table><thead><tr><th>Code</th><th>Name</th><th>Address</th><th>Status</th><th>Actions</th></tr></thead><tbody>{branches.map(b=><tr key={b.id}><td>{b.code}</td><td>{b.name}</td><td>{b.address||'—'}</td><td>{b.active?'Active':'Inactive'}</td><td><button type="button" className="secondary" onClick={()=>void assignUser(b.id)}>Assign user</button></td></tr>)}</tbody></table></div>:<p>No branches configured.</p>}
     <form className="form" onSubmit={createBranch}><h3>Create branch</h3><input name="code" placeholder="Branch code" maxLength={50} required/><input name="name" placeholder="Branch name" maxLength={150} required/><input name="address" placeholder="Address"/><input name="phone" placeholder="Phone"/><input name="email" type="email" placeholder="Contact email"/><button disabled={busy}>{busy?'Saving…':'Create branch'}</button></form>
-   </div>
+   </div>}
   </>:<>
    <div className="card"><h2>Subscription plans</h2>{plans.length?<div className="table-wrap"><table><thead><tr><th>Plan</th><th>Cycle</th><th>Price</th><th>Limits</th></tr></thead><tbody>{plans.map(p=><tr key={p.id}><td>{p.name} ({p.planCode})</td><td>{p.billingCycle}</td><td>{p.currency} {p.price}</td><td>{p.maxUsers} users · {p.maxBranches} branches · {p.maxWarehouses} warehouses</td></tr>)}</tbody></table></div>:<p>No plans created yet.</p>}
     <form className="form" onSubmit={createPlan}><h3>Create subscription plan</h3><input name="planCode" placeholder="Plan code (e.g. STARTER)" required/><input name="name" placeholder="Plan name" required/><textarea name="description" placeholder="Description"/><select name="billingCycle"><option value="MONTHLY">Monthly</option><option value="YEARLY">Yearly</option></select><input name="price" type="number" min="0" step="0.01" placeholder="Price (INR)" required/><input name="currency" defaultValue="INR" maxLength={3} required/><input name="maxUsers" type="number" min="1" defaultValue="5" required/><input name="maxBranches" type="number" min="1" defaultValue="1" required/><input name="maxWarehouses" type="number" min="1" defaultValue="1" required/><input name="maxStorageMb" type="number" min="0" defaultValue="1024" required/><textarea name="entitlementsJson" defaultValue="{}" placeholder="Feature entitlements JSON" required/><button disabled={busy}>{busy?'Saving…':'Create plan'}</button></form>
