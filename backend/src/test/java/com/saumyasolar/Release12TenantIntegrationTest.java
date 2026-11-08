@@ -119,7 +119,7 @@ class Release12TenantIntegrationTest {
                                 """.formatted(adminEmail, adminPassword)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var onboardingToken = json.readTree(onboardingLogin).get("accessToken").asText();
-        mvc.perform(patch("/api/v1/vendor/profile")
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/vendor/profile")
                         .header("Authorization", "Bearer " + onboardingToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
