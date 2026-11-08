@@ -18,6 +18,7 @@ public class Quotation {
     @Id
     UUID id;
     UUID tenantId;
+    UUID branchId;
     UUID quoteGroupId;
     String quotationNumber;
     int revision;
