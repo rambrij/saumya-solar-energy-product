@@ -229,3 +229,24 @@ These checks do not replace deployed E2E, provider certification, branch-isolati
 Workflow: https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42516142831
 
 This validates the branch's current application code and additive migrations. It does not certify a real gateway/accounting provider, production DNS, complete branch isolation, universal audit, or full offline conflict resolution.
+
+
+## 12. Continued Phase 3 work — branch data foundation and analytics
+
+The following branch-scoping work has been added on the same feature branch:
+
+- V43 adds nullable `branch_id` foreign keys and indexes to enquiry, sales lead, site survey, quotation, customer order, invoice, service request and installation job.
+- Existing records are deliberately left with `branch_id = NULL`; no historical data is reassigned or deleted.
+- JPA entities map the new branch ownership field.
+- Added reusable branch membership visibility helpers. Vendor administrators can view all branches; assigned users can view records for their assigned branches and legacy unassigned records.
+- Applied branch visibility to vendor lists for enquiries, leads, surveys, quotations and orders.
+- Added branch membership checks to lead updates/history and vendor quotation approval/send/order-conversion paths.
+- Added a branch analytics endpoint: `GET /api/v1/branches/{branchId}/analytics`. It reports leads, surveys, quotations, sent quotations, orders and order value, invoices and invoice value, service tickets and installations. Access is tenant-scoped and restricted to branch members or vendor administrators.
+
+### Remaining branch-isolation work
+
+This is a foundation, not a claim of complete branch isolation. Records created after V43 are not yet consistently assigned to a branch in every workflow; invoices, service tickets, installations and several direct lookup/update routes still need branch-aware checks. Legacy unassigned records remain tenant-visible for compatibility. The API also does not yet provide a complete selected-branch context for users belonging to multiple branches.
+
+### Validation status
+
+GitHub Actions has been triggered for the migration, entity mappings, repository queries, analytics service/controller and access-control changes. The latest branch-head commit is `0c272dc0abdb1cbcde9b55ff423cc65f8309def2`. Do not treat this follow-up as release-validated until CI for that exact head completes successfully and dedicated cross-branch negative tests pass.
