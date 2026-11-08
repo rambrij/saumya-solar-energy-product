@@ -518,3 +518,27 @@ Mailpit is local-only. For real delivery, configure an SMTP provider and set the
 - `PUBLIC_BASE_URL` to the deployed frontend URL used in password-reset links
 
 Never use the Compose Mailpit host, local credentials, or a localhost public URL in production. Verify sender-domain SPF, DKIM and DMARC with the chosen provider before enabling customer-facing notifications.
+
+
+## Phase 2 Operations — engineer, warranty and messaging additions
+
+The Phase 2 branch adds:
+- Tenant-scoped engineer profiles (skills, certifications, territory, availability window and concurrent-job limit) at `GET/POST /api/v1/engineers`.
+- Warranty claims submitted by customers at `POST /api/v1/customer/warranty-claims`; vendor operations users can list, approve, reject and resolve claims at `/api/v1/warranty-claims`.
+- An operational KPI snapshot at `GET /api/v1/reports/operations?from=YYYY-MM-DD&to=YYYY-MM-DD`.
+- Installation schedule conflict checks for the same engineer/team, rescheduling/cancellation history and an optional approved-survey link.
+- Customer opt-in controls at `GET/PATCH /api/v1/customer/messaging-consent`.
+
+### SMS and WhatsApp provider configuration
+
+The backend supports Twilio's Messages API when the following backend-only environment variables are configured:
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_SMS_FROM` — provider-approved SMS sender/number
+- `TWILIO_WHATSAPP_FROM` — approved WhatsApp sender, for example `whatsapp:+14155238886` in a Twilio sandbox
+
+The registered customer phone number must be in E.164 format (for example `+919876543210`). SMS and WhatsApp are sent only when the customer has explicitly opted in to the respective channel. If Twilio credentials or sender IDs are absent, those channels are skipped; email remains the existing notification channel. Delivery attempts are recorded per channel, and failed email/SMS/WhatsApp sends are retried by the scheduled worker with exponential backoff, up to five attempts. Twilio sandbox/production approval, WhatsApp templates, per-tenant sender credentials, provider delivery webhooks, and a durable external queue/outbox are not provided by this implementation. Do not claim delivery to a handset from an HTTP acceptance response alone.
+
+### Messaging security and operational notes
+
+Keep Twilio credentials in the deployment secret manager; never place them in frontend environment variables or commit them to source control. Ask customers to save consent only after presenting the intended notification purpose. Revoke consent using the same preferences endpoint. Provider HTTP responses are recorded as provider-accepted, not handset-delivered/read receipts.
