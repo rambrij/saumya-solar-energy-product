@@ -13,6 +13,7 @@ ALTER TABLE tenant_subscription
  ADD COLUMN replaced_by_subscription_id BINARY(16) NULL,
  ADD CONSTRAINT fk_subscription_replaced_by FOREIGN KEY(replaced_by_subscription_id) REFERENCES tenant_subscription(id),
  ADD CONSTRAINT chk_subscription_billing_cycle CHECK(billing_cycle IN ('MONTHLY','YEARLY'));
+UPDATE tenant_subscription ts JOIN subscription_plan p ON p.id=ts.plan_id SET ts.billing_cycle=p.billing_cycle;
 CREATE TABLE subscription_assignment_history (
  id BINARY(16) PRIMARY KEY,
  tenant_id BINARY(16) NOT NULL,
