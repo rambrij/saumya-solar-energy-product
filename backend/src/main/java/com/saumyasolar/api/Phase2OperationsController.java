@@ -24,14 +24,14 @@ public class Phase2OperationsController {
  private final AppUserRepository users; private final InstallationJobRepository installations;
  private final CustomerOrderRepository orders; private final ServiceRequestRepository tickets;
  private final InventoryTransactionRepository inventory; private final InvoiceRepository invoices;
- private final PaymentRepository payments; private final SalesLeadRepository leads;
+ private final PaymentRepository payments; private final SalesLeadRepository leads; private final RefundRepository refunds;
  public Phase2OperationsController(EngineerProfileRepository engineers,WarrantyClaimRepository claims,
   WarrantyRepository warranties,CustomerProfileRepository customers,AppUserRepository users,
   InstallationJobRepository installations,CustomerOrderRepository orders,ServiceRequestRepository tickets,
-  InventoryTransactionRepository inventory,InvoiceRepository invoices,PaymentRepository payments,SalesLeadRepository leads){
+  InventoryTransactionRepository inventory,InvoiceRepository invoices,PaymentRepository payments,SalesLeadRepository leads,RefundRepository refunds){
   this.engineers=engineers;this.claims=claims;this.warranties=warranties;this.customers=customers;this.users=users;
   this.installations=installations;this.orders=orders;this.tickets=tickets;this.inventory=inventory;
-  this.invoices=invoices;this.payments=payments;this.leads=leads;
+  this.invoices=invoices;this.payments=payments;this.leads=leads;this.refunds=refunds;
  }
  private Principal p(Authentication a){return (Principal)a.getPrincipal();}
  private UUID tenant(Principal p){if(!"VENDOR".equals(p.accountType())||p.tenantId()==null)throw new ResponseStatusException(HttpStatus.FORBIDDEN);return p.tenantId();}
@@ -91,7 +91,14 @@ public class Phase2OperationsController {
   var leadRows=leads.findByTenantIdOrderByIdDesc(t).stream().filter(x->x.getCreatedAt()!=null&&!x.getCreatedAt().isBefore(start)&&x.getCreatedAt().isBefore(end)).toList();
   var warrantyRows=warranties.findByTenantIdOrderByStartDateDesc(t).stream().filter(x->x.getStartDate()!=null&&!x.getStartDate().isBefore(from==null?LocalDate.MIN:from)&&!x.getStartDate().isAfter(to==null?LocalDate.MAX:to)).toList();
   var stockRows=inventory.findByTenantIdOrderByCreatedAtDesc(t).stream().filter(x->x.getCreatedAt()!=null&&!x.getCreatedAt().isBefore(start)&&x.getCreatedAt().isBefore(end)).toList();
-  BigDecimal paymentTotal=paymentRows.stream().filter(x->"SUCCEEDED".equals(x.getStatus())||"PAID".equals(x.getStatus())).map(Payment::getAmount).filter(Objects::nonNull).reduce(BigDecimal.ZERO,BigDecimal::add);
+  BigDecimal paymentTotal=paymentRows.stream()
+   .filter(x->Set.of("CONFIRMED","SUCCEEDED","PAID","PARTIALLY_REFUNDED","REFUNDED").contains(x.getStatus()))
+   .map(payment->{BigDecimal gross=payment.getAmount()==null?BigDecimal.ZERO:payment.getAmount();
+    BigDecimal refunded=refunds.findByTenantIdAndPaymentId(t,payment.getId()).stream()
+      .filter(r->"RECORDED".equals(r.getStatus())).map(Refund::getAmount).filter(Objects::nonNull)
+      .reduce(BigDecimal.ZERO,BigDecimal::add);
+    return gross.subtract(refunded).max(BigDecimal.ZERO);
+   }).reduce(BigDecimal.ZERO,BigDecimal::add);
   Map<String,Object> result=new LinkedHashMap<>();result.put("from",from);result.put("to",to);result.put("orders",orderRows.size());result.put("orderValue",orderRows.stream().map(CustomerOrder::getTotal).filter(Objects::nonNull).reduce(BigDecimal.ZERO,BigDecimal::add));result.put("leads",leadRows.size());result.put("installations",installationRows.size());result.put("installationsCompleted",installationRows.stream().filter(x->Set.of("COMPLETED","COMMISSIONED").contains(x.getStatus())).count());result.put("serviceTickets",ticketRows.size());result.put("serviceOpen",ticketRows.stream().filter(x->!Set.of("CLOSED","RESOLVED","CUSTOMER_CONFIRMED").contains(x.getStatus())).count());result.put("warranties",warrantyRows.size());result.put("invoices",invoiceRows.size());result.put("invoicedAmount",invoiceRows.stream().map(Invoice::getGrandTotal).filter(Objects::nonNull).reduce(BigDecimal.ZERO,BigDecimal::add));result.put("paymentsReceived",paymentTotal);result.put("inventoryTransactions",stockRows.size());return result;
  }
 

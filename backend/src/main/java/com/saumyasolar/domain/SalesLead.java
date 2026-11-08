@@ -18,6 +18,7 @@ public class SalesLead {
     @Id
     UUID id;
     UUID tenantId;
+    UUID branchId;
     UUID enquiryId;
     UUID customerId;
     String stage;

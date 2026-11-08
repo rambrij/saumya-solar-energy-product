@@ -13,6 +13,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import com.saumyasolar.repo.TenantSubscriptionRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -32,7 +35,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain chain(HttpSecurity http, JwtFilter jwtFilter) throws Exception {
+    SecurityFilterChain chain(HttpSecurity http, JwtFilter jwtFilter, SubscriptionEnforcementFilter subscriptionFilter) throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(cors()))
@@ -43,11 +46,25 @@ public class SecurityConfig {
                                 HttpStatus.FORBIDDEN.value(), "You do not have permission to access this resource")))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/v1/auth/**", "/api/v1/public/**", "/api/v1/payment-webhooks/**", "/uploads/**",
+                        .requestMatchers("/api/v1/auth/**", "/api/v1/public/**", "/api/v1/payment-webhooks/**", "/api/v1/payment-gateway-webhooks/**", "/uploads/**",
                                 "/actuator/health", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(subscriptionFilter, JwtFilter.class)
                 .build();
+    }
+
+
+    @Bean
+    SubscriptionEnforcementFilter subscriptionEnforcementFilter(TenantSubscriptionRepository subscriptions) {
+        return new SubscriptionEnforcementFilter(subscriptions);
+    }
+
+    @Bean
+    FilterRegistrationBean<SubscriptionEnforcementFilter> disableContainerSubscriptionFilter(SubscriptionEnforcementFilter filter) {
+        FilterRegistrationBean<SubscriptionEnforcementFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     CorsConfigurationSource cors() {

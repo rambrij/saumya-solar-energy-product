@@ -17,10 +17,16 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 @Service
 public class AppService {
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private IntegrationManagementService integrationManagement;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private EnterpriseSaasService enterpriseSaas;
+
     final TenantRepository tenants;
     final AppUserRepository users;
     final ProductCategoryRepository cats;
@@ -40,6 +46,7 @@ public class AppService {
     final RoleRepository roles;
     final OrderStatusHistoryRepository orderStatusHistory;
     final NotificationService notifications;
+    final ApprovalWorkflowService approvalWorkflows;
     
     public AppService(
             TenantRepository a,
@@ -60,7 +67,8 @@ public class AppService {
             IdempotencyRecordRepository p,
             RoleRepository roles,
             OrderStatusHistoryRepository orderStatusHistory,
-            NotificationService notifications
+            NotificationService notifications,
+            ApprovalWorkflowService approvalWorkflows
     ) {
         tenants = a;
         users = b;
@@ -81,6 +89,7 @@ public class AppService {
         this.roles = roles;
         this.orderStatusHistory = orderStatusHistory;
         this.notifications = notifications;
+        this.approvalWorkflows = approvalWorkflows;
     }
     
     void vendor(Principal p) {
@@ -158,7 +167,7 @@ public class AppService {
             case "orders" -> requirePermission(p, "ORDER_CREATE");
             default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        return switch (type) {
+        Object rows = switch (type) {
             case "categories" -> cats.findByTenantIdOrderByIdDesc(p.tenantId());
             case "products" -> products.findByTenantIdOrderByIdDesc(p.tenantId());
             case "packages" -> packs.findByTenantIdOrderByIdDesc(p.tenantId());
@@ -169,6 +178,15 @@ public class AppService {
             case "quotations" -> quotes.findByTenantIdOrderByIdDesc(p.tenantId());
             case "orders" -> orders.findByTenantIdOrderByIdDesc(p.tenantId());
             default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        };
+        if (enterpriseSaas == null) return rows;
+        return switch (type) {
+            case "enquiries" -> enterpriseSaas.filterBranchRecords((List<Enquiry>)rows, Enquiry::getBranchId, p);
+            case "leads" -> enterpriseSaas.filterBranchRecords((List<SalesLead>)rows, SalesLead::getBranchId, p);
+            case "surveys" -> enterpriseSaas.filterBranchRecords((List<SiteSurvey>)rows, SiteSurvey::getBranchId, p);
+            case "quotations" -> enterpriseSaas.filterBranchRecords((List<Quotation>)rows, Quotation::getBranchId, p);
+            case "orders" -> enterpriseSaas.filterBranchRecords((List<CustomerOrder>)rows, CustomerOrder::getBranchId, p);
+            default -> rows;
         };
     }
     
@@ -536,6 +554,7 @@ public class AppService {
         vendor(p);
         requirePermission(p, "LEAD_MANAGE");
         var l = leads.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
+        if(enterpriseSaas!=null)enterpriseSaas.assertBranchAccess(l.getBranchId(),p);
         requireEmployee(x.assignedUserId(), p.tenantId());
         var old = l.getStage();
         var oldAssignee = l.getAssignedUserId();
@@ -723,6 +742,7 @@ public class AppService {
         q.setApprovalRequired(q.getDiscountPercent().compareTo(approvalThreshold) > 0);
         q.setStatus(q.isApprovalRequired() ? "PENDING_APPROVAL" : "DRAFT");
         quotes.save(q);
+        if(q.isApprovalRequired()) approvalWorkflows.startIfConfigured("QUOTATION",q.getId(),p);
         return new QuoteView(q, items);
     }
     
@@ -742,10 +762,18 @@ public class AppService {
             return quotes.save(q);
         }
         vendor(p);
+        if(enterpriseSaas!=null)enterpriseSaas.assertBranchAccess(q.getBranchId(),p);
         if ("approve".equals(action) || "reject-approval".equals(action)) {
-            requirePermission(p, "DISCOUNT_APPROVE");
             if (!"PENDING_APPROVAL".equals(q.getStatus()) || !q.isApprovalRequired())
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Quotation is not awaiting approval");
+            var workflowStatus=approvalWorkflows.decideForEntity(p.tenantId(),"QUOTATION",q.getId(),
+                    "approve".equals(action)?"APPROVE":"REJECT",action,p);
+            if(workflowStatus.isPresent()){
+                if("APPROVED".equals(workflowStatus.get()))q.setStatus("DRAFT");
+                else if("REJECTED".equals(workflowStatus.get()))q.setStatus("APPROVAL_REJECTED");
+                return quotes.save(q);
+            }
+            requirePermission(p, "DISCOUNT_APPROVE");
         } else {
             requirePermission(p, "QUOTATION_MANAGE");
         }
@@ -799,6 +827,7 @@ public class AppService {
             return existing;
         }
         var q = quotes.findByIdAndTenantIdForUpdate(qid, p.tenantId()).orElseThrow();
+        if(enterpriseSaas!=null)enterpriseSaas.assertBranchAccess(q.getBranchId(),p);
         if (!"ACCEPTED".equals(q.getStatus())) throw new ResponseStatusException(HttpStatus.CONFLICT);
         var existingOrder = orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
                 .filter(o -> qid.equals(o.getQuotationId())).findFirst();
@@ -817,6 +846,8 @@ public class AppService {
         o.setTotal(q.getGrandTotal());
         o.setCreatedAt(Instant.now());
         orders.save(o);
+        if(integrationManagement!=null)integrationManagement.enqueueAccountingEvent("ORDER",o.getId().toString(),"UPSERT",
+                Map.of("orderNumber",o.getOrderNumber(),"customerId",o.getCustomerId().toString(),"total",o.getTotal()==null?java.math.BigDecimal.ZERO:o.getTotal(),"status",o.getStatus()),p);
         var initialHistory=new OrderStatusHistory();initialHistory.setId(UUID.randomUUID());initialHistory.setTenantId(p.tenantId());initialHistory.setOrderId(o.getId());initialHistory.setOldStatus(null);initialHistory.setNewStatus("CONFIRMED");initialHistory.setReason("Order created from accepted quotation");initialHistory.setActorId(p.userId());initialHistory.setCreatedAt(Instant.now());orderStatusHistory.save(initialHistory);
         for (var qi : quoteItems.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(i -> i.getQuotationId().equals(qid)).toList()) {
             var i = new OrderItem();

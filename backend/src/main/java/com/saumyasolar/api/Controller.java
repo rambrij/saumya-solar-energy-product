@@ -57,6 +57,7 @@ public class Controller {
     final PackageImageStorageService packageImages;
     final TenantAdminService tenantAdmin;
     final com.saumyasolar.service.SurveyLifecycleService surveyLifecycle;
+    final com.saumyasolar.service.EnterpriseSaasService enterpriseSaas;
     final boolean platformMfaEnabled;
     
     Controller(
@@ -73,6 +74,7 @@ public class Controller {
             PackageImageStorageService packageImages,
             TenantAdminService tenantAdmin,
             com.saumyasolar.service.SurveyLifecycleService surveyLifecycle,
+            com.saumyasolar.service.EnterpriseSaasService enterpriseSaas,
             @org.springframework.beans.factory.annotation.Value("${app.auth.platform-mfa-enabled:true}") boolean platformMfaEnabled
     ) {
         this.s = s;
@@ -88,6 +90,7 @@ public class Controller {
         this.packageImages = packageImages;
         this.tenantAdmin = tenantAdmin;
         this.surveyLifecycle = surveyLifecycle;
+        this.enterpriseSaas = enterpriseSaas;
         this.platformMfaEnabled = platformMfaEnabled;
     }
     
@@ -147,6 +150,7 @@ public class Controller {
         if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
                 || actor.permissions() == null || !actor.permissions().contains("USER_MANAGE"))
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
+        enterpriseSaas.enforceUserLimit(actor.tenantId());
         var u = lifecycle.createEmployee(actor.tenantId(), x.name(), x.email(), x.password(), x.roleName());
         var roleNames = new HashSet<String>();
         var permissionCodes = new HashSet<String>();

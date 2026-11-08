@@ -1,6 +1,8 @@
 package com.saumyasolar.service;
 
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.transaction.Transactional;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -18,6 +20,19 @@ import java.util.UUID;
 @Service
 public class PrivateObjectStorageService {
 
+    private final TenantStorageMeteringService metering;
+
+    @Autowired
+    public PrivateObjectStorageService(TenantStorageMeteringService metering) {
+        this.metering = metering;
+    }
+
+    /** Test/standalone constructor; production Spring wiring always supplies the metering service. */
+    public PrivateObjectStorageService() {
+        this.metering = null;
+    }
+
+    @Transactional
     public String put(Path localRoot, String category, UUID tenantId, String generatedKey,
                       byte[] content, String contentType) throws IOException {
         if (tenantId == null || category == null || !category.matches("[a-z0-9-]{1,50}")
@@ -32,6 +47,7 @@ public class PrivateObjectStorageService {
         if (!tenantDirectory.startsWith(root) || !target.startsWith(tenantDirectory)) {
             throw new IOException("Invalid private evidence path");
         }
+        if (metering != null) metering.assertCanStore(tenantId, content.length);
         Files.createDirectories(tenantDirectory);
         Files.write(target, content, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
         return tenantId + "/" + category + "/" + generatedKey;
