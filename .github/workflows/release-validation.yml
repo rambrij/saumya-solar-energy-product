@@ -87,6 +87,17 @@ jobs:
       - name: Install Chromium
         working-directory: frontend
         run: npx playwright install --with-deps chromium
+      - name: Wait for Mailpit SMTP and HTTP readiness
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8025/api/v1/info >/dev/null; then
+              echo "Mailpit is ready."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Mailpit did not become ready."
+          exit 1
       - name: Package backend
         working-directory: backend
         run: mvn --batch-mode --no-transfer-progress clean package -DskipTests
@@ -128,6 +139,9 @@ jobs:
           VITE_API_BASE_URL: ''
           VITE_PUBLIC_STORE_SLUG: saumya-solar
         run: npm run test:e2e
+      - name: Show backend logs on E2E failure
+        if: failure()
+        run: if [ -f /tmp/saumya-e2e-backend.log ]; then cat /tmp/saumya-e2e-backend.log; fi
       - name: Stop backend
         if: always()
         run: if [ -f /tmp/saumya-e2e-backend.pid ]; then kill "$(cat /tmp/saumya-e2e-backend.pid)" || true; fi
