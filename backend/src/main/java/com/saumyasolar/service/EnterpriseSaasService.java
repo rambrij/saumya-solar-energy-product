@@ -8,10 +8,10 @@ import java.time.Instant;import java.util.*;import java.math.BigDecimal;
 public class EnterpriseSaasService {
  private final BranchRepository branches;private final BranchMembershipRepository memberships;
  private final SubscriptionPlanRepository plans;private final TenantSubscriptionRepository subscriptions;
- private final TenantRepository tenants;private final AppUserRepository users;private final AuditEventRepository audits;private final ObjectMapper mapper;
+ private final TenantRepository tenants;private final AppUserRepository users;private final AuditEventRepository audits;private final WarehouseRepository warehouses;private final ObjectMapper mapper;
  public EnterpriseSaasService(BranchRepository b,BranchMembershipRepository m,SubscriptionPlanRepository pl,
-  TenantSubscriptionRepository s,TenantRepository t,AppUserRepository u,AuditEventRepository a,ObjectMapper om){
-  branches=b;memberships=m;plans=pl;subscriptions=s;tenants=t;users=u;audits=a;mapper=om;
+  TenantSubscriptionRepository s,TenantRepository t,AppUserRepository u,AuditEventRepository a,WarehouseRepository wr,ObjectMapper om){
+  branches=b;memberships=m;plans=pl;subscriptions=s;tenants=t;users=u;audits=a;warehouses=wr;mapper=om;
  }
  private void permission(Principal p,String code){if(p.permissions()==null||!p.permissions().contains(code))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Missing permission: "+code);}
  private UUID vendor(Principal p,String code){if(!"VENDOR".equals(p.accountType())||p.tenantId()==null)throw new ResponseStatusException(HttpStatus.FORBIDDEN);permission(p,code);return p.tenantId();}
