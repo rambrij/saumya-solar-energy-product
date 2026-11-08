@@ -150,9 +150,13 @@ public class EnterpriseSaasService {
    .max(Comparator.comparing(TenantSubscription::getStartsAt));
  }
  private boolean effective(TenantSubscription s){Instant now=Instant.now();return ("ACTIVE".equals(s.getStatus())||"TRIAL".equals(s.getStatus()))&&s.getStartsAt()!=null&&!s.getStartsAt().isAfter(now)&&(s.getEndsAt()==null||s.getEndsAt().isAfter(now));}
- public List<AuditEvent> auditEvents(Principal p,Instant from,Instant to){
-  if("PLATFORM".equals(p.accountType())){platform(p,"AUDIT_VIEW");return audits.findTop200ByCreatedAtBetweenOrderByCreatedAtDesc(from,to);}
-  UUID t=vendor(p,"AUDIT_VIEW");return audits.findTop200ByTenantIdAndCreatedAtBetweenOrderByCreatedAtDesc(t,from,to);
+ public List<AuditEvent> auditEvents(Principal p,Instant from,Instant to,UUID actorId,String action,String entityType,String outcome){
+  UUID tenant=null;
+  if("PLATFORM".equals(p.accountType()))platform(p,"AUDIT_VIEW");
+  else tenant=vendor(p,"AUDIT_VIEW");
+  if(from==null||to==null||to.isBefore(from)||java.time.Duration.between(from,to).toDays()>90)
+   throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Audit range must be valid and no longer than 90 days");
+  return audits.search(tenant,from,to,actorId,trim(action),trim(entityType),trim(outcome),org.springframework.data.domain.PageRequest.of(0,500));
  }
  public BrandingView publicBranding(String slug){
   Tenant t=tenants.findBySlug(slug).filter(v->"ACTIVE".equals(v.getStatus()))
