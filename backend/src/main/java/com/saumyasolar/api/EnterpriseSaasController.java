@@ -4,7 +4,7 @@ import jakarta.validation.Valid;import jakarta.validation.constraints.*;import o
 import java.math.BigDecimal;import java.time.Instant;import java.util.*;
 @RestController @RequestMapping("/api/v1")
 public class EnterpriseSaasController {
- private final EnterpriseSaasService service;private final com.saumyasolar.service.ApprovalWorkflowService approvalWorkflows;public EnterpriseSaasController(EnterpriseSaasService s,com.saumyasolar.service.ApprovalWorkflowService a){service=s;approvalWorkflows=a;}
+ private final EnterpriseSaasService service;private final com.saumyasolar.service.ApprovalWorkflowService approvalWorkflows;private final com.saumyasolar.service.IntegrationManagementService integrations;public EnterpriseSaasController(EnterpriseSaasService s,com.saumyasolar.service.ApprovalWorkflowService a,com.saumyasolar.service.IntegrationManagementService i){service=s;approvalWorkflows=a;integrations=i;}
  private Principal p(Authentication a){return (Principal)a.getPrincipal();}
  public record BranchRequest(@NotBlank @Size(max=50) String code,@NotBlank @Size(max=150) String name,@Size(max=700) String address,@Size(max=40) String phone,@Email @Size(max=254) String email){}
  public record BranchUserRequest(@NotNull UUID userId){}
@@ -15,9 +15,16 @@ public class EnterpriseSaasController {
  public record WarehouseBranchRequest(UUID branchId){}
  public record BrandingRequest(@NotBlank @Size(max=150) String displayName,@Size(max=1000) String logoUrl,@NotBlank @Pattern(regexp="#[0-9A-Fa-f]{6}") String primaryColor,@NotBlank @Pattern(regexp="#[0-9A-Fa-f]{6}") String secondaryColor,@Email @Size(max=254) String contactEmail,@Size(max=40) String contactPhone,@Email @Size(max=254) String supportEmail,@Size(max=40) String supportPhone){}
  public record DomainRequest(@NotBlank @Size(max=253) String domain){}
+ public record IntegrationRequest(@NotBlank @Size(max=60) String providerCode,@NotBlank String integrationType,@NotBlank @Size(max=150) String displayName,@Size(max=500) String secretReference,@NotBlank String configJson){}
+ public record IntegrationJobRequest(@NotBlank String entityType,@NotBlank @Size(max=100) String entityId,@NotBlank String operation,@NotBlank @Size(max=160) String idempotencyKey,@NotBlank String payloadJson){}
  public record WorkflowRequest(@NotBlank @Size(max=60) String code,@NotBlank @Size(max=150) String name,@NotBlank String entityType,@NotBlank String stepsJson){}
  public record ApprovalDecisionRequest(@NotBlank String decision,@Size(max=1000) String comments){}
  public record SubscriptionRequest(@NotNull UUID planId,@NotBlank String status,Instant startsAt,Instant endsAt,Instant renewsAt,@Size(max=160) String externalReference){}
+ @GetMapping("/integrations") public List<IntegrationConnection> integrations(Authentication a){return integrations.list(p(a));}
+ @PostMapping("/integrations") public IntegrationConnection createIntegration(@Valid @RequestBody IntegrationRequest x,Authentication a){return integrations.create(new com.saumyasolar.service.IntegrationManagementService.ConnectionInput(x.providerCode(),x.integrationType(),x.displayName(),x.secretReference(),x.configJson()),p(a));}
+ @GetMapping("/integrations/{id}/sync-jobs") public List<IntegrationSyncJob> integrationJobs(@PathVariable UUID id,Authentication a){return integrations.jobs(id,p(a));}
+ @PostMapping("/integrations/{id}/sync-jobs") public IntegrationSyncJob enqueueIntegrationJob(@PathVariable UUID id,@Valid @RequestBody IntegrationJobRequest x,Authentication a){return integrations.enqueue(id,new com.saumyasolar.service.IntegrationManagementService.JobInput(x.entityType(),x.entityId(),x.operation(),x.idempotencyKey(),x.payloadJson()),p(a));}
+ @PostMapping("/integrations/sync-jobs/{jobId}/retry") public IntegrationSyncJob retryIntegrationJob(@PathVariable UUID jobId,Authentication a){return integrations.retry(jobId,p(a));}
  @GetMapping("/approval-workflows") public List<ApprovalWorkflow> approvalWorkflows(Authentication a){return approvalWorkflows.list(p(a));}
  @PostMapping("/approval-workflows") public ApprovalWorkflow createApprovalWorkflow(@Valid @RequestBody WorkflowRequest x,Authentication a){return approvalWorkflows.create(new com.saumyasolar.service.ApprovalWorkflowService.WorkflowInput(x.code(),x.name(),x.entityType(),x.stepsJson()),p(a));}
  @GetMapping("/approval-instances") public List<ApprovalInstance> approvalInstances(Authentication a){return approvalWorkflows.instances(p(a));}
