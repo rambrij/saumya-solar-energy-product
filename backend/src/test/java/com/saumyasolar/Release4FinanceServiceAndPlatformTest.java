@@ -38,7 +38,7 @@ class Release4FinanceServiceAndPlatformTest {
         String exportSlug="export-"+UUID.randomUUID().toString().substring(0,8);
         String exportEmail="export-"+UUID.randomUUID()+"@example.test";
         String createdTenant=mvc.perform(post("/api/v1/tenants").header("Authorization","Bearer "+platform).contentType(MediaType.APPLICATION_JSON)
-            .content("{\"name\":\"Export Tenant\",\"slug\":\""+exportSlug+"\",\"adminName\":\"Export Admin\",\"adminEmail\":\""+exportEmail+"\",\"adminPassword\":\"ExportAdmin@2026\"}"))
+            .content("{\"name\":\"Export Tenant\",\"slug\":\""+exportSlug+"\",\"adminName\":\"Export Admin\",\"adminEmail\":\""+exportEmail+"\"}"))
             .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         String newTenantId=json.readTree(createdTenant).get("id").asText();
         mvc.perform(post("/api/v1/platform/tenants/"+newTenantId+"/verification").header("Authorization","Bearer "+platform)
