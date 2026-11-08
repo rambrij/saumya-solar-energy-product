@@ -12,13 +12,13 @@
 
 ## 1. Executive summary
 
-**Disposition: Phase 2 Operations is NOT ready for acceptance. Estimated completion: 43% (qualitative, equal-weight average of the nine Phase 2 modules).**
+**Disposition: Phase 2 Operations is NOT ready for acceptance. Estimated completion: 47% (qualitative, equal-weight average of the nine Phase 2 modules).**
 
-The audited `main` snapshot already contains meaningful operational capabilities from the prior Release 3/4 work: basic site-survey capture, order-linked installation scheduling and commissioning, installation teams/checklists, stock ledger and reservations, manual invoice/payment tracking, service tickets with visits and SLA tracking, and warranty activation during commissioning.
+The audited `feature/phase-2-operations` snapshot contains meaningful operational capabilities from the prior Release 3/4 work: basic site-survey capture, order-linked installation scheduling and commissioning, installation teams/checklists, stock ledger and reservations, manual invoice/payment tracking, service tickets with visits and SLA tracking, and warranty activation during commissioning.
 
 However, this is not a complete Phase 2 implementation. The most material gaps are:
 
-1. **Site survey lifecycle is incomplete.** A survey can be created and listed, but there is no update/approval/rejection workflow, no survey-specific completion evidence or attachment/GPS capture, and the data model omits several required electrical/site details.
+1. **Site survey lifecycle is partially implemented.** The feature branch adds tenant-scoped detail/update/start/submit/approve/reject/cancel/history APIs, technical assessment fields, and lifecycle integration tests. The Operations panel exposes lifecycle actions. Remaining gaps include survey-specific photo/attachment capture, a GPS entry UI, explicit approved-quotation/confirmed-order linkage, and a gate from survey approval into installation creation.
 2. **Engineer resource management is incomplete.** Users can be grouped into installation teams and assigned to installations/service tickets, but engineer skills, territory, availability, workload, profile lifecycle, and conflict prevention are not implemented.
 3. **Installation scheduling lacks scheduling controls.** It supports order linkage, a scheduled timestamp, team/engineer assignment, checklist, rescheduling, completion and commissioning. It does not prevent overlapping engineer/team bookings, provide a calendar view, or support cancellation.
 4. **Warranty is activation-and-read-only only.** Warranty records are created when an installation is commissioned and shown in lists/customer portal. Claims, claim review/decision, suspension/cancellation, warranty documents, and expiry alerts are absent.
@@ -37,14 +37,16 @@ The application has substantial backend and UI building blocks, but **the existe
 | Repository | `https://github.com/rambrij/saumya-solar-energy-product` |
 | Default/base branch | `main` |
 | Audited main HEAD | `34b9dac90da5455b032c197579d8dce881ac923c` |
-| Feature branch created | `feature/phase-2-operations` |
-| Feature branch starting SHA | `34b9dac90da5455b032c197579d8dce881ac923c` |
+| Existing feature branch audited | `feature/phase-2-operations` |
+| Main/base SHA | `34b9dac90da5455b032c197579d8dce881ac923c` |
+| Feature branch audited HEAD | `486d9942363a59d8d947143b6e62b832f58aacbb` |
+| Branch delta vs main | 23 commits ahead, 0 behind |
 | Audited repository tree | 206 entries; 180 files |
 | Main technology | Java 21 / Spring Boot 3.5.7, MySQL 8.4 / Flyway, React / TypeScript / Vite |
-| Latest migration present | Flyway V26 |
+| Latest migration present | Flyway V27 |
 | Audit report | `PHASE-2-OPERATIONS-ANALYSIS-AND-GAP-REPORT.md` |
 
-The branch was created from the exact current `main` HEAD. GitHub remote repository/tree/file APIs were used to inspect the branch contents. A local Git checkout and application runtime were not available in this execution, so this report does not claim that the code was locally built or that the application was manually exercised in a deployed environment.
+The target branch already existed when this audit began. GitHub comparison confirmed it is based on the audited `main` SHA and is 23 commits ahead / 0 behind. The branch already contained application-source, migration, test, workflow and an earlier version of this report; those pre-existing changes are not changes made by this audit. This audit updated only this Markdown report. GitHub Actions run `42474204585` executed against branch HEAD `486d9942363a59d8d947143b6e62b832f58aacbb` and passed backend tests, frontend build, MySQL migration validation through V27, and application startup/health verification. No local checkout or manual deployed-business-workflow exercise was performed.
 
 ## 3. Audit scope and approach
 
@@ -52,7 +54,7 @@ Reviewed the repository tree and relevant source in:
 
 - Backend controllers, DTOs, domain entities, repositories, services, security configuration and application configuration.
 - Frontend vendor portal, customer portal, operations panel, finance/service panel and survey form.
-- Flyway migrations V1–V26, including Release 3 operations and Release 4 finance/service migrations.
+- Flyway migrations V1–V27, including Release 3 operations, Release 4 finance/service, and the Phase 2 survey lifecycle migration.
 - Backend integration/security/service tests, notification unit tests, Maven configuration, frontend package scripts and GitHub Actions workflow.
 - Project requirements and SRS/HLD documents, including Phase 2 scope and detailed requirements.
 
@@ -76,20 +78,21 @@ Status classification follows the requested labels. Percentages are qualitative 
 
 | Validation | Result | Evidence / limitation |
 |---|---|---|
-| Backend Maven compile/test on audited main SHA | Unable to Verify | No local checkout/runtime execution was available; no GitHub Actions run was found for `main` or the new feature branch at audit time. |
-| Frontend production build on audited main SHA | Unable to Verify | No direct build result for the audited SHA. `frontend/package.json` defines `tsc && vite build`; no frontend test script is defined. |
-| Clean MySQL migration run on audited main SHA | Unable to Verify | V1–V26 are present. The checked workflow contains manual migration checks for prior Release 3/4 migrations, but this audit did not execute a clean database migration against the audited SHA. |
+| Backend Maven compile/test on audited feature-branch HEAD | **Test Verified — PASS** | GitHub Actions run `42474204585`, job `Backend compile and tests`, ran `mvn --batch-mode --no-transfer-progress clean verify` against `486d9942363a59d8d947143b6e62b832f58aacbb`; job conclusion `success`. |
+| Frontend production build on audited feature-branch HEAD | **Test Verified — PASS** | Same GitHub Actions run, job `Frontend typecheck and production build`; `npm install` and `npm run build` (`tsc && vite build`) completed successfully. No frontend unit/E2E test script is defined. |
+| Clean MySQL migration run on audited feature-branch HEAD | **Runtime Verified — PASS** | Same run, job `Validate Flyway migrations on MySQL 8.4`, applied V1–V27 successfully to a clean MySQL 8.4 service; V27 survey lifecycle migration step passed. This verifies the workflow's SQL migration path, not every production upgrade/data scenario. |
 | Backend test inventory | Code Verified | `Release3OperationsIntegrationTest`, `Release4FinanceServiceAndPlatformTest`, `Release12TenantIntegrationTest`, `Release2SecurityTest`, `Release4AccessAndPackageTest`, and `NotificationServiceTest`. |
+| Application startup/health smoke | **Runtime Verified — PASS** | Same run, job `Start Spring Boot against MySQL 8.4 and Mailpit`, packaged backend and completed `Start application and verify health`. This is a health smoke, not a full browser or business E2E. |
 | Browser E2E | Not Implemented / Unable to Verify | No Playwright/Cypress/Webdriver test suite or frontend E2E script was found in the repository tree/package scripts. |
-| Latest observed CI activity | Context only | Successful runs were found for branch `phase-1-commercial-mvp-remediation` (for example run 42471022328), not for the audited `main` SHA. They are not used as proof that this snapshot passed. |
+| CI run evidence | **All 4 jobs PASS** | Run `42474204585` on branch HEAD `486d9942363a59d8d947143b6e62b832f58aacbb`: MySQL V1–V27 migrations, Spring Boot startup/health, frontend production build, and backend compile/tests. |
 
-**Conclusion:** Build, tests and clean migrations must be run on `feature/phase-2-operations` before any implementation acceptance. The report deliberately does not claim a passing build or test run.
+**Conclusion:** CI provides positive build, backend test, clean migration and health-smoke evidence for the audited branch HEAD. It does not establish complete Phase 2 acceptance: there is no browser E2E suite, and the business workflows still have material functional gaps.
 
 ## 5. Overall and module-wise completion
 
 | Phase 2 module | Estimate | Status | Summary |
 |---|---:|---|---|
-| Site survey | 20% | Partially Implemented | Create/list and basic fields; no full lifecycle, approval, GPS, evidence or technical recommendation workflow. |
+| Site survey | 55% | Partially Implemented | Backend lifecycle APIs, history, technical assessment fields, UI actions and integration tests exist; no survey attachments/photo evidence, no GPS entry UI, no order approval linkage or installation gate. |
 | Installation scheduling | 55% | Partially Implemented | Order-linked scheduling, team/engineer, checklist, reschedule, completion and commissioning; no conflicts/calendar/cancel. |
 | Engineer assignment | 30% | Partially Implemented | Basic same-tenant employee/team assignment; no skills, territory, availability, workload or robust assignment history. |
 | Service tickets | 70% | Partially Implemented | Ticket creation, assignment, visits, attachments, event history and SLA; missing notification and some lifecycle/operational capabilities. |
@@ -99,7 +102,7 @@ Status classification follows the requested labels. Percentages are qualitative 
 | Advanced reporting | 15% | Partially Implemented | Platform tenant dashboard/export only; vendor operational reporting absent. |
 | SMS and WhatsApp | 0% | Not Implemented | No provider adapters or channel workflows found. |
 
-**Overall Phase 2 estimate: 43%** (mean of the nine module estimates, rounded from 42.8%). The score should be treated as a directional gap-assessment metric, not as a certification of partial production readiness.
+**Overall Phase 2 estimate: 47%** (mean of the nine module estimates, rounded from 46.7%). The score should be treated as a directional gap-assessment metric, not as a certification of partial production readiness.
 
 ## 6. Requirement traceability matrix
 
@@ -107,6 +110,7 @@ Status classification follows the requested labels. Percentages are qualitative 
 |---|---|---|---|---:|---|---|---|---|---|---|---|---|
 | SUR-01 | Site survey | Create and list tenant surveys linked to leads | Partially Implemented | 40 | `Controller.survey`, `AppService.survey`, `SiteSurveyRepository` | `main.tsx` SurveyForm; generic surveys tab/list | `SiteSurvey`; survey table in V1 schema | Vendor + `SURVEY_MANAGE`; same-tenant lead/employee checks | No dedicated survey lifecycle integration test identified | Create/list only; no dedicated update/detail API | High | Implement explicit survey resource APIs and full lifecycle tests |
 | SUR-02 | Site survey | Schedule, assign, approve/reject/cancel and retain history | Partially Implemented | 15 | `AppService.survey` accepts initial SCHEDULED/COMPLETED/CANCELLED status | Survey creation form only | `scheduled_at`, `assigned_user_id`, `status`, `completed_at` | Initial tenant checks only | Unable to verify runtime | No approval/rejection, reassignment, cancellation transition or audit history | High | Add state machine, action permissions, history and transition tests |
+| SUR-04 | Site survey | Record lifecycle history and enforce tenant/permission boundaries | Test Verified (CI) | 70 | `SurveyLifecycleService.record`, `requireSurvey`, `authorize`; `SurveyLifecycleController.history` | `OperationsPanel.tsx` exposes history/action affordances | V27 `site_survey_history` | `SURVEY_MANAGE`, tenant-scoped `findByIdAndTenantId` | `SurveyLifecycleIntegrationTest` covers history, cross-tenant 404 and missing-permission 403; CI passed | History is survey-specific; no common audit event stream and no browser E2E | Medium | Extend platform audit coverage and add Playwright workflow tests |
 | SUR-03 | Site survey | Capture roof, shading, load, location, GPS, electrical details, notes, images and findings | Partially Implemented | 20 | `SiteSurvey` fields: propertyType, roofType, usableAreaSqft, shading, sanctionedLoadKw, notes | Form captures subset only | Survey schema lacks GPS/electrical/photo/findings columns | No survey attachment-specific authorization | Code Verified only | No coordinates, orientation, sanctioned supply detail, electricity usage, attachments or technical recommendation | High | Extend survey DTO/schema and private attachment handling |
 | INS-01 | Installation | Create from eligible order; customer/site/order linkage | Implemented but Not Runtime Verified | 75 | `OperationsService.createInstallation`, `InstallationJobRepository` | `OperationsPanel` installation tab | `installation_job` in V11/V12 | Tenant-scoped order/team/engineer lookup | Selected operations integration tests; no runtime run for audited SHA | Site survey approval is not a prerequisite and no package snapshot linkage | Medium | Gate creation on accepted survey/order policy and test linkage |
 | INS-02 | Installation | Date/time, engineer/team assignment, reschedule and cancellation | Partially Implemented | 50 | `createInstallation`, `reschedule`; no cancel endpoint | Installation form/list; no calendar | `scheduled_at`, `assigned_engineer_id`, `team_id`, `reschedule_reason` | Vendor/Operations Manager checks; engineer access scoped to assigned job | No conflict test identified | No overlapping-booking prevention, cancellation, schedule calendar or reschedule history | High | Add availability/overlap validation, cancellation and calendar APIs/UI |
@@ -132,11 +136,11 @@ Status classification follows the requested labels. Percentages are qualitative 
 
 ## 7. Detailed module findings
 
-### 7.1 Site survey — 20%
+### 7.1 Site survey — 55%
 
-**Present:** `POST /api/v1/surveys`, tenant-scoped `GET /api/v1/surveys`, `AppService.survey`, `SiteSurveyRepository`, `SiteSurvey`, and a `SurveyForm` in `frontend/src/main.tsx`. Survey creation requires a same-tenant lead and an employee assignment. Captured fields include property type, roof type, usable area, shading, sanctioned load, notes, scheduled timestamp and an initial status.
+**Present:** Survey creation/listing remains in `Controller.survey` / `AppService.survey` and is linked to a same-tenant lead. The branch adds `SurveyLifecycleController` at `/api/v1/surveys` with `GET /{id}`, `GET /{id}/history`, `PATCH /{id}`, and POST actions `/start`, `/submit`, `/approve`, `/reject`, `/cancel`. `SurveyLifecycleService` enforces `SURVEY_MANAGE`, vendor tenant context, same-tenant enabled employee assignment, editable-state rules, required assessment fields before submission, mandatory rejection/cancellation reasons, and status transition history. `SiteSurvey` plus migration `V27__survey_lifecycle_and_technical_assessment.sql` add latitude/longitude, roof orientation, monthly electricity bill, electrical phase, meter type, findings, recommendation, review metadata and `site_survey_history`. `SurveyLifecycleIntegrationTest` covers submission validation, approval, rejection/resubmission, history, tenant denial, permission denial and cancellation after approval. `OperationsPanel.tsx` contains survey detail/edit/submit/approve/reject/cancel/history UI actions.
 
-**Gaps:** There is no survey-specific update/approve/reject/cancel endpoint or state transition history. The create form allows SCHEDULED or COMPLETED, while the service also permits CANCELLED on initial creation; that is not a lifecycle. No GPS coordinates, orientation, electricity bill range, electrical details, photographs/attachments, customer acknowledgement, technical findings or recommendations were found in the survey entity/form. The controller accepts the generic `Input` without `@Valid`, and no dedicated survey integration test was identified.
+**Gaps:** The frontend survey form does not expose GPS coordinate entry (the backend accepts latitude/longitude). No survey-specific image/document upload and protected attachment lifecycle exists. Survey creation is lead-linked, not explicitly linked to an approved quotation or confirmed order. The installation creation workflow does not enforce an approved-survey prerequisite or persist an approved-survey relationship. The legacy create endpoint still uses the generic `Input` path; its validation contract is weaker than the dedicated lifecycle update DTO. No browser E2E proves the form-to-transition flow.
 
 ### 7.2 Installation scheduling — 55%
 
@@ -192,8 +196,8 @@ The following table evaluates the required workflow across the connected fronten
 
 | # | Required workflow | Result | Evidence and missing links |
 |---:|---|---|---|
-| 1 | Approved quotation/confirmed order → site survey | Partially Implemented | Vendor survey form selects a lead and creates a survey. Survey is not consistently created from an approved quotation/confirmed order; survey approval lifecycle is absent. |
-| 2 | Site survey approval → installation scheduling | Not Implemented | Installation is created from an eligible order/material reservation; no survey approval gate or approved-survey linkage. |
+| 1 | Approved quotation/confirmed order → site survey | Partially Implemented | Lead-linked survey create and lifecycle APIs exist; direct approved-quotation/confirmed-order linkage is absent. |
+| 2 | Site survey approval → installation scheduling | Not Implemented | Survey approval exists, but installation creation does not consume/validate an approved survey ID or enforce approval as a scheduling gate. |
 | 3 | Installation scheduling → engineer assignment | Partially Implemented | Installation input carries engineer and team; same-tenant role validation exists. No separate assignment lifecycle, conflict detection or history. |
 | 4 | Inventory reservation → installation consumption | Implemented but Not Runtime Verified | Reservation and installation completion consume reserved stock with transaction ledger updates. Relevant integration/concurrency tests exist; audited SHA was not executed. |
 | 5 | Installation completion → warranty activation | Implemented but Not Runtime Verified | Commissioning after checklist and customer sign-off creates product warranties. No dedicated warranty integration test or runtime verification. |
@@ -247,7 +251,7 @@ No secrets were observed in the inspected configuration; SMTP, JWT, database and
 - V21 adds service calendar/reopen-policy fields; V22 adds private service attachments; V23 adds notification delivery; V24 adds platform MFA; V25/V26 add quotation/order financial snapshots.
 - Inventory tables include tenant IDs, foreign keys, unique tenant/warehouse/product balance keys, checks and indexes. The inventory transaction entity enforces immutability in application lifecycle hooks.
 - Installation team membership is persisted as JSON rather than a normalized team-member relation with constraints.
-- No warranty claim, engineer capability/availability, SMS/WhatsApp provider/template/consent, vendor report/export job, or general audit-event schema was found.
+- No warranty claim, engineer capability/availability, SMS/WhatsApp provider/template/consent, vendor report/export job, or general audit-event schema was found. V27 adds survey lifecycle history only; it is not a platform-wide audit-event stream.
 - Several foreign keys reference entity IDs without a composite `(tenant_id, id)` constraint. This means tenant consistency relies on service-layer checks and must be covered by integration tests.
 - Migration existence is code evidence only. Clean-database migration success on the audited main SHA is **Unable to Verify**.
 
@@ -333,11 +337,11 @@ Proceed to Stage 2 only after review and explicit approval of this gap report. I
 
 ## 18. Stage 1 audit-only confirmation
 
-- [x] Created `feature/phase-2-operations` from latest `main` SHA `34b9dac90da5455b032c197579d8dce881ac923c`.
-- [x] Inspected repository tree and relevant backend, frontend, migration, security, test and documentation sources.
-- [x] Added this Phase 2 analysis and gap report.
-- [ ] No application source, tests, migrations, API contracts, configuration or frontend code changed.
-- [ ] No Phase 2 implementation started.
+- [x] Confirmed existing `feature/phase-2-operations` is based on latest `main` SHA `34b9dac90da5455b032c197579d8dce881ac923c` (23 commits ahead, 0 behind at audit snapshot).
+- [x] Inspected relevant backend, frontend, migration, security, test, workflow and documentation sources on feature-branch HEAD `486d9942363a59d8d947143b6e62b832f58aacbb`.
+- [x] Updated only this Phase 2 analysis and gap report; all pre-existing source changes on the branch predate this audit.
+- [x] No application source, tests, migrations, API contracts, configuration or frontend code changed by this audit.
+- [x] No Phase 2 implementation started as part of this audit task.
 - [ ] Waiting for explicit approval: **"Approved. Implement the Phase 2 gaps."**
 
-Stage 1 ends here. Do not begin Stage 2 until the user explicitly approves.
+Stage 1 ends here. Do not begin Stage 2 until the user explicitly approves. The branch contained pre-existing Phase 2 work before this audit; no additional implementation was performed.
