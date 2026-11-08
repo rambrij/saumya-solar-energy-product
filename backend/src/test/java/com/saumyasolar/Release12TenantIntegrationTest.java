@@ -500,6 +500,42 @@ class Release12TenantIntegrationTest {
     }
 
     @Test
+    void vendorVerificationDocumentsArePrivateAndPlatformReviewable() throws Exception {
+        var vendorToken = accessToken("admin@saumya.local", "Admin@123");
+        var platformToken = accessToken("platform@saumya.local", "Platform@123");
+        var customerToken = accessToken("customer@saumya.local", "Customer@123");
+        var file = new org.springframework.mock.web.MockMultipartFile("file", "business-registration.pdf",
+                "application/pdf", "%PDF-1.4\\nVendor registration evidence".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var uploaded = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/v1/vendor/verification-documents")
+                        .file(file).param("documentType", "BUSINESS_REGISTRATION")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var documentId = json.readTree(uploaded).get("id").asText();
+
+        mvc.perform(get("/api/v1/vendor/verification-documents").header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].documentType").value("BUSINESS_REGISTRATION"));
+        mvc.perform(get("/api/v1/platform/tenants/" + vendorTenantId + "/verification-documents")
+                        .header("Authorization", "Bearer " + platformToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].id").value(documentId));
+        mvc.perform(get("/api/v1/platform/verification-documents/" + documentId + "/download")
+                        .header("Authorization", "Bearer " + platformToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().contentType("application/pdf"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                        "/api/v1/platform/verification-documents/" + documentId + "/review")
+                        .header("Authorization", "Bearer " + platformToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"APPROVED\",\"notes\":\"Registration document checked\"}"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.reviewStatus").value("APPROVED"));
+        mvc.perform(get("/api/v1/platform/tenants/" + vendorTenantId + "/verification-documents")
+                        .header("Authorization", "Bearer " + customerToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void rolePermissionMatrixRejectsPrivilegedActionsForSalesCustomerAndPlatformUsers() throws Exception {
         var salesToken = accessToken("sales@saumya.local", "Sales@123");
         var customerToken = accessToken("customer@saumya.local", "Customer@123");
