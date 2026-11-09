@@ -101,11 +101,6 @@ public class OperationsService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing permission: " + code);
     }
     
-    private void operationsManager(Principal p) {
-        if (p.roles() == null || p.roles().stream().noneMatch(r -> Set.of("VENDOR_ADMIN", "OPERATIONS_MANAGER", "SERVICE_MANAGER").contains(r)))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only Vendor Admin or Operations Manager can manage teams and checklist templates");
-    }
-    
     private CustomerOrder order(UUID id, UUID t) {
         return orders.findByIdAndTenantId(id, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
     }
@@ -532,7 +527,7 @@ public class OperationsService {
         UUID t = tenant(p);
         permission(p, "INSTALLATION_VIEW");
         List<InstallationTeam> active = teams.findByTenantIdOrderByNameAsc(t).stream().filter(InstallationTeam::isActive).toList();
-        if (p.roles() != null && p.roles().stream().anyMatch(Set.of("SERVICE_ENGINEER", "TECHNICIAN", "INSTALLER")::contains))
+        if (p.permissions() == null || !p.permissions().contains("INSTALLATION_ASSIGN"))
             return active.stream().filter(team -> team.getMemberIdsJson() != null && team.getMemberIdsJson().contains(p.userId().toString())).toList();
         return active;
     }
@@ -541,7 +536,6 @@ public class OperationsService {
     public InstallationTeam updateTeam(UUID id, TeamInput x, Principal p) {
         UUID t = tenant(p);
         permission(p, "INSTALLATION_ASSIGN");
-        operationsManager(p);
         InstallationTeam team = teams.findByIdAndTenantId(id, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         validateTeamMembers(t, x.memberIds());
         team.setName(x.name().trim());
@@ -641,7 +635,7 @@ public class OperationsService {
         UUID t = tenant(p);
         permission(p, "INSTALLATION_VIEW");
         List<InstallationJob> all = installations.findByTenantIdOrderByScheduledAtAsc(t);
-        if (p.roles() != null && p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "OPERATIONS_MANAGER", "SERVICE_MANAGER").contains(r)))
+        if (p.permissions() != null && p.permissions().contains("INSTALLATION_ASSIGN"))
             return all;
         return all.stream().filter(j -> p.userId().equals(j.getAssignedEngineerId())).toList();
     }
@@ -750,8 +744,7 @@ public class OperationsService {
     
     private InstallationJob installation(UUID id, UUID t, Principal p) {
         InstallationJob j = installations.findByIdAndTenantId(id, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Installation not found"));
-        Set<String> elevated = Set.of("VENDOR_ADMIN", "OPERATIONS_MANAGER", "SERVICE_MANAGER");
-        if (( p.roles() == null || p.roles().stream().noneMatch(elevated::contains) ) && !Objects.equals(j.getAssignedEngineerId(), p.userId()))
+        if ((p.permissions() == null || !p.permissions().contains("INSTALLATION_ASSIGN")) && !Objects.equals(j.getAssignedEngineerId(), p.userId()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         return j;
     }
