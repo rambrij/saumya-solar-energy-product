@@ -21,16 +21,18 @@ public class ApiExceptionHandler {
                 ? status.getReasonPhrase() : exception.getReason();
         return ResponseEntity.status(status).body(body(status, detail));
     }
-
+    
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException exception) {
         String detail = exception.getBindingResult().getFieldErrors().stream()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .distinct().collect(Collectors.joining("; "));
-        return ResponseEntity.badRequest().body(body(HttpStatus.BAD_REQUEST,
-                detail.isBlank() ? "Request validation failed." : detail));
+        return ResponseEntity.badRequest().body(body(
+                HttpStatus.BAD_REQUEST,
+                detail.isBlank() ? "Request validation failed." : detail
+        ));
     }
-
+    
     private Map<String, Object> body(HttpStatus status, String detail) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("type", "about:blank");

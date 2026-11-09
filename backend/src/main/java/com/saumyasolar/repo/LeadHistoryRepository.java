@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 public interface LeadHistoryRepository extends JpaRepository<LeadHistory, UUID> {
     List<LeadHistory> findByTenantIdOrderByIdDesc(UUID tenantId);
+    
     List<LeadHistory> findByLeadIdAndTenantIdOrderByCreatedAtDesc(UUID leadId, UUID tenantId);
     
     Optional<LeadHistory> findByIdAndTenantId(UUID id, UUID tenantId);

@@ -21,8 +21,10 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 public class InventoryTransaction {
-    @Id UUID id;
-    @Column(length = 50, nullable = false) String transactionReference;
+    @Id
+    UUID id;
+    @Column(length = 50, nullable = false)
+    String transactionReference;
     UUID tenantId;
     UUID warehouseId;
     UUID productId;
@@ -34,23 +36,24 @@ public class InventoryTransaction {
     BigDecimal quantityDelta;
     BigDecimal reservedDelta;
     BigDecimal damagedDelta;
-    @Column(length = 500) String reason;
+    @Column(length = 500)
+    String reason;
     UUID actorId;
     Instant createdAt;
-
+    
     @PrePersist
     private void assignTransactionReference() {
         if (transactionReference == null || transactionReference.isBlank()) {
             transactionReference = "INV-" + UUID.randomUUID().toString().replace("-", "").toUpperCase(java.util.Locale.ROOT);
         }
     }
-
+    
     /** Ledger rows are append-only; corrections must be recorded as new movements. */
     @PreUpdate
     private void preventMutation() {
         throw new IllegalStateException("Inventory transactions are immutable; append a compensating movement instead.");
     }
-
+    
     @PreRemove
     private void preventDeletion() {
         throw new IllegalStateException("Inventory transactions cannot be deleted.");

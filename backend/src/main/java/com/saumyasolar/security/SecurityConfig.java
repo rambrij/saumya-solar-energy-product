@@ -28,14 +28,15 @@ import java.util.List;
 public class SecurityConfig {
     @Value("${app.cors-origins}")
     String origins;
-
+    
     @Bean
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12);
     }
-
+    
     @Bean
-    SecurityFilterChain chain(HttpSecurity http, JwtFilter jwtFilter, SubscriptionEnforcementFilter subscriptionFilter) throws Exception {
+    SecurityFilterChain chain(HttpSecurity http, JwtFilter jwtFilter, SubscriptionEnforcementFilter subscriptionFilter)
+            throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(cors()))
@@ -46,27 +47,30 @@ public class SecurityConfig {
                                 HttpStatus.FORBIDDEN.value(), "You do not have permission to access this resource")))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/v1/auth/**", "/api/v1/public/**", "/api/v1/payment-webhooks/**", "/api/v1/payment-gateway-webhooks/**", "/uploads/**",
-                                "/actuator/health", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        .requestMatchers(
+                                "/api/v1/auth/**", "/api/v1/public/**", "/api/v1/payment-webhooks/**", "/api/v1/payment-gateway-webhooks/**", "/uploads/**",
+                                "/actuator/health", "/swagger-ui/**", "/v3/api-docs/**"
+                        ).permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(subscriptionFilter, JwtFilter.class)
                 .build();
     }
-
-
+    
     @Bean
     SubscriptionEnforcementFilter subscriptionEnforcementFilter(TenantSubscriptionRepository subscriptions) {
         return new SubscriptionEnforcementFilter(subscriptions);
     }
-
+    
     @Bean
-    FilterRegistrationBean<SubscriptionEnforcementFilter> disableContainerSubscriptionFilter(SubscriptionEnforcementFilter filter) {
+    FilterRegistrationBean<SubscriptionEnforcementFilter> disableContainerSubscriptionFilter(
+            SubscriptionEnforcementFilter filter
+    ) {
         FilterRegistrationBean<SubscriptionEnforcementFilter> registration = new FilterRegistrationBean<>(filter);
         registration.setEnabled(false);
         return registration;
     }
-
+    
     CorsConfigurationSource cors() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(Arrays.stream(origins.split(","))

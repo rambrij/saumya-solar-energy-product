@@ -6,7 +6,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class ServiceSlaScheduler {
     private final FinanceService finance;
-    public ServiceSlaScheduler(FinanceService finance){this.finance=finance;}
-    @Scheduled(fixedDelayString="${app.service.sla-check-interval-ms:60000}")
-    public void evaluate(){finance.evaluateSlaBreaches();}
+    
+    public ServiceSlaScheduler(FinanceService finance) {
+        this.finance = finance;
+    }
+    
+    @Scheduled(fixedDelayString = "${app.service.sla-check-interval-ms:60000}")
+    public void evaluate() {
+        finance.evaluateSlaBreaches();
+    }
 }

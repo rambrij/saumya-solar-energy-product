@@ -11,8 +11,9 @@ import java.time.Instant;
 import java.util.UUID;
 
 public final class SurveyModels {
-    private SurveyModels() {}
-
+    private SurveyModels() {
+    }
+    
     public record UpdateRequest(
             Instant scheduledAt,
             UUID assignedUserId,
@@ -30,7 +31,9 @@ public final class SurveyModels {
             @Size(max = 10000) String notes,
             @Size(max = 10000) String findings,
             @Size(max = 10000) String recommendation
-    ) {}
-
-    public record DecisionRequest(@NotBlank @Size(max = 1000) String reason) {}
+    ) {
+    }
+    
+    public record DecisionRequest(@NotBlank @Size(max = 1000) String reason) {
+    }
 }

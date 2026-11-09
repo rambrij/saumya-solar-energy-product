@@ -15,15 +15,15 @@ import java.time.Duration;
 import java.util.Locale;
 
 /**
- * Safe baseline adapter for tenant-configured HTTPS APIs. Provider-specific accounting
- * and payment adapters can implement IntegrationAdapter without changing the durable queue.
+ * Safe baseline adapter for tenant-configured HTTPS APIs. Provider-specific accounting and payment adapters can
+ * implement IntegrationAdapter without changing the durable queue.
  */
 @Component
 public class GenericHttpIntegrationAdapter implements IntegrationAdapter {
     private final ObjectMapper mapper;
     private final HttpClient client;
     private final SecretProviderRegistry secrets;
-
+    
     public GenericHttpIntegrationAdapter(ObjectMapper mapper, SecretProviderRegistry secrets) {
         this.mapper = mapper;
         this.secrets = secrets;
@@ -32,19 +32,19 @@ public class GenericHttpIntegrationAdapter implements IntegrationAdapter {
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .build();
     }
-
+    
     @Override
     public String providerCode() {
         return "GENERIC_HTTP";
     }
-
+    
     @Override
     public void synchronize(IntegrationConnection connection, IntegrationSyncJob job) throws Exception {
         JsonNode config = mapper.readTree(connection.getConfigJson());
         String endpoint = required(config, "endpoint");
         URI uri = URI.create(endpoint);
         String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
-        if (!"https".equals(scheme) || uri.getHost() == null || (uri.getPort() != -1 && uri.getPort() != 443)) {
+        if (!"https".equals(scheme) || uri.getHost() == null || ( uri.getPort() != -1 && uri.getPort() != 443 )) {
             throw new IllegalArgumentException("Generic integration endpoints must use HTTPS on the standard port");
         }
         if (uri.getUserInfo() != null || uri.getFragment() != null || uri.getHost().endsWith(".")) {
@@ -61,14 +61,14 @@ public class GenericHttpIntegrationAdapter implements IntegrationAdapter {
                 throw new IllegalArgumentException("Integration endpoint resolves to a non-public network address");
             }
         }
-
+        
         HttpRequest.Builder request = HttpRequest.newBuilder(uri)
                 .timeout(Duration.ofSeconds(20))
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
                 .header("Idempotency-Key", job.getIdempotencyKey())
                 .POST(HttpRequest.BodyPublishers.ofString(job.getPayloadJson()));
-
+        
         String secretReference = connection.getSecretReference();
         if (secretReference != null && !secretReference.isBlank()) {
             String secret = secrets.resolve(secretReference);
@@ -80,7 +80,7 @@ public class GenericHttpIntegrationAdapter implements IntegrationAdapter {
             }
             request.header(header, schemeName.isBlank() ? secret : schemeName + " " + secret);
         }
-
+        
         HttpResponse<Void> response = client.send(request.build(), HttpResponse.BodyHandlers.discarding());
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             throw new IllegalStateException("Integration endpoint returned HTTP " + response.statusCode());
@@ -88,7 +88,7 @@ public class GenericHttpIntegrationAdapter implements IntegrationAdapter {
         response.headers().firstValue("Location").ifPresent(location ->
                 job.setExternalReference(location.length() > 160 ? location.substring(0, 160) : location));
     }
-
+    
     private String required(JsonNode config, String field) {
         JsonNode value = config.get(field);
         if (value == null || !value.isTextual() || value.asText().isBlank()) {

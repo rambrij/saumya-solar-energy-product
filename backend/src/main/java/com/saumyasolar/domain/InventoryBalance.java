@@ -1,4 +1,33 @@
 package com.saumyasolar.domain;
-import jakarta.persistence.Entity;import jakarta.persistence.Id;import jakarta.persistence.Table;import jakarta.persistence.Version;import lombok.Getter;import lombok.NoArgsConstructor;import lombok.Setter;import java.math.BigDecimal;import java.util.UUID;
-@Entity @Table(name="inventory_balance") @Getter @Setter @NoArgsConstructor
-public class InventoryBalance {@Id UUID id;UUID tenantId;UUID warehouseId;UUID productId;BigDecimal onHand=BigDecimal.ZERO;BigDecimal reserved=BigDecimal.ZERO;BigDecimal damaged=BigDecimal.ZERO;@Version long version;public BigDecimal getAvailable(){return onHand.subtract(reserved).subtract(damaged);}}
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+@Entity
+@Table(name = "inventory_balance")
+@Getter
+@Setter
+@NoArgsConstructor
+public class InventoryBalance {
+    @Id
+    UUID id;
+    UUID tenantId;
+    UUID warehouseId;
+    UUID productId;
+    BigDecimal onHand = BigDecimal.ZERO;
+    BigDecimal reserved = BigDecimal.ZERO;
+    BigDecimal damaged = BigDecimal.ZERO;
+    @Version
+    long version;
+    
+    public BigDecimal getAvailable() {
+        return onHand.subtract(reserved).subtract(damaged);
+    }
+}

@@ -29,22 +29,24 @@ public class OfflineSyncService {
     private final ServiceCommentControllerAccess comments;
     private final SurveyLifecycleService surveys;
     private final ObjectMapper mapper;
-
-    public OfflineSyncService(OfflineSyncOperationRepository operations,
-                              AuditEventRepository audits,
-                              ServiceRequestRepository tickets,
-                              ServiceCommentRepository serviceComments,
-                              CustomerProfileRepository customers,
-                              NotificationService notifications,
-                              SurveyLifecycleService surveys,
-                              ObjectMapper mapper) {
+    
+    public OfflineSyncService(
+            OfflineSyncOperationRepository operations,
+            AuditEventRepository audits,
+            ServiceRequestRepository tickets,
+            ServiceCommentRepository serviceComments,
+            CustomerProfileRepository customers,
+            NotificationService notifications,
+            SurveyLifecycleService surveys,
+            ObjectMapper mapper
+    ) {
         this.operations = operations;
         this.audits = audits;
         this.comments = new ServiceCommentControllerAccess(tickets, serviceComments, customers, notifications, mapper);
         this.surveys = surveys;
         this.mapper = mapper;
     }
-
+    
     @Transactional
     public List<SyncResult> synchronize(List<SyncCommand> commands, Principal actor) {
         if (actor == null || actor.tenantId() == null || actor.userId() == null
@@ -58,7 +60,7 @@ public class OfflineSyncService {
         for (SyncCommand command : commands) results.add(apply(command, actor));
         return results;
     }
-
+    
     @Transactional
     public List<SyncResult> status(Principal actor) {
         if (actor == null || actor.tenantId() == null || actor.userId() == null
@@ -68,7 +70,7 @@ public class OfflineSyncService {
         return operations.findTop100ByTenantIdAndActorIdOrderByReceivedAtDesc(actor.tenantId(), actor.userId())
                 .stream().map(this::result).toList();
     }
-
+    
     private SyncResult apply(SyncCommand command, Principal actor) {
         if (command == null || command.operationId() == null || command.resourceId() == null
                 || command.type() == null || command.payload() == null || command.clientCreatedAt() == null) {
@@ -96,7 +98,7 @@ public class OfflineSyncService {
             }
             return result(prior);
         }
-
+        
         String resultJson;
         try {
             resultJson = switch (type) {
@@ -113,7 +115,7 @@ public class OfflineSyncService {
         } catch (Exception ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Offline operation payload is invalid");
         }
-
+        
         OfflineSyncOperation row = new OfflineSyncOperation();
         row.setId(UUID.randomUUID());
         row.setTenantId(actor.tenantId());
@@ -129,25 +131,34 @@ public class OfflineSyncService {
         row.setAppliedAt(Instant.now());
         operations.save(row);
         AuditEvent audit = new AuditEvent();
-        audit.setId(UUID.randomUUID()); audit.setTenantId(actor.tenantId()); audit.setActorId(actor.userId());
-        audit.setActorType(actor.accountType()); audit.setAction("OFFLINE_SYNC_" + type);
-        audit.setEntityType("OFFLINE_SYNC_OPERATION"); audit.setEntityId(row.getId().toString());
+        audit.setId(UUID.randomUUID());
+        audit.setTenantId(actor.tenantId());
+        audit.setActorId(actor.userId());
+        audit.setActorType(actor.accountType());
+        audit.setAction("OFFLINE_SYNC_" + type);
+        audit.setEntityType("OFFLINE_SYNC_OPERATION");
+        audit.setEntityId(row.getId().toString());
         audit.setOutcome("SUCCESS");
         try {
-            audit.setAfterJson(mapper.writeValueAsString(Map.of("operationId", command.operationId().toString(),
-                    "resourceId", command.resourceId().toString(), "payloadHash", hash)));
+            audit.setAfterJson(mapper.writeValueAsString(Map.of(
+                    "operationId", command.operationId().toString(),
+                    "resourceId", command.resourceId().toString(), "payloadHash", hash
+            )));
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
             throw new IllegalStateException("Unable to serialize offline sync audit event", ex);
         }
-        audit.setCreatedAt(Instant.now()); audits.save(audit);
+        audit.setCreatedAt(Instant.now());
+        audits.save(audit);
         return result(row);
     }
-
+    
     private SyncResult result(OfflineSyncOperation row) {
-        return new SyncResult(row.getClientOperationId(), row.getOperationType(), row.getResourceId(),
-                row.getStatus(), row.getResultJson(), row.getErrorMessage(), row.getAppliedAt());
+        return new SyncResult(
+                row.getClientOperationId(), row.getOperationType(), row.getResourceId(),
+                row.getStatus(), row.getResultJson(), row.getErrorMessage(), row.getAppliedAt()
+        );
     }
-
+    
     private String hash(String value) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
@@ -156,15 +167,22 @@ public class OfflineSyncService {
             throw new IllegalStateException("SHA-256 is unavailable", ex);
         }
     }
-
-    public record SyncCommand(UUID operationId, String type, UUID resourceId,
-                              String payload, Instant clientCreatedAt) {}
-    public record SyncResult(UUID operationId, String type, UUID resourceId, String status,
-                             String resultJson, String errorMessage, Instant appliedAt) {}
-
+    
+    public record SyncCommand(
+            UUID operationId, String type, UUID resourceId,
+            String payload, Instant clientCreatedAt
+    ) {
+    }
+    
+    public record SyncResult(
+            UUID operationId, String type, UUID resourceId, String status,
+            String resultJson, String errorMessage, Instant appliedAt
+    ) {
+    }
+    
     /**
-     * Narrow service facade that preserves the exact authorization and notification behavior
-     * of the existing service-comment endpoint without duplicating its policy.
+     * Narrow service facade that preserves the exact authorization and notification behavior of the existing
+     * service-comment endpoint without duplicating its policy.
      */
     static final class ServiceCommentControllerAccess {
         private final ServiceRequestRepository tickets;
@@ -172,14 +190,22 @@ public class OfflineSyncService {
         private final CustomerProfileRepository customers;
         private final NotificationService notifications;
         private final ObjectMapper mapper;
-        ServiceCommentControllerAccess(ServiceRequestRepository tickets, ServiceCommentRepository comments,
-                                       CustomerProfileRepository customers, NotificationService notifications, ObjectMapper mapper) {
-            this.tickets = tickets; this.comments = comments; this.customers = customers; this.notifications = notifications; this.mapper = mapper;
+        
+        ServiceCommentControllerAccess(
+                ServiceRequestRepository tickets, ServiceCommentRepository comments,
+                CustomerProfileRepository customers, NotificationService notifications, ObjectMapper mapper
+        ) {
+            this.tickets = tickets;
+            this.comments = comments;
+            this.customers = customers;
+            this.notifications = notifications;
+            this.mapper = mapper;
         }
+        
         ServiceComment create(UUID ticketId, String payload, Principal actor) throws Exception {
             var input = mapper.readValue(payload, CommentPayload.class);
             if (input.body() == null || input.body().isBlank() || input.body().length() > 4000
-                    || (input.visibility() != null && !Set.of("CUSTOMER", "INTERNAL").contains(input.visibility()))) {
+                    || ( input.visibility() != null && !Set.of("CUSTOMER", "INTERNAL").contains(input.visibility()) )) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid service comment payload");
             }
             ServiceRequest ticket = tickets.findByIdAndTenantId(ticketId, actor.tenantId())
@@ -189,33 +215,41 @@ public class OfflineSyncService {
                         .filter(com.saumyasolar.domain.CustomerProfile::isActive)
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer profile not found"));
                 if (!customer.getId().equals(ticket.getCustomerId())
-                        || (input.visibility() != null && !"CUSTOMER".equals(input.visibility()))) {
+                        || ( input.visibility() != null && !"CUSTOMER".equals(input.visibility()) )) {
                     throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Service ticket not found");
                 }
             } else {
                 if (!"VENDOR".equals(actor.accountType()) || actor.permissions() == null
-                        || !actor.permissions().contains("SERVICE_MANAGE")) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+                        || !actor.permissions().contains("SERVICE_MANAGE"))
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN);
                 boolean manager = actor.roles() != null && actor.roles().stream()
                         .anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r));
                 if (!manager && !actor.userId().equals(ticket.getAssignedEngineerId()))
                     throw new ResponseStatusException(HttpStatus.FORBIDDEN);
             }
             String visibility = "CUSTOMER".equals(actor.accountType()) ? "CUSTOMER"
-                    : (input.visibility() == null ? "CUSTOMER" : input.visibility());
+                    : ( input.visibility() == null ? "CUSTOMER" : input.visibility() );
             ServiceComment comment = new ServiceComment();
-            comment.setId(UUID.randomUUID()); comment.setTenantId(actor.tenantId());
-            comment.setServiceRequestId(ticketId); comment.setAuthorId(actor.userId());
-            comment.setVisibility(visibility); comment.setBody(input.body().trim());
+            comment.setId(UUID.randomUUID());
+            comment.setTenantId(actor.tenantId());
+            comment.setServiceRequestId(ticketId);
+            comment.setAuthorId(actor.userId());
+            comment.setVisibility(visibility);
+            comment.setBody(input.body().trim());
             comment.setCreatedAt(Instant.now());
             ServiceComment saved = comments.save(comment);
             if ("CUSTOMER".equals(visibility) && !"CUSTOMER".equals(actor.accountType())) {
                 customers.findByIdAndTenantId(ticket.getCustomerId(), actor.tenantId()).ifPresent(customer ->
-                        notifications.sendBusinessNotification(customer.getUserId(), actor.tenantId(),
+                        notifications.sendBusinessNotification(
+                                customer.getUserId(), actor.tenantId(),
                                 "SERVICE_TICKET_COMMENT", customer.getEmail(),
-                                "Update on service request " + ticket.getTicketNumber(), input.body().trim()));
+                                "Update on service request " + ticket.getTicketNumber(), input.body().trim()
+                        ));
             }
             return saved;
         }
-        record CommentPayload(String body, String visibility) {}
+        
+        record CommentPayload(String body, String visibility) {
+        }
     }
 }

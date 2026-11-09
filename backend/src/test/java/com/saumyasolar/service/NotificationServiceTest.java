@@ -9,6 +9,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 
 import java.util.UUID;
 import java.time.Instant;
+
 import org.mockito.ArgumentCaptor;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -22,15 +23,17 @@ class NotificationServiceTest {
         NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
         when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
         NotificationService service = new NotificationService(sender, repository, "no-reply@example.test", "http://localhost:3000");
-
-        boolean sent = service.sendPasswordReset(UUID.randomUUID(), UUID.randomUUID(),
-                "customer@example.test", "Solar Customer", "random-one-time-token");
-
+        
+        boolean sent = service.sendPasswordReset(
+                UUID.randomUUID(), UUID.randomUUID(),
+                "customer@example.test", "Solar Customer", "random-one-time-token"
+        );
+        
         assertTrue(sent);
         verify(sender).send(any(SimpleMailMessage.class));
         verify(repository, times(2)).save(any(NotificationDelivery.class));
     }
-
+    
     @Test
     void recordsFailedSmtpDeliveryWithoutThrowingToCaller() {
         JavaMailSender sender = mock(JavaMailSender.class);
@@ -38,10 +41,12 @@ class NotificationServiceTest {
         when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
         doThrow(new MailSendException("SMTP unavailable")).when(sender).send(any(SimpleMailMessage.class));
         NotificationService service = new NotificationService(sender, repository, "no-reply@example.test", "http://localhost:3000");
-
-        boolean sent = service.sendBusinessNotification(UUID.randomUUID(), UUID.randomUUID(),
-                "QUOTE_SENT", "customer@example.test", "Your quotation", "Quotation details");
-
+        
+        boolean sent = service.sendBusinessNotification(
+                UUID.randomUUID(), UUID.randomUUID(),
+                "QUOTE_SENT", "customer@example.test", "Your quotation", "Quotation details"
+        );
+        
         assertFalse(sent);
         ArgumentCaptor<NotificationDelivery> saved = ArgumentCaptor.forClass(NotificationDelivery.class);
         verify(repository, times(2)).save(saved.capture());

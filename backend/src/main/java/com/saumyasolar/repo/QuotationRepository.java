@@ -14,12 +14,14 @@ public interface QuotationRepository extends JpaRepository<Quotation, UUID> {
     List<Quotation> findByTenantIdOrderByIdDesc(UUID tenantId);
     
     Optional<Quotation> findByIdAndTenantId(UUID id, UUID tenantId);
- long countByTenantIdAndBranchId(UUID tenantId,UUID branchId);
- long countByTenantIdAndBranchIdAndStatus(UUID tenantId,UUID branchId,String status);
-
+    
+    long countByTenantIdAndBranchId(UUID tenantId, UUID branchId);
+    
+    long countByTenantIdAndBranchIdAndStatus(UUID tenantId, UUID branchId, String status);
+    
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select q from Quotation q where q.id = :id and q.tenantId = :tenantId")
     Optional<Quotation> findByIdAndTenantIdForUpdate(@Param("id") UUID id, @Param("tenantId") UUID tenantId);
-
+    
     List<Quotation> findByQuoteGroupIdAndTenantIdOrderByRevisionAsc(UUID quoteGroupId, UUID tenantId);
 }

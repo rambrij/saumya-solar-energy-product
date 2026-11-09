@@ -10,11 +10,11 @@ import java.nio.file.Path;
 @Configuration
 public class UploadResourceConfig implements WebMvcConfigurer {
     private final Path uploadRoot;
-
+    
     public UploadResourceConfig(@Value("${app.storage.location:./data/uploads}") String location) {
         this.uploadRoot = Path.of(location).toAbsolutePath().normalize();
     }
-
+    
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         registry.addResourceHandler("/uploads/**")

@@ -1,7 +1,9 @@
 package com.saumyasolar.domain;
 
 import org.junit.jupiter.api.Test;
+
 import java.lang.reflect.Method;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class InventoryTransactionTest {
@@ -14,7 +16,7 @@ class InventoryTransactionTest {
         assertNotNull(transaction.getTransactionReference());
         assertTrue(transaction.getTransactionReference().matches("INV-[A-F0-9]{32}"));
     }
-
+    
     @Test
     void preservesAnExistingReference() throws Exception {
         InventoryTransaction transaction = new InventoryTransaction();

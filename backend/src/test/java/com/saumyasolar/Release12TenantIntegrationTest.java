@@ -39,25 +39,35 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class Release12TenantIntegrationTest {
-    @Autowired MockMvc mvc;
-    @Autowired ObjectMapper json;
-    @Autowired AppUserRepository users;
-    @Autowired TenantRepository tenants;
-    @Autowired ProductCategoryRepository categories;
-    @Autowired ProductRepository products;
-    @Autowired EnquiryRepository enquiries;
-    @Autowired CustomerProfileRepository customerProfiles;
-    @Autowired CustomerOrderRepository customerOrders;
-    @Autowired OrderItemRepository orderItems;
-
+    @Autowired
+    MockMvc mvc;
+    @Autowired
+    ObjectMapper json;
+    @Autowired
+    AppUserRepository users;
+    @Autowired
+    TenantRepository tenants;
+    @Autowired
+    ProductCategoryRepository categories;
+    @Autowired
+    ProductRepository products;
+    @Autowired
+    EnquiryRepository enquiries;
+    @Autowired
+    CustomerProfileRepository customerProfiles;
+    @Autowired
+    CustomerOrderRepository customerOrders;
+    @Autowired
+    OrderItemRepository orderItems;
+    
     UUID vendorTenantId;
-
+    
     @BeforeEach
     void findSeedVendorTenant() {
         vendorTenantId = users.findByEmailIgnoreCase("admin@saumya.local")
                 .orElseThrow().getTenantId();
     }
-
+    
     @Test
     void platformCanProvisionTenantAndVendorAdminCanManageSalesEmployee() throws Exception {
         var platformToken = accessToken("platform@saumya.local", "Platform@123");
@@ -73,7 +83,7 @@ class Release12TenantIntegrationTest {
                         .content(tenantBody))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var tenantId = json.readTree(tenantResponse).get("id").asText();
-
+        
         var vendorToken = accessToken(adminEmail, adminPassword);
         var rolesResponse = mvc.perform(get("/api/v1/roles").header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
@@ -98,7 +108,7 @@ class Release12TenantIntegrationTest {
                                 {"email":"%s","password":"SalesExec-Pass-2026"}
                                 """.formatted(employeeEmail)))
                 .andExpect(status().isUnauthorized());
-
+        
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/tenants/" + tenantId + "/status")
                         .header("Authorization", "Bearer " + platformToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -112,7 +122,7 @@ class Release12TenantIntegrationTest {
         mvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isUnauthorized());
     }
-
+    
     @Test
     void logoutRevokesAccessAndRefreshTokens() throws Exception {
         var loginBody = """
@@ -124,7 +134,7 @@ class Release12TenantIntegrationTest {
         var session = json.readTree(loginResponse);
         var accessToken = session.get("accessToken").asText();
         var refreshToken = session.get("refreshToken").asText();
-
+        
         mvc.perform(post("/api/v1/auth/logout")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -140,7 +150,7 @@ class Release12TenantIntegrationTest {
                                 """.formatted(refreshToken)))
                 .andExpect(status().isUnauthorized());
     }
-
+    
     @Test
     void customerRegistrationCreatesProfileAndCanOpenCustomerQuotationList() throws Exception {
         var email = "registered-" + UUID.randomUUID() + "@example.test";
@@ -169,7 +179,7 @@ class Release12TenantIntegrationTest {
         mvc.perform(get("/api/v1/catalog-categories").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
     }
-
+    
     @Test
     void salesRoleCanReadButCannotManageCatalogue() throws Exception {
         var token = accessToken("sales@saumya.local", "Sales@123");
@@ -181,7 +191,7 @@ class Release12TenantIntegrationTest {
                         .content("{\"name\":\"Unauthorized category\"}"))
                 .andExpect(status().isForbidden());
     }
-
+    
     @Test
     void productCannotReferenceAnotherTenantsCategory() throws Exception {
         var foreignTenant = newTenant();
@@ -191,19 +201,19 @@ class Release12TenantIntegrationTest {
         category.setName("Foreign category " + UUID.randomUUID());
         category.setActive(true);
         categories.save(category);
-
+        
         var token = accessToken("admin@saumya.local", "Admin@123");
         var request = """
                 {"name":"Invalid cross-tenant product","sku":"CROSS-%s","categoryId":"%s","price":500,"taxPercent":0}
                 """.formatted(UUID.randomUUID(), category.getId());
-
+        
         mvc.perform(post("/api/v1/products")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
                 .andExpect(status().isBadRequest());
     }
-
+    
     @Test
     void productListDoesNotExposeAnotherTenantsProducts() throws Exception {
         var foreignTenant = newTenant();
@@ -223,7 +233,7 @@ class Release12TenantIntegrationTest {
         foreignProduct.setTaxPercent(BigDecimal.ZERO);
         foreignProduct.setActive(true);
         products.save(foreignProduct);
-
+        
         var token = accessToken("admin@saumya.local", "Admin@123");
         var response = mvc.perform(get("/api/v1/products")
                         .header("Authorization", "Bearer " + token))
@@ -234,7 +244,7 @@ class Release12TenantIntegrationTest {
             assertNotEquals(foreignProduct.getId().toString(), row.get("id").asText());
         }
     }
-
+    
     @Test
     void leadCannotBeAssignedToEmployeeFromAnotherTenant() throws Exception {
         var foreignTenant = newTenant();
@@ -247,7 +257,7 @@ class Release12TenantIntegrationTest {
         foreignEmployee.setAccountType("VENDOR");
         foreignEmployee.setEnabled(true);
         users.save(foreignEmployee);
-
+        
         var enquiry = new Enquiry();
         enquiry.setId(UUID.randomUUID());
         enquiry.setTenantId(vendorTenantId);
@@ -255,19 +265,19 @@ class Release12TenantIntegrationTest {
         enquiry.setStatus("NEW");
         enquiry.setCreatedAt(Instant.now());
         enquiries.save(enquiry);
-
+        
         var token = accessToken("admin@saumya.local", "Admin@123");
         var request = """
                 {"assignedUserId":"%s","priority":"MEDIUM"}
                 """.formatted(foreignEmployee.getId());
-
+        
         mvc.perform(post("/api/v1/enquiries/" + enquiry.getId() + "/convert")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
                 .andExpect(status().isBadRequest());
     }
-
+    
     @Test
     void vendorAdminCanCreateCategorizedProductAndConfigurablePackage() throws Exception {
         var token = accessToken("admin@saumya.local", "Admin@123");
@@ -283,7 +293,7 @@ class Release12TenantIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content(productBody))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var productId = json.readTree(productResponse).get("id").asText();
-
+        
         mvc.perform(post("/api/v1/packages")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -291,7 +301,7 @@ class Release12TenantIntegrationTest {
                                 {"code":"EMPTY-%s","name":"Invalid package","capacityKw":3,"packageType":"RESIDENTIAL","basePrice":25000,"items":[]}
                                 """.formatted(UUID.randomUUID())))
                 .andExpect(status().isBadRequest());
-
+        
         mvc.perform(post("/api/v1/packages")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -300,7 +310,7 @@ class Release12TenantIntegrationTest {
                                 """.formatted(UUID.randomUUID(), productId)))
                 .andExpect(status().isOk());
     }
-
+    
     @Test
     void vendorAdminCanConfigureDiscountApprovalThreshold() throws Exception {
         var token = accessToken("admin@saumya.local", "Admin@123");
@@ -313,7 +323,7 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertEquals(7.5, json.readTree(response).get("discountApprovalThreshold").asDouble());
     }
-
+    
     @Test
     void customerCanRequestSurveyReceiveQuotationAcceptAndConvertExactlyOneOrder() throws Exception {
         var vendorToken = accessToken("admin@saumya.local", "Admin@123");
@@ -327,7 +337,7 @@ class Release12TenantIntegrationTest {
         var customerToken = json.readTree(registration).get("accessToken").asText();
         var customer = users.findByEmailIgnoreCase(customerEmail).orElseThrow();
         var profile = customerProfiles.findByTenantIdAndUserId(customer.getTenantId(), customer.getId()).orElseThrow();
-
+        
         var enquiryResponse = mvc.perform(post("/api/v1/customer/enquiries")
                         .header("Authorization", "Bearer " + customerToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -337,7 +347,7 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var enquiryId = json.readTree(enquiryResponse).get("id").asText();
         var vendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
-
+        
         var leadResponse = mvc.perform(post("/api/v1/enquiries/" + enquiryId + "/convert")
                         .header("Authorization", "Bearer " + vendorToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -350,7 +360,7 @@ class Release12TenantIntegrationTest {
                         .header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertTrue(leadHistory.contains("ASSIGNMENT"));
-
+        
         var surveyResponse = mvc.perform(post("/api/v1/surveys")
                         .header("Authorization", "Bearer " + vendorToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -359,7 +369,7 @@ class Release12TenantIntegrationTest {
                                 """.formatted(leadId, vendor.getId(), Instant.now().plusSeconds(86400))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var surveyId = json.readTree(surveyResponse).get("id").asText();
-
+        
         mvc.perform(patch("/api/v1/surveys/" + surveyId).header("Authorization", "Bearer " + vendorToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sanctionedLoadKw\":5,\"findings\":\"Roof structure and shading assessed\",\"recommendation\":\"Proceed with 3 kW rooftop installation\"}"))
@@ -370,7 +380,7 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("SUBMITTED"));
         mvc.perform(post("/api/v1/surveys/" + surveyId + "/approve").header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("APPROVED"));
-
+        
         var categoriesJson = mvc.perform(get("/api/v1/categories").header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var categoryId = json.readTree(categoriesJson).get(0).get("id").asText();
@@ -382,24 +392,26 @@ class Release12TenantIntegrationTest {
                                 """.formatted(UUID.randomUUID(), categoryId)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var productId = json.readTree(productResponse).get("id").asText();
-
+        
         var quoteResponse = mvc.perform(post("/api/v1/quotations")
                         .header("Authorization", "Bearer " + vendorToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"customerId":"%s","leadId":"%s","surveyId":"%s","discountPercent":10,"validUntil":"%s","items":[{"productId":"%s","quantity":1},{"productId":"%s","quantity":1}]}
-                                """.formatted(profile.getId(), leadId, surveyId,
-                                java.time.LocalDate.now().plusDays(30), productId, productId)))
+                                """.formatted(
+                                profile.getId(), leadId, surveyId,
+                                java.time.LocalDate.now().plusDays(30), productId, productId
+                        )))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var quotationId = json.readTree(quoteResponse).get("quotation").get("id").asText();
-
+        
         mvc.perform(post("/api/v1/quotations/" + quotationId + "/send")
                         .header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/v1/quotations/" + quotationId + "/accept")
                         .header("Authorization", "Bearer " + customerToken))
                 .andExpect(status().isOk());
-
+        
         var key = "journey-" + UUID.randomUUID();
         var firstOrder = mvc.perform(post("/api/v1/quotations/" + quotationId + "/convert-to-order")
                         .header("Authorization", "Bearer " + vendorToken)
@@ -410,7 +422,7 @@ class Release12TenantIntegrationTest {
                         .header("Idempotency-Key", key))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertEquals(json.readTree(firstOrder).get("id").asText(), json.readTree(secondOrder).get("id").asText());
-
+        
         var orderId = json.readTree(firstOrder).get("id").asText();
         var persistedOrder = customerOrders.findByIdAndTenantId(UUID.fromString(orderId), vendorTenantId).orElseThrow();
         assertEquals(0, new BigDecimal("0.10").compareTo(persistedOrder.getSubtotal()));
@@ -418,7 +430,7 @@ class Release12TenantIntegrationTest {
         assertEquals(0, new BigDecimal("0.02").compareTo(persistedOrder.getDiscountAmount()));
         assertEquals(0, new BigDecimal("0.02").compareTo(persistedOrder.getTaxTotal()));
         assertEquals(0, new BigDecimal("0.10").compareTo(persistedOrder.getTotal()));
-
+        
         var invoiceResponse = mvc.perform(post("/api/v1/invoices")
                         .header("Authorization", "Bearer " + vendorToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -439,56 +451,57 @@ class Release12TenantIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         assertEquals(2, json.readTree(invoiceLines).size());
     }
-
+    
     @Test
     void platformCanManagePlansAndAssignReplacementWithHistory() throws Exception {
-        String platformToken=accessToken("platform@saumya.local","Platform@123");
-        String vendorToken=accessToken("admin@saumya.local","Admin@123");
-        var plansJson=mvc.perform(get("/api/v1/platform/subscription-plans").header("Authorization","Bearer "+platformToken))
+        String platformToken = accessToken("platform@saumya.local", "Platform@123");
+        String vendorToken = accessToken("admin@saumya.local", "Admin@123");
+        var plansJson = mvc.perform(get("/api/v1/platform/subscription-plans").header("Authorization", "Bearer " + platformToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        var plansNode=json.readTree(plansJson);
-        assertTrue(plansNode.size()>=3);
-        String starterId=null;
-        for(JsonNode item:plansNode)if("STARTER".equals(item.path("planCode").asText()))starterId=item.path("id").asText();
+        var plansNode = json.readTree(plansJson);
+        assertTrue(plansNode.size() >= 3);
+        String starterId = null;
+        for (JsonNode item : plansNode)
+            if ("STARTER".equals(item.path("planCode").asText())) starterId = item.path("id").asText();
         assertNotNull(starterId);
-        mvc.perform(get("/api/v1/platform/subscription-plans").header("Authorization","Bearer "+vendorToken))
+        mvc.perform(get("/api/v1/platform/subscription-plans").header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isForbidden());
-
-        String first=mvc.perform(post("/api/v1/platform/tenants/"+vendorTenantId+"/subscriptions")
-                .header("Authorization","Bearer "+platformToken).contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                  {"planId":"%s","status":"ACTIVE","billingCycle":"MONTHLY","autoRenew":true,"notes":"Integration test initial assignment"}
-                  """.formatted(starterId)))
+        
+        String first = mvc.perform(post("/api/v1/platform/tenants/" + vendorTenantId + "/subscriptions")
+                        .header("Authorization", "Bearer " + platformToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"planId":"%s","status":"ACTIVE","billingCycle":"MONTHLY","autoRenew":true,"notes":"Integration test initial assignment"}
+                                """.formatted(starterId)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        String firstId=json.readTree(first).path("id").asText();
-        String second=mvc.perform(post("/api/v1/platform/tenants/"+vendorTenantId+"/subscriptions")
-                .header("Authorization","Bearer "+platformToken).contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                  {"planId":"%s","status":"TRIAL","billingCycle":"MONTHLY","trialEndsAt":"2027-01-15T00:00:00Z","autoRenew":false,"notes":"Integration test replacement"}
-                  """.formatted(starterId)))
+        String firstId = json.readTree(first).path("id").asText();
+        String second = mvc.perform(post("/api/v1/platform/tenants/" + vendorTenantId + "/subscriptions")
+                        .header("Authorization", "Bearer " + platformToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"planId":"%s","status":"TRIAL","billingCycle":"MONTHLY","trialEndsAt":"2027-01-15T00:00:00Z","autoRenew":false,"notes":"Integration test replacement"}
+                                """.formatted(starterId)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertNotEquals(firstId,json.readTree(second).path("id").asText());
-        var history=mvc.perform(get("/api/v1/platform/tenants/"+vendorTenantId+"/subscription-history")
-                .header("Authorization","Bearer "+platformToken))
+        assertNotEquals(firstId, json.readTree(second).path("id").asText());
+        var history = mvc.perform(get("/api/v1/platform/tenants/" + vendorTenantId + "/subscription-history")
+                        .header("Authorization", "Bearer " + platformToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertTrue(history.contains("ASSIGNED"));
         assertTrue(history.contains("REPLACED"));
-        mvc.perform(get("/api/v1/subscription").header("Authorization","Bearer "+vendorToken))
+        mvc.perform(get("/api/v1/subscription").header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.plan.planCode").value("STARTER"));
     }
-
+    
     @Test
     void platformPlanCreateRejectsDuplicatePlanCode() throws Exception {
-        String platformToken=accessToken("platform@saumya.local","Platform@123");
-        String payload="""
-          {"planCode":"STARTER","name":"Duplicate Starter","billingCycle":"MONTHLY","price":1200,"currency":"INR",
-           "maxUsers":5,"maxBranches":1,"maxWarehouses":1,"maxStorageMb":512,"maxProducts":100,"maxCustomers":100,
-           "trialPeriodDays":14,"displayOrder":1,"entitlementsJson":"{\\"branches\\":false}"}
-          """;
-        mvc.perform(post("/api/v1/platform/subscription-plans").header("Authorization","Bearer "+platformToken)
+        String platformToken = accessToken("platform@saumya.local", "Platform@123");
+        String payload = """
+                {"planCode":"STARTER","name":"Duplicate Starter","billingCycle":"MONTHLY","price":1200,"currency":"INR",
+                 "maxUsers":5,"maxBranches":1,"maxWarehouses":1,"maxStorageMb":512,"maxProducts":100,"maxCustomers":100,
+                 "trialPeriodDays":14,"displayOrder":1,"entitlementsJson":"{\\"branches\\":false}"}
+                """;
+        mvc.perform(post("/api/v1/platform/subscription-plans").header("Authorization", "Bearer " + platformToken)
                 .contentType(MediaType.APPLICATION_JSON).content(payload)).andExpect(status().isConflict());
     }
-
+    
     private String accessToken(String email, String password) throws Exception {
         var body = """
                 {"email":"%s","password":"%s"}
@@ -499,7 +512,7 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         return json.readTree(response).get("accessToken").asText();
     }
-
+    
     private Tenant newTenant() {
         var tenant = new Tenant();
         tenant.setId(UUID.randomUUID());
@@ -508,7 +521,7 @@ class Release12TenantIntegrationTest {
         tenant.setStatus("ACTIVE");
         return tenants.save(tenant);
     }
-
+    
     @Test
     void customerCanPlaceProductOrderAndVendorMustAcceptIt() throws Exception {
         var email = "direct-order-" + UUID.randomUUID() + "@example.test";
@@ -542,7 +555,7 @@ class Release12TenantIntegrationTest {
         assertEquals(2, line.getQuantity());
         assertNotNull(line.getTaxPercent());
         assertTrue(persistedOrder.getTotal().compareTo(BigDecimal.ZERO) > 0);
-
+        
         var vendorToken = accessToken("sales@saumya.local", "Sales@123");
         mvc.perform(post("/api/v1/orders/" + orderId + "/vendor-decision")
                         .header("Authorization", "Bearer " + vendorToken)

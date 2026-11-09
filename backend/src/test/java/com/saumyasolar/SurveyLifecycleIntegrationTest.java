@@ -30,25 +30,33 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest
 @ActiveProfiles("test")
 class SurveyLifecycleIntegrationTest {
-    @Autowired SurveyLifecycleService lifecycle;
-    @Autowired SurveyAttachmentService attachments;
-    @Autowired SiteSurveyRepository surveys;
-    @Autowired SalesLeadRepository leads;
-    @Autowired TenantRepository tenants;
-    @Autowired AppUserRepository users;
-
+    @Autowired
+    SurveyLifecycleService lifecycle;
+    @Autowired
+    SurveyAttachmentService attachments;
+    @Autowired
+    SiteSurveyRepository surveys;
+    @Autowired
+    SalesLeadRepository leads;
+    @Autowired
+    TenantRepository tenants;
+    @Autowired
+    AppUserRepository users;
+    
     private UUID tenantId;
     private UUID actorId;
     private UUID surveyId;
     private Principal actor;
-
+    
     @BeforeEach
     void setup() {
         var admin = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
         tenantId = admin.getTenantId();
         actorId = admin.getId();
-        actor = new Principal(actorId, tenantId, admin.getEmail(), "VENDOR",
-                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_MANAGE"));
+        actor = new Principal(
+                actorId, tenantId, admin.getEmail(), "VENDOR",
+                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_MANAGE")
+        );
         SalesLead lead = new SalesLead();
         lead.setId(UUID.randomUUID());
         lead.setTenantId(tenantId);
@@ -65,21 +73,27 @@ class SurveyLifecycleIntegrationTest {
         survey.setStatus("SCHEDULED");
         surveys.save(survey);
     }
-
+    
     @Test
     void requiresCompleteAssessmentBeforeSubmissionAndApprovalBeforeQuotationUse() {
         lifecycle.start(surveyId, actor);
-        ResponseStatusException incomplete = assertThrows(ResponseStatusException.class,
-                () -> lifecycle.submit(surveyId, actor));
+        ResponseStatusException incomplete = assertThrows(
+                ResponseStatusException.class,
+                () -> lifecycle.submit(surveyId, actor)
+        );
         assertEquals(HttpStatus.BAD_REQUEST, incomplete.getStatusCode());
-
-        lifecycle.update(surveyId, new UpdateRequest(null, null, "RESIDENTIAL", "RCC",
-                new BigDecimal("1200"), "LOW", new BigDecimal("5"), "SOUTH",
-                new BigDecimal("4500"), "SINGLE_PHASE", "DIGITAL",
-                new BigDecimal("19.0760"), new BigDecimal("72.8777"),
-                "Survey notes", "Roof is suitable; minor shade in evening",
-                "Install 5 kW rooftop system with elevated mounting"), actor);
-
+        
+        lifecycle.update(
+                surveyId, new UpdateRequest(
+                        null, null, "RESIDENTIAL", "RCC",
+                        new BigDecimal("1200"), "LOW", new BigDecimal("5"), "SOUTH",
+                        new BigDecimal("4500"), "SINGLE_PHASE", "DIGITAL",
+                        new BigDecimal("19.0760"), new BigDecimal("72.8777"),
+                        "Survey notes", "Roof is suitable; minor shade in evening",
+                        "Install 5 kW rooftop system with elevated mounting"
+                ), actor
+        );
+        
         SiteSurvey submitted = lifecycle.submit(surveyId, actor);
         assertEquals("SUBMITTED", submitted.getStatus());
         SiteSurvey approved = lifecycle.approve(surveyId, actor);
@@ -88,22 +102,28 @@ class SurveyLifecycleIntegrationTest {
         assertEquals(actorId, approved.getReviewedBy());
         assertTrue(lifecycle.history(surveyId, actor).size() >= 4);
     }
-
+    
     @Test
     void rejectedSurveyRequiresReasonAndCanBeResubmittedAfterCorrection() {
         lifecycle.start(surveyId, actor);
-        lifecycle.update(surveyId, new UpdateRequest(null, null, "RESIDENTIAL", "RCC",
-                new BigDecimal("900"), "HIGH", new BigDecimal("3"), null, null, null, null,
-                null, null, null, "Insufficient usable roof area",
-                "Rework mounting layout and remeasure"), actor);
+        lifecycle.update(
+                surveyId, new UpdateRequest(
+                        null, null, "RESIDENTIAL", "RCC",
+                        new BigDecimal("900"), "HIGH", new BigDecimal("3"), null, null, null, null,
+                        null, null, null, "Insufficient usable roof area",
+                        "Rework mounting layout and remeasure"
+                ), actor
+        );
         lifecycle.submit(surveyId, actor);
-        ResponseStatusException missingReason = assertThrows(ResponseStatusException.class,
-                () -> lifecycle.reject(surveyId, "  ", actor));
+        ResponseStatusException missingReason = assertThrows(
+                ResponseStatusException.class,
+                () -> lifecycle.reject(surveyId, "  ", actor)
+        );
         assertEquals(HttpStatus.BAD_REQUEST, missingReason.getStatusCode());
         assertEquals("REJECTED", lifecycle.reject(surveyId, "Need revised shade analysis", actor).getStatus());
         assertEquals("SUBMITTED", lifecycle.submit(surveyId, actor).getStatus());
     }
-
+    
     @Test
     void surveyReadsAndTransitionsAreTenantScopedAndPermissionProtected() {
         Tenant other = new Tenant();
@@ -112,32 +132,46 @@ class SurveyLifecycleIntegrationTest {
         other.setSlug("survey-" + UUID.randomUUID());
         other.setStatus("ACTIVE");
         tenants.save(other);
-        Principal foreign = new Principal(actorId, other.getId(), "foreign@example.test", "VENDOR",
-                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_MANAGE"));
-        ResponseStatusException notFound = assertThrows(ResponseStatusException.class,
-                () -> lifecycle.get(surveyId, foreign));
+        Principal foreign = new Principal(
+                actorId, other.getId(), "foreign@example.test", "VENDOR",
+                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_MANAGE")
+        );
+        ResponseStatusException notFound = assertThrows(
+                ResponseStatusException.class,
+                () -> lifecycle.get(surveyId, foreign)
+        );
         assertEquals(HttpStatus.NOT_FOUND, notFound.getStatusCode());
-
-        Principal withoutPermission = new Principal(actorId, tenantId, "admin@saumya.local", "VENDOR",
-                Set.of("VENDOR_ADMIN"), Set.of());
-        ResponseStatusException forbidden = assertThrows(ResponseStatusException.class,
-                () -> lifecycle.get(surveyId, withoutPermission));
+        
+        Principal withoutPermission = new Principal(
+                actorId, tenantId, "admin@saumya.local", "VENDOR",
+                Set.of("VENDOR_ADMIN"), Set.of()
+        );
+        ResponseStatusException forbidden = assertThrows(
+                ResponseStatusException.class,
+                () -> lifecycle.get(surveyId, withoutPermission)
+        );
         assertEquals(HttpStatus.FORBIDDEN, forbidden.getStatusCode());
     }
-
+    
     @Test
     void cannotCancelAnApprovedSurvey() {
         lifecycle.start(surveyId, actor);
-        lifecycle.update(surveyId, new UpdateRequest(null, null, "RESIDENTIAL", "RCC",
-                new BigDecimal("1000"), "LOW", new BigDecimal("4"), null, null, null, null,
-                null, null, null, "Assessment complete", "Suitable for rooftop solar"), actor);
+        lifecycle.update(
+                surveyId, new UpdateRequest(
+                        null, null, "RESIDENTIAL", "RCC",
+                        new BigDecimal("1000"), "LOW", new BigDecimal("4"), null, null, null, null,
+                        null, null, null, "Assessment complete", "Suitable for rooftop solar"
+                ), actor
+        );
         lifecycle.submit(surveyId, actor);
         lifecycle.approve(surveyId, actor);
-        ResponseStatusException conflict = assertThrows(ResponseStatusException.class,
-                () -> lifecycle.cancel(surveyId, "Cancelled after approval", actor));
+        ResponseStatusException conflict = assertThrows(
+                ResponseStatusException.class,
+                () -> lifecycle.cancel(surveyId, "Cancelled after approval", actor)
+        );
         assertEquals(HttpStatus.CONFLICT, conflict.getStatusCode());
     }
-
+    
     @Test
     void surveyEvidenceUploadDownloadAndTenantIsolation() {
         byte[] pdf = "%PDF-1.4\\nSurvey evidence\\n%%EOF".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
@@ -147,11 +181,15 @@ class SurveyLifecycleIntegrationTest {
         assertEquals(1, attachments.list(surveyId, actor).size());
         var downloaded = attachments.download(surveyId, stored.getId(), actor);
         assertArrayEquals(pdf, downloaded.content());
-
-        Principal foreign = new Principal(actorId, UUID.randomUUID(), "foreign@example.test", "VENDOR",
-                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_MANAGE"));
-        ResponseStatusException hidden = assertThrows(ResponseStatusException.class,
-                () -> attachments.download(surveyId, stored.getId(), foreign));
+        
+        Principal foreign = new Principal(
+                actorId, UUID.randomUUID(), "foreign@example.test", "VENDOR",
+                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_MANAGE")
+        );
+        ResponseStatusException hidden = assertThrows(
+                ResponseStatusException.class,
+                () -> attachments.download(surveyId, stored.getId(), foreign)
+        );
         assertEquals(HttpStatus.NOT_FOUND, hidden.getStatusCode());
     }
 }

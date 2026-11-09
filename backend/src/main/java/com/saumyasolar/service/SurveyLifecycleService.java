@@ -28,32 +28,41 @@ public class SurveyLifecycleService {
     private final AppUserRepository users;
     private final CustomerProfileRepository customers;
     private final NotificationService notifications;
-
-    public SurveyLifecycleService(SiteSurveyRepository surveys,
-                                  SiteSurveyHistoryRepository history,
-                                  SalesLeadRepository leads,
-                                  AppUserRepository users,CustomerProfileRepository customers,NotificationService notifications) {
+    
+    public SurveyLifecycleService(
+            SiteSurveyRepository surveys,
+            SiteSurveyHistoryRepository history,
+            SalesLeadRepository leads,
+            AppUserRepository users, CustomerProfileRepository customers, NotificationService notifications
+    ) {
         this.surveys = surveys;
         this.history = history;
         this.leads = leads;
         this.users = users;
-        this.customers=customers;
-        this.notifications=notifications;
+        this.customers = customers;
+        this.notifications = notifications;
     }
-
+    
     private void authorize(Principal actor) {
         if (actor == null || !"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
                 || actor.permissions() == null || !actor.permissions().contains("SURVEY_MANAGE")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Survey management permission is required");
         }
     }
-
+    
     private SiteSurvey requireSurvey(UUID id, Principal actor) {
         return surveys.findByIdAndTenantId(id, actor.tenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Survey not found"));
     }
-
-    private void record(SiteSurvey survey, Principal actor, String event, String oldStatus, String newStatus, String reason) {
+    
+    private void record(
+            SiteSurvey survey,
+            Principal actor,
+            String event,
+            String oldStatus,
+            String newStatus,
+            String reason
+    ) {
         SiteSurveyHistory row = new SiteSurveyHistory();
         row.setId(UUID.randomUUID());
         row.setTenantId(actor.tenantId());
@@ -66,29 +75,30 @@ public class SurveyLifecycleService {
         row.setCreatedAt(Instant.now());
         history.save(row);
     }
-
+    
     @Transactional
     public void recordCreated(SiteSurvey survey, Principal actor) {
         authorize(actor);
         if (survey == null || !actor.tenantId().equals(survey.getTenantId())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Survey not found");
         }
-        record(survey, actor, "CREATED", null, survey.getStatus(), "Survey scheduled");notifyCustomer(survey,"SITE_SURVEY_SCHEDULED","Site survey scheduled","A site survey has been scheduled for "+survey.getScheduledAt()+".");
+        record(survey, actor, "CREATED", null, survey.getStatus(), "Survey scheduled");
+        notifyCustomer(survey, "SITE_SURVEY_SCHEDULED", "Site survey scheduled", "A site survey has been scheduled for " + survey.getScheduledAt() + ".");
     }
-
+    
     @Transactional
     public SiteSurvey get(UUID id, Principal actor) {
         authorize(actor);
         return requireSurvey(id, actor);
     }
-
+    
     @Transactional
     public List<SiteSurveyHistory> history(UUID id, Principal actor) {
         authorize(actor);
         requireSurvey(id, actor);
         return history.findBySurveyIdAndTenantIdOrderByCreatedAtDesc(id, actor.tenantId());
     }
-
+    
     @Transactional
     public SiteSurvey update(UUID id, UpdateRequest input, Principal actor) {
         authorize(actor);
@@ -114,7 +124,7 @@ public class SurveyLifecycleService {
         if (input.meterType() != null) survey.setMeterType(input.meterType().trim());
         if (input.latitude() != null) survey.setLatitude(input.latitude());
         if (input.longitude() != null) survey.setLongitude(input.longitude());
-        if ((survey.getLatitude() == null) != (survey.getLongitude() == null)) {
+        if (( survey.getLatitude() == null ) != ( survey.getLongitude() == null )) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Latitude and longitude must be provided together");
         }
         if (input.notes() != null) survey.setNotes(input.notes().trim());
@@ -123,7 +133,7 @@ public class SurveyLifecycleService {
         record(survey, actor, "UPDATED", survey.getStatus(), survey.getStatus(), "Survey assessment updated");
         return surveys.save(survey);
     }
-
+    
     @Transactional
     public SiteSurvey start(UUID id, Principal actor) {
         authorize(actor);
@@ -131,7 +141,7 @@ public class SurveyLifecycleService {
         transition(survey, actor, "SCHEDULED", "IN_PROGRESS", "STARTED", "Survey started");
         return surveys.save(survey);
     }
-
+    
     @Transactional
     public SiteSurvey submit(UUID id, Principal actor) {
         authorize(actor);
@@ -143,8 +153,10 @@ public class SurveyLifecycleService {
                 || survey.getUsableAreaSqft() == null || survey.getSanctionedLoadKw() == null
                 || survey.getFindings() == null || survey.getFindings().isBlank()
                 || survey.getRecommendation() == null || survey.getRecommendation().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Property, roof, usable area, sanctioned load, findings and recommendation are required before submission");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Property, roof, usable area, sanctioned load, findings and recommendation are required before submission"
+            );
         }
         String old = survey.getStatus();
         survey.setStatus("SUBMITTED");
@@ -154,7 +166,7 @@ public class SurveyLifecycleService {
         record(survey, actor, "SUBMITTED", old, "SUBMITTED", "Survey submitted for review");
         return surveys.save(survey);
     }
-
+    
     @Transactional
     public SiteSurvey approve(UUID id, Principal actor) {
         authorize(actor);
@@ -162,25 +174,31 @@ public class SurveyLifecycleService {
         transition(survey, actor, "SUBMITTED", "APPROVED", "APPROVED", "Survey approved");
         survey.setReviewedBy(actor.userId());
         survey.setReviewedAt(Instant.now());
-        SiteSurvey saved=surveys.save(survey);notifyCustomer(saved,"SITE_SURVEY_APPROVED","Site survey approved","Your site survey has been approved. The vendor can now proceed with installation planning.");return saved;
+        SiteSurvey saved = surveys.save(survey);
+        notifyCustomer(saved, "SITE_SURVEY_APPROVED", "Site survey approved", "Your site survey has been approved. The vendor can now proceed with installation planning.");
+        return saved;
     }
-
+    
     @Transactional
     public SiteSurvey reject(UUID id, String reason, Principal actor) {
         authorize(actor);
-        if (reason == null || reason.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rejection reason is required");
+        if (reason == null || reason.isBlank())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rejection reason is required");
         SiteSurvey survey = requireSurvey(id, actor);
         transition(survey, actor, "SUBMITTED", "REJECTED", "REJECTED", reason.trim());
         survey.setReviewedBy(actor.userId());
         survey.setReviewedAt(Instant.now());
         survey.setRejectionReason(reason.trim());
-        SiteSurvey saved=surveys.save(survey);notifyCustomer(saved,"SITE_SURVEY_REJECTED","Site survey requires changes","Your site survey was rejected. Reason: "+reason.trim());return saved;
+        SiteSurvey saved = surveys.save(survey);
+        notifyCustomer(saved, "SITE_SURVEY_REJECTED", "Site survey requires changes", "Your site survey was rejected. Reason: " + reason.trim());
+        return saved;
     }
-
+    
     @Transactional
     public SiteSurvey cancel(UUID id, String reason, Principal actor) {
         authorize(actor);
-        if (reason == null || reason.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cancellation reason is required");
+        if (reason == null || reason.isBlank())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cancellation reason is required");
         SiteSurvey survey = requireSurvey(id, actor);
         if (!Set.of("SCHEDULED", "IN_PROGRESS", "REJECTED").contains(survey.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Survey cannot be cancelled in status " + survey.getStatus());
@@ -188,20 +206,31 @@ public class SurveyLifecycleService {
         String old = survey.getStatus();
         survey.setStatus("CANCELLED");
         record(survey, actor, "CANCELLED", old, "CANCELLED", reason.trim());
-        SiteSurvey saved=surveys.save(survey);notifyCustomer(saved,"SITE_SURVEY_CANCELLED","Site survey cancelled","Your site survey has been cancelled. Reason: "+reason.trim());return saved;
+        SiteSurvey saved = surveys.save(survey);
+        notifyCustomer(saved, "SITE_SURVEY_CANCELLED", "Site survey cancelled", "Your site survey has been cancelled. Reason: " + reason.trim());
+        return saved;
     }
-
-    private void notifyCustomer(SiteSurvey survey,String event,String subject,String body){
-        if(survey.getLeadId()==null)return;
-        leads.findByIdAndTenantId(survey.getLeadId(),survey.getTenantId()).map(lead->lead.getCustomerId()).filter(java.util.Objects::nonNull)
-            .flatMap(customerId->customers.findByIdAndTenantId(customerId,survey.getTenantId()))
-            .filter(customer->customer.isActive()).ifPresent(customer->notifications.sendBusinessNotification(customer.getUserId(),survey.getTenantId(),event,customer.getEmail(),subject,body));
+    
+    private void notifyCustomer(SiteSurvey survey, String event, String subject, String body) {
+        if (survey.getLeadId() == null) return;
+        leads.findByIdAndTenantId(survey.getLeadId(), survey.getTenantId()).map(lead -> lead.getCustomerId()).filter(java.util.Objects::nonNull)
+                .flatMap(customerId -> customers.findByIdAndTenantId(customerId, survey.getTenantId()))
+                .filter(customer -> customer.isActive()).ifPresent(customer -> notifications.sendBusinessNotification(customer.getUserId(), survey.getTenantId(), event, customer.getEmail(), subject, body));
     }
-
-    private void transition(SiteSurvey survey, Principal actor, String expected, String target, String event, String reason) {
+    
+    private void transition(
+            SiteSurvey survey,
+            Principal actor,
+            String expected,
+            String target,
+            String event,
+            String reason
+    ) {
         if (!expected.equals(survey.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Expected survey status " + expected + " but found " + survey.getStatus());
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Expected survey status " + expected + " but found " + survey.getStatus()
+            );
         }
         survey.setStatus(target);
         record(survey, actor, event, expected, target, reason);

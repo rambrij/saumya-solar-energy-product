@@ -23,13 +23,13 @@ public final class Models {
     
     public record MfaVerify(@NotBlank String challengeId, @NotBlank String code) {
     }
-
+    
     public record MfaChallengeRequired(boolean mfaRequired, String challengeId) {
     }
-
+    
     public record Refresh(@NotBlank String refreshToken) {
     }
-
+    
     public record EmployeeCreate(
             @NotBlank String name, @Email String email, @Size(min = 12) String password,
             @NotBlank String roleName
@@ -67,8 +67,12 @@ public final class Models {
     ) {
     }
     
-    public record CustomerEnquiryRequest(@Size(max=100) String propertyType, BigDecimal monthlyBill, BigDecimal requiredCapacityKw, @Size(max=2000) String message, UUID addressId) {}
-
+    public record CustomerEnquiryRequest(
+            @Size(max = 100) String propertyType, BigDecimal monthlyBill, BigDecimal requiredCapacityKw,
+            @Size(max = 2000) String message, UUID addressId
+    ) {
+    }
+    
     public record QuoteView(Quotation quotation, List<QuotationItem> items) {
     }
 }

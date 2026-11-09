@@ -20,7 +20,7 @@ public class JwtFilter extends OncePerRequestFilter {
     private final JwtService j;
     private final AppUserRepository users;
     private final TenantRepository tenants;
-
+    
     JwtFilter(JwtService j, AppUserRepository users, TenantRepository tenants) {
         this.j = j;
         this.users = users;
@@ -32,7 +32,7 @@ public class JwtFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
         return path.startsWith("/api/v1/auth/") || path.startsWith("/api/v1/public/") || path.startsWith("/api/v1/payment-webhooks/") || path.startsWith("/uploads/");
     }
-
+    
     protected void doFilterInternal(HttpServletRequest r, HttpServletResponse s, FilterChain c)
             throws ServletException, IOException {
         var h = r.getHeader("Authorization");

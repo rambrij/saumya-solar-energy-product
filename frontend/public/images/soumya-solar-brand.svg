@@ -1,24 +1,38 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 124" role="img" aria-labelledby="title desc">
-  <title id="title">Soumya Solar Energy Solution</title>
-  <desc id="desc">Sun, solar panel and leaf logo with Soumya Solar Energy Solution wordmark</desc>
-  <defs>
-    <linearGradient id="sun" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd34d"/><stop offset="1" stop-color="#f39a16"/></linearGradient>
-    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#124b86"/><stop offset="1" stop-color="#1686bd"/></linearGradient>
-    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#78c943"/><stop offset="1" stop-color="#16834a"/></linearGradient>
-  </defs>
-  <g transform="translate(5 4)">
-    <path d="M22 78a52 52 0 0 1 104 0" fill="none" stroke="#f4a51d" stroke-width="7" stroke-linecap="round"/>
-    <circle cx="74" cy="45" r="27" fill="url(#sun)"/>
-    <g stroke="#f4a51d" stroke-width="4" stroke-linecap="round"><path d="M74 3v9M28 16l7 7M120 16l-7 7M13 54h10M125 54h10"/></g>
-    <path d="M16 72 115 52l18 37-101 20z" fill="url(#panel)" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
-    <g stroke="#dceefa" stroke-width="2"><path d="m48 65 14 37M78 59l14 37M108 55l13 37M27 83l99-19M34 99l99-19"/></g>
-    <path d="M15 111c24 10 56 6 77-4 19-9 27-21 36-35-2 28-22 45-49 52-24 6-47 2-64-13z" fill="url(#leaf)"/>
-    <path d="M91 119c12-20 28-31 49-37-5 22-21 37-49 37z" fill="#2a9f55"/>
-  </g>
-  <g font-family="Arial, Helvetica, sans-serif">
-    <text x="165" y="59" fill="#183c2a" font-size="38" font-weight="700" letter-spacing="-1.2">Soumya Solar</text>
-    <text x="168" y="88" fill="#34764c" font-size="17" font-weight="700" letter-spacing="5.2">ENERGY SOLUTION</text>
-    <path d="M167 101h290" stroke="#dce8dc" stroke-width="2"/>
-    <text x="168" y="117" fill="#809087" font-size="10" letter-spacing="2.2">CLEAN POWER · BRIGHTER FUTURE</text>
-  </g>
+    <title id="title">Soumya Solar Energy Solution</title>
+    <desc id="desc">Sun, solar panel and leaf logo with Soumya Solar Energy Solution wordmark</desc>
+    <defs>
+        <linearGradient id="sun" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#ffd34d"/>
+            <stop offset="1" stop-color="#f39a16"/>
+        </linearGradient>
+        <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#124b86"/>
+            <stop offset="1" stop-color="#1686bd"/>
+        </linearGradient>
+        <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#78c943"/>
+            <stop offset="1" stop-color="#16834a"/>
+        </linearGradient>
+    </defs>
+    <g transform="translate(5 4)">
+        <path d="M22 78a52 52 0 0 1 104 0" fill="none" stroke="#f4a51d" stroke-width="7" stroke-linecap="round"/>
+        <circle cx="74" cy="45" r="27" fill="url(#sun)"/>
+        <g stroke="#f4a51d" stroke-width="4" stroke-linecap="round">
+            <path d="M74 3v9M28 16l7 7M120 16l-7 7M13 54h10M125 54h10"/>
+        </g>
+        <path d="M16 72 115 52l18 37-101 20z" fill="url(#panel)" stroke="#fff" stroke-width="4"
+              stroke-linejoin="round"/>
+        <g stroke="#dceefa" stroke-width="2">
+            <path d="m48 65 14 37M78 59l14 37M108 55l13 37M27 83l99-19M34 99l99-19"/>
+        </g>
+        <path d="M15 111c24 10 56 6 77-4 19-9 27-21 36-35-2 28-22 45-49 52-24 6-47 2-64-13z" fill="url(#leaf)"/>
+        <path d="M91 119c12-20 28-31 49-37-5 22-21 37-49 37z" fill="#2a9f55"/>
+    </g>
+    <g font-family="Arial, Helvetica, sans-serif">
+        <text x="165" y="59" fill="#183c2a" font-size="38" font-weight="700" letter-spacing="-1.2">Soumya Solar</text>
+        <text x="168" y="88" fill="#34764c" font-size="17" font-weight="700" letter-spacing="5.2">ENERGY SOLUTION</text>
+        <path d="M167 101h290" stroke="#dce8dc" stroke-width="2"/>
+        <text x="168" y="117" fill="#809087" font-size="10" letter-spacing="2.2">CLEAN POWER · BRIGHTER FUTURE</text>
+    </g>
 </svg>

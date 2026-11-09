@@ -1,3 +1,23 @@
-package com.saumyasolar.repo;import com.saumyasolar.domain.Warehouse;import jakarta.persistence.LockModeType;import org.springframework.data.jpa.repository.JpaRepository;import org.springframework.data.jpa.repository.Lock;import org.springframework.data.jpa.repository.Query;import org.springframework.data.repository.query.Param;import java.util.List;import java.util.Optional;import java.util.UUID;
-public interface WarehouseRepository extends JpaRepository<Warehouse,UUID>{List<Warehouse> findByTenantIdOrderByNameAsc(UUID tenantId);Optional<Warehouse> findByIdAndTenantId(UUID id,UUID tenantId);
- long countByTenantIdAndBranchId(UUID tenantId,UUID branchId);@Lock(LockModeType.PESSIMISTIC_WRITE) @Query("select w from Warehouse w where w.id=:id and w.tenantId=:tenantId") Optional<Warehouse> findForUpdate(@Param("id") UUID id,@Param("tenantId") UUID tenantId);}
+package com.saumyasolar.repo;
+
+import com.saumyasolar.domain.Warehouse;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
+    List<Warehouse> findByTenantIdOrderByNameAsc(UUID tenantId);
+    
+    Optional<Warehouse> findByIdAndTenantId(UUID id, UUID tenantId);
+    
+    long countByTenantIdAndBranchId(UUID tenantId, UUID branchId);
+    
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select w from Warehouse w where w.id=:id and w.tenantId=:tenantId")
+    Optional<Warehouse> findForUpdate(@Param("id") UUID id, @Param("tenantId") UUID tenantId);
+}

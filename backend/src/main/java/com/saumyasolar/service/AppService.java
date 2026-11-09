@@ -22,13 +22,13 @@ import java.util.Objects;
 import java.util.UUID;
 @Service
 public class AppService {
-    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
     private IntegrationManagementService integrationManagement;
-    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
     private EnterpriseSaasService enterpriseSaas;
-    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
     private CustomerAddressRepository customerAddresses;
-
+    
     final TenantRepository tenants;
     final AppUserRepository users;
     final ProductCategoryRepository cats;
@@ -98,28 +98,28 @@ public class AppService {
         if (!"VENDOR".equals(p.accountType()) || p.tenantId() == null)
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
     }
-
+    
     private void requirePermission(Principal p, String code) {
         if (p.permissions() == null || !p.permissions().contains(code))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing permission: " + code);
     }
-
+    
     private void requireAnyPermission(Principal p, String... codes) {
         if (p.permissions() == null || java.util.Arrays.stream(codes).noneMatch(p.permissions()::contains))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing required catalogue permission");
     }
-
+    
     private void requireEmployee(UUID id, UUID tenantId) {
         if (id != null && users.findById(id).filter(u -> tenantId.equals(u.getTenantId())
                 && "VENDOR".equals(u.getAccountType()) && u.isEnabled()).isEmpty())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee must belong to this vendor");
     }
-
+    
     private CustomerProfile requireCustomer(UUID id, UUID tenantId) {
         return customers.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
     }
-
+    
     private SalesLead requireLead(UUID id, UUID tenantId) {
         return leads.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found"));
@@ -141,9 +141,12 @@ public class AppService {
             if (!"CUSTOMER".equals(p.accountType()) || p.tenantId() == null)
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN);
             return switch (type) {
-                case "catalog-categories" -> cats.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(ProductCategory::isActive).toList();
-                case "catalog-products" -> products.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(Product::isActive).toList();
-                default -> packs.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(SolarPackage::isActive).toList();
+                case "catalog-categories" ->
+                        cats.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(ProductCategory::isActive).toList();
+                case "catalog-products" ->
+                        products.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(Product::isActive).toList();
+                default ->
+                        packs.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(SolarPackage::isActive).toList();
             };
         }
         if ("customer-enquiries".equals(type) && "CUSTOMER".equals(p.accountType())) {
@@ -183,11 +186,12 @@ public class AppService {
         };
         if (enterpriseSaas == null) return rows;
         return switch (type) {
-            case "enquiries" -> enterpriseSaas.filterBranchRecords((List<Enquiry>)rows, Enquiry::getBranchId, p);
-            case "leads" -> enterpriseSaas.filterBranchRecords((List<SalesLead>)rows, SalesLead::getBranchId, p);
-            case "surveys" -> enterpriseSaas.filterBranchRecords((List<SiteSurvey>)rows, SiteSurvey::getBranchId, p);
-            case "quotations" -> enterpriseSaas.filterBranchRecords((List<Quotation>)rows, Quotation::getBranchId, p);
-            case "orders" -> enterpriseSaas.filterBranchRecords((List<CustomerOrder>)rows, CustomerOrder::getBranchId, p);
+            case "enquiries" -> enterpriseSaas.filterBranchRecords((List<Enquiry>) rows, Enquiry::getBranchId, p);
+            case "leads" -> enterpriseSaas.filterBranchRecords((List<SalesLead>) rows, SalesLead::getBranchId, p);
+            case "surveys" -> enterpriseSaas.filterBranchRecords((List<SiteSurvey>) rows, SiteSurvey::getBranchId, p);
+            case "quotations" -> enterpriseSaas.filterBranchRecords((List<Quotation>) rows, Quotation::getBranchId, p);
+            case "orders" ->
+                    enterpriseSaas.filterBranchRecords((List<CustomerOrder>) rows, CustomerOrder::getBranchId, p);
             default -> rows;
         };
     }
@@ -202,7 +206,7 @@ public class AppService {
         tenant.setUpdatedAt(Instant.now());
         return tenants.save(tenant);
     }
-
+    
     @Transactional
     public Object create(String type, Input x, Principal p) {
         if ("tenants".equals(type)) {
@@ -232,7 +236,7 @@ public class AppService {
                 yield cats.save(e);
             }
             case "products" -> {
-                if(enterpriseSaas!=null)enterpriseSaas.enforceProductLimit(p.tenantId());
+                if (enterpriseSaas != null) enterpriseSaas.enforceProductLimit(p.tenantId());
                 var e = new Product();
                 e.setId(UUID.randomUUID());
                 e.setTenantId(p.tenantId());
@@ -241,7 +245,7 @@ public class AppService {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select an active product category belonging to this vendor");
                 if (x.price() == null || x.price().signum() < 0)
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product price must be zero or greater");
-                if (x.taxPercent() != null && (x.taxPercent().signum() < 0 || x.taxPercent().compareTo(new BigDecimal("100")) > 0))
+                if (x.taxPercent() != null && ( x.taxPercent().signum() < 0 || x.taxPercent().compareTo(new BigDecimal("100")) > 0 ))
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tax percentage must be between 0 and 100");
                 e.setCategoryId(x.categoryId());
                 e.setSku(x.sku());
@@ -284,7 +288,8 @@ public class AppService {
                     pi.setTenantId(p.tenantId());
                     if (l.productId() == null || products.findByIdAndTenantId(l.productId(), p.tenantId()).filter(Product::isActive).isEmpty())
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package items must reference active products in this vendor");
-                    if (l.quantity() < 1) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package item quantity must be positive");
+                    if (l.quantity() < 1)
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package item quantity must be positive");
                     pi.setPackageId(e.getId());
                     pi.setProductId(l.productId());
                     pi.setQuantity(l.quantity());
@@ -294,7 +299,7 @@ public class AppService {
                 yield e;
             }
             case "customers" -> {
-                if(enterpriseSaas!=null)enterpriseSaas.enforceCustomerLimit(p.tenantId());
+                if (enterpriseSaas != null) enterpriseSaas.enforceCustomerLimit(p.tenantId());
                 var e = new CustomerProfile();
                 e.setId(UUID.randomUUID());
                 e.setTenantId(p.tenantId());
@@ -335,7 +340,7 @@ public class AppService {
         return packs.findByTenantIdOrderByIdDesc(tenant.getId()).stream()
                 .filter(SolarPackage::isActive).toList();
     }
-
+    
     public List<com.saumyasolar.api.CatalogModels.PublicProductView> publicProducts(String storeSlug) {
         String normalized = storeSlug == null ? "" : storeSlug.trim().toLowerCase(java.util.Locale.ROOT)
                 .replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
@@ -356,12 +361,13 @@ public class AppService {
                             product.getModel(), product.getTechnology(), product.getPrice(),
                             product.getDiscountPercent(), product.getTaxPercent(), product.getWarrantyYears(),
                             product.getImageUrl(), product.getDatasheetUrl(), product.getUnitOfMeasure(),
-                            product.isSerialized(), product.getAttributesJson());
+                            product.isSerialized(), product.getAttributesJson()
+                    );
                 })
                 .filter(Objects::nonNull)
                 .toList();
     }
-
+    
     @Transactional
     public Enquiry createPublicEnquiry(String storeSlug, Input input) {
         String normalized = storeSlug == null ? "" : storeSlug.trim().toLowerCase(java.util.Locale.ROOT)
@@ -387,19 +393,19 @@ public class AppService {
         enquiry.setCreatedAt(Instant.now());
         return enquiries.save(enquiry);
     }
-
+    
     private UUID requirePackageManager(Principal p) {
         vendor(p);
         requirePermission(p, "CATALOG_MANAGE");
         return p.tenantId();
     }
-
+    
     public void assertPackageManageAccess(UUID id, Principal p) {
         UUID tenantId = requirePackageManager(p);
         if (packs.findByIdAndTenantId(id, tenantId).isEmpty())
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Solar package not found");
     }
-
+    
     @Transactional
     public SolarPackage updatePackageImage(UUID id, String imageUrl, Principal p) {
         UUID tenantId = requirePackageManager(p);
@@ -408,7 +414,7 @@ public class AppService {
         pack.setImageUrl(imageUrl);
         return packs.save(pack);
     }
-
+    
     @Transactional
     public SolarPackage updateSolarPackage(UUID id, PackageInput x, Principal p) {
         UUID tenantId = requirePackageManager(p);
@@ -416,7 +422,9 @@ public class AppService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Solar package not found"));
         packs.findByTenantIdOrderByIdDesc(tenantId).stream()
                 .filter(other -> !other.getId().equals(id) && other.getCode().equalsIgnoreCase(x.code()))
-                .findAny().ifPresent(other -> { throw new ResponseStatusException(HttpStatus.CONFLICT, "Package code already exists"); });
+                .findAny().ifPresent(other -> {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Package code already exists");
+                });
         validatePackageItems(x.items(), tenantId);
         pack.setCode(x.code().trim());
         pack.setName(x.name().trim());
@@ -445,7 +453,7 @@ public class AppService {
         }
         return pack;
     }
-
+    
     private void validatePackageItems(List<PackageInput.Item> items, UUID tenantId) {
         if (items == null || items.isEmpty())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Add at least one package component");
@@ -456,7 +464,7 @@ public class AppService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Package components must use active products from this vendor");
         }
     }
-
+    
     @Transactional
     public SolarPackage archiveSolarPackage(UUID id, Principal p) {
         UUID tenantId = requirePackageManager(p);
@@ -465,13 +473,13 @@ public class AppService {
         pack.setActive(false);
         return packs.save(pack);
     }
-
+    
     public Tenant tenantSettings(Principal p) {
         vendor(p);
         requirePermission(p, "DISCOUNT_POLICY_MANAGE");
         return tenants.findById(p.tenantId()).orElseThrow();
     }
-
+    
     public Tenant updateDiscountApprovalThreshold(BigDecimal threshold, Principal p) {
         vendor(p);
         requirePermission(p, "DISCOUNT_POLICY_MANAGE");
@@ -482,7 +490,7 @@ public class AppService {
         tenant.setDiscountApprovalThreshold(threshold);
         return tenants.save(tenant);
     }
-
+    
     public List<Role> employeeRoles(Principal p) {
         vendor(p);
         requirePermission(p, "USER_MANAGE");
@@ -490,15 +498,17 @@ public class AppService {
                 .filter(role -> !java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "CUSTOMER").contains(role.getName()))
                 .toList();
     }
-
+    
     @Transactional
     public Enquiry createCustomerEnquiry(Input x, Principal p) {
-        return createCustomerEnquiry(x.propertyType(),x.monthlyBill(),x.requiredCapacityKw(),x.message(),null,p);
+        return createCustomerEnquiry(x.propertyType(), x.monthlyBill(), x.requiredCapacityKw(), x.message(), null, p);
     }
-
+    
     @Transactional
-    public Enquiry createCustomerEnquiry(String propertyType, BigDecimal monthlyBill, BigDecimal requiredCapacityKw,
-                                         String message, UUID addressId, Principal p) {
+    public Enquiry createCustomerEnquiry(
+            String propertyType, BigDecimal monthlyBill, BigDecimal requiredCapacityKw,
+            String message, UUID addressId, Principal p
+    ) {
         if (!"CUSTOMER".equals(p.accountType()) || p.tenantId() == null)
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         var profile = customers.findByTenantIdAndUserId(p.tenantId(), p.userId())
@@ -514,21 +524,22 @@ public class AppService {
         enquiry.setMonthlyBill(monthlyBill);
         enquiry.setRequiredCapacityKw(requiredCapacityKw);
         enquiry.setMessage(message);
-        if(addressId!=null){
-            if(customerAddresses==null)throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Saved address service is unavailable");
-            CustomerAddress address=customerAddresses.findByIdAndTenantIdAndCustomerId(addressId,p.tenantId(),profile.getId())
-                    .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Saved address not found"));
+        if (addressId != null) {
+            if (customerAddresses == null)
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Saved address service is unavailable");
+            CustomerAddress address = customerAddresses.findByIdAndTenantIdAndCustomerId(addressId, p.tenantId(), profile.getId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Saved address not found"));
             enquiry.setAddressId(address.getId());
-            enquiry.setSiteAddress(java.util.stream.Stream.of(address.getLine1(),address.getLine2(),address.getLandmark()).filter(java.util.Objects::nonNull).filter(v->!v.isBlank()).collect(java.util.stream.Collectors.joining(", ")));
-            enquiry.setCityPincode(address.getCity()+", "+address.getState()+" "+address.getPincode());
-        } else if(profile.getAddress()!=null&&!profile.getAddress().isBlank()) {
+            enquiry.setSiteAddress(java.util.stream.Stream.of(address.getLine1(), address.getLine2(), address.getLandmark()).filter(java.util.Objects::nonNull).filter(v -> !v.isBlank()).collect(java.util.stream.Collectors.joining(", ")));
+            enquiry.setCityPincode(address.getCity() + ", " + address.getState() + " " + address.getPincode());
+        } else if (profile.getAddress() != null && !profile.getAddress().isBlank()) {
             enquiry.setSiteAddress(profile.getAddress());
         }
         enquiry.setStatus("NEW");
         enquiry.setCreatedAt(Instant.now());
         return enquiries.save(enquiry);
     }
-
+    
     @Transactional
     public SalesLead convertLead(UUID enquiryId, Input x, Principal p) {
         vendor(p);
@@ -540,7 +551,7 @@ public class AppService {
         if (q.getCustomerId() == null) {
             CustomerProfile customer = customers.findByTenantIdAndEmailIgnoreCase(p.tenantId(), q.getEmail())
                     .orElseGet(() -> {
-                        if(enterpriseSaas!=null)enterpriseSaas.enforceCustomerLimit(p.tenantId());
+                        if (enterpriseSaas != null) enterpriseSaas.enforceCustomerLimit(p.tenantId());
                         var created = new CustomerProfile();
                         created.setId(UUID.randomUUID());
                         created.setTenantId(p.tenantId());
@@ -575,13 +586,13 @@ public class AppService {
         vendor(p);
         requirePermission(p, "LEAD_MANAGE");
         var l = leads.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
-        if(enterpriseSaas!=null)enterpriseSaas.assertBranchAccess(l.getBranchId(),p);
+        if (enterpriseSaas != null) enterpriseSaas.assertBranchAccess(l.getBranchId(), p);
         requireEmployee(x.assignedUserId(), p.tenantId());
         var old = l.getStage();
         var oldAssignee = l.getAssignedUserId();
         if (x.stage() != null && !java.util.Set.of("NEW", "CONTACTED", "SITE_VISIT_SCHEDULED", "SURVEY_COMPLETED", "QUOTATION_SENT", "NEGOTIATION", "WON", "LOST").contains(x.stage()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid lead stage");
-        if (x.stage() != null && "LOST".equals(x.stage()) && (x.lostReason() == null || x.lostReason().isBlank()))
+        if (x.stage() != null && "LOST".equals(x.stage()) && ( x.lostReason() == null || x.lostReason().isBlank() ))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lost reason is required");
         if (x.priority() != null && !java.util.Set.of("LOW", "MEDIUM", "HIGH").contains(x.priority()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid lead priority");
@@ -610,7 +621,7 @@ public class AppService {
         history.setCreatedAt(Instant.now());
         histories.save(history);
     }
-
+    
     public List<LeadHistory> leadHistory(UUID leadId, Principal p) {
         vendor(p);
         requirePermission(p, "LEAD_MANAGE");
@@ -618,7 +629,7 @@ public class AppService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found");
         return histories.findByLeadIdAndTenantIdOrderByCreatedAtDesc(leadId, p.tenantId());
     }
-
+    
     void history(SalesLead l, String old, String now, UUID actor, String reason) {
         var h = new LeadHistory();
         h.setId(UUID.randomUUID());
@@ -653,8 +664,10 @@ public class AppService {
         e.setSanctionedLoadKw(x.sanctionedLoadKw());
         e.setNotes(x.notes());
         if (x.status() != null && !"SCHEDULED".equals(x.status()))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "New surveys must start in SCHEDULED status; use the survey lifecycle endpoints for transitions");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "New surveys must start in SCHEDULED status; use the survey lifecycle endpoints for transitions"
+            );
         e.setStatus("SCHEDULED");
         if (e.getScheduledAt() == null)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Scheduled date/time is required");
@@ -670,8 +683,10 @@ public class AppService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lead does not belong to the selected customer");
         if (x.leadId() != null && x.surveyId() == null
                 && !surveys.findByLeadIdAndTenantIdOrderByIdDesc(x.leadId(), p.tenantId()).isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "An approved site survey is required before creating a quotation for this lead");
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "An approved site survey is required before creating a quotation for this lead"
+            );
         }
         if (x.surveyId() != null) {
             var survey = surveys.findByIdAndTenantId(x.surveyId(), p.tenantId())
@@ -679,8 +694,10 @@ public class AppService {
             if (x.leadId() == null || !x.leadId().equals(survey.getLeadId()))
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Survey must belong to selected lead");
             if (!"APPROVED".equals(survey.getStatus()))
-                throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Quotation creation requires an approved site survey");
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Quotation creation requires an approved site survey"
+                );
         }
         if (x.items() == null || x.items().isEmpty())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one quotation item is required");
@@ -704,7 +721,8 @@ public class AppService {
         BigDecimal sub = BigDecimal.ZERO, discountTotal = BigDecimal.ZERO, tax = BigDecimal.ZERO;
         var items = new ArrayList<QuotationItem>();
         for (var a : x.items()) {
-            if (a.quantity() < 1) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Quantity must be positive");
+            if (a.quantity() < 1)
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Quantity must be positive");
             BigDecimal unitPrice;
             BigDecimal taxPercent;
             String description;
@@ -712,8 +730,8 @@ public class AppService {
                 var product = products.findByIdAndTenantId(a.productId(), p.tenantId()).filter(Product::isActive)
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Product is not active in this vendor"));
                 unitPrice = product.getPrice();
-                if(product.getDiscountPercent()!=null&&product.getDiscountPercent().signum()>0)
-                    unitPrice=unitPrice.multiply(BigDecimal.valueOf(100).subtract(product.getDiscountPercent())).divide(BigDecimal.valueOf(100),2,RoundingMode.HALF_UP);
+                if (product.getDiscountPercent() != null && product.getDiscountPercent().signum() > 0)
+                    unitPrice = unitPrice.multiply(BigDecimal.valueOf(100).subtract(product.getDiscountPercent())).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
                 taxPercent = product.getTaxPercent();
                 description = product.getName();
             } else if (a.packageId() != null) {
@@ -763,7 +781,7 @@ public class AppService {
         q.setApprovalRequired(q.getDiscountPercent().compareTo(approvalThreshold) > 0);
         q.setStatus(q.isApprovalRequired() ? "PENDING_APPROVAL" : "DRAFT");
         quotes.save(q);
-        if(q.isApprovalRequired()) approvalWorkflows.startIfConfigured("QUOTATION",q.getId(),p);
+        if (q.isApprovalRequired()) approvalWorkflows.startIfConfigured("QUOTATION", q.getId(), p);
         return new QuoteView(q, items);
     }
     
@@ -783,15 +801,17 @@ public class AppService {
             return quotes.save(q);
         }
         vendor(p);
-        if(enterpriseSaas!=null)enterpriseSaas.assertBranchAccess(q.getBranchId(),p);
+        if (enterpriseSaas != null) enterpriseSaas.assertBranchAccess(q.getBranchId(), p);
         if ("approve".equals(action) || "reject-approval".equals(action)) {
             if (!"PENDING_APPROVAL".equals(q.getStatus()) || !q.isApprovalRequired())
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Quotation is not awaiting approval");
-            var workflowStatus=approvalWorkflows.decideForEntity(p.tenantId(),"QUOTATION",q.getId(),
-                    "approve".equals(action)?"APPROVE":"REJECT",action,p);
-            if(workflowStatus.isPresent()){
-                if("APPROVED".equals(workflowStatus.get()))q.setStatus("DRAFT");
-                else if("REJECTED".equals(workflowStatus.get()))q.setStatus("APPROVAL_REJECTED");
+            var workflowStatus = approvalWorkflows.decideForEntity(
+                    p.tenantId(), "QUOTATION", q.getId(),
+                    "approve".equals(action) ? "APPROVE" : "REJECT", action, p
+            );
+            if (workflowStatus.isPresent()) {
+                if ("APPROVED".equals(workflowStatus.get())) q.setStatus("DRAFT");
+                else if ("REJECTED".equals(workflowStatus.get())) q.setStatus("APPROVAL_REJECTED");
                 return quotes.save(q);
             }
             requirePermission(p, "DISCOUNT_APPROVE");
@@ -809,11 +829,13 @@ public class AppService {
         Quotation saved = quotes.save(q);
         if ("send".equals(action)) {
             CustomerProfile recipient = requireCustomer(q.getCustomerId(), p.tenantId());
-            notifications.sendBusinessNotification(recipient.getUserId(), p.tenantId(), "QUOTATION_SENT",
+            notifications.sendBusinessNotification(
+                    recipient.getUserId(), p.tenantId(), "QUOTATION_SENT",
                     recipient.getEmail(), "Your solar quotation is ready",
                     "Hello " + recipient.getName() + ",\n\nYour quotation " + q.getQuotationNumber()
                             + " is ready. Total: INR " + q.getGrandTotal()
-                            + ". Sign in to your customer portal to review and accept or reject it.");
+                            + ". Sign in to your customer portal to review and accept or reject it."
+            );
         }
         return saved;
     }
@@ -833,7 +855,7 @@ public class AppService {
         }
         return quotes.findByQuoteGroupIdAndTenantIdOrderByRevisionAsc(quotation.getQuoteGroupId(), p.tenantId());
     }
-
+    
     @Transactional
     public CustomerOrder order(UUID qid, String key, Principal p) {
         vendor(p);
@@ -848,7 +870,7 @@ public class AppService {
             return existing;
         }
         var q = quotes.findByIdAndTenantIdForUpdate(qid, p.tenantId()).orElseThrow();
-        if(enterpriseSaas!=null)enterpriseSaas.assertBranchAccess(q.getBranchId(),p);
+        if (enterpriseSaas != null) enterpriseSaas.assertBranchAccess(q.getBranchId(), p);
         if (!"ACCEPTED".equals(q.getStatus())) throw new ResponseStatusException(HttpStatus.CONFLICT);
         var existingOrder = orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
                 .filter(o -> qid.equals(o.getQuotationId())).findFirst();
@@ -867,9 +889,20 @@ public class AppService {
         o.setTotal(q.getGrandTotal());
         o.setCreatedAt(Instant.now());
         orders.save(o);
-        if(integrationManagement!=null)integrationManagement.enqueueAccountingEvent("ORDER",o.getId().toString(),"UPSERT",
-                Map.of("orderNumber",o.getOrderNumber(),"customerId",o.getCustomerId().toString(),"total",o.getTotal()==null?java.math.BigDecimal.ZERO:o.getTotal(),"status",o.getStatus()),p);
-        var initialHistory=new OrderStatusHistory();initialHistory.setId(UUID.randomUUID());initialHistory.setTenantId(p.tenantId());initialHistory.setOrderId(o.getId());initialHistory.setOldStatus(null);initialHistory.setNewStatus("CONFIRMED");initialHistory.setReason("Order created from accepted quotation");initialHistory.setActorId(p.userId());initialHistory.setCreatedAt(Instant.now());orderStatusHistory.save(initialHistory);
+        if (integrationManagement != null) integrationManagement.enqueueAccountingEvent(
+                "ORDER", o.getId().toString(), "UPSERT",
+                Map.of("orderNumber", o.getOrderNumber(), "customerId", o.getCustomerId().toString(), "total", o.getTotal() == null ? java.math.BigDecimal.ZERO : o.getTotal(), "status", o.getStatus()), p
+        );
+        var initialHistory = new OrderStatusHistory();
+        initialHistory.setId(UUID.randomUUID());
+        initialHistory.setTenantId(p.tenantId());
+        initialHistory.setOrderId(o.getId());
+        initialHistory.setOldStatus(null);
+        initialHistory.setNewStatus("CONFIRMED");
+        initialHistory.setReason("Order created from accepted quotation");
+        initialHistory.setActorId(p.userId());
+        initialHistory.setCreatedAt(Instant.now());
+        orderStatusHistory.save(initialHistory);
         for (var qi : quoteItems.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(i -> i.getQuotationId().equals(qid)).toList()) {
             var i = new OrderItem();
             i.setId(UUID.randomUUID());

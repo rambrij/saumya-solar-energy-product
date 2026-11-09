@@ -22,5 +22,6 @@ public record PackageInput(
         Boolean active,
         @NotEmpty List<@Valid Item> items
 ) {
-    public record Item(@NotNull UUID productId, @NotNull Integer quantity, Boolean optionalItem) {}
+    public record Item(@NotNull UUID productId, @NotNull Integer quantity, Boolean optionalItem) {
+    }
 }

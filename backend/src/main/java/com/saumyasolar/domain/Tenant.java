@@ -7,6 +7,7 @@ import jakarta.persistence.PrePersist;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
 import java.time.Instant;
 import java.util.UUID;
 import java.math.BigDecimal;
@@ -37,11 +38,10 @@ public class Tenant {
     String gstin;
     String invoicePrefix = "INV";
     Integer serviceReopenDays;
-
+    
     /**
-     * Keep newly-created tenants valid even when callers do not provide
-     * optional branding fields. Hibernate includes null-valued properties in
-     * INSERT statements, so database DEFAULT clauses alone are insufficient.
+     * Keep newly-created tenants valid even when callers do not provide optional branding fields. Hibernate includes
+     * null-valued properties in INSERT statements, so database DEFAULT clauses alone are insufficient.
      */
     @PrePersist
     void applyDefaults() {

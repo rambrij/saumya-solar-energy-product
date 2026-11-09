@@ -14,10 +14,13 @@ public interface CustomerOrderRepository extends JpaRepository<CustomerOrder, UU
     List<CustomerOrder> findByTenantIdOrderByIdDesc(UUID tenantId);
     
     Optional<CustomerOrder> findByIdAndTenantId(UUID id, UUID tenantId);
- long countByTenantIdAndBranchId(UUID tenantId,UUID branchId);
- @Query("select coalesce(sum(o.total),0) from CustomerOrder o where o.tenantId=:tenantId and o.branchId=:branchId")
- java.math.BigDecimal sumTotalByTenantAndBranch(@Param("tenantId") UUID tenantId,@Param("branchId") UUID branchId);
+    
+    long countByTenantIdAndBranchId(UUID tenantId, UUID branchId);
+    
+    @Query("select coalesce(sum(o.total),0) from CustomerOrder o where o.tenantId=:tenantId and o.branchId=:branchId")
+    java.math.BigDecimal sumTotalByTenantAndBranch(@Param("tenantId") UUID tenantId, @Param("branchId") UUID branchId);
+    
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select o from CustomerOrder o where o.id=:id and o.tenantId=:tenantId")
-    Optional<CustomerOrder> findForUpdate(@Param("id") UUID id,@Param("tenantId") UUID tenantId);
+    Optional<CustomerOrder> findForUpdate(@Param("id") UUID id, @Param("tenantId") UUID tenantId);
 }

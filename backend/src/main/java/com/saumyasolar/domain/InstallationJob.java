@@ -1,5 +1,45 @@
 package com.saumyasolar.domain;
-import jakarta.persistence.Column;import jakarta.persistence.Entity;import jakarta.persistence.Id;import jakarta.persistence.Table;import lombok.Getter;import lombok.NoArgsConstructor;import lombok.Setter;import java.math.BigDecimal;import java.time.Instant;import java.util.UUID;
-@Entity @Table(name="installation_job") @Getter @Setter @NoArgsConstructor
-public class InstallationJob {@Id UUID id;UUID tenantId;
-    UUID branchId;UUID orderId;UUID customerId;UUID approvedSurveyId;@Column(length=700) String siteAddress;Instant scheduledAt;UUID assignedEngineerId;UUID teamId;String teamName;BigDecimal capacityKw;@Column(columnDefinition="TEXT") String notes;String status;boolean customerSignedOff;Instant completedAt;Instant commissionedAt;@Column(columnDefinition="TEXT") String commissioningNotes;@Column(length=500) String rescheduleReason;Instant createdAt;}
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+@Entity
+@Table(name = "installation_job")
+@Getter
+@Setter
+@NoArgsConstructor
+public class InstallationJob {
+    @Id
+    UUID id;
+    UUID tenantId;
+    UUID branchId;
+    UUID orderId;
+    UUID customerId;
+    UUID approvedSurveyId;
+    @Column(length = 700)
+    String siteAddress;
+    Instant scheduledAt;
+    UUID assignedEngineerId;
+    UUID teamId;
+    String teamName;
+    BigDecimal capacityKw;
+    @Column(columnDefinition = "TEXT")
+    String notes;
+    String status;
+    boolean customerSignedOff;
+    Instant completedAt;
+    Instant commissionedAt;
+    @Column(columnDefinition = "TEXT")
+    String commissioningNotes;
+    @Column(length = 500)
+    String rescheduleReason;
+    Instant createdAt;
+}

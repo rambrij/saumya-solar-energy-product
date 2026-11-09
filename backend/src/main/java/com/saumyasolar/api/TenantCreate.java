@@ -10,4 +10,5 @@ public record TenantCreate(
         @NotBlank @Size(max = 150) String adminName,
         @NotBlank @Email @Size(max = 190) String adminEmail,
         @NotBlank @Size(min = 12, max = 100) String adminPassword
-) {}
+) {
+}

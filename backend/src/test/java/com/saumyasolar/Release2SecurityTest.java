@@ -6,11 +6,14 @@ import com.saumyasolar.repo.*;
 import com.saumyasolar.service.AppService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+
 import java.lang.reflect.RecordComponent;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Optional;
+
 import static org.mockito.Mockito.*;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
@@ -32,7 +35,7 @@ class Release2SecurityTest {
         var p = new Principal(UUID.randomUUID(), null, "platform@test", "PLATFORM", Set.of("PLATFORM_SUPER_ADMIN"), Set.of("PLATFORM_MANAGE"));
         assertNull(p.tenantId());
     }
-
+    
     @Test
     void vendorWithoutCatalogPermissionCannotListProducts() {
         var service = service(mock(ProductCategoryRepository.class), mock(ProductRepository.class));
@@ -40,7 +43,7 @@ class Release2SecurityTest {
         var error = assertThrows(ResponseStatusException.class, () -> service.list("products", principal));
         assertEquals(HttpStatus.FORBIDDEN, error.getStatusCode());
     }
-
+    
     @Test
     void productCannotReferenceAnotherTenantsCategory() throws Exception {
         var categories = mock(ProductCategoryRepository.class);
@@ -50,14 +53,16 @@ class Release2SecurityTest {
         var categoryId = UUID.randomUUID();
         when(categories.findByIdAndTenantId(categoryId, tenantId)).thenReturn(Optional.empty());
         var principal = new Principal(UUID.randomUUID(), tenantId, "admin@test", "VENDOR", Set.of("VENDOR_ADMIN"), Set.of("CATALOG_MANAGE"));
-
-        var error = assertThrows(ResponseStatusException.class,
-                () -> service.create("products", inputWithCategory(categoryId), principal));
-
+        
+        var error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.create("products", inputWithCategory(categoryId), principal)
+        );
+        
         assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
         verify(products, never()).save(any());
     }
-
+    
     private AppService service(ProductCategoryRepository categories, ProductRepository products) {
         return new AppService(
                 mock(TenantRepository.class), mock(AppUserRepository.class), categories, products,
@@ -71,7 +76,7 @@ class Release2SecurityTest {
                 mock(com.saumyasolar.service.ApprovalWorkflowService.class)
         );
     }
-
+    
     private Input inputWithCategory(UUID categoryId) throws Exception {
         var components = Input.class.getRecordComponents();
         var types = Arrays.stream(components).map(RecordComponent::getType).toArray(Class<?>[]::new);

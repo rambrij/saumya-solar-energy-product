@@ -24,7 +24,8 @@ import java.security.MessageDigest;
 import java.util.Base64;
 @Service
 public class AuthLifecycleService {
-    @org.springframework.beans.factory.annotation.Autowired(required=false) private EnterpriseSaasService enterpriseSaas;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private EnterpriseSaasService enterpriseSaas;
     final RefreshTokenRepository refresh;
     final PasswordResetTokenRepository resets;
     final MfaChallengeRepository mfaChallenges;
@@ -67,7 +68,7 @@ public class AuthLifecycleService {
         if (user.getTenantId() == null) return "PLATFORM".equals(user.getAccountType());
         return tenants.findById(user.getTenantId()).map(t -> "ACTIVE".equals(t.getStatus())).orElse(false);
     }
-
+    
     public String newRefresh(AppUser u) {
         var x = new RefreshToken();
         x.setId(UUID.randomUUID());
@@ -135,7 +136,7 @@ public class AuthLifecycleService {
         });
         return out;
     }
-
+    
     public String createMfaChallenge(AppUser user) {
         byte[] random = new byte[4];
         new SecureRandom().nextBytes(random);
@@ -157,12 +158,15 @@ public class AuthLifecycleService {
         }
         return challenge.getId().toString();
     }
-
+    
     @Transactional(dontRollbackOn = ResponseStatusException.class)
     public AppUser verifyMfaChallenge(String challengeId, String code) {
         UUID id;
-        try { id = UUID.fromString(challengeId); }
-        catch (RuntimeException ex) { throw new ResponseStatusException(HttpStatus.UNAUTHORIZED); }
+        try {
+            id = UUID.fromString(challengeId);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        }
         MfaChallenge challenge = mfaChallenges.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
         if (challenge.isUsed() || !challenge.getExpiresAt().isAfter(Instant.now()) || challenge.getAttempts() >= 5) {
@@ -173,7 +177,8 @@ public class AuthLifecycleService {
         challenge.setAttempts(challenge.getAttempts() + 1);
         boolean matches = code != null && MessageDigest.isEqual(
                 hashResetToken(code).getBytes(java.nio.charset.StandardCharsets.UTF_8),
-                challenge.getCodeHash().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                challenge.getCodeHash().getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
         if (!matches) {
             if (challenge.getAttempts() >= 5) challenge.setUsed(true);
             mfaChallenges.save(challenge);
@@ -185,7 +190,7 @@ public class AuthLifecycleService {
                 .filter(this::tenantIsActive)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
     }
-
+    
     private String hashResetToken(String token) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
@@ -195,7 +200,7 @@ public class AuthLifecycleService {
             throw new IllegalStateException("SHA-256 is not available", ex);
         }
     }
-
+    
     @Transactional
     public void reset(String token, String password) {
         var x = resets.findByToken(hashResetToken(token)).filter(v -> !v.isUsed() && v.getExpiresAt().isAfter(Instant.now())).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid token"));
@@ -224,7 +229,7 @@ public class AuthLifecycleService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Tenant slug already exists");
         if (users.findByEmailIgnoreCase(adminEmail).isPresent())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Administrator email already exists");
-
+        
         var tenant = new Tenant();
         tenant.setId(UUID.randomUUID());
         tenant.setName(name.trim());
@@ -233,7 +238,7 @@ public class AuthLifecycleService {
         tenant.setCreatedAt(Instant.now());
         tenant.setUpdatedAt(Instant.now());
         tenants.save(tenant);
-
+        
         var vendorAdmin = new com.saumyasolar.domain.Role();
         vendorAdmin.setId(UUID.randomUUID());
         vendorAdmin.setTenantId(tenant.getId());
@@ -241,10 +246,10 @@ public class AuthLifecycleService {
         permissions.findAll().stream().filter(permission -> !"PLATFORM_MANAGE".equals(permission.getCode()))
                 .forEach(vendorAdmin.getPermissions()::add);
         roles.save(vendorAdmin);
-
+        
         provisionEmployeeRoles(tenant.getId());
         seedCategories(tenant.getId());
-
+        
         var admin = new AppUser();
         admin.setId(UUID.randomUUID());
         admin.setTenantId(tenant.getId());
@@ -257,7 +262,7 @@ public class AuthLifecycleService {
         users.save(admin);
         return tenant;
     }
-
+    
     @Transactional
     public AppUser createEmployee(UUID tenantId, String name, String email, String password, String roleName) {
         if (tenantId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
@@ -281,7 +286,7 @@ public class AuthLifecycleService {
         u.getRoles().add(role);
         return users.save(u);
     }
-
+    
     @Transactional
     public AppUser setEmployeeEnabled(UUID tenantId, UUID actorId, UUID employeeId, boolean enabled) {
         if (tenantId == null || employeeId == null || employeeId.equals(actorId))
@@ -295,7 +300,7 @@ public class AuthLifecycleService {
         employee.setTokenVersion(employee.getTokenVersion() + 1);
         return users.save(employee);
     }
-
+    
     private void provisionEmployeeRoles(UUID tenantId) {
         var permissionByCode = permissions.findAll().stream()
                 .collect(java.util.stream.Collectors.toMap(Permission::getCode, x -> x));
@@ -312,10 +317,12 @@ public class AuthLifecycleService {
             roles.save(role);
         });
     }
-
+    
     private void seedCategories(UUID tenantId) {
-        for (String name : java.util.List.of("Solar Panels", "Inverters", "Batteries", "Mounting Structures",
-                "Cables", "AC/DC Distribution Boxes", "Solar Accessories")) {
+        for (String name : java.util.List.of(
+                "Solar Panels", "Inverters", "Batteries", "Mounting Structures",
+                "Cables", "AC/DC Distribution Boxes", "Solar Accessories"
+        )) {
             categories.findByNameAndTenantId(name, tenantId).orElseGet(() -> {
                 var category = new com.saumyasolar.domain.ProductCategory();
                 category.setId(UUID.randomUUID());
@@ -327,13 +334,13 @@ public class AuthLifecycleService {
             });
         }
     }
-
+    
     private String normalizeSlug(String value) {
         if (value == null) return null;
         return value.trim().toLowerCase(java.util.Locale.ROOT)
                 .replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
     }
-
+    
     @Transactional
     public AppUser register(String slug, String name, String email, String password) {
         String normalizedSlug = normalizeSlug(slug);
@@ -342,14 +349,16 @@ public class AuthLifecycleService {
             store = tenants.findByNameIgnoreCase(slug.trim());
         }
         var t = store.filter(x -> "ACTIVE".equals(x.getStatus()))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "No active store matches '" + slug + "'. Enter the vendor store slug or exact store name."));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "No active store matches '" + slug + "'. Enter the vendor store slug or exact store name."
+                ));
         if (name == null || name.isBlank() || email == null || email.isBlank()
                 || password == null || password.length() < 12)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name, email and a password of at least 12 characters are required");
         if (users.findByEmailIgnoreCase(email).isPresent())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email exists");
-        if(enterpriseSaas!=null)enterpriseSaas.enforceCustomerLimit(t.getId());
+        if (enterpriseSaas != null) enterpriseSaas.enforceCustomerLimit(t.getId());
         var u = new AppUser();
         u.setId(UUID.randomUUID());
         u.setTenantId(t.getId());

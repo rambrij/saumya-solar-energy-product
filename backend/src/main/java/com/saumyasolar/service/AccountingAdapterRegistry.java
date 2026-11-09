@@ -1,11 +1,13 @@
 package com.saumyasolar.service;
 
 import org.springframework.stereotype.Component;
+
 import java.util.*;
 
 @Component
 public class AccountingAdapterRegistry {
     private final Map<String, AccountingAdapter> adapters;
+    
     public AccountingAdapterRegistry(List<AccountingAdapter> candidates) {
         Map<String, AccountingAdapter> registered = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
         for (AccountingAdapter adapter : candidates) {
@@ -17,8 +19,12 @@ public class AccountingAdapterRegistry {
         }
         this.adapters = Collections.unmodifiableMap(registered);
     }
+    
     public Optional<AccountingAdapter> find(String providerCode) {
         return Optional.ofNullable(providerCode == null ? null : adapters.get(providerCode));
     }
-    public Set<String> providers() { return adapters.keySet(); }
+    
+    public Set<String> providers() {
+        return adapters.keySet();
+    }
 }

@@ -2,9 +2,12 @@
 
 ## Production-Grade Multi-Tenant Solar ERP, E-Commerce, CRM and Service Management Platform
 
-For **Saumya Solar Energy Solution**, the application should be designed as a **multi-tenant Solar ERP + e-commerce + CRM + service-management SaaS platform**, not just a normal solar website.
+For **Saumya Solar Energy Solution**, the application should be designed as a **multi-tenant Solar ERP + e-commerce +
+CRM + service-management SaaS platform**, not just a normal solar website.
 
-The key production-grade requirement is **tenant isolation**: every dealer/vendor gets their own secure workspace and can access only their store, products, customers, quotations, orders, inventory, invoices, service requests, reports, and team members.
+The key production-grade requirement is **tenant isolation**: every dealer/vendor gets their own secure workspace and
+can access only their store, products, customers, quotations, orders, inventory, invoices, service requests, reports,
+and team members.
 
 ## 1. User Types and Access Model
 
@@ -466,13 +469,13 @@ Each vendor can create employees and assign roles.
 
 For example:
 
-| Role | Orders | Inventory | Service | Reports |
-|---|---|---|---|---|
-| Vendor Admin | Full | Full | Full | Full |
-| Sales | Manage | View | View | Sales |
-| Inventory Manager | View | Manage | View | Inventory |
-| Service Engineer | View | View | Assigned | Service |
-| Accountant | View | View | View | Financial |
+| Role              | Orders | Inventory | Service  | Reports   |
+|-------------------|--------|-----------|----------|-----------|
+| Vendor Admin      | Full   | Full      | Full     | Full      |
+| Sales             | Manage | View      | View     | Sales     |
+| Inventory Manager | View   | Manage    | View     | Inventory |
+| Service Engineer  | View   | View      | Assigned | Service   |
+| Accountant        | View   | View      | View     | Financial |
 
 Implement permission-level controls such as:
 
@@ -870,4 +873,7 @@ rather than:
 
 That distinction will make the application genuinely sellable to other solar dealers.
 
-For the existing **Spring Boot 3 + Java 21 + React + MySQL** application, the strongest next step is to turn these requirements into a complete **production-ready SRS/HLD with modules, roles and permissions, database design, REST APIs, screens, workflows, security requirements, tenant-isolation strategy, and acceptance criteria** before adding more features.
+For the existing **Spring Boot 3 + Java 21 + React + MySQL** application, the strongest next step is to turn these
+requirements into a complete **production-ready SRS/HLD with modules, roles and permissions, database design, REST APIs,
+screens, workflows, security requirements, tenant-isolation strategy, and acceptance criteria** before adding more
+features.

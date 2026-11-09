@@ -10,6 +10,8 @@ public interface SalesLeadRepository extends JpaRepository<SalesLead, UUID> {
     List<SalesLead> findByTenantIdOrderByIdDesc(UUID tenantId);
     
     Optional<SalesLead> findByIdAndTenantId(UUID id, UUID tenantId);
- long countByTenantIdAndBranchId(UUID tenantId,UUID branchId);
- long countByTenantIdAndBranchIdAndStage(UUID tenantId,UUID branchId,String stage);
+    
+    long countByTenantIdAndBranchId(UUID tenantId, UUID branchId);
+    
+    long countByTenantIdAndBranchIdAndStage(UUID tenantId, UUID branchId, String stage);
 }

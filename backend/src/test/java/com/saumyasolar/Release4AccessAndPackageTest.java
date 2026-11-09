@@ -23,11 +23,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class Release4AccessAndPackageTest {
-    @Autowired MockMvc mvc;
-    @Autowired ObjectMapper json;
-    @Autowired AppUserRepository users;
-    @Autowired SolarPackageRepository packages;
-
+    @Autowired
+    MockMvc mvc;
+    @Autowired
+    ObjectMapper json;
+    @Autowired
+    AppUserRepository users;
+    @Autowired
+    SolarPackageRepository packages;
+    
     private String token(String email, String password) throws Exception {
         String body = """
                 {"email":"%s","password":"%s"}
@@ -36,7 +40,7 @@ class Release4AccessAndPackageTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         return json.readTree(response).get("accessToken").asText();
     }
-
+    
     @Test
     void platformAdminCanCreateTenantAndNonPlatformCannot() throws Exception {
         String platform = token("platform@saumya.local", "Platform@123");
@@ -57,7 +61,7 @@ class Release4AccessAndPackageTest {
                                 """))
                 .andExpect(status().isForbidden());
     }
-
+    
     @Test
     void settingsAliasRequiresVendorDiscountPolicyPermission() throws Exception {
         String vendor = token("admin@saumya.local", "Admin@123");
@@ -73,7 +77,7 @@ class Release4AccessAndPackageTest {
         mvc.perform(get("/api/v1/settings").header("Authorization", "Bearer " + customer))
                 .andExpect(status().isForbidden());
     }
-
+    
     @Test
     void registrationAcceptsExactStoreDisplayNameAndUnknownStoreIsNotForbidden() throws Exception {
         String email = "register-" + UUID.randomUUID() + "@example.test";
@@ -89,7 +93,7 @@ class Release4AccessAndPackageTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("No active store matches")));
     }
-
+    
     @Test
     void publicProductCatalogueShowsOnlyActiveProductsForTheRequestedActiveStore() throws Exception {
         String vendor = token("admin@saumya.local", "Admin@123");
@@ -113,7 +117,7 @@ class Release4AccessAndPackageTest {
                                  "purchasePrice":3000,"discountPercent":0,"taxPercent":5,"reorderLevel":0,"active":false}
                                 """.formatted(categoryId, UUID.randomUUID())))
                 .andExpect(status().isOk());
-
+        
         String catalogue = mvc.perform(get("/api/v1/public/saumya-solar/products"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         JsonNode rows = json.readTree(catalogue);
@@ -124,7 +128,7 @@ class Release4AccessAndPackageTest {
         assertFalse(catalogue.contains("reorderLevel"));
         mvc.perform(get("/api/v1/public/unknown-solar/products")).andExpect(status().isNotFound());
     }
-
+    
     @Test
     void customerCanReadPublicPackagesAndVendorCanUploadPackageImage() throws Exception {
         String vendor = token("admin@saumya.local", "Admin@123");

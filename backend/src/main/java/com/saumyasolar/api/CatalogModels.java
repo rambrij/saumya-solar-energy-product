@@ -1,9 +1,48 @@
 package com.saumyasolar.api;
-import jakarta.validation.constraints.*;import java.math.BigDecimal;import java.util.UUID;
-public final class CatalogModels{private CatalogModels(){}
-public record CategoryInput(@NotBlank @Size(max=120) String name,@Size(max=500) String description,Boolean active){}
-public record ProductInput(@NotNull UUID categoryId,@NotBlank @Size(max=80) String sku,@NotBlank @Size(max=180) String name,String description,@Size(max=150) String manufacturer,@Size(max=120) String model,@Size(max=120) String technology,@NotNull @DecimalMin("0.00") BigDecimal price,@NotNull @DecimalMin("0.00") BigDecimal purchasePrice,@NotNull @DecimalMin("0.00") @DecimalMax("100.00") BigDecimal discountPercent,@NotNull @DecimalMin("0.00") @DecimalMax("100.00") BigDecimal taxPercent,@Min(0) Integer warrantyYears,String imageUrl,String datasheetUrl,@NotNull @DecimalMin("0.00") BigDecimal reorderLevel,@Size(max=30) String unitOfMeasure,@Size(max=40) String hsnCode,Boolean serialized,String attributesJson,Boolean active){}
-public record CustomerInput(@NotBlank @Size(max=150) String name,@Email @Size(max=190) String email,@Size(max=30) String phone,@Size(max=500) String address,Boolean active){}
-public record EmployeeUpdateInput(@NotBlank @Size(max=150) String name,@Email @Size(max=190) String email,String roleName,String newPassword){}
-public record PublicProductView(UUID id,String sku,String name,String description,String categoryId,String categoryName,String manufacturer,String model,String technology,BigDecimal price,BigDecimal discountPercent,BigDecimal taxPercent,Integer warrantyYears,String imageUrl,String datasheetUrl,String unitOfMeasure,boolean serialized,String attributesJson){}
+
+import jakarta.validation.constraints.*;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+public final class CatalogModels {
+    private CatalogModels() {
+    }
+    
+    public record CategoryInput(
+            @NotBlank @Size(max = 120) String name, @Size(max = 500) String description, Boolean active
+    ) {
+    }
+    
+    public record ProductInput(
+            @NotNull UUID categoryId, @NotBlank @Size(max = 80) String sku, @NotBlank @Size(max = 180) String name,
+            String description, @Size(max = 150) String manufacturer, @Size(max = 120) String model,
+            @Size(max = 120) String technology, @NotNull @DecimalMin("0.00") BigDecimal price,
+            @NotNull @DecimalMin("0.00") BigDecimal purchasePrice,
+            @NotNull @DecimalMin("0.00") @DecimalMax("100.00") BigDecimal discountPercent,
+            @NotNull @DecimalMin("0.00") @DecimalMax("100.00") BigDecimal taxPercent, @Min(0) Integer warrantyYears,
+            String imageUrl, String datasheetUrl, @NotNull @DecimalMin("0.00") BigDecimal reorderLevel,
+            @Size(max = 30) String unitOfMeasure, @Size(max = 40) String hsnCode, Boolean serialized,
+            String attributesJson, Boolean active
+    ) {
+    }
+    
+    public record CustomerInput(
+            @NotBlank @Size(max = 150) String name, @Email @Size(max = 190) String email, @Size(max = 30) String phone,
+            @Size(max = 500) String address, Boolean active
+    ) {
+    }
+    
+    public record EmployeeUpdateInput(
+            @NotBlank @Size(max = 150) String name, @Email @Size(max = 190) String email, String roleName,
+            String newPassword
+    ) {
+    }
+    
+    public record PublicProductView(
+            UUID id, String sku, String name, String description, String categoryId, String categoryName,
+            String manufacturer, String model, String technology, BigDecimal price, BigDecimal discountPercent,
+            BigDecimal taxPercent, Integer warrantyYears, String imageUrl, String datasheetUrl, String unitOfMeasure,
+            boolean serialized, String attributesJson
+    ) {
+    }
 }
