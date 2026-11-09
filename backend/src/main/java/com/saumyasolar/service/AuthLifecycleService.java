@@ -415,6 +415,7 @@ public class AuthLifecycleService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
         var role = roles.findByNameAndTenantId(roleName, tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role does not belong to this vendor"));
+        assertVendorAssignableRole(role);
         employee.getRoles().clear();
         employee.getRoles().add(role);
         AppUser saved = users.save(employee);
@@ -433,6 +434,12 @@ public class AuthLifecycleService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Role is assigned to one or more employees");
         roles.delete(role);
         auditAuth("CUSTOM_ROLE_DELETED", users.findById(actorId).orElse(null), "SUCCESS", "CUSTOM_ROLE_DELETED_" + role.getName(), roleId.toString());
+    }
+
+    private void assertVendorAssignableRole(com.saumyasolar.domain.Role role) {
+        if (role.getPermissions() == null || role.getPermissions().stream()
+                .anyMatch(permission -> !VENDOR_ROLE_PERMISSION_CODES.contains(permission.getCode())))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Role contains permissions not assignable to vendor employees");
     }
 
     private java.util.Set<Permission> resolveVendorPermissions(java.util.Set<String> codes) {
