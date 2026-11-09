@@ -51,7 +51,7 @@ function Vendor({s,error,logout}:any){
  const permissions=s.user.permissions||[];
  const tabs=getNavigationKeys('vendor',permissions);
  const [subscriptionBadge,setSubscriptionBadge]=useState('');
- useEffect(()=>{let alive=true;api('/subscription',{},s).then((x:any)=>{if(alive)setSubscriptionBadge(x?.plan?.name?x.plan.name+' · '+(x.subscription?.status||''):'No active plan')}).catch(()=>{if(alive)setSubscriptionBadge('Subscription unavailable')});return()=>{alive=false}},[s.accessToken]);
+ useEffect(()=>{let alive=true;if(!permissions.some((permission:string)=>['SUBSCRIPTION_VIEW','SUBSCRIPTION_MANAGE'].includes(permission))){setSubscriptionBadge('');return()=>{alive=false}}api('/subscription',{},s).then((x:any)=>{if(alive)setSubscriptionBadge(x?.plan?.name?x.plan.name+' · '+(x.subscription?.status||''):'No active plan')}).catch(()=>{if(alive)setSubscriptionBadge('Subscription unavailable')});return()=>{alive=false}},[s.accessToken]);
  const forms={users:['name','email','password','roleName'],categories:['name','description'],products:['sku','name','categoryId','manufacturer','model','technology','description','purchasePrice','price','discountPercent','taxPercent','warrantyYears','imageUrl','datasheetUrl','reorderLevel','unitOfMeasure','hsnCode','serialized','attributesJson'],packages:['code','name','capacityKw','packageType','basePrice','warrantyYears'],customers:['name','email','phone','address'],enquiries:['name','email','phone','propertyType','monthlyBill','requiredCapacityKw','message']};
  return <Crud title="Vendor Portal" s={s} error={error} tabs={tabs} forms={forms} role="vendor" logout={logout} planBadge={subscriptionBadge}/>;
 }
