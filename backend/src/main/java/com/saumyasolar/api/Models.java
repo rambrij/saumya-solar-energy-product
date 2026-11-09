@@ -42,7 +42,7 @@ public final class Models {
     public record PasswordReset(@Email String email, String token, String newPassword) {
     }
     
-    public record Session(String accessToken, String refreshToken, String csrfToken, UserView user) {
+    public record Session(String accessToken, String csrfToken, UserView user) {
     }
     
     public record UserView(
