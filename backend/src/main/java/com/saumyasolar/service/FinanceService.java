@@ -454,7 +454,6 @@ public class FinanceService {
     public Refund refund(RefundCreate x, Principal p) {
         financeAccess(p);
         permission(p, "PAYMENT_REFUND");
-        permission(p, "PAYMENT_REFUND");
         if (x.amount() == null || x.amount().signum() <= 0 || x.reason() == null || x.reason().isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A positive refund amount and reason are required");
         Payment pay = payments.findForUpdate(x.paymentId(), p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
