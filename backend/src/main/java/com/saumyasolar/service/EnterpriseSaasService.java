@@ -603,7 +603,7 @@ public class EnterpriseSaasService {
     
     @Transactional
     public Warehouse assignWarehouseBranch(UUID warehouseId, UUID branchId, Principal p) {
-        UUID t = vendor(p, "INVENTORY_MANAGE");
+        UUID t = vendor(p, "INVENTORY_TRANSFER");
         if (( p.roles() == null || !p.roles().contains("VENDOR_ADMIN") ) && ( p.permissions() == null || !p.permissions().contains("BRANCH_MANAGE") ))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Branch management permission is required to move warehouses between branches");
         Warehouse w = warehouses.findByIdAndTenantId(warehouseId, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Warehouse not found"));
