@@ -1,5 +1,5 @@
 const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
-export type AuthSession={accessToken:string;csrfToken?:string;user:{id:string;tenantId?:string;name:string;email:string;accountType:string;roles:string[];permissions:string[]}};
+export type AuthSession={accessToken?:string;csrfToken?:string;user:{id:string;tenantId?:string;name:string;email:string;accountType:string;roles:string[];permissions:string[]}};
 let currentSession:AuthSession|null=null;
 let refreshInFlight:Promise<AuthSession>|null=null;
 
@@ -14,10 +14,22 @@ export function sessionForToken(token:string):AuthSession {
  return {...currentSession,accessToken:token};
 }
 
+function csrfToken():string|null {
+ const fromCookie=document.cookie.split(';').map(value=>value.trim()).find(value=>value.startsWith('XSRF-TOKEN='));
+ if(fromCookie){
+  const value=decodeURIComponent(fromCookie.slice('XSRF-TOKEN='.length));
+  sessionStorage.setItem('saumya-csrf-token',value);
+  return value;
+ }
+ return sessionStorage.getItem('saumya-csrf-token');
+}
 function csrfHeaders(headers:Headers):Headers {
- const csrf=sessionStorage.getItem('saumya-csrf-token');
+ const csrf=csrfToken();
  if(csrf)headers.set('X-CSRF-Token',csrf);
  return headers;
+}
+function isUnsafe(method:string):boolean {
+ return !['GET','HEAD','OPTIONS','TRACE'].includes(method.toUpperCase());
 }
 
 async function rotateSession():Promise<AuthSession>{
@@ -31,7 +43,7 @@ async function rotateSession():Promise<AuthSession>{
 }
 
 export async function bootstrapSession():Promise<AuthSession|null>{
- if(!sessionStorage.getItem('saumya-csrf-token'))return null;
+ if(!csrfToken())return null;
  try{
   if(!refreshInFlight)refreshInFlight=rotateSession();
   try{return await refreshInFlight}catch{setCurrentAuthSession(null);return null}finally{refreshInFlight=null}
@@ -42,8 +54,8 @@ export async function authenticatedFetch(url:string,init:RequestInit={},session?
  let active:AuthSession|null=currentSession||session||null;
  const request=(current:AuthSession|null)=>{
   const headers=new Headers(init.headers||{});
-  if(current)headers.set('Authorization','Bearer '+current.accessToken);
-  if(url.includes('/auth/logout'))csrfHeaders(headers);
+  if(current?.accessToken)headers.set('Authorization','Bearer '+current.accessToken);
+  if(isUnsafe(init.method||'GET'))csrfHeaders(headers);
   return fetch(url,{...init,headers,credentials:'include'});
  };
  let response=await request(active);
