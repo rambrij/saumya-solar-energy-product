@@ -154,6 +154,51 @@ class Release12TenantIntegrationTest {
     }
     
     @Test
+    void concurrentRefreshReuseRevokesTheWholeDatabaseTokenFamily() throws Exception {
+        var login = mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"admin@saumya.local\",\"password\":\"Admin@123\"}"))
+                .andExpect(status().isOk()).andReturn();
+        var csrfToken = json.readTree(login.getResponse().getContentAsString()).get("csrfToken").asText();
+        var refreshCookie = login.getResponse().getCookie("saumya_refresh");
+        var csrfCookie = login.getResponse().getCookie("XSRF-TOKEN");
+        assertNotNull(refreshCookie);
+        assertNotNull(csrfCookie);
+
+        var gate = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.Callable<org.springframework.test.web.servlet.MvcResult> request = () -> {
+                gate.await();
+                return mvc.perform(post("/api/v1/auth/refresh")
+                                .cookie(refreshCookie, csrfCookie)
+                                .header("X-CSRF-Token", csrfToken))
+                        .andReturn();
+            };
+            var first = pool.submit(request);
+            var second = pool.submit(request);
+            gate.countDown();
+            var firstResult = first.get();
+            var secondResult = second.get();
+            int firstStatus = firstResult.getResponse().getStatus();
+            int secondStatus = secondResult.getResponse().getStatus();
+            assertTrue((firstStatus == 200 && secondStatus == 401) || (firstStatus == 401 && secondStatus == 200),
+                    "Exactly one concurrent refresh can rotate the same token");
+            var rotated = firstStatus == 200 ? firstResult : secondResult;
+            var rotatedCookie = rotated.getResponse().getCookie("saumya_refresh");
+            var rotatedCsrfCookie = rotated.getResponse().getCookie("XSRF-TOKEN");
+            var rotatedCsrf = json.readTree(rotated.getResponse().getContentAsString()).get("csrfToken").asText();
+            assertNotNull(rotatedCookie);
+            assertNotNull(rotatedCsrfCookie);
+            mvc.perform(post("/api/v1/auth/refresh")
+                            .cookie(rotatedCookie, rotatedCsrfCookie)
+                            .header("X-CSRF-Token", rotatedCsrf))
+                    .andExpect(status().isUnauthorized());
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
     void customerRegistrationCreatesProfileAndCanOpenCustomerQuotationList() throws Exception {
         var email = "registered-" + UUID.randomUUID() + "@example.test";
         var body = """
