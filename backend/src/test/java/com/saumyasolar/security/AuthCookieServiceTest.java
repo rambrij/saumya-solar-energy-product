@@ -37,6 +37,17 @@ class AuthCookieServiceTest {
                 .getStatusCode().value());
     }
 
+
+    @Test
+    void readableCsrfCookieRemainsHostOnlyEvenWhenRefreshCookieDomainIsConfigured() {
+        var service = new AuthCookieService(true, "None", ".example.test", 7);
+        var response = new MockHttpServletResponse();
+        service.issue(response, "opaque-refresh-token");
+        var cookies = response.getHeaders("Set-Cookie");
+        assertTrue(cookies.stream().anyMatch(v -> v.contains("saumya_refresh=") && v.contains("Domain=.example.test")));
+        assertTrue(cookies.stream().anyMatch(v -> v.contains("XSRF-TOKEN=") && !v.contains("Domain=")));
+    }
+
     @Test
     void sameSiteNoneRequiresSecureCookie() {
         assertThrows(IllegalArgumentException.class, () -> new AuthCookieService(false, "None", "", 7));
