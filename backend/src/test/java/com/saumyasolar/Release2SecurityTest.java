@@ -52,7 +52,7 @@ class Release2SecurityTest {
         var tenantId = UUID.randomUUID();
         var categoryId = UUID.randomUUID();
         when(categories.findByIdAndTenantId(categoryId, tenantId)).thenReturn(Optional.empty());
-        var principal = new Principal(UUID.randomUUID(), tenantId, "admin@test", "VENDOR", Set.of("VENDOR_ADMIN"), Set.of("CATALOG_MANAGE"));
+        var principal = new Principal(UUID.randomUUID(), tenantId, "admin@test", "VENDOR", Set.of("VENDOR_ADMIN"), Set.of("PRODUCT_CREATE"));
         
         var error = assertThrows(
                 ResponseStatusException.class,
