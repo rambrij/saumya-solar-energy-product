@@ -39,7 +39,7 @@ public class CustomerAccountService {
  }
  public List<CustomerAddress> addresses(Principal actor){
   CustomerProfile c=customer(actor);
-  return addresses.findByTenantIdAndCustomerIdOrderByIsDefaultDescCreatedAtDesc(actor.tenantId(),c.getId());
+  return addresses.findOwnedAddresses(actor.tenantId(),c.getId());
  }
  @Transactional public CustomerAddress createAddress(AddressInput input,Principal actor){
   CustomerProfile c=customer(actor);validate(input);
