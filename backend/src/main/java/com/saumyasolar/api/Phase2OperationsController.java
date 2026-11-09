@@ -88,7 +88,7 @@ public class Phase2OperationsController {
     
     private void ops(Principal p) {
         tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "INSTALLATION_ASSIGN");
         if (!hasRole(p, "VENDOR_ADMIN", "OPERATIONS_MANAGER", "SERVICE_MANAGER"))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
     }
