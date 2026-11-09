@@ -36,6 +36,43 @@ The optional `.`/start-clean.ps1` script and `docker compose down -v` remove the
 
 The Compose file enables demo seeding with `SEED_DATA_ENABLED=true` for local development. Application default is false, so production does not create demo accounts. Production must use its own database/JWT/CORS secrets and must not enable demo seeding. Do not expose the Compose MySQL port to an untrusted network.
 
+
+### Run backend and frontend separately (PowerShell)
+
+1. Start only the database and local email inbox:
+
+```powershell
+docker compose up -d mysql mailpit
+```
+
+2. In a backend terminal, configure the local connection (use your own long random JWT secret outside disposable development) and start Spring Boot:
+
+```powershell
+cd backend
+$env:DB_URL="jdbc:mysql://localhost:3306/solar?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+$env:DB_USER="solar"
+$env:DB_PASSWORD="solarpass"
+$env:JWT_SECRET="local-only-change-this-long-jwt-secret-12345678901234567890"
+$env:CORS_ORIGINS="http://localhost:3000,http://localhost:5173"
+$env:MAIL_HOST="localhost"
+$env:MAIL_PORT="1025"
+$env:MAIL_SMTP_AUTH="false"
+$env:MAIL_SMTP_STARTTLS="false"
+$env:SEED_DATA_ENABLED="true"
+mvn spring-boot:run
+```
+
+3. In a separate frontend terminal:
+
+```powershell
+cd frontend
+npm install
+$env:VITE_API_BASE_URL="http://localhost:8080"
+npm run dev -- --host 0.0.0.0
+```
+
+Open the Vite URL shown in the terminal (normally `http://localhost:5173`). Mailpit inbox: `http://localhost:8025`. For the containerized default experience, prefer `docker compose up --build`.
+
 For a new production database, run Flyway migrations first. Then bootstrap the first platform administrator once using deployment secrets: set `PLATFORM_BOOTSTRAP_ENABLED=true`, `PLATFORM_BOOTSTRAP_EMAIL`, and `PLATFORM_BOOTSTRAP_PASSWORD` (minimum 16 characters), start the backend, verify the account can sign in, and immediately set `PLATFORM_BOOTSTRAP_ENABLED=false` and remove the bootstrap password. The bootstrap is disabled by default and fails if the email already exists.
 
 
@@ -569,3 +606,141 @@ Keep Twilio credentials in the deployment secret manager; never place them in fr
 
 - Customer and authorized vendor staff can read/post service ticket comments at `/api/v1/service-requests/{ticketId}/comments`. Internal comments are hidden from customers; all comment access is tenant- and ticket-scoped.
 - Warranty expiry is evaluated daily using `app.warranty.expiry-alert-cron` and `app.warranty.expiry-alert-zone` (defaults to 08:15 Asia/Kolkata). The scheduler marks ended ACTIVE warranties EXPIRED and sends 30-day, 7-day and 1-day reminders through configured customer-consented channels. Email idempotency keys suppress duplicate reminder deliveries for the same warranty/event.
+
+
+---
+
+## Subscription management and feature documentation
+
+### Subscription plans
+
+Flyway migration **V45** seeds the default Starter, Professional and Enterprise plans by unique plan code. Re-running application startup or Flyway does not create duplicate plans. **V46** adds product/customer limits, trial period, display order and assignment-history storage; **V47** aligns the Starter warehouse allowance with its multi-warehouse entitlement; **V48** protects assignment history with append-only database triggers. Existing plan and tenant-subscription IDs are preserved.
+
+The Platform Super Admin manages plans from **Platform → Subscription administration**. Plan fields include name/code, description, monthly/yearly billing, INR price, user/branch/warehouse/product/customer limits, storage allowance, trial days, entitlements JSON, active status and display order. A plan referenced by a tenant subscription cannot be physically deleted; deactivate it instead.
+
+Platform subscription APIs (all require a Platform Super Admin principal and `SUBSCRIPTION_MANAGE`):
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/v1/platform/subscription-plans` | List active and inactive plans |
+| GET | `/api/v1/platform/subscription-plans/{planId}` | Plan details |
+| POST | `/api/v1/platform/subscription-plans` | Create plan |
+| PUT | `/api/v1/platform/subscription-plans/{planId}` | Update plan |
+| POST | `/api/v1/platform/subscription-plans/{planId}/activate` | Activate plan |
+| POST | `/api/v1/platform/subscription-plans/{planId}/deactivate` | Deactivate plan |
+| DELETE | `/api/v1/platform/subscription-plans/{planId}` | Delete only when never assigned |
+| GET | `/api/v1/platform/tenants/search?q={term}` | Search tenants by name/slug (minimum 2 characters) |
+| GET | `/api/v1/platform/tenants/{tenantId}/subscriptions` | Assignment list |
+| GET | `/api/v1/platform/tenants/{tenantId}/subscription-history` | Assignment history |
+| POST | `/api/v1/platform/tenants/{tenantId}/subscriptions` | Assign or replace plan |
+| GET/PUT | `/api/v1/platform/tenants/{tenantId}/subscriptions/{subscriptionId}` | View/update assignment |
+| POST | `/api/v1/platform/tenants/{tenantId}/subscriptions/{subscriptionId}/cancel` | Cancel assignment |
+
+The assignment form supports start/end dates, trial end, billing cycle, auto-renew flag, external reference and internal notes. When a tenant already has an active/trial/past-due assignment, the UI requires replacement confirmation. The service locks the tenant row, closes/cancels the prior assignment as appropriate, links the replacement and writes a history row. Auto-renew is configuration metadata; it does not by itself charge a payment method.
+
+The vendor subscription view remains read-only and displays the effective plan and existing usage information. Plan limits and entitlements continue to be enforced by the existing subscription enforcement services.
+
+### Local startup and database migrations
+
+Prerequisites: Docker Desktop/Rancher Desktop with Compose v2; Java 21 and Maven for backend checks outside Docker; Node.js 22 and npm for frontend checks outside Docker; MySQL 8.4 (Compose provisions it).
+
+Start the local environment:
+
+```powershell
+docker compose up --build
+```
+
+Open frontend at http://localhost:3000, API health at http://localhost:8080/actuator/health and Swagger UI at http://localhost:8080/swagger-ui/index.html.
+
+Flyway applies migrations on backend startup. Confirm that V45, V46, V47 and V48 appear in `flyway_schema_history`. Do not manually re-run migration SQL against a database where Flyway already recorded those versions.
+
+### Environment variables
+
+Use the existing `.env.example` / Compose configuration as the source of truth for exact variable names. At minimum configure database URL/user/password, JWT signing secret, CORS allowed origins, frontend `VITE_API_BASE_URL`, mail transport and the seed toggle. Keep secrets outside Git and never use demo credentials in shared environments. `SEED_DATA_ENABLED` / `app.seed.enabled` defaults to false in normal application configuration; Compose may explicitly enable it for local development.
+
+### Demo accounts and seed scope
+
+For disposable local development only:
+
+| Role | Email | Password |
+|---|---|---|
+| Platform Super Admin | platform@saumya.local | Platform@123 |
+| Vendor Admin | admin@saumya.local | Admin@123 |
+| Vendor Sales User | sales@saumya.local | Sales@123 |
+| Customer | customer@saumya.local | Customer@123 |
+
+Passwords are encoded through the configured PasswordEncoder. Seeded baseline data includes the Saumya Solar tenant, roles, these accounts, customer profiles, product categories/products, warehouse/checklist templates, an opening inventory balance/receipt ledger and V45 plan catalogue. The opt-in local DataSeeder creates a linked demonstration graph: enquiry → qualified lead → approved site survey → accepted quotation and item → confirmed order and item → paid invoice and confirmed manual UPI payment → commissioned installation → open service request. The records are tenant-owned and seeded idempotently. The UI/API manual E2E guide is still required to validate the complete interactive workflow. Do not treat demo credentials as production credentials.
+
+### Role navigation
+
+- Platform Super Admin: tenant administration, subscription plans, tenant subscription assignment/history and platform audit views (permission-gated).
+- Vendor Admin: catalogue, customers, enquiries, leads, surveys, quotations, orders and enabled operations/enterprise modules.
+- Vendor employee: only the tabs/actions granted by the current role permissions (e.g. sales, inventory, service, installation).
+- Customer: available products, enquiry/quotation request, own enquiries/quotations/orders and customer-facing installation/service functions where enabled.
+
+The backend is authoritative for role, permission, tenant and customer-ownership checks. Hiding a menu item is not an authorization boundary.
+
+### Business lifecycle
+
+`Platform setup → Tenant subscription → Product setup → Customer enquiry → Lead → Quotation → Site survey → Order → Installation → Service request`
+
+See [13-end-to-end-testing-guide.md](docs/features/13-end-to-end-testing-guide.md) for the manual scenario, expected links, role switching and negative tests.
+
+### Feature documentation
+
+- [01 Product catalogue](docs/features/01-product-catalogue.md)
+- [02 Customer enquiry](docs/features/02-customer-enquiry.md)
+- [03 Lead management](docs/features/03-lead-management.md)
+- [04 Quotation management](docs/features/04-quotation-management.md)
+- [05 Site survey](docs/features/05-site-survey.md)
+- [06 Order management](docs/features/06-order-management.md)
+- [07 Installation management](docs/features/07-installation-management.md)
+- [08 Service request management](docs/features/08-service-request-management.md)
+- [09 Subscription plan management](docs/features/09-subscription-plan-management.md)
+- [10 Tenant subscription assignment](docs/features/10-tenant-subscription-assignment.md)
+- [11 Demo data and test users](docs/features/11-demo-data-and-test-users.md)
+- [12 Role and permission matrix](docs/features/12-role-and-permission-matrix.md)
+- [13 End-to-end testing guide](docs/features/13-end-to-end-testing-guide.md)
+
+### Verification commands
+
+Backend:
+
+```powershell
+cd backend
+mvn clean verify
+```
+
+Frontend:
+
+```powershell
+cd frontend
+npm install
+npm test
+npm run build
+```
+
+Full local stack:
+
+```powershell
+docker compose build --no-cache
+docker compose up
+```
+
+Subscription verification: sign in as Platform Super Admin; create/edit/deactivate/reactivate a plan; search tenant by at least two characters; assign a plan; confirm replacement when one is already active; inspect assignment history; sign in as Vendor Admin and verify the effective subscription and usage screen. Verify vendor/customer attempts to call platform subscription APIs return 403.
+
+### Troubleshooting
+
+- **Plan migration fails:** check MySQL 8.4, Flyway schema history and whether V45/V46 are already applied; do not edit applied migrations.
+- **Plan code conflict:** plan codes are unique case-insensitively at service level and unique in the database; choose another code.
+- **Plan delete returns conflict:** at least one tenant subscription references it; deactivate the plan to preserve billing history.
+- **Tenant search shows no results:** enter at least two characters and confirm the tenant exists and is accessible to the Platform Super Admin.
+- **Assignment rejected:** verify the plan is active, date order is valid, tenant exists and the caller has Platform Super Admin plus `SUBSCRIPTION_MANAGE`.
+- **Vendor has no effective subscription:** inspect assignment status/start/end dates and `subscription_assignment_history`; future-start assignments are not effective until their start time.
+- **Frontend API errors:** verify `VITE_API_BASE_URL`, CORS allowed origin, backend health and current access token.
+- **Demo users missing:** verify seed flag is enabled only in the local profile and inspect backend startup logs; the seed runner intentionally exits when disabled.
+- **Private evidence missing after redeploy:** confirm persistent local filesystem volumes/disk are mounted as documented in the private evidence section above.
+
+### Current validation caveat
+
+The GitHub branch contains backend/frontend source changes and documentation. Backend unit/API integration tests and frontend component tests are included in CI. Browser-level cross-role E2E still requires the documented manual run; the CI workflow validates V45/V46/V47/V48 migrations and starts Spring Boot against MySQL 8.4 with the opt-in demo seeder enabled. Do not mark this branch production-ready until the CI run and the manual E2E guide pass.

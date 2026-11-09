@@ -24,6 +24,7 @@ import java.security.MessageDigest;
 import java.util.Base64;
 @Service
 public class AuthLifecycleService {
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private EnterpriseSaasService enterpriseSaas;
     final RefreshTokenRepository refresh;
     final PasswordResetTokenRepository resets;
     final MfaChallengeRepository mfaChallenges;
@@ -348,6 +349,7 @@ public class AuthLifecycleService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name, email and a password of at least 12 characters are required");
         if (users.findByEmailIgnoreCase(email).isPresent())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email exists");
+        if(enterpriseSaas!=null)enterpriseSaas.enforceCustomerLimit(t.getId());
         var u = new AppUser();
         u.setId(UUID.randomUUID());
         u.setTenantId(t.getId());

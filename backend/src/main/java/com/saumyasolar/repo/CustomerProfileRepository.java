@@ -9,4 +9,5 @@ public interface CustomerProfileRepository extends JpaRepository<CustomerProfile
  Optional<CustomerProfile> findByIdAndTenantId(UUID id, UUID tenantId);
  Optional<CustomerProfile> findByTenantIdAndUserId(UUID tenantId, UUID userId);
  Optional<CustomerProfile> findByTenantIdAndEmailIgnoreCase(UUID tenantId, String email);
+ long countByTenantIdAndActiveTrue(UUID tenantId);
 }

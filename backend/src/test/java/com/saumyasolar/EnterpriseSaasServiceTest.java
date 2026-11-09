@@ -35,13 +35,26 @@ class EnterpriseSaasServiceTest {
     @Mock AuditEventRepository audits;
     @Mock WarehouseRepository warehouses;
     @Mock TenantDomainRepository tenantDomains;
+    @Mock SubscriptionAssignmentHistoryRepository subscriptionHistory;
+    @Mock ProductRepository productRecords;
+    @Mock CustomerProfileRepository customerProfiles;
+    @Mock TenantStorageLedgerRepository storageLedger;
 
     EnterpriseSaasService service;
 
     @BeforeEach
     void setUp() {
         service = new EnterpriseSaasService(branches, memberships, plans, subscriptions, tenants,
-                users, audits, warehouses, tenantDomains, new ObjectMapper());
+                users, audits, warehouses, tenantDomains, new ObjectMapper(), subscriptionHistory, productRecords, customerProfiles, storageLedger);
+    }
+
+    @Test
+    void platformTenantUsageRejectsVendorAdministrators() {
+        UUID tenantId=UUID.randomUUID();
+        ResponseStatusException error=assertThrows(ResponseStatusException.class,
+                ()->service.platformTenantUsage(principal(tenantId,Set.of("SUBSCRIPTION_MANAGE")),0,20));
+        assertEquals(HttpStatus.FORBIDDEN,error.getStatusCode());
+        verifyNoInteractions(tenants,storageLedger);
     }
 
     @Test
@@ -142,7 +155,7 @@ class EnterpriseSaasServiceTest {
                 Set.of("PLATFORM_SUPER_ADMIN"),Set.of("SUBSCRIPTION_MANAGE"),0);
 
         service.assignSubscription(tenantId,plan.getId(),
-                new EnterpriseSaasService.SubscriptionInput("ACTIVE",scheduledStart,null,null,"scheduled"),platform);
+                new EnterpriseSaasService.SubscriptionInput("ACTIVE",scheduledStart,null,null,"scheduled","MONTHLY",null,true,"scheduled replacement test"),platform);
 
         assertEquals("ACTIVE",current.getStatus());
         assertEquals(scheduledStart,current.getEndsAt());
@@ -168,6 +181,95 @@ class EnterpriseSaasServiceTest {
         when(plans.findById(plan.getId())).thenReturn(Optional.of(plan));
         ResponseStatusException error=assertThrows(ResponseStatusException.class,()->service.requireEntitlement(tenantId,"APPROVAL_WORKFLOWS"));
         assertEquals(HttpStatus.FORBIDDEN,error.getStatusCode());
+    }
+
+    @Test
+    void platformCanCreatePlanWithValidatedLimitsAndAudit() {
+        when(plans.findByPlanCodeIgnoreCase("GROWTH")).thenReturn(Optional.empty());
+        when(plans.save(any(SubscriptionPlan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(audits.save(any(AuditEvent.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        Principal platform=new Principal(UUID.randomUUID(),null,"platform@example.test","PLATFORM",
+                Set.of("PLATFORM_SUPER_ADMIN"),Set.of("SUBSCRIPTION_MANAGE"),0);
+        var input=new EnterpriseSaasService.PlanInput("growth","Growth","Growing teams","MONTHLY",
+                java.math.BigDecimal.valueOf(4999),"INR",25,3,3,10240,2000,2000,14,4,"{\"branches\":true}");
+        SubscriptionPlan created=service.createPlan(input,platform);
+        assertEquals("GROWTH",created.getPlanCode());
+        assertEquals(2000,created.getMaxProducts());
+        assertTrue(created.isActive());
+        verify(audits).save(argThat(event->"PLAN_CREATED".equals(event.getAction())));
+    }
+
+    @Test
+    void platformCanUpdateAndTogglePlanActivation() {
+        UUID id=UUID.randomUUID();SubscriptionPlan existing=plan(2);existing.setId(id);existing.setPlanCode("GROWTH");
+        when(plans.findById(id)).thenReturn(Optional.of(existing));
+        when(plans.findByPlanCodeIgnoreCase("GROWTH")).thenReturn(Optional.of(existing));
+        when(plans.save(any(SubscriptionPlan.class))).thenAnswer(invocation->invocation.getArgument(0));
+        when(audits.save(any(AuditEvent.class))).thenAnswer(invocation->invocation.getArgument(0));
+        Principal platform=new Principal(UUID.randomUUID(),null,"platform@example.test","PLATFORM",
+                Set.of("PLATFORM_SUPER_ADMIN"),Set.of("SUBSCRIPTION_MANAGE"),0);
+        var input=new EnterpriseSaasService.PlanInput("growth","Growth Updated","Updated description","YEARLY",
+                java.math.BigDecimal.valueOf(39999),"INR",40,5,5,20480,4000,4000,30,5,"{\"branches\":true}");
+        SubscriptionPlan updated=service.updatePlan(id,input,platform);
+        assertEquals("Growth Updated",updated.getName());
+        assertEquals("YEARLY",updated.getBillingCycle());
+        assertEquals(4000,updated.getMaxCustomers());
+        assertFalse(service.setPlanActive(id,false,platform).isActive());
+        assertTrue(service.setPlanActive(id,true,platform).isActive());
+    }
+
+    @Test
+    void unassignedPlanCanBeDeleted() {
+        UUID id=UUID.randomUUID();SubscriptionPlan existing=plan(2);existing.setId(id);
+        when(plans.findById(id)).thenReturn(Optional.of(existing));
+        when(subscriptions.existsByPlanId(id)).thenReturn(false);
+        when(audits.save(any(AuditEvent.class))).thenAnswer(invocation->invocation.getArgument(0));
+        Principal platform=new Principal(UUID.randomUUID(),null,"platform@example.test","PLATFORM",
+                Set.of("PLATFORM_SUPER_ADMIN"),Set.of("SUBSCRIPTION_MANAGE"),0);
+        assertDoesNotThrow(()->service.deletePlan(id,platform));
+        verify(plans).delete(existing);
+    }
+
+    @Test
+    void planWithAssignmentHistoryCannotBePhysicallyDeleted() {
+        UUID planId=UUID.randomUUID();SubscriptionPlan plan=plan(2);plan.setId(planId);
+        when(plans.findById(planId)).thenReturn(Optional.of(plan));
+        when(subscriptions.existsByPlanId(planId)).thenReturn(true);
+        Principal platform=new Principal(UUID.randomUUID(),null,"platform@example.test","PLATFORM",
+                Set.of("PLATFORM_SUPER_ADMIN"),Set.of("SUBSCRIPTION_MANAGE"),0);
+        ResponseStatusException error=assertThrows(ResponseStatusException.class,()->service.deletePlan(planId,platform));
+        assertEquals(HttpStatus.CONFLICT,error.getStatusCode());
+        verify(plans,never()).delete(any(SubscriptionPlan.class));
+    }
+
+    @Test
+    void productLimitIsEnforcedFromAssignedPlan() {
+        UUID tenantId=UUID.randomUUID();TenantSubscription assigned=subscription(tenantId);SubscriptionPlan plan=plan(2);
+        plan.setMaxProducts(1);assigned.setPlanId(plan.getId());
+        when(subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(assigned));
+        when(plans.findById(plan.getId())).thenReturn(Optional.of(plan));
+        when(productRecords.countByTenantIdAndActiveTrue(tenantId)).thenReturn(1L);
+        ResponseStatusException error=assertThrows(ResponseStatusException.class,()->service.enforceProductLimit(tenantId));
+        assertEquals(HttpStatus.FORBIDDEN,error.getStatusCode());
+    }
+
+    @Test
+    void customerLimitIsEnforcedFromAssignedPlan() {
+        UUID tenantId=UUID.randomUUID();TenantSubscription assigned=subscription(tenantId);SubscriptionPlan plan=plan(2);
+        plan.setMaxCustomers(2);assigned.setPlanId(plan.getId());
+        when(subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(assigned));
+        when(plans.findById(plan.getId())).thenReturn(Optional.of(plan));
+        when(customerProfiles.countByTenantIdAndActiveTrue(tenantId)).thenReturn(2L);
+        ResponseStatusException error=assertThrows(ResponseStatusException.class,()->service.enforceCustomerLimit(tenantId));
+        assertEquals(HttpStatus.FORBIDDEN,error.getStatusCode());
+    }
+
+    @Test
+    void vendorCannotManagePlatformSubscriptionPlans() {
+        Principal vendor=principal(UUID.randomUUID(),Set.of("SUBSCRIPTION_MANAGE"));
+        ResponseStatusException error=assertThrows(ResponseStatusException.class,()->service.allPlans(vendor));
+        assertEquals(HttpStatus.FORBIDDEN,error.getStatusCode());
+        verify(plans,never()).findAllByOrderByDisplayOrderAscNameAsc();
     }
 
     private TenantSubscription subscription(UUID tenantId) {

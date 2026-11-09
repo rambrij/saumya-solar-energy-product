@@ -14,6 +14,8 @@ import com.saumyasolar.repo.CustomerOrderRepository;
 import com.saumyasolar.repo.OrderItemRepository;
 import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.repo.InventoryBalanceRepository;
+import com.saumyasolar.repo.SubscriptionPlanRepository;
+import com.saumyasolar.repo.TenantSubscriptionRepository;
 import com.saumyasolar.domain.ProductCategory;
 import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.AppUserRepository;
@@ -41,14 +43,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class Release3OperationsIntegrationTest {
  @Autowired MockMvc mvc;@Autowired ObjectMapper json;@Autowired AppUserRepository users;
  @Autowired ProductRepository products;@Autowired ProductCategoryRepository categories;@Autowired TenantRepository tenants;@Autowired WarehouseRepository warehouses;
- @Autowired CustomerOrderRepository orders;@Autowired OrderItemRepository orderItems;@Autowired CustomerProfileRepository customerProfiles;@Autowired InventoryBalanceRepository balances;@Autowired OperationsService operations;
+ @Autowired CustomerOrderRepository orders;@Autowired OrderItemRepository orderItems;@Autowired CustomerProfileRepository customerProfiles;@Autowired InventoryBalanceRepository balances;@Autowired OperationsService operations;@Autowired SubscriptionPlanRepository subscriptionPlans;@Autowired TenantSubscriptionRepository tenantSubscriptions;
  UUID tenantId;
  @BeforeEach void setup(){tenantId=users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow().getTenantId();}
  private String token() throws Exception {String body=mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"admin@saumya.local\",\"password\":\"Admin@123\"}")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();return json.readTree(body).get("accessToken").asText();}
  private Tenant otherTenant(){Tenant t=new Tenant();t.setId(UUID.randomUUID());t.setName("Other vendor");t.setSlug("other-"+UUID.randomUUID());t.setStatus("ACTIVE");return tenants.save(t);}
  @Test void warehouseReceiptCreatesBalanceAndImmutableLedger() throws Exception {
+  var assigned=tenantSubscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId).stream().findFirst().orElseThrow();var starter=subscriptionPlans.findById(assigned.getPlanId()).orElseThrow();assertEquals(3,starter.getMaxWarehouses(),starter.getEntitlementsJson());assertTrue(starter.getEntitlementsJson().contains("\"multiWarehouse\":true"),starter.getEntitlementsJson());starter.setMaxWarehouses(1000);subscriptionPlans.save(starter);
   String auth=token();String warehouseBody="{\"code\":\"WH-"+UUID.randomUUID()+"\",\"name\":\"Test warehouse\",\"address\":\"Mumbai\"}";
-  String warehouseJson=mvc.perform(post("/api/v1/warehouses").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content(warehouseBody)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+  var warehouseResult=mvc.perform(post("/api/v1/warehouses").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content(warehouseBody)).andReturn();
+  assertEquals(200,warehouseResult.getResponse().getStatus(),warehouseResult.getResponse().getContentAsString());
+  String warehouseJson=warehouseResult.getResponse().getContentAsString();
   UUID warehouseId=UUID.fromString(json.readTree(warehouseJson).get("id").asText());
   Product product=products.findByTenantIdOrderByIdDesc(tenantId).stream().filter(p->"DEMO-PV-550".equals(p.getSku())).findFirst().orElseThrow();
   mvc.perform(post("/api/v1/inventory/receipts").header("Authorization","Bearer "+auth).contentType(MediaType.APPLICATION_JSON).content("{\"warehouseId\":\""+warehouseId+"\",\"productId\":\""+product.getId()+"\",\"quantity\":25,\"reason\":\"PO-TEST-001\"}")).andExpect(status().isOk());

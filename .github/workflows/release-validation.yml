@@ -9,6 +9,7 @@ on:
       - feature/phase-2-operations
       - feature/phase-3-Enterprise-SaaS
       - phase-1-commercial-mvp-remediation
+      - feature/subscription-and-ui-enhancements
   pull_request:
     branches:
       - main
@@ -44,6 +45,9 @@ jobs:
       - name: Install dependencies
         working-directory: frontend
         run: npm install
+      - name: Component tests
+        working-directory: frontend
+        run: npm test
       - name: Build
         working-directory: frontend
         run: npm run build
@@ -235,6 +239,45 @@ jobs:
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name IN ('tenant_storage_ledger','offline_sync_attachment','integration_secret_reference')")" = "3"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='offline_sync_operation' AND column_name IN ('expected_version','resulting_version','conflict_code','attempt_count','resolved_at','resolution_action')")" = "6"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='audit_event' AND column_name IN ('branch_id','request_id','source_ip','user_agent')")" = "4"
+ 
+      - name: Apply V45 default subscription plans idempotently
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V45__seed_default_subscription_plans.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM subscription_plan WHERE plan_code IN ('STARTER','PROFESSIONAL','ENTERPRISE')" )" = "3"
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V45__seed_default_subscription_plans.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM subscription_plan WHERE plan_code IN ('STARTER','PROFESSIONAL','ENTERPRISE')" )" = "3"
+
+      - name: Apply V46 subscription history and extended plan fields
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V46__subscription_management_and_assignment_history.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='subscription_plan' AND column_name IN ('max_products','max_customers','trial_period_days','display_order')" )" = "4"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='subscription_assignment_history'" )" = "1"
+
+      - name: Apply V47 Starter warehouse allowance
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V47__starter_plan_warehouse_allowance.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT max_warehouses FROM subscription_plan WHERE plan_code='STARTER'" )" = "3"
+
+      - name: Apply V48 immutable subscription assignment history
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V48__subscription_assignment_history_immutable.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema='solar_migration_test' AND trigger_name IN ('trg_subscription_assignment_history_no_update','trg_subscription_assignment_history_no_delete')" )" = "2"
+
+      - name: Apply V49 tenant-scoped customer saved addresses
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V49__customer_addresses.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='customer_address'")" = "1"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema='solar_migration_test' AND constraint_name='fk_customer_address_profile'")" = "1"
+
+      - name: Apply V50 saved address linkage to customer enquiries
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V50__enquiry_saved_address.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='enquiry' AND column_name IN ('address_id','site_address','city_pincode')")" = "3"
+
+      - name: Apply V51 vendor administrator analytics permissions
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V51__repair_vendor_admin_analytics_permissions.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role_permission rp JOIN role r ON r.id=rp.role_id JOIN permission p ON p.id=rp.permission_id WHERE r.name='VENDOR_ADMIN' AND r.tenant_id IS NOT NULL AND p.code IN ('REPORT_VIEW','BRANCH_MANAGE')" )" = "2"
 
   mysql-app-startup:
     name: Start Spring Boot against MySQL 8.4 and Mailpit
@@ -278,7 +321,7 @@ jobs:
           MAIL_PORT: 1025
           MAIL_SMTP_AUTH: 'false'
           MAIL_SMTP_STARTTLS: 'false'
-          SEED_DATA_ENABLED: 'false'
+          SEED_DATA_ENABLED: 'true'
           PLATFORM_BOOTSTRAP_ENABLED: 'false'
         run: |
           java -jar target/platform-2.0.0.jar > /tmp/saumya-backend.log 2>&1 &
