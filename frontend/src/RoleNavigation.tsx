@@ -5,8 +5,8 @@ export type NavigationGroup={label:string;items:NavigationItem[]};
 const roleMenus:Record<string,NavigationGroup[]>={
  platform:[
   {label:'Workspace',items:[{key:'dashboard',label:'Dashboard'},{key:'tenants',label:'Tenants'}]},
-  {label:'Subscriptions',items:[{key:'subscriptions',label:'Subscription Plans & Assignments'}]},
-  {label:'Insights',items:[{key:'analytics',label:'Analytics'}]}
+  {label:'Subscriptions',items:[{key:'subscriptions',label:'Subscription Plans & Assignments',permission:'SUBSCRIPTION_MANAGE'}]},
+  {label:'Insights',items:[{key:'analytics',label:'Analytics',permission:'SUBSCRIPTION_MANAGE'}]}
  ],
  vendor:[
   {label:'Overview',items:[{key:'dashboard',label:'Dashboard'}]},
