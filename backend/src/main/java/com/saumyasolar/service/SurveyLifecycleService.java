@@ -115,6 +115,11 @@ public class SurveyLifecycleService {
         if (!EDITABLE.contains(survey.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Survey cannot be edited in status " + survey.getStatus());
         }
+        if (input.assignedUserId() != null && !input.assignedUserId().equals(survey.getAssignedUserId())) {
+            if (actor.permissions() == null || !actor.permissions().contains("SURVEY_ASSIGN")
+                    || actor.roles() == null || actor.roles().stream().noneMatch(Set.of("VENDOR_ADMIN", "SALES_MANAGER", "OPERATIONS_MANAGER")::contains))
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Survey reassignment requires SURVEY_ASSIGN");
+        }
         if (input.assignedUserId() != null && users.findById(input.assignedUserId())
                 .filter(user -> actor.tenantId().equals(user.getTenantId())
                         && "VENDOR".equals(user.getAccountType()) && user.isEnabled()).isEmpty()) {
