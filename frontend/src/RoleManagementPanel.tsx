@@ -1,5 +1,4 @@
 import React,{useEffect,useMemo,useState} from 'react';
-
 type Props={s:any;error:(message:string)=>void};
 export default function RoleManagementPanel({s,error}:Props){
  const[roles,setRoles]=useState<any[]>([]);
