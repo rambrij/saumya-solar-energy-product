@@ -7,7 +7,7 @@ async function request(path:string,s:Session,method='GET',body?:any){
  if(!r.ok)throw new Error(data.detail||data.message||'Request failed ('+r.status+')');
  return data;
 }
-export default function EnterpriseSaasPanel({mode,s,error,section}:{mode:'platform'|'vendor';s:Session;error:(message:string)=>void;section?:'subscriptions'|'assignments'|'analytics'|'audit'|'subscription'|'branches'}){
+export default function EnterpriseSaasPanel({mode,s,error,section=mode==='platform'?'subscriptions':'subscription'}:{mode:'platform'|'vendor';s:Session;error:(message:string)=>void;section?:'subscriptions'|'assignments'|'analytics'|'audit'|'subscription'|'branches'}){
  const [branches,setBranches]=useState<any[]>([]),[plans,setPlans]=useState<any[]>([]),[subscription,setSubscription]=useState<any>(null),[audits,setAudits]=useState<any[]>([]),[branding,setBranding]=useState<any>({displayName:'',logoUrl:'',primaryColor:'#0B6B4B',secondaryColor:'#F6C85F',contactEmail:'',contactPhone:'',supportEmail:'',supportPhone:''}),[domains,setDomains]=useState<any[]>([]),[workflows,setWorkflows]=useState<any[]>([]),[integrations,setIntegrations]=useState<any[]>([]);
  const [approvalInstances,setApprovalInstances]=useState<any[]>([]),[selectedBranch,setSelectedBranch]=useState<string|null>(null),[branchMembers,setBranchMembers]=useState<any[]>([]);
  const [adapterCapabilities,setAdapterCapabilities]=useState<any>(null),[subscriptionUsage,setSubscriptionUsage]=useState<any>(null),[storageUsage,setStorageUsage]=useState<any>(null),[selectedIntegration,setSelectedIntegration]=useState<string|null>(null),[integrationJobs,setIntegrationJobs]=useState<any[]>([]);
