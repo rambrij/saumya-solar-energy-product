@@ -537,6 +537,7 @@ This addendum supersedes conflicting earlier statements in Sections 1–18 about
 
 - SRS standard roles are reconciled in `DataSeeder.employeeRolePermissions()`.
 - `PLATFORM_SUPPORT` is a global, read-only role with only `TENANT_VIEW` and `AUDIT_VIEW`; tenant directory reads and audit-log reads are recorded as security audit events.
+- Existing `MANAGER`, `INSTALLER` and `TECHNICIAN` roles are retained as backward-compatible operational roles because they already exist in the repository, although they are not standard roles in SRS §9.1. Their grants remain limited and assigned-resource scoped; they do not receive platform or legacy broad permissions.
 - `TenantAdminService.authorizeRead` permits support reads; tenant mutation remains restricted to `PLATFORM_SUPER_ADMIN`.
 - V55 removes legacy broad permission grants from all tenant-owned roles, including custom roles.
 - V56 removes platform-only permissions from tenant-owned roles.
