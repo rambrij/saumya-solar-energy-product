@@ -16,6 +16,7 @@ import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.AppUserRepository;
 import com.saumyasolar.repo.RoleRepository;
+import com.saumyasolar.repo.AuditEventRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import com.saumyasolar.repo.EnquiryRepository;
 import com.saumyasolar.repo.ProductCategoryRepository;
@@ -59,6 +60,8 @@ class Release12TenantIntegrationTest {
     AppUserRepository users;
     @Autowired
     RoleRepository roles;
+    @Autowired
+    AuditEventRepository auditEvents;
     @Autowired
     PasswordEncoder passwordEncoder;
     @Autowired
@@ -623,6 +626,12 @@ class Release12TenantIntegrationTest {
                                 {"name":"CUSTOM_PLATFORM_ESCAPE","permissions":["PLATFORM_MANAGE"]}
                                 """))
                 .andExpect(status().isForbidden());
+        var auditFrom = Instant.now().minusSeconds(60);
+        var auditTo = Instant.now().plusSeconds(60);
+        assertTrue(auditEvents.findTop200ByTenantIdAndCreatedAtBetweenOrderByCreatedAtDesc(vendorTenantId, auditFrom, auditTo)
+                .stream().anyMatch(event -> "ROLE_PRIVILEGE_ESCALATION_BLOCKED".equals(event.getAction())
+                        && "DENIED".equals(event.getOutcome())),
+                "Blocked custom-role platform permission escalation must be durably audited");
     }
 
     @Test
