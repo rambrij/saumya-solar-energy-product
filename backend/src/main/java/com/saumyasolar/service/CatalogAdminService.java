@@ -60,7 +60,8 @@ public class CatalogAdminService {
     private CustomerProfile customer(UUID id, UUID t, Principal p) {
         CustomerProfile customer = customers.findByIdAndTenantId(id, t)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
-        if (p.roles() != null && p.roles().contains("SALES_EXECUTIVE")
+        if (p.permissions() != null && p.permissions().contains("LEAD_VIEW")
+                && !p.permissions().contains("LEAD_ASSIGN")
                 && (leads == null || leads.findByTenantIdOrderByIdDesc(t).stream()
                     .noneMatch(lead -> id.equals(lead.getCustomerId()) && p.userId().equals(lead.getAssignedUserId()))))
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found");
