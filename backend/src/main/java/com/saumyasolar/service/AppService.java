@@ -543,6 +543,7 @@ public class AppService {
         requirePermission(p, "ROLE_VIEW");
         return roles.findByTenantIdOrderByNameAsc(p.tenantId()).stream()
                 .filter(role -> !java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "CUSTOMER").contains(role.getName()))
+                .peek(role -> role.setCustomRole(!com.saumyasolar.config.DataSeeder.employeeRolePermissions().containsKey(role.getName())))
                 .toList();
     }
     
