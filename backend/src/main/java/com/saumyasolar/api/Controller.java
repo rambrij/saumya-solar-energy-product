@@ -119,7 +119,7 @@ public class Controller {
             r.getPermissions().forEach(z -> ps.add(z.getCode()));
         });
         String csrfToken = authCookies.issue(response, lifecycle.newRefresh(u));
-        return new Session(jwt.issue(u), null, csrfToken, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
+        return new Session(jwt.issue(u), csrfToken, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
     }
     
     @PostMapping("/auth/mfa/verify")
@@ -133,7 +133,7 @@ public class Controller {
         });
         String csrfToken = authCookies.issue(response, lifecycle.newRefresh(u));
         return new Session(
-                jwt.issue(u), null, csrfToken,
+                jwt.issue(u), csrfToken,
                 new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), roleNames, permissionCodes)
         );
     }
