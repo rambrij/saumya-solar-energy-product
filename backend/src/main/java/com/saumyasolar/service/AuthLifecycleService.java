@@ -367,6 +367,16 @@ public class AuthLifecycleService {
                 .toList();
     }
 
+    private void auditRoleEscalation(UUID actorId, String attemptedValue) {
+        String safeValue = attemptedValue == null ? "UNKNOWN" : attemptedValue.replaceAll("[^A-Za-z0-9_,-]", "").substring(0, Math.min(80, attemptedValue.replaceAll("[^A-Za-z0-9_,-]", "").length()));
+        auditAuth("ROLE_PRIVILEGE_ESCALATION_BLOCKED", users.findById(actorId).orElse(null),
+                "DENIED", "UNASSIGNABLE_ROLE_OR_PERMISSION_" + safeValue, null);
+    }
+
+    private boolean reservedVendorRole(String roleName) {
+        return roleName == null || java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT", "CUSTOMER").contains(roleName);
+    }
+
     @Transactional
     public com.saumyasolar.domain.Role createCustomRole(UUID tenantId, UUID actorId, String name, java.util.Set<String> permissionCodes) {
         if (tenantId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
@@ -378,6 +388,10 @@ public class AuthLifecycleService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Reserved role names cannot be created as custom roles");
         if (roles.findByNameAndTenantId(normalized, tenantId).isPresent())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Role already exists");
+        if (permissionCodes != null && permissionCodes.stream().anyMatch(code -> !VENDOR_ROLE_PERMISSION_CODES.contains(code))) {
+            auditRoleEscalation(actorId, String.join(",", permissionCodes));
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Permission is not assignable to a vendor custom role");
+        }
         var role = new com.saumyasolar.domain.Role();
         role.setId(UUID.randomUUID());
         role.setTenantId(tenantId);
@@ -397,6 +411,10 @@ public class AuthLifecycleService {
         if (java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT", "CUSTOMER").contains(role.getName())
                 || com.saumyasolar.config.DataSeeder.employeeRolePermissions().containsKey(role.getName()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "System roles cannot be modified");
+        if (permissionCodes != null && permissionCodes.stream().anyMatch(code -> !VENDOR_ROLE_PERMISSION_CODES.contains(code))) {
+            auditRoleEscalation(actorId, String.join(",", permissionCodes));
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Permission is not assignable to a vendor custom role");
+        }
         role.setCustomRole(true);
         role.getPermissions().clear();
         role.getPermissions().addAll(resolveVendorPermissions(permissionCodes));
@@ -408,8 +426,10 @@ public class AuthLifecycleService {
     @Transactional
     public AppUser assignEmployeeRole(UUID tenantId, UUID actorId, UUID employeeId, String roleName) {
         if (tenantId == null || employeeId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-        if (roleName == null || java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT", "CUSTOMER").contains(roleName))
+        if (reservedVendorRole(roleName)) {
+            auditRoleEscalation(actorId, roleName);
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This role cannot be assigned to a vendor employee");
+        }
         if (employeeId.equals(actorId))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Administrators cannot change their own role");
         AppUser employee = users.findById(employeeId)
@@ -465,8 +485,10 @@ public class AuthLifecycleService {
         if (name == null || name.isBlank() || email == null || email.isBlank()
                 || password == null || password.length() < 12)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name, email and a password of at least 12 characters are required");
-        if (roleName == null || java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT", "CUSTOMER").contains(roleName))
+        if (reservedVendorRole(roleName)) {
+            auditRoleEscalation(actorId, roleName);
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This role cannot be assigned to a vendor employee");
+        }
         if (users.findByEmailIgnoreCase(email).isPresent())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email exists");
         var role = roles.findByNameAndTenantId(roleName, tenantId)
