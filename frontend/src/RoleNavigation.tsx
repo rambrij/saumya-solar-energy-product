@@ -1,7 +1,7 @@
 import React,{useMemo,useState} from 'react';
 import BrandLogo from './BrandLogo';
 
-export type NavigationItem={key:string;label:string;permission?:string|string[]};
+export type NavigationItem={key:string;label:string;permission?:string|string[];allPermissions?:string[]};
 export type NavigationGroup={label:string;items:NavigationItem[]};
 const roleMenus:Record<string,NavigationGroup[]>={
  platform:[
@@ -16,16 +16,17 @@ const roleMenus:Record<string,NavigationGroup[]>={
   {label:'Catalog',items:[{key:'categories',label:'Categories',permission:'CATALOG_MANAGE'},{key:'products',label:'Products',permission:'CATALOG_MANAGE'},{key:'packages',label:'Solar Packages',permission:'CATALOG_MANAGE'}]},
   {label:'Sales',items:[{key:'enquiries',label:'Enquiries',permission:'LEAD_MANAGE'},{key:'leads',label:'Leads',permission:'LEAD_MANAGE'},{key:'surveys',label:'Site Surveys',permission:'SURVEY_MANAGE'},{key:'quotations',label:'Quotations',permission:'QUOTATION_MANAGE'},{key:'orders',label:'Orders',permission:'ORDER_CREATE'}]},
   {label:'Customers & Team',items:[{key:'customers',label:'Customers',permission:'CUSTOMER_MANAGE'},{key:'users',label:'Users',permission:'USER_VIEW'},{key:'branches',label:'Branches',permission:'BRANCH_MANAGE'}]},
-  {label:'Insights',items:[{key:'analytics',label:'Analytics',permission:['REPORT_VIEW','BRANCH_MANAGE']}] },
+  {label:'Insights',items:[{key:'analytics',label:'Analytics',allPermissions:['REPORT_VIEW','BRANCH_MANAGE']}] },
   {label:'Business operations',items:[{key:'operations',label:'Inventory & Operations',permission:['INVENTORY_MANAGE','SURVEY_MANAGE']},{key:'finance-service',label:'Finance & Service',permission:['FINANCE_MANAGE','SERVICE_MANAGE']},{key:'offline-sync',label:'Offline Business Sync'}]},
   {label:'Account',items:[{key:'subscription',label:'My Subscription',permission:['SUBSCRIPTION_VIEW','SUBSCRIPTION_MANAGE']},{key:'settings',label:'Settings',permission:'DISCOUNT_POLICY_MANAGE'}]}
  ],
  customer:[
-  {label:'My Account',items:[{key:'dashboard',label:'Account Overview'},{key:'profile',label:'My Profile'},{key:'addresses',label:'Addresses'},{key:'settings',label:'Settings'},{key:'request',label:'Request a Quotation'},{key:'enquiries',label:'My Enquiries'},{key:'quotations',label:'My Quotations'},{key:'customer-orders',label:'My Orders'},{key:'invoices',label:'My Invoices'},{key:'payments',label:'My Payments'},{key:'my-installations',label:'My Installations'},{key:'warranties',label:'My Warranties'},{key:'warranty-claims',label:'Warranty Claims'},{key:'service',label:'Service Requests'},{key:'notifications',label:'Notification Preferences'}]}
+  {label:'Overview',items:[{key:'dashboard',label:'Dashboard'}]},
+  {label:'My Account',items:[{key:'profile',label:'My Profile'},{key:'customer-orders',label:'My Orders'},{key:'invoices',label:'My Invoices'},{key:'enquiries',label:'My Enquiries'},{key:'addresses',label:'Addresses'},{key:'settings',label:'Settings'},{key:'logout',label:'Logout'}]}
  ]
 };
 export function getRoleNavigation(role:'platform'|'vendor'|'customer',permissions:string[]=[]):NavigationGroup[]{
- return roleMenus[role].map(group=>({...group,items:group.items.filter(item=>!item.permission||(Array.isArray(item.permission)?item.permission.some(p=>permissions.includes(p)):permissions.includes(item.permission)))})).filter(group=>group.items.length>0);
+ return roleMenus[role].map(group=>({...group,items:group.items.filter(item=>(!item.permission||(Array.isArray(item.permission)?item.permission.some(p=>permissions.includes(p)):permissions.includes(item.permission)))&&(!item.allPermissions||item.allPermissions.every(p=>permissions.includes(p))))})).filter(group=>group.items.length>0);
 }
 export function getNavigationKeys(role:'platform'|'vendor'|'customer',permissions:string[]=[]):string[]{
  return getRoleNavigation(role,permissions).flatMap(group=>group.items.map(item=>item.key));
@@ -36,7 +37,7 @@ export default function RoleShell({role,active,onNavigate,children,user,onLogout
  const [mobileOpen,setMobileOpen]=useState(false);
  const [collapsed,setCollapsed]=useState<Record<string,boolean>>({});
  const activeGroup=groups.find(g=>g.items.some(i=>i.key===active))?.label;
- const select=(key:string)=>{onNavigate(key);setMobileOpen(false)};
+ const select=(key:string)=>{if(key==='logout')onLogout();else onNavigate(key);setMobileOpen(false)};
  const activeLabel=groups.flatMap(g=>g.items).find(i=>i.key===active)?.label||active;
  return <div className={'role-app role-'+role}>
   {mobileOpen&&<button type="button" className="role-drawer-scrim" aria-label="Close menu" onClick={()=>setMobileOpen(false)}/>}
