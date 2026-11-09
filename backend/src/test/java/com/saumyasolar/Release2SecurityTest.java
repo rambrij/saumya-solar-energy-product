@@ -63,6 +63,41 @@ class Release2SecurityTest {
         verify(products, never()).save(any());
     }
     
+
+    @Test
+    void customSalesRoleWithoutLeadAssignSeesOnlyItsAssignedLeads() {
+        var tenantId = UUID.randomUUID();
+        var userId = UUID.randomUUID();
+        var otherUserId = UUID.randomUUID();
+        var assigned = new com.saumyasolar.domain.SalesLead();
+        assigned.setId(UUID.randomUUID());
+        assigned.setTenantId(tenantId);
+        assigned.setAssignedUserId(userId);
+        var unassigned = new com.saumyasolar.domain.SalesLead();
+        unassigned.setId(UUID.randomUUID());
+        unassigned.setTenantId(tenantId);
+        unassigned.setAssignedUserId(otherUserId);
+        var leads = mock(SalesLeadRepository.class);
+        var quotations = mock(QuotationRepository.class);
+        when(leads.findByTenantIdOrderByIdDesc(tenantId)).thenReturn(java.util.List.of(assigned, unassigned));
+        when(quotations.findByTenantIdOrderByIdDesc(tenantId)).thenReturn(java.util.List.of());
+        var service = new AppService(
+                mock(TenantRepository.class), mock(AppUserRepository.class), mock(ProductCategoryRepository.class),
+                mock(ProductRepository.class), mock(SolarPackageRepository.class), mock(PackageItemRepository.class),
+                mock(CustomerProfileRepository.class), mock(EnquiryRepository.class), leads,
+                mock(LeadHistoryRepository.class), mock(SiteSurveyRepository.class), quotations,
+                mock(QuotationItemRepository.class), mock(CustomerOrderRepository.class),
+                mock(OrderItemRepository.class), mock(IdempotencyRecordRepository.class),
+                mock(RoleRepository.class), mock(OrderStatusHistoryRepository.class),
+                mock(com.saumyasolar.service.NotificationService.class), mock(com.saumyasolar.service.ApprovalWorkflowService.class)
+        );
+        var customSales = new Principal(userId, tenantId, "sales@test", "VENDOR",
+                Set.of("CUSTOM_SALES_READ"), Set.of("LEAD_VIEW"));
+        var visible = (java.util.List<com.saumyasolar.domain.SalesLead>) service.list("leads", customSales);
+        assertEquals(1, visible.size());
+        assertEquals(assigned.getId(), visible.get(0).getId());
+    }
+
     private AppService service(ProductCategoryRepository categories, ProductRepository products) {
         return new AppService(
                 mock(TenantRepository.class), mock(AppUserRepository.class), categories, products,
