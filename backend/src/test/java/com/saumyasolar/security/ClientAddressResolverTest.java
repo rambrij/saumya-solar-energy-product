@@ -24,6 +24,25 @@ class ClientAddressResolverTest {
         assertEquals("198.51.100.25", resolver.resolve(request));
     }
 
+
+    @Test
+    void resolvesForwardedClientThroughTrustedIpv4Cidr() {
+        var resolver = new ClientAddressResolver("10.0.0.0/24");
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getRemoteAddr()).thenReturn("10.0.0.10");
+        when(request.getHeader("X-Forwarded-For")).thenReturn("198.51.100.25");
+        assertEquals("198.51.100.25", resolver.resolve(request));
+    }
+
+    @Test
+    void doesNotTrustProxyOutsideConfiguredCidr() {
+        var resolver = new ClientAddressResolver("10.0.0.0/24");
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getRemoteAddr()).thenReturn("10.0.1.10");
+        when(request.getHeader("X-Forwarded-For")).thenReturn("198.51.100.25");
+        assertEquals("10.0.1.10", resolver.resolve(request));
+    }
+
     @Test
     void rejectsMalformedForwardedAddressAndFallsBackToTrustedProxyAddress() {
         var resolver = new ClientAddressResolver("10.0.0.10");
