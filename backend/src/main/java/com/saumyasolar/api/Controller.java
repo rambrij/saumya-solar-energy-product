@@ -228,6 +228,15 @@ public class Controller {
         return s.employeeRoles(p(a));
     }
 
+    @GetMapping("/permissions")
+    List<com.saumyasolar.domain.Permission> vendorRolePermissions(Authentication a) {
+        var actor = p(a);
+        if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
+                || actor.permissions() == null || !actor.permissions().contains("ROLE_VIEW"))
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
+        return lifecycle.vendorRolePermissions();
+    }
+
     @PostMapping("/roles")
     com.saumyasolar.domain.Role createCustomRole(@Valid @RequestBody RolePermissionRequest x, Authentication a) {
         var actor = p(a);
