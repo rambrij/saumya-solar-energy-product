@@ -351,6 +351,8 @@ class Release12TenantIntegrationTest {
         foreignTenant.setName("Foreign Vendor");
         foreignTenant.setSlug("foreign-" + UUID.randomUUID().toString().replace("-", ""));
         foreignTenant.setStatus("ACTIVE");
+        foreignTenant.setCreatedAt(Instant.now());
+        foreignTenant.setUpdatedAt(Instant.now());
         tenants.save(foreignTenant);
 
         var customer = new CustomerProfile();
