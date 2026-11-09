@@ -590,7 +590,7 @@ public class AppService {
     @Transactional
     public SalesLead convertLead(UUID enquiryId, Input x, Principal p) {
         vendor(p);
-        requirePermission(p, "LEAD_UPDATE");
+        requirePermission(p, "LEAD_CREATE");
         if (p.roles() != null && p.roles().contains("SALES_EXECUTIVE")
                 && !p.permissions().contains("LEAD_ASSIGN")
                 && !Objects.equals(x.assignedUserId(), p.userId()))
@@ -735,8 +735,12 @@ public class AppService {
         vendor(p);
         requirePermission(p, "QUOTATION_CREATE");
         requireCustomer(x.customerId(), p.tenantId());
-        if (x.leadId() != null && !Objects.equals(requireLead(x.leadId(), p.tenantId()).getCustomerId(), x.customerId()))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lead does not belong to the selected customer");
+        if (x.leadId() != null) {
+            SalesLead lead = requireLead(x.leadId(), p.tenantId());
+            assertSalesLeadScope(lead, p);
+            if (!Objects.equals(lead.getCustomerId(), x.customerId()))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lead does not belong to the selected customer");
+        }
         if (x.leadId() != null && x.surveyId() == null
                 && !surveys.findByLeadIdAndTenantIdOrderByIdDesc(x.leadId(), p.tenantId()).isEmpty()) {
             throw new ResponseStatusException(
@@ -857,6 +861,7 @@ public class AppService {
             return quotes.save(q);
         }
         vendor(p);
+        assertSalesQuotationScope(q, p);
         if (enterpriseSaas != null) enterpriseSaas.assertBranchAccess(q.getBranchId(), p);
         if ("approve".equals(action) || "reject-approval".equals(action)) {
             if (!"PENDING_APPROVAL".equals(q.getStatus()) || !q.isApprovalRequired())
@@ -907,7 +912,7 @@ public class AppService {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         } else {
             vendor(p);
-            requirePermission(p, "QUOTATION_MANAGE");
+            requirePermission(p, "QUOTATION_VIEW");
         }
         return quotes.findByQuoteGroupIdAndTenantIdOrderByRevisionAsc(quotation.getQuoteGroupId(), p.tenantId());
     }
@@ -926,6 +931,7 @@ public class AppService {
             return existing;
         }
         var q = quotes.findByIdAndTenantIdForUpdate(qid, p.tenantId()).orElseThrow();
+        assertSalesQuotationScope(q, p);
         if (enterpriseSaas != null) enterpriseSaas.assertBranchAccess(q.getBranchId(), p);
         if (!"ACCEPTED".equals(q.getStatus())) throw new ResponseStatusException(HttpStatus.CONFLICT);
         var existingOrder = orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
