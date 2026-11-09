@@ -28,6 +28,13 @@ public class TenantAdminService {
         this.users = users;
     }
     
+    private void authorizeRead(Principal p) {
+        if (!"PLATFORM".equals(p.accountType()) || p.roles() == null
+                || p.roles().stream().noneMatch(java.util.Set.of("PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT")::contains)
+                || p.permissions() == null || !p.permissions().contains("TENANT_VIEW"))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform tenant read permission is required");
+    }
+
     private void authorize(Principal p) {
         if (!"PLATFORM".equals(p.accountType()) || p.roles() == null ||
                 !p.roles().contains("PLATFORM_SUPER_ADMIN") || p.permissions() == null ||
@@ -59,7 +66,7 @@ public class TenantAdminService {
     }
     
     public TenantPage page(Principal p, String search, String status, int page, int size) {
-        authorize(p);
+        authorizeRead(p);
         if (page < 0 || size < 1 || size > 100)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Page must be non-negative and size must be between 1 and 100");
         String normalized = status == null || status.isBlank() || "ALL".equalsIgnoreCase(status) ? null : status.toUpperCase(Locale.ROOT);
@@ -89,7 +96,7 @@ public class TenantAdminService {
     }
     
     public TenantRow get(UUID id, Principal p) {
-        authorize(p);
+        authorizeRead(p);
         return row(tenants.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found")));
     }
     
