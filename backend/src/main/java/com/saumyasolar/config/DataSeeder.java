@@ -81,7 +81,7 @@ public class DataSeeder {
             });
             for (Tenant tenant : tenants.findAll()) {
                 Role admin = ensureRole(roles, tenant.getId(), "VENDOR_ADMIN");
-                grant(admin, PERMISSIONS.stream().filter(x -> !x.equals("PLATFORM_MANAGE") && !x.equals("SUBSCRIPTION_MANAGE")).toList(), pm);
+                grant(admin, PERMISSIONS.stream().filter(x -> !java.util.Set.of("PLATFORM_MANAGE", "SUBSCRIPTION_MANAGE", "TENANT_VIEW", "TENANT_UPDATE").contains(x)).toList(), pm);
                 roles.save(admin);
                 employeeRolePermissions().forEach((name, codes) -> {
                     Role role = ensureRole(roles, tenant.getId(), name);
