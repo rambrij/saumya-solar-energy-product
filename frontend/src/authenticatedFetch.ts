@@ -36,7 +36,7 @@ type LockManagerLike={request<T>(name:string,callback:()=>Promise<T>):Promise<T>
 
 function withCrossTabRefreshLock<T>(task:()=>Promise<T>):Promise<T>{
  const locks=(navigator as Navigator & {locks?:LockManagerLike}).locks;
- return locks?locks.request('saumya-auth-refresh',task):task();
+ return locks && typeof locks.request==='function'?locks.request('saumya-auth-refresh',task):task();
 }
 
 async function rotateSession():Promise<AuthSession>{
