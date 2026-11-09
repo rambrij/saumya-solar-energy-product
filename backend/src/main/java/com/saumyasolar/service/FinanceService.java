@@ -726,7 +726,7 @@ public class FinanceService {
         ServiceRequest t = ticket(id, p.tenantId());
         ensureTicketAccess(t, p);
         ServiceVisit v = visits.findById(visitId).filter(a -> a.getTenantId().equals(p.tenantId()) && a.getServiceRequestId().equals(id)).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Visit not found"));
-        if (!v.getEngineerId().equals(p.userId()) && !( p.roles() != null && p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)) ))
+        if (!v.getEngineerId().equals(p.userId()) && !(p.permissions() != null && p.permissions().contains("SERVICE_ASSIGN")))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (v.getCompletedAt() != null)
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Visit is already completed");
@@ -801,8 +801,6 @@ public class FinanceService {
         permission(p, "SERVICE_CLOSE");
         if (reason == null || reason.isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Closure reason is required");
-        if (p.roles() == null || !p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         ServiceRequest t = ticket(id, p.tenantId());
         if (!"CUSTOMER_CONFIRMED".equals(t.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Customer confirmation is required before closure");
@@ -864,7 +862,7 @@ public class FinanceService {
         servicePermission(p);
         permission(p, "SERVICE_VIEW");
         List<CustomerProfile> active = customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(CustomerProfile::isActive).toList();
-        if (p.roles() != null && p.roles().stream().anyMatch(Set.of("SERVICE_ENGINEER", "TECHNICIAN", "INSTALLER")::contains)) {
+        if (p.permissions() == null || !p.permissions().contains("SERVICE_ASSIGN")) {
             Set<UUID> assignedCustomers = tickets.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream()
                     .filter(ticket -> p.userId().equals(ticket.getAssignedEngineerId()))
                     .map(ServiceRequest::getCustomerId).collect(java.util.stream.Collectors.toSet());
