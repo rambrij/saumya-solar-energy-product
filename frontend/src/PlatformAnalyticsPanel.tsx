@@ -1,4 +1,5 @@
 import React,{useCallback,useEffect,useState} from 'react';
+import {authenticatedFetch,type AuthSession} from './authenticatedFetch';
 const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
 type Session={accessToken:string;user:{permissions:string[]}};
 export default function PlatformAnalyticsPanel({s}:{s:Session}){
@@ -6,7 +7,7 @@ export default function PlatformAnalyticsPanel({s}:{s:Session}){
  const load=useCallback(async(nextPage=page)=>{
   setLoading(true);setError('');
   try{
-   const response=await fetch(API_BASE+'/api/v1/platform/analytics/tenant-usage?page='+nextPage+'&size=100',{headers:{Authorization:'Bearer '+s.accessToken}});
+   const response=await authenticatedFetch(API_BASE+'/api/v1/platform/analytics/tenant-usage?page='+nextPage+'&size=100',{},s as AuthSession);
    const body=await response.json().catch(()=>({}));
    if(!response.ok)throw new Error(body.detail||body.message||'Unable to load platform analytics ('+response.status+')');
    setData(body);setPage(Number(body.page??nextPage));
