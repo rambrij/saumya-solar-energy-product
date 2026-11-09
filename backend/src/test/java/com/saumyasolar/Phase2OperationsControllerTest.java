@@ -91,7 +91,7 @@ class Phase2OperationsControllerTest {
         when(refunds.findByTenantIdAndPaymentId(tenantId, confirmedId)).thenReturn(List.of());
         when(refunds.findByTenantIdAndPaymentId(tenantId, partialId)).thenReturn(List.of(refund));
         
-        Authentication auth = auth(tenantId, "VENDOR", Set.of("VENDOR_ADMIN"), Set.of("SURVEY_MANAGE"));
+        Authentication auth = auth(tenantId, "VENDOR", Set.of("VENDOR_ADMIN"), Set.of("INSTALLATION_ASSIGN"));
         Map<String, Object> result = controller.operationsReport(LocalDate.now().minusDays(1), LocalDate.now().plusDays(1), auth);
         
         assertEquals(new BigDecimal("130.00"), result.get("paymentsReceived"));
@@ -99,7 +99,7 @@ class Phase2OperationsControllerTest {
     
     @Test
     void customerCannotReadVendorOperationsReport() {
-        Authentication auth = auth(UUID.randomUUID(), "CUSTOMER", Set.of("CUSTOMER"), Set.of("SURVEY_MANAGE"));
+        Authentication auth = auth(UUID.randomUUID(), "CUSTOMER", Set.of("CUSTOMER"), Set.of("INSTALLATION_ASSIGN"));
         assertThrows(
                 ResponseStatusException.class,
                 () -> controller.operationsReport(LocalDate.now().minusDays(1), LocalDate.now(), auth)
