@@ -28,9 +28,9 @@ describe('Platform subscription administration',()=>{
   });
   render(<EnterpriseSaasPanel mode="platform" s={session} error={vi.fn()}/>);
   await screen.findByText('Starter');
+  fireEvent.click(screen.getByRole('button',{name:'Tenant Subscriptions'}));
   fireEvent.change(screen.getByPlaceholderText('Type at least 2 characters…'),{target:{value:'sa'}});
-  const tenantSelect=await screen.findByRole('combobox',{name:'Select tenant'});
-  fireEvent.change(tenantSelect,{target:{value:'tenant-1'}});
+  fireEvent.click(await screen.findByRole('button',{name:/Saumya Solar/}));
   expect(await screen.findByText('Assignment history')).toBeTruthy();
   await waitFor(()=>expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/platform/tenants/tenant-1/subscription-history'),expect.any(Object)));
  });
