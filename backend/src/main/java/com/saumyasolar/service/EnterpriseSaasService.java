@@ -575,6 +575,7 @@ public class EnterpriseSaasService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Customer limit reached for current plan");
     }
     
+    @Transactional
     public void enforceUserLimit(UUID t) {
         List<TenantSubscription> history = subscriptions.findByTenantIdOrderByCreatedAtDesc(t);
         if (history.isEmpty()) return; // Existing Phase 1/2 vendors remain grandfathered until subscription assignment.
