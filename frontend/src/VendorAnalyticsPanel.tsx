@@ -1,4 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useState} from 'react';
+import {authenticatedFetch,sessionForToken} from './authenticatedFetch';
 const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
 type Props={token:string;onError:(message:string)=>void};
 const colors=['#168252','#e5b847','#5488b9','#8d70b5','#cf8053','#4c9d9b'];
@@ -12,7 +13,7 @@ export default function VendorAnalyticsPanel({token,onError}:Props){
  const [loading,setLoading]=useState(true),[error,setLocalError]=useState('');
  const headers={Authorization:'Bearer '+token};
  const loadLookups=useCallback(async()=>{
-  const requests=await Promise.all(['/branches','/categories','/products'].map(async path=>{const r=await fetch(API_BASE+'/api/v1'+path,{headers});const body=await r.json().catch(()=>[]);if(!r.ok)throw Error(body.detail||'Unable to load analytics filters');return body||[]}));
+  const requests=await Promise.all(['/branches','/categories','/products'].map(async path=>{const r=await authenticatedFetch(API_BASE+'/api/v1'+path,{headers},sessionForToken(token));const body=await r.json().catch(()=>[]);if(!r.ok)throw Error(body.detail||'Unable to load analytics filters');return body||[]}));
   setBranches(requests[0]);setCategories(requests[1]);setProducts(requests[2]);
  },[token]);
  const load=useCallback(async()=>{
@@ -20,7 +21,7 @@ export default function VendorAnalyticsPanel({token,onError}:Props){
   try{
    const params=new URLSearchParams({from:new Date(from+'T00:00:00').toISOString(),to:new Date(to+'T23:59:59').toISOString(),granularity,metric:'revenue',limit:'10'});
    if(branchId)params.set('branchId',branchId);if(categoryId)params.set('categoryId',categoryId);if(productId)params.set('productId',productId);
-   const [b,t,r]=await Promise.all(['breakdowns','trends','rankings'].map(async (kind)=>{const q=kind==='trends'?params.toString():kind==='rankings'?params.toString():params.toString();const url=API_BASE+'/api/v1/vendor/analytics/'+kind+'?'+q;const response=await fetch(url,{headers});const body=await response.json().catch(()=>({}));if(!response.ok)throw Error(body.detail||'Unable to load vendor analytics');return body}));
+   const [b,t,r]=await Promise.all(['breakdowns','trends','rankings'].map(async (kind)=>{const q=kind==='trends'?params.toString():kind==='rankings'?params.toString():params.toString();const url=API_BASE+'/api/v1/vendor/analytics/'+kind+'?'+q;const response=await authenticatedFetch(url,{headers},sessionForToken(token));const body=await response.json().catch(()=>({}));if(!response.ok)throw Error(body.detail||'Unable to load vendor analytics');return body}));
    setBreakdowns(b);setTrends(t.items||[]);setRankings(r);
   }catch(e:any){setLocalError(e.message);onError(e.message)}
   finally{setLoading(false)}
