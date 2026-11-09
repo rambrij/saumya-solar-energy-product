@@ -35,7 +35,7 @@ public class SecurityConfig {
     }
     
     @Bean
-    SecurityFilterChain chain(HttpSecurity http, JwtFilter jwtFilter, CookieCsrfFilter cookieCsrfFilter, AuthenticationRateLimitFilter rateLimitFilter, SubscriptionEnforcementFilter subscriptionFilter)
+    SecurityFilterChain chain(HttpSecurity http, JwtFilter jwtFilter, AuthenticationRateLimitFilter rateLimitFilter, SubscriptionEnforcementFilter subscriptionFilter)
             throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
@@ -53,7 +53,6 @@ public class SecurityConfig {
                         ).permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(cookieCsrfFilter, JwtFilter.class)
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(subscriptionFilter, JwtFilter.class)
                 .build();
