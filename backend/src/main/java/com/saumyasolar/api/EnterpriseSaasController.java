@@ -1,4 +1,5 @@
 package com.saumyasolar.api;
+import io.swagger.v3.oas.annotations.Operation;
 import com.saumyasolar.domain.*;import com.saumyasolar.security.Principal;import com.saumyasolar.service.EnterpriseSaasService;
 import jakarta.validation.Valid;import jakarta.validation.constraints.*;import org.springframework.security.core.Authentication;import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;import java.time.Instant;import java.util.*;
@@ -76,6 +77,7 @@ public class EnterpriseSaasController {
  }
  @PatchMapping("/warehouses/{id}/branch") public Warehouse assignWarehouseBranch(@PathVariable UUID id,@RequestBody WarehouseBranchRequest x,Authentication a){return service.assignWarehouseBranch(id,x.branchId(),p(a));}
  @GetMapping("/subscription") public Map<String,Object> currentSubscription(Authentication a){return service.currentSubscription(p(a));}
+ @Operation(summary="Platform tenant resource usage",description="Paginated usage and plan limits across tenants. Requires Platform Super Admin and SUBSCRIPTION_MANAGE.")
  @GetMapping("/platform/analytics/tenant-usage") public Map<String,Object> platformTenantUsage(@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size,Authentication a){return service.platformTenantUsage(p(a),page,size);}
  @GetMapping("/audit-events") public List<AuditEvent> auditEvents(@RequestParam Instant from,@RequestParam Instant to,
   @RequestParam(required=false) UUID actorId,@RequestParam(required=false) String action,
