@@ -371,3 +371,5 @@ table{font-size:.93rem}
 .public-header-cta{background:#0b6b4b!important;color:#fff!important;border:1px solid #0b6b4b!important;border-radius:9px!important;padding:11px 15px!important}
 @media(max-width:1120px){.public-site-header{gap:12px}.public-brand img{width:155px}.public-site-nav{gap:8px}.public-site-nav a{font-size:.75rem}}
 @media(max-width:900px){.public-site-nav .public-nav-register{display:block;text-align:center;margin-top:8px;background:#0b6b4b;color:#fff;border:0;border-radius:9px;padding:12px}.public-site-nav .public-login-link{border:0!important;text-align:left}}
+
+.analytics-donut-row{display:flex;align-items:center;gap:24px;flex-wrap:wrap;margin:14px 0 22px}.analytics-donut{width:176px;height:176px;border-radius:50%;display:grid;place-items:center;position:relative;flex:0 0 auto}.analytics-donut:before{content:"";position:absolute;inset:25px;border-radius:50%;background:#fff}.analytics-donut span{position:relative;font-size:1.7rem;font-weight:750;color:#173d2d}.analytics-legend{display:grid;gap:8px}.analytics-legend span{display:flex;align-items:center;gap:9px}.analytics-legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
