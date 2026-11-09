@@ -502,6 +502,28 @@ class Release12TenantIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content(payload)).andExpect(status().isConflict());
     }
     
+
+    @Test
+    void vendorAdminCannotEscalateEmployeeToPlatformSuperAdmin() throws Exception {
+        String token = accessToken("admin@saumya.local", "Admin@123");
+        String email = "escalation-" + UUID.randomUUID() + "@example.test";
+        mvc.perform(post("/api/v1/users")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Escalation Attempt","email":"%s","password":"StrongEscalationPassword-2026","roleName":"PLATFORM_SUPER_ADMIN"}
+                                """.formatted(email)))
+                .andExpect(status().isBadRequest());
+        assertTrue(users.findByEmailIgnoreCase(email).isEmpty());
+    }
+
+    @Test
+    void missingAndMalformedBearerTokensAreUnauthorized() throws Exception {
+        mvc.perform(get("/api/v1/me")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/me").header("Authorization", "Bearer not-a-valid-jwt"))
+                .andExpect(status().isUnauthorized());
+    }
+
     private String accessToken(String email, String password) throws Exception {
         var body = """
                 {"email":"%s","password":"%s"}
