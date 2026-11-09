@@ -59,6 +59,15 @@ public class SecurityConfig {
     }
     
     @Bean
+    FilterRegistrationBean<AuthenticationRateLimitFilter> disableContainerAuthenticationRateLimitFilter(
+            AuthenticationRateLimitFilter filter
+    ) {
+        FilterRegistrationBean<AuthenticationRateLimitFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
     SubscriptionEnforcementFilter subscriptionEnforcementFilter(TenantSubscriptionRepository subscriptions) {
         return new SubscriptionEnforcementFilter(subscriptions);
     }
