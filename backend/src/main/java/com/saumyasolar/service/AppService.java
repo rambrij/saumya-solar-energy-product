@@ -680,7 +680,7 @@ public class AppService {
     
     public List<LeadHistory> leadHistory(UUID leadId, Principal p) {
         vendor(p);
-        requirePermission(p, "LEAD_MANAGE");
+        requirePermission(p, "LEAD_VIEW");
         SalesLead lead = requireLead(leadId, p.tenantId());
         assertSalesLeadScope(lead, p);
         return histories.findByLeadIdAndTenantIdOrderByCreatedAtDesc(leadId, p.tenantId());
