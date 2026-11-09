@@ -220,13 +220,13 @@ public class AuthLifecycleService {
         challenge.setUsed(false);
         challenge.setCreatedAt(Instant.now());
         mfaChallenges.save(challenge);
-        auditAuth("MFA_CHALLENGE_CREATED", user, "SUCCESS", "EMAIL_MFA_CHALLENGE", challenge.getId().toString());
-        auditAuth("MFA_CHALLENGE_CREATED", user, "SUCCESS", "EMAIL_MFA_CHALLENGE", challenge.getId().toString());
         if (!notifications.sendMfaCode(user.getId(), user.getTenantId(), user.getEmail(), user.getName(), code)) {
             challenge.setUsed(true);
             mfaChallenges.save(challenge);
+            auditAuth("MFA_CHALLENGE_DELIVERY_FAILED", user, "FAILED", "EMAIL_MFA_DELIVERY_FAILED", challenge.getId().toString());
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Unable to send verification code");
         }
+        auditAuth("MFA_CHALLENGE_CREATED", user, "SUCCESS", "EMAIL_MFA_CHALLENGE", challenge.getId().toString());
         return challenge.getId().toString();
     }
     
