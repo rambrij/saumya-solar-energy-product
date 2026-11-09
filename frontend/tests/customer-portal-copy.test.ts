@@ -11,7 +11,8 @@ describe('Customer catalogue and quotation copy regressions',()=>{
   expect(customerPortal).not.toContain('<h2>Product categories</h2>');
  });
  it('uses Our Products in customer and public navigation',()=>{
-  expect(customerPortal).toContain('Our Products');
+  expect(customerPortal).toContain('<PublicSiteHeader accountName');
+  expect(customerPortal).not.toContain("{key:'catalog'");
   expect(publicHome).toContain('Our Products');
   expect(customerPortal).not.toContain('Solar Catalogue');
   expect(publicHome).not.toContain('Solar Catalogue');
