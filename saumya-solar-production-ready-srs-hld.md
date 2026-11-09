@@ -662,12 +662,19 @@ Example error:
 |--------|-------------------------|----------------------------------------|
 | POST   | `/auth/register`        | Register customer                      |
 | POST   | `/auth/login`           | Authenticate user                      |
-| POST   | `/auth/refresh`         | Rotate refresh token                   |
-| POST   | `/auth/logout`          | Revoke current session                 |
+| POST   | `/auth/refresh`         | Rotate HttpOnly refresh cookie; require CSRF double-submit header |
+| POST   | `/auth/logout`          | Revoke HttpOnly cookie session; require CSRF double-submit header |
 | POST   | `/auth/forgot-password` | Request reset                          |
 | POST   | `/auth/reset-password`  | Complete reset                         |
 | POST   | `/auth/verify-email`    | Verify email                           |
 | GET    | `/me`                   | Current user and effective permissions |
+
+Browser session contract:
+- Login, registration and MFA verification return a short-lived access token and a non-secret CSRF token; the refresh token is issued only as an HttpOnly, Secure, SameSite cookie scoped to /api/v1/auth.
+- The browser keeps the access token in memory and the CSRF token in session storage. Neither access nor refresh tokens are persisted in local storage.
+- Refresh and logout send the CSRF token in the X-CSRF-Token header; the server compares it with the CSRF cookie using constant-time comparison.
+- Cross-origin browser clients must use credentialed requests and an explicit CORS_ORIGINS allowlist. SameSite=None requires Secure=true.
+
 
 ### 13.3 Vendor and user APIs
 
