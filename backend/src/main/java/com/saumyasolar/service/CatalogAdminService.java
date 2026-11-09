@@ -186,7 +186,7 @@ public class CatalogAdminService {
     public CustomerProfile archiveCustomer(UUID id, Principal p) {
         UUID t = tenant(p);
         require(p, "CUSTOMER_UPDATE");
-        CustomerProfile e = customer(id, t);
+        CustomerProfile e = customer(id, t, p);
         e.setActive(false);
         return customers.save(e);
     }
