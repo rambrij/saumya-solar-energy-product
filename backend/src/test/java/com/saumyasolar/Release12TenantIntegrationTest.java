@@ -421,6 +421,7 @@ class Release12TenantIntegrationTest {
         ticket.setStatus("OPEN");
         ticket.setDescription("Foreign tenant test record");
         ticket.setCreatedAt(Instant.now());
+        ticket.setUpdatedAt(Instant.now());
         serviceRequests.save(ticket);
 
         var installation = new InstallationJob();
@@ -431,6 +432,7 @@ class Release12TenantIntegrationTest {
         installation.setStatus("SCHEDULED");
         installation.setCapacityKw(BigDecimal.ZERO);
         installation.setScheduledAt(Instant.now());
+        installation.setCreatedAt(Instant.now());
         installationJobs.save(installation);
 
         var token = accessToken("admin@saumya.local", "Admin@123");
