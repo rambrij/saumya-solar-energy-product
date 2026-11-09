@@ -18,6 +18,16 @@ describe('Platform subscription administration',()=>{
   expect(screen.getByText('Starter')).toBeTruthy();
   expect(screen.queryByText('Professional')).toBeNull();
  });
+ it('opens the create plan form only after clicking the action',async()=>{
+  render(<EnterpriseSaasPanel mode="platform" s={session} error={vi.fn()}/>);
+  await screen.findByText('Starter');
+  expect(screen.queryByRole('dialog',{name:/subscription plan/i})).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'Create Subscription Plan'}));
+  expect(await screen.findByRole('dialog')).toBeTruthy();
+  expect(screen.getByText('Included features')).toBeTruthy();
+  expect(screen.queryByLabelText('Included feature entitlements (JSON)')).toBeNull();
+ });
+
  it('searches tenants and loads assignment history after selection',async()=>{
   const fetchMock=vi.mocked(fetch);
   fetchMock.mockImplementation(async (url:any)=>{
