@@ -18,6 +18,7 @@ import java.util.Base64;
 
 @Component
 public class AuthCookieService {
+    public static final String ACCESS_COOKIE = "saumya_access";
     public static final String REFRESH_COOKIE = "saumya_refresh";
     public static final String CSRF_COOKIE = "XSRF-TOKEN";
     public static final String CSRF_HEADER = "X-CSRF-Token";
@@ -26,12 +27,14 @@ public class AuthCookieService {
     private final String sameSite;
     private final String domain;
     private final long ttlDays;
+    private final long accessTtlSeconds;
 
     public AuthCookieService(
             @Value("${app.auth.refresh-cookie-secure:true}") boolean secure,
             @Value("${app.auth.refresh-cookie-same-site:Strict}") String sameSite,
             @Value("${app.auth.refresh-cookie-domain:}") String domain,
-            @Value("${app.auth.refresh-token-ttl-days:7}") long ttlDays) {
+            @Value("${app.auth.refresh-token-ttl-days:7}") long ttlDays,
+            @Value("${app.auth.access-token-ttl-seconds:900}") long accessTtlSeconds) {
         if (!"Strict".equalsIgnoreCase(sameSite) && !"Lax".equalsIgnoreCase(sameSite)
                 && !"None".equalsIgnoreCase(sameSite))
             throw new IllegalArgumentException("Refresh cookie SameSite must be Strict, Lax or None");
@@ -41,21 +44,31 @@ public class AuthCookieService {
         this.sameSite = sameSite;
         this.domain = domain == null ? "" : domain.trim();
         this.ttlDays = Math.max(1, ttlDays);
+        this.accessTtlSeconds = Math.max(60, accessTtlSeconds);
     }
 
-    public String issue(HttpServletResponse response, String refreshToken) {
+    public String issue(HttpServletResponse response, String accessToken, String refreshToken) {
         byte[] bytes = new byte[32];
         new SecureRandom().nextBytes(bytes);
         String csrf = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie(ACCESS_COOKIE, accessToken, true, "/api/v1", Duration.ofSeconds(accessTtlSeconds)));
         response.addHeader(HttpHeaders.SET_COOKIE, cookie(REFRESH_COOKIE, refreshToken, true, "/api/v1/auth", Duration.ofDays(ttlDays)));
         response.addHeader(HttpHeaders.SET_COOKIE, cookie(CSRF_COOKIE, csrf, false, "/", Duration.ofDays(ttlDays)));
         return csrf;
     }
 
+    public String accessToken(HttpServletRequest request) {
+        return cookieValue(request, ACCESS_COOKIE);
+    }
+
     public String refreshToken(HttpServletRequest request) {
+        return cookieValue(request, REFRESH_COOKIE);
+    }
+
+    private String cookieValue(HttpServletRequest request, String name) {
         if (request.getCookies() == null) return null;
         for (Cookie cookie : request.getCookies())
-            if (REFRESH_COOKIE.equals(cookie.getName())) return cookie.getValue();
+            if (name.equals(cookie.getName())) return cookie.getValue();
         return null;
     }
 
@@ -72,6 +85,7 @@ public class AuthCookieService {
     }
 
     public void clear(HttpServletResponse response) {
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie(ACCESS_COOKIE, "", true, "/api/v1", Duration.ZERO));
         response.addHeader(HttpHeaders.SET_COOKIE, cookie(REFRESH_COOKIE, "", true, "/api/v1/auth", Duration.ZERO));
         response.addHeader(HttpHeaders.SET_COOKIE, cookie(CSRF_COOKIE, "", false, "/", Duration.ZERO));
     }
