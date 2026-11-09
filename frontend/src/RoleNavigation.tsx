@@ -1,7 +1,7 @@
 import React,{useMemo,useState} from 'react';
 import BrandLogo from './BrandLogo';
 
-export type NavigationItem={key:string;label:string;permission?:string|string[];allPermissions?:string[]};
+export type NavigationItem={key:string;label:string;permission?:string|string[];allPermissions?:string[];requiredRoles?:string[]};
 export type NavigationGroup={label:string;items:NavigationItem[]};
 const roleMenus:Record<string,NavigationGroup[]>={
  platform:[
@@ -16,7 +16,7 @@ const roleMenus:Record<string,NavigationGroup[]>={
   {label:'Catalog',items:[{key:'categories',label:'Categories',permission:'CATALOG_MANAGE'},{key:'products',label:'Products',permission:'CATALOG_MANAGE'},{key:'packages',label:'Solar Packages',permission:'CATALOG_MANAGE'}]},
   {label:'Sales',items:[{key:'enquiries',label:'Enquiries',permission:'LEAD_MANAGE'},{key:'leads',label:'Leads',permission:'LEAD_MANAGE'},{key:'surveys',label:'Site Surveys',permission:'SURVEY_MANAGE'},{key:'quotations',label:'Quotations',permission:'QUOTATION_MANAGE'},{key:'orders',label:'Orders',permission:'ORDER_CREATE'}]},
   {label:'Customers & Team',items:[{key:'customers',label:'Customers',permission:'CUSTOMER_MANAGE'},{key:'users',label:'Users',permission:'USER_VIEW'},{key:'branches',label:'Branches',permission:'BRANCH_MANAGE'}]},
-  {label:'Insights',items:[{key:'analytics',label:'Analytics',allPermissions:['REPORT_VIEW','BRANCH_MANAGE']}] },
+  {label:'Insights',items:[{key:'analytics',label:'Analytics',allPermissions:['REPORT_VIEW','BRANCH_MANAGE'],requiredRoles:['VENDOR_ADMIN']}] },
   {label:'Business operations',items:[{key:'operations',label:'Inventory & Operations',permission:['INVENTORY_MANAGE','SURVEY_MANAGE']},{key:'finance-service',label:'Finance & Service',permission:['FINANCE_MANAGE','SERVICE_MANAGE']},{key:'offline-sync',label:'Offline Business Sync'}]},
   {label:'Account',items:[{key:'subscription',label:'My Subscription',permission:['SUBSCRIPTION_VIEW','SUBSCRIPTION_MANAGE']},{key:'settings',label:'Settings',permission:'DISCOUNT_POLICY_MANAGE'}]}
  ],
@@ -25,15 +25,15 @@ const roleMenus:Record<string,NavigationGroup[]>={
   {label:'My Account',items:[{key:'profile',label:'My Profile'},{key:'customer-orders',label:'My Orders'},{key:'invoices',label:'My Invoices'},{key:'enquiries',label:'My Enquiries'},{key:'addresses',label:'Addresses'},{key:'settings',label:'Settings'},{key:'logout',label:'Logout'}]}
  ]
 };
-export function getRoleNavigation(role:'platform'|'vendor'|'customer',permissions:string[]=[]):NavigationGroup[]{
- return roleMenus[role].map(group=>({...group,items:group.items.filter(item=>(!item.permission||(Array.isArray(item.permission)?item.permission.some(p=>permissions.includes(p)):permissions.includes(item.permission)))&&(!item.allPermissions||item.allPermissions.every(p=>permissions.includes(p))))})).filter(group=>group.items.length>0);
+export function getRoleNavigation(role:'platform'|'vendor'|'customer',permissions:string[]=[],roles:string[]=[]):NavigationGroup[]{
+ return roleMenus[role].map(group=>({...group,items:group.items.filter(item=>(!item.permission||(Array.isArray(item.permission)?item.permission.some(p=>permissions.includes(p)):permissions.includes(item.permission)))&&(!item.allPermissions||item.allPermissions.every(p=>permissions.includes(p)))&&(!item.requiredRoles||item.requiredRoles.some(r=>roles.includes(r))))})).filter(group=>group.items.length>0);
 }
-export function getNavigationKeys(role:'platform'|'vendor'|'customer',permissions:string[]=[]):string[]{
- return getRoleNavigation(role,permissions).flatMap(group=>group.items.map(item=>item.key));
+export function getNavigationKeys(role:'platform'|'vendor'|'customer',permissions:string[]=[],roles:string[]=[]):string[]{
+ return getRoleNavigation(role,permissions,roles).flatMap(group=>group.items.map(item=>item.key));
 }
-type Props={role:'platform'|'vendor'|'customer';active:string;onNavigate:(key:string)=>void;children:React.ReactNode;user:{name:string;accountType:string};onLogout:()=>void;planBadge?:string;breadcrumbs?:string[];permissions?:string[]};
-export default function RoleShell({role,active,onNavigate,children,user,onLogout,planBadge,breadcrumbs=[],permissions=[]}:Props){
- const groups=useMemo(()=>getRoleNavigation(role,permissions),[role,permissions.join('|')]);
+type Props={role:'platform'|'vendor'|'customer';active:string;onNavigate:(key:string)=>void;children:React.ReactNode;user:{name:string;accountType:string};onLogout:()=>void;planBadge?:string;breadcrumbs?:string[];permissions?:string[];roles?:string[]};
+export default function RoleShell({role,active,onNavigate,children,user,onLogout,planBadge,breadcrumbs=[],permissions=[],roles=[]}:Props){
+ const groups=useMemo(()=>getRoleNavigation(role,permissions,roles),[role,permissions.join('|'),roles.join('|')]);
  const [mobileOpen,setMobileOpen]=useState(false);
  const [collapsed,setCollapsed]=useState<Record<string,boolean>>({});
  const activeGroup=groups.find(g=>g.items.some(i=>i.key===active))?.label;
