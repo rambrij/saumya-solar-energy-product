@@ -566,7 +566,7 @@ public class FinanceService {
             if (!cp.getId().equals(t.getCustomerId())) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         } else {
             servicePermission(p);
-            if (p.roles() == null || ( !p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)) && !Objects.equals(t.getAssignedEngineerId(), p.userId()) ))
+            if ((p.permissions() == null || !p.permissions().contains("SERVICE_ASSIGN")) && !Objects.equals(t.getAssignedEngineerId(), p.userId()))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
     }
@@ -644,7 +644,7 @@ public class FinanceService {
         servicePermission(p);
         permission(p, "SERVICE_VIEW");
         List<ServiceRequest> all = tickets.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
-        if (p.roles() != null && p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)))
+        if (p.permissions() != null && p.permissions().contains("SERVICE_ASSIGN"))
             return all;
         return all.stream().filter(t -> p.userId().equals(t.getAssignedEngineerId())).toList();
     }
@@ -653,8 +653,6 @@ public class FinanceService {
     public ServiceRequest assignTicket(UUID id, ServiceAssign x, Principal p) {
         servicePermission(p);
         permission(p, "SERVICE_ASSIGN");
-        if (p.roles() == null || !p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         UUID tenant = p.tenantId();
         ServiceRequest t = ticket(id, tenant);
         AppUser engineer = users.findById(x.engineerId()).filter(u -> tenant.equals(u.getTenantId()) && u.isEnabled() && u.getRoles().stream().anyMatch(r -> "SERVICE_ENGINEER".equals(r.getName()) || "TECHNICIAN".equals(r.getName()) || "INSTALLER".equals(r.getName()))).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Engineer must be an enabled same-tenant service engineer"));
@@ -677,9 +675,7 @@ public class FinanceService {
     public ServiceVisit scheduleVisit(UUID id, ServiceVisitCreate x, Principal p) {
         servicePermission(p);
         permission(p, "SERVICE_ASSIGN");
-        if (p.roles() == null || !p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-        ServiceRequest t = ticket(id, p.tenantId());
+                ServiceRequest t = ticket(id, p.tenantId());
         if (!x.scheduledAt().isAfter(Instant.now()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Visit must be scheduled in the future");
         if (t.getAssignedEngineerId() == null || !t.getAssignedEngineerId().equals(x.engineerId()))
@@ -708,7 +704,7 @@ public class FinanceService {
         ServiceRequest t = ticket(id, p.tenantId());
         ensureTicketAccess(t, p);
         ServiceVisit v = visits.findById(visitId).filter(a -> a.getTenantId().equals(p.tenantId()) && a.getServiceRequestId().equals(id)).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Visit not found"));
-        if (!v.getEngineerId().equals(p.userId()) && !( p.roles() != null && p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)) ))
+        if (!v.getEngineerId().equals(p.userId()) && !(p.permissions() != null && p.permissions().contains("SERVICE_ASSIGN")) )
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (v.getStartedAt() != null)
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Visit has already started");
