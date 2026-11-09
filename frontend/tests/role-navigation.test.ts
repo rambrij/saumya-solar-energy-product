@@ -19,10 +19,10 @@ describe('role navigation configuration',()=>{
   expect(getNavigationKeys('vendor',['REPORT_VIEW','BRANCH_MANAGE'],['SALES_MANAGER'])).not.toContain('analytics');
  });
  it('shows vendor account subscription and settings to vendor admin only',()=>{
-  const keys=getNavigationKeys('vendor',['DISCOUNT_POLICY_MANAGE'],['VENDOR_ADMIN']);
+  const keys=getNavigationKeys('vendor',['QUOTATION_APPROVE_DISCOUNT'],['VENDOR_ADMIN']);
   expect(keys).toContain('subscription');
   expect(keys).toContain('settings');
-  expect(getNavigationKeys('vendor',['DISCOUNT_POLICY_MANAGE'],['SALES_MANAGER'])).not.toContain('subscription');
+  expect(getNavigationKeys('vendor',['QUOTATION_APPROVE_DISCOUNT'],['SALES_MANAGER'])).not.toContain('subscription');
  });
  it('shows customer account links including quotations and logout without a duplicate dashboard group',()=>{
   const groups=getRoleNavigation('customer');
