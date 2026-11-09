@@ -12,11 +12,11 @@ describe('role navigation configuration',()=>{
   expect(groups.find(g=>g.label==='Tenants')?.items.map(i=>i.key)).toEqual(['tenants']);
   expect(groups.find(g=>g.label==='Settings')?.items.map(i=>i.key)).toEqual(['settings']);
  });
- it('shows vendor admin analytics only with the permissions required by its backend endpoint',()=>{
-  expect(getNavigationKeys('vendor',['REPORT_VIEW'],['VENDOR_ADMIN'])).not.toContain('analytics');
-  expect(getNavigationKeys('vendor',['BRANCH_MANAGE'],['VENDOR_ADMIN'])).not.toContain('analytics');
+ it('shows vendor admin analytics by role even when a pre-migration session lacks permission claims',()=>{
+  expect(getNavigationKeys('vendor',[],['VENDOR_ADMIN'])).toContain('analytics');
+  expect(getNavigationKeys('vendor',['REPORT_VIEW'],['VENDOR_ADMIN'])).toContain('analytics');
+  expect(getNavigationKeys('vendor',['BRANCH_MANAGE'],['VENDOR_ADMIN'])).toContain('analytics');
   expect(getNavigationKeys('vendor',['REPORT_VIEW','BRANCH_MANAGE'],['SALES_MANAGER'])).not.toContain('analytics');
-  expect(getNavigationKeys('vendor',['REPORT_VIEW','BRANCH_MANAGE'],['VENDOR_ADMIN'])).toContain('analytics');
  });
  it('shows vendor account subscription and settings to vendor admin only',()=>{
   const keys=getNavigationKeys('vendor',['DISCOUNT_POLICY_MANAGE'],['VENDOR_ADMIN']);
