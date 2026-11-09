@@ -11,12 +11,10 @@ import static org.junit.jupiter.api.Assertions.*;
 class AuthCookieServiceTest {
     @Test
     void refreshCookieIsHttpOnlySecureAndScopedToAuthEndpoints() {
-        var service = new AuthCookieService(true, "None", "", 7, 900);
+        var service = new AuthCookieService(true, "None", "", 7);
         var response = new MockHttpServletResponse();
-        String csrf = service.issue(response, "opaque-access-token", "opaque-refresh-token");
+        String csrf = service.issue(response, "opaque-refresh-token");
         var cookies = response.getHeaders("Set-Cookie");
-        assertTrue(cookies.stream().anyMatch(v -> v.contains("saumya_access=")
-                && v.contains("HttpOnly") && v.contains("Secure") && v.contains("Path=/api/v1")));
         assertTrue(cookies.stream().anyMatch(v -> v.contains("saumya_refresh=")
                 && v.contains("HttpOnly") && v.contains("Secure")
                 && v.contains("SameSite=None") && v.contains("Path=/api/v1/auth")));
@@ -27,7 +25,7 @@ class AuthCookieServiceTest {
 
     @Test
     void requiresDoubleSubmitCsrfCookieAndHeader() {
-        var service = new AuthCookieService(true, "Strict", "", 7, 900);
+        var service = new AuthCookieService(true, "Strict", "", 7);
         var request = new MockHttpServletRequest();
         request.setCookies(new Cookie(AuthCookieService.CSRF_COOKIE, "csrf-value"));
         request.addHeader(AuthCookieService.CSRF_HEADER, "csrf-value");
@@ -41,6 +39,6 @@ class AuthCookieServiceTest {
 
     @Test
     void sameSiteNoneRequiresSecureCookie() {
-        assertThrows(IllegalArgumentException.class, () -> new AuthCookieService(false, "None", "", 7, 900));
+        assertThrows(IllegalArgumentException.class, () -> new AuthCookieService(false, "None", "", 7));
     }
 }
