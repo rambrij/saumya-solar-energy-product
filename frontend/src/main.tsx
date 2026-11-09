@@ -175,6 +175,7 @@ function Crud({title,s,error,tabs,forms,role='vendor',logout,planBadge}:any){
  };
  const titleCase=(v:string)=>v.replace(/([A-Z])/g,' $1').replaceAll('_',' ').replace(/^./,c=>c.toUpperCase());
  const cols=columns[tab]||[];
+ if(tab==='analytics'&&role==='vendor')return <RoleShell role="vendor" active={tab} onNavigate={setTab} user={s.user} onLogout={logout} planBadge={planBadge} permissions={s.user.permissions}><VendorAnalyticsPanel token={s.accessToken} onError={error}/></RoleShell>;
  const searchable=(x:any)=>Object.values(x||{}).filter(v=>v===null||['string','number','boolean'].includes(typeof v)).join(' ').toLowerCase();
  const hasStatus=data.some(x=>x.status!==undefined||x.enabled!==undefined||x.active!==undefined);
  const filtered=data.filter(x=>searchable(x).includes(search.toLowerCase())&&(statusFilter==='ALL'||String(x.status??(x.enabled??x.active?'ACTIVE':'INACTIVE')).toUpperCase()===statusFilter));
