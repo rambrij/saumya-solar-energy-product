@@ -159,7 +159,7 @@ public class Controller {
                 || actor.permissions() == null || !actor.permissions().contains("USER_MANAGE"))
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
         enterpriseSaas.enforceUserLimit(actor.tenantId());
-        var u = lifecycle.createEmployee(actor.tenantId(), x.name(), x.email(), x.password(), x.roleName());
+        var u = lifecycle.createEmployee(actor.tenantId(), actor.userId(), x.name(), x.email(), x.password(), x.roleName());
         var roleNames = new HashSet<String>();
         var permissionCodes = new HashSet<String>();
         u.getRoles().forEach(r -> {
