@@ -125,6 +125,22 @@ public class AppService {
         return leads.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found"));
     }
+
+    private void assertSalesLeadScope(SalesLead lead, Principal p) {
+        if (p.roles() != null && p.roles().contains("SALES_EXECUTIVE")
+                && !p.userId().equals(lead.getAssignedUserId()))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found");
+    }
+
+    private void assertSalesQuotationScope(Quotation quotation, Principal p) {
+        if (p.roles() == null || !p.roles().contains("SALES_EXECUTIVE")) return;
+        boolean createdBySelf = p.userId().equals(quotation.getCreatedBy());
+        boolean assignedLead = quotation.getLeadId() != null
+                && leads.findByIdAndTenantId(quotation.getLeadId(), p.tenantId())
+                    .filter(lead -> p.userId().equals(lead.getAssignedUserId())).isPresent();
+        if (!createdBySelf && !assignedLead)
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Quotation not found");
+    }
     
     public Object list(String type, Principal p) {
         if ("tenants".equals(type)) {
@@ -575,6 +591,10 @@ public class AppService {
     public SalesLead convertLead(UUID enquiryId, Input x, Principal p) {
         vendor(p);
         requirePermission(p, "LEAD_UPDATE");
+        if (p.roles() != null && p.roles().contains("SALES_EXECUTIVE")
+                && !p.permissions().contains("LEAD_ASSIGN")
+                && !Objects.equals(x.assignedUserId(), p.userId()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sales executives may only assign new leads to themselves");
         var q = enquiries.findByIdAndTenantId(enquiryId, p.tenantId()).orElseThrow();
         if (!"NEW".equals(q.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Enquiry already converted");
@@ -617,6 +637,11 @@ public class AppService {
         vendor(p);
         requirePermission(p, "LEAD_UPDATE");
         var l = leads.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
+        assertSalesLeadScope(l, p);
+        if (p.roles() != null && p.roles().contains("SALES_EXECUTIVE")
+                && !p.permissions().contains("LEAD_ASSIGN")
+                && x.assignedUserId() != null && !Objects.equals(x.assignedUserId(), l.getAssignedUserId()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Lead reassignment requires LEAD_ASSIGN");
         if (enterpriseSaas != null) enterpriseSaas.assertBranchAccess(l.getBranchId(), p);
         requireEmployee(x.assignedUserId(), p.tenantId());
         var old = l.getStage();
@@ -656,8 +681,8 @@ public class AppService {
     public List<LeadHistory> leadHistory(UUID leadId, Principal p) {
         vendor(p);
         requirePermission(p, "LEAD_MANAGE");
-        if (leads.findByIdAndTenantId(leadId, p.tenantId()).isEmpty())
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found");
+        SalesLead lead = requireLead(leadId, p.tenantId());
+        assertSalesLeadScope(lead, p);
         return histories.findByLeadIdAndTenantIdOrderByCreatedAtDesc(leadId, p.tenantId());
     }
     
