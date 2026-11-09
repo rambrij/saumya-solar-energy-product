@@ -247,7 +247,7 @@ Values are clamped to a minimum of one for lockout/rate-limit counts and duratio
 - Flyway migration against MySQL
 - Browser E2E / security negative test suite
 
-No latest-commit GitHub check run was available when this report was prepared. Therefore, test/build status is **NOT RUN**, not passed.
+GitHub Actions was available. Results are recorded in the Phase 1 follow-up addendum below. Earlier runs passed MySQL migration V53 and frontend build, but backend compile/test and frontend component-test failures were observed on intermediate commits. The latest commit must pass the full workflow before completion.
 
 ## 12. Known limitations and remaining gaps
 
@@ -291,3 +291,135 @@ Only after running the migration in a disposable/test MySQL database:
 **Phase 1 is not yet complete.** Rate limiting, account lockout, refresh rotation hardening, configurable token lifetimes, safe status responses and shared-API frontend refresh handling have been implemented in source. Completion is blocked by unexecuted build/tests/migration, missing authentication audit events, incomplete full-matrix negative tests, permission-catalogue reconciliation, direct-fetch frontend gaps, and unresolved token storage/proxy deployment decisions.
 
 Do not promote this branch as production-ready until these gates are resolved and test evidence is attached.
+
+
+---
+
+## 16. Follow-up hardening — 2026-11-09
+
+### 16.1 Refresh-token family revocation
+
+Added V53:
+- `refresh_token.family_id BINARY(16) NOT NULL`
+- `refresh_token.replaced_by_token_id BINARY(16)`
+- `refresh_token.created_at TIMESTAMP(6)`
+- Family and user/family indexes.
+- Self-referencing replacement-token foreign key.
+
+New refresh sessions receive a new family ID. Rotation retains the family ID and links the old token to the replacement. Reuse of a revoked token revokes all still-active members of that family under a pessimistic lock. Legacy token rows are assigned individual families during migration; the fallback path revokes all sessions for a user if a legacy null family is encountered.
+
+Evidence:
+- `RefreshToken.familyId`, `RefreshToken.replacedByTokenId`
+- `RefreshTokenRepository.findByFamilyIdForUpdate`
+- `AuthLifecycleService.newRefresh/rotateRefresh/consumeRefresh`
+- `V53__refresh_token_families_and_srs_permissions.sql`
+- `AuthLifecycleServiceTest.replayOfRotatedRefreshTokenRevokesEveryTokenInItsFamily`
+
+### 16.2 Authentication audit-event persistence
+
+Reused the existing append-only `audit_event` schema and repository. No duplicate audit table was introduced.
+
+Events now written include:
+- Login success, invalid credentials, locked account and lockout threshold.
+- Refresh rotation and refresh replay.
+- Logout/session revocation.
+- Password-reset request and completion.
+- MFA challenge delivery success/failure and verification.
+- Vendor employee role assignment and account enable/disable.
+
+The event records actor/tenant where known, safe action/outcome/reason, resolved source IP, truncated user agent and request ID. Passwords, raw refresh tokens, OTPs and reset tokens are not recorded. Audit persistence joins the caller transaction; audit exceptions are not silently suppressed.
+
+Evidence:
+- `AuthenticationAuditService.record`
+- `AuthLifecycleService.auditAuth`
+- `AuthLifecycleService.authenticate/rotateRefresh/consumeRefresh/logout/forgot/reset/verifyMfaChallenge/createEmployee/setEmployeeEnabled`
+- `AuditEventRepository` and existing `audit_event` append-only schema
+- `AuthenticationAuditServiceTest`
+
+### 16.3 Trusted proxy and rate-limit retention
+
+Added `ClientAddressResolver` and injected it into `AuthenticationRateLimitFilter`. Forwarded client IPs are only considered if the immediate remote address is in the explicit trusted proxy allowlist. The allowlist is configured through `TRUSTED_PROXY_IPS`; only exact IP addresses are supported, not CIDR ranges.
+
+Added `AuthenticationRateLimitCleanup.removeExpiredBuckets`, scheduled by the existing `@EnableScheduling` application configuration. It deletes rate-limit buckets older than two days. Configure the schedule through `AUTH_RATE_LIMIT_CLEANUP_CRON`.
+
+Evidence:
+- `ClientAddressResolver.resolve`
+- `AuthenticationRateLimitFilter.requestPath/doFilterInternal`
+- `AuthenticationRateLimitCleanup.removeExpiredBuckets`
+- `application.yml`
+- `ClientAddressResolverTest`
+
+### 16.4 Frontend refresh coverage and concurrency
+
+Extracted the common helper to `frontend/src/authenticatedFetch.ts`. It:
+- Preserves `Headers`, FormData and binary response handling.
+- Retries a protected request once after a 401 and successful refresh.
+- Updates the stored rotated refresh token.
+- Uses a shared in-flight refresh promise to prevent parallel 401 responses from replaying the same refresh token.
+- Reuses a newer session written by another request before attempting refresh.
+- Dispatches `saumya:session-expired` when refresh fails; the App clears its authenticated UI state.
+
+All identified authenticated direct API calls in these components now use the helper:
+- `main.tsx`
+- `EnterpriseSaasPanel.tsx`
+- `FinanceServicePanel.tsx`
+- `OfflineSyncPanel.tsx`
+- `OperationsPanel.tsx`
+- `PackageImageUpload.tsx`
+- `Phase2AdminPanel.tsx`
+- `PlatformAnalyticsPanel.tsx`
+- `VendorAnalyticsPanel.tsx`
+
+The remaining direct calls in `PublicHome.tsx` are public, unauthenticated endpoints.
+
+Frontend tests added in `frontend/tests/authenticatedFetch.test.ts` for single refresh/retry, concurrent refresh coalescing and invalid-session cleanup.
+
+### 16.5 Permission catalogue and enforcement qualification
+
+V53 inserts the fine-grained permission codes defined by the SRS and grants predefined employee role permissions. `DataSeeder.PERMISSIONS` and `employeeRolePermissions()` were extended so subsequently created tenants receive the same catalogue/grants. A negative integration test verifies a vendor administrator cannot create an employee with `PLATFORM_SUPER_ADMIN`.
+
+However, the existing backend still checks legacy broad codes such as `CUSTOMER_MANAGE`, `LEAD_MANAGE`, `SURVEY_MANAGE`, `QUOTATION_MANAGE` and `CATALOG_MANAGE` in multiple services. These were retained to avoid breaking existing workflows. The fine-grained grants are not yet the sole enforcement source, and some assigned-record scopes and custom role administration are not implemented. Therefore role/permission compliance remains **PARTIAL**.
+
+Evidence:
+- `V53__refresh_token_families_and_srs_permissions.sql`
+- `DataSeeder.PERMISSIONS`
+- `DataSeeder.employeeRolePermissions()`
+- `AppService.requirePermission`
+- `Controller.createEmployee`
+- `Release12TenantIntegrationTest.vendorAdminCannotEscalateEmployeeToPlatformSuperAdmin`
+
+### 16.6 HttpOnly cookie review
+
+The browser currently persists both access and refresh tokens in localStorage. This does not satisfy the SRS recommendation for HttpOnly refresh-token storage and leaves the refresh credential exposed to same-origin script execution.
+
+A safe migration requires coordinated cookie issuance/clearing, Secure/SameSite policy, credentialed CORS, CSRF protection, frontend session bootstrap and compatibility handling for existing clients. This was reviewed but not migrated as an untested partial change. It remains a **production-readiness blocker**.
+
+### 16.7 Additional tests
+
+Added:
+- `backend/src/test/java/com/saumyasolar/security/ClientAddressResolverTest.java`
+- `backend/src/test/java/com/saumyasolar/service/AuthenticationAuditServiceTest.java`
+- Refresh family replay case in `AuthLifecycleServiceTest`
+- Role escalation and missing/malformed bearer-token cases in `Release12TenantIntegrationTest`
+- `frontend/tests/authenticatedFetch.test.ts`
+
+### 16.8 CI validation history
+
+- MySQL 8.4 Flyway validation through V53 passed in workflow run [42657544449](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42657544449).
+- An intermediate backend run failed compilation because an edit to `DataSeeder.java` inadvertently removed existing demo seeding methods. Both methods were restored in commit `bec3748ad55fb001d41ff3e8ca7b4e64fc07ac37`.
+- An intermediate rate-limit test failed because a mock request exposed an empty servlet path. `AuthenticationRateLimitFilter.requestPath` now falls back to the request URI.
+- The first frontend test run after helper extraction failed on an escaped slash regex. It was corrected in commit `8b33a8195761488c1172ee2e7aee0c361ed1200f`.
+- The latest workflow run after these corrections is the source of truth for pass/fail. The repository workflow runs on every branch push; intermediate failures must not be treated as final results.
+
+### 16.9 Final status
+
+**Phase 1 remains PARTIALLY IMPLEMENTED.** Additional hardening has been committed, but completion is blocked until:
+1. Latest backend compilation/tests pass.
+2. Latest frontend component tests and production build pass.
+3. Latest MySQL migration validation and Spring Boot startup pass.
+4. Fine-grained permissions replace legacy broad permission enforcement without breaking documented workflows.
+5. HttpOnly refresh-cookie and CSRF design is implemented and tested.
+6. Full tenant-resource and refresh replay concurrency integration tests pass.
+7. Production proxy allowlist and scheduler configuration are verified in the deployed environment.
+
+Do not merge or deploy as production-ready until all blockers above are closed.
