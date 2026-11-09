@@ -67,6 +67,8 @@ public final class Models {
     ) {
     }
     
+    public record CustomerEnquiryRequest(@Size(max=100) String propertyType, BigDecimal monthlyBill, BigDecimal requiredCapacityKw, @Size(max=2000) String message, UUID addressId) {}
+
     public record QuoteView(Quotation quotation, List<QuotationItem> items) {
     }
 }
