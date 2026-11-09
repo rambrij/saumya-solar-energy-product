@@ -117,6 +117,7 @@ export default function EnterpriseSaasPanel({mode,s,error,section}:{mode:'platfo
    }
    setAnalyticsData({totalTenants:first.total??tenants.length,counts});
   }catch(e:any){setPanelError(e.message)}finally{setAnalyticsLoading(false)}};
+ useEffect(()=>{if(mode==='platform'&&section==='analytics'&&plans.length)void loadAnalytics()},[mode,section,plans.length,s.accessToken]);
  const loadAudit=async()=>{
   try{const from=new Date(Date.now()-30*86400000).toISOString(),to=new Date().toISOString();const params=new URLSearchParams({from,to});Object.entries(auditFilters).forEach(([key,value])=>{if(value.trim())params.set(key,value.trim())});setAudits(await request('/audit-events?'+params.toString(),s));}
   catch(e:any){setPanelError(e.message)}
