@@ -30,6 +30,9 @@ public final class Models {
     public record Refresh(@NotBlank String refreshToken) {
     }
     
+    public record RolePermissionRequest(@NotBlank @Size(max = 50) String name, Set<@NotBlank String> permissions) {
+    }
+    
     public record EmployeeCreate(
             @NotBlank String name, @Email String email, @Size(min = 12) String password,
             @NotBlank String roleName
