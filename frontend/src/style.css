@@ -80,7 +80,7 @@ button.secondary{background:#e5eee8;color:#1c4935}
 .dealer-card{align-self:center;background:#fff;padding:28px;border-radius:18px;border:1px solid #dce9df}
 .dealer-card p{line-height:1.7;color:#65786c}
 .public-footer{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:24px clamp(20px,7vw,100px);background:#123c2a;color:#e7f3eb;flex-wrap:wrap}
-.public-footer img{width:170px;max-height:45px;filter:brightness(0) invert(1)}
+.public-footer img{width:170px;max-height:45px;filter:none;background:#fff;border-radius:7px;padding:3px 6px}
 .customer-package-card{display:grid!important;grid-template-columns:125px 1fr auto;align-items:center;gap:16px}
 .customer-package-card img{width:125px;height:96px;object-fit:cover;border-radius:10px}
 .admin-package-thumb{width:82px;height:64px;object-fit:cover;border-radius:8px}
