@@ -137,7 +137,6 @@ public class FinanceService {
     
     private void financeAccess(Principal p) {
         vendorTenant(p);
-        permission(p, "FINANCE_MANAGE");
     }
     
     private String fiscalYear(LocalDate date) {
@@ -147,6 +146,7 @@ public class FinanceService {
     
     public List<CustomerOrder> billableOrders(Principal p) {
         financeAccess(p);
+        permission(p, "INVOICE_CREATE");
         Set<String> eligible = Set.of("CONFIRMED", "PAYMENT_PENDING", "PAYMENT_PARTIAL", "PAID", "MATERIAL_RESERVED", "INSTALLATION_SCHEDULED", "INSTALLATION_IN_PROGRESS", "INSTALLED", "COMMISSIONED", "CLOSED");
         return orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
                 .filter(o -> eligible.contains(o.getStatus()))
@@ -158,6 +158,7 @@ public class FinanceService {
     public Invoice createInvoice(InvoiceCreate input, Principal p) {
         UUID tenant = vendorTenant(p);
         permission(p, "FINANCE_MANAGE");
+        permission(p, "INVOICE_CREATE");
         CustomerOrder order = orders.findForUpdate(input.orderId(), tenant).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
         if (!Set.of("CONFIRMED", "PAYMENT_PENDING", "PAYMENT_PARTIAL", "PAID", "MATERIAL_RESERVED", "INSTALLATION_SCHEDULED", "INSTALLATION_IN_PROGRESS", "INSTALLED", "COMMISSIONED", "CLOSED").contains(order.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "An invoice can only be issued for a confirmed order milestone");
@@ -305,6 +306,7 @@ public class FinanceService {
     @Transactional
     public CreditNote createCreditNote(UUID invoiceId, CreditNoteCreate x, Principal p) {
         financeAccess(p);
+        permission(p, "INVOICE_VOID");
         Invoice i = invoices.findForUpdate(invoiceId, p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found"));
         if (x.amount() == null || x.amount().signum() <= 0 || x.reason() == null || x.reason().isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Credit note amount and reason are required");
@@ -337,6 +339,7 @@ public class FinanceService {
             if (!orders.findByIdAndTenantId(i.getOrderId(), p.tenantId()).map(o -> cp.getId().equals(o.getCustomerId())).orElse(false))
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         } else financeAccess(p);
+        permission(p, "INVOICE_VIEW");
         return creditNotes.findByTenantIdAndInvoiceIdOrderByCreatedAtDesc(p.tenantId(), invoiceId);
     }
     
@@ -346,6 +349,7 @@ public class FinanceService {
             return invoices.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream().filter(i -> orders.findByIdAndTenantId(i.getOrderId(), p.tenantId()).map(o -> cp.getId().equals(o.getCustomerId())).orElse(false)).toList();
         }
         financeAccess(p);
+        permission(p, "INVOICE_VIEW");
         return invoices.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
     }
     
@@ -357,6 +361,7 @@ public class FinanceService {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         } else {
             financeAccess(p);
+        permission(p, "INVOICE_VIEW");
         }
         return invoiceItems.findByTenantIdAndInvoiceId(p.tenantId(), id);
     }
@@ -364,6 +369,7 @@ public class FinanceService {
     @Transactional
     public Invoice voidInvoice(UUID id, String reason, Principal p) {
         financeAccess(p);
+        permission(p, "INVOICE_VOID");
         if (reason == null || reason.isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Void reason is required");
         Invoice i = invoices.findForUpdate(id, p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found"));
@@ -379,6 +385,7 @@ public class FinanceService {
     @Transactional
     public Payment recordPayment(ManualPayment x, Principal p) {
         financeAccess(p);
+        permission(p, "PAYMENT_RECORD");
         if (x.paidAt() == null || x.paidAt().isAfter(Instant.now()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment date cannot be in the future");
         Invoice i = invoices.findForUpdate(x.invoiceId(), p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found"));
@@ -427,6 +434,7 @@ public class FinanceService {
             if (listInvoices(p).stream().noneMatch(i -> i.getId().equals(payment.getInvoiceId())))
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         } else financeAccess(p);
+        permission(p, "PAYMENT_VIEW");
         return payment;
     }
     
@@ -438,12 +446,14 @@ public class FinanceService {
             return payments.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream().filter(v -> invoiceIds.contains(v.getInvoiceId())).toList();
         }
         financeAccess(p);
+        permission(p, "PAYMENT_VIEW");
         return payments.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
     }
     
     @Transactional
     public Refund refund(RefundCreate x, Principal p) {
         financeAccess(p);
+        permission(p, "PAYMENT_REFUND");
         permission(p, "PAYMENT_REFUND");
         if (x.amount() == null || x.amount().signum() <= 0 || x.reason() == null || x.reason().isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A positive refund amount and reason are required");
@@ -535,7 +545,6 @@ public class FinanceService {
     
     private void servicePermission(Principal p) {
         vendorTenant(p);
-        permission(p, "SERVICE_MANAGE");
     }
     
     private void event(ServiceRequest t, Principal p, String type, String old, String next, String reason) {
@@ -572,6 +581,7 @@ public class FinanceService {
             tenant = p.tenantId();
         } else {
             servicePermission(p);
+        permission(p, "SERVICE_CREATE");
             tenant = p.tenantId();
             if (x.customerId() == null)
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer is required when a vendor creates a service ticket");
@@ -623,6 +633,7 @@ public class FinanceService {
     public ServiceRequest getTicket(UUID id, Principal p) {
         ServiceRequest t = ticket(id, p.tenantId());
         ensureTicketAccess(t, p);
+        if (!"CUSTOMER".equals(p.accountType())) permission(p, "SERVICE_VIEW");
         return t;
     }
     
@@ -632,6 +643,7 @@ public class FinanceService {
             return tickets.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream().filter(t -> cp.getId().equals(t.getCustomerId())).toList();
         }
         servicePermission(p);
+        permission(p, "SERVICE_VIEW");
         List<ServiceRequest> all = tickets.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
         if (p.roles() != null && p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)))
             return all;
@@ -641,6 +653,7 @@ public class FinanceService {
     @Transactional
     public ServiceRequest assignTicket(UUID id, ServiceAssign x, Principal p) {
         servicePermission(p);
+        permission(p, "SERVICE_ASSIGN");
         if (p.roles() == null || !p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         UUID tenant = p.tenantId();
@@ -664,6 +677,7 @@ public class FinanceService {
     @Transactional
     public ServiceVisit scheduleVisit(UUID id, ServiceVisitCreate x, Principal p) {
         servicePermission(p);
+        permission(p, "SERVICE_ASSIGN");
         if (p.roles() == null || !p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         ServiceRequest t = ticket(id, p.tenantId());
@@ -691,6 +705,7 @@ public class FinanceService {
     @Transactional
     public ServiceVisit startVisit(UUID id, UUID visitId, Principal p) {
         servicePermission(p);
+        permission(p, "SERVICE_UPDATE");
         ServiceRequest t = ticket(id, p.tenantId());
         ensureTicketAccess(t, p);
         ServiceVisit v = visits.findById(visitId).filter(a -> a.getTenantId().equals(p.tenantId()) && a.getServiceRequestId().equals(id)).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Visit not found"));
@@ -712,6 +727,7 @@ public class FinanceService {
     @Transactional
     public ServiceVisit completeVisit(UUID id, UUID visitId, ServiceVisitComplete x, Principal p) {
         servicePermission(p);
+        permission(p, "SERVICE_RESOLVE");
         ServiceRequest t = ticket(id, p.tenantId());
         ensureTicketAccess(t, p);
         ServiceVisit v = visits.findById(visitId).filter(a -> a.getTenantId().equals(p.tenantId()) && a.getServiceRequestId().equals(id)).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Visit not found"));
@@ -787,6 +803,7 @@ public class FinanceService {
     @Transactional
     public ServiceRequest closeTicket(UUID id, String reason, Principal p) {
         servicePermission(p);
+        permission(p, "SERVICE_CLOSE");
         if (reason == null || reason.isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Closure reason is required");
         if (p.roles() == null || !p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)))
@@ -837,22 +854,26 @@ public class FinanceService {
     public List<ServiceVisit> serviceVisits(UUID id, Principal p) {
         ServiceRequest t = ticket(id, p.tenantId());
         ensureTicketAccess(t, p);
+        if (!"CUSTOMER".equals(p.accountType())) permission(p, "SERVICE_VIEW");
         return visits.findByTenantIdAndServiceRequestIdOrderByScheduledAtAsc(p.tenantId(), id);
     }
     
     public List<ServiceEvent> serviceHistory(UUID id, Principal p) {
         ServiceRequest t = ticket(id, p.tenantId());
         ensureTicketAccess(t, p);
+        if (!"CUSTOMER".equals(p.accountType())) permission(p, "SERVICE_VIEW");
         return serviceEvents.findByTenantIdAndServiceRequestIdOrderByOccurredAtAsc(p.tenantId(), id);
     }
     
     public List<CustomerProfile> serviceCustomers(Principal p) {
         servicePermission(p);
+        permission(p, "SERVICE_VIEW");
         return customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(CustomerProfile::isActive).toList();
     }
     
     public List<AppUser> serviceEngineers(Principal p) {
         servicePermission(p);
+        permission(p, "SERVICE_ASSIGN");
         return users.findByTenantId(p.tenantId()).stream().filter(AppUser::isEnabled).filter(u -> u.getRoles().stream().anyMatch(r -> Set.of("SERVICE_ENGINEER", "TECHNICIAN", "INSTALLER").contains(r.getName()))).toList();
     }
     
@@ -917,6 +938,7 @@ public class FinanceService {
     @Transactional
     public Tenant saveServiceReopenPolicy(int days, Principal p) {
         servicePermission(p);
+        permission(p, "SERVICE_UPDATE");
         if (p.roles() == null || !p.roles().contains("VENDOR_ADMIN"))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (days < 0 || days > 90)
@@ -929,12 +951,14 @@ public class FinanceService {
     
     public List<ServiceSlaPolicy> slaPolicies(Principal p) {
         servicePermission(p);
+        permission(p, "SERVICE_VIEW");
         return slaPolicies.findByTenantIdAndActiveTrue(p.tenantId());
     }
     
     @Transactional
     public ServiceSlaPolicy saveSlaPolicy(SlaPolicyInput x, Principal p) {
         servicePermission(p);
+        permission(p, "SERVICE_UPDATE");
         if (p.roles() == null || !p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (x.resolutionMinutes() < x.responseMinutes())
@@ -965,12 +989,14 @@ public class FinanceService {
     public List<Refund> listRefunds(Principal p) {
         financeAccess(p);
         permission(p, "PAYMENT_REFUND");
+        permission(p, "PAYMENT_REFUND");
         return refunds.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
     }
     
     @Transactional
     public ServiceRequest pauseSla(UUID id, String reason, Principal p) {
         servicePermission(p);
+        permission(p, "SERVICE_UPDATE");
         if (p.roles() == null || !p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (reason == null || reason.isBlank())
@@ -989,6 +1015,7 @@ public class FinanceService {
     @Transactional
     public ServiceRequest resumeSla(UUID id, String reason, Principal p) {
         servicePermission(p);
+        permission(p, "SERVICE_UPDATE");
         if (p.roles() == null || !p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         ServiceRequest t = ticket(id, p.tenantId());
