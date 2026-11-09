@@ -16,7 +16,7 @@ public class ClientAddressResolver {
 
     public ClientAddressResolver(@Value("${app.security.trusted-proxies:}") String configuredProxies) {
         trustedProxies = Arrays.stream(configuredProxies.split(","))
-                .map(String::trim).filter(value -> !value.isEmpty()).collect(Collectors.toUnmodifiableSet());
+                .map(String::trim).filter(value -> !value.isEmpty()).map(ClientAddressResolver::normalizeAddress).filter(java.util.Objects::nonNull).collect(Collectors.toUnmodifiableSet());
     }
 
     public String resolve(HttpServletRequest request) {
@@ -38,12 +38,11 @@ public class ClientAddressResolver {
         return candidate;
     }
 
-    private String normalize(String value) {
+    private String normalize(String value) { return normalizeAddress(value); }
+
+    private static String normalizeAddress(String value) {
         if (value == null || !value.matches("[0-9a-fA-F:.]+")) return null;
-        try {
-            return InetAddress.getByName(value).getHostAddress();
-        } catch (Exception ignored) {
-            return null;
-        }
+        try { return InetAddress.getByName(value).getHostAddress(); }
+        catch (Exception ignored) { return null; }
     }
 }
