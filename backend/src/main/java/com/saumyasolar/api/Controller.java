@@ -617,7 +617,7 @@ public class Controller {
     @DeleteMapping("/users/{id}")
     UserView archiveEmployee(@PathVariable UUID id, Authentication a) {
         var actor = p(a);
-        if (!"VENDOR".equals(actor.accountType()) || actor.permissions() == null || !actor.permissions().contains("USER_MANAGE"))
+        if (!"VENDOR".equals(actor.accountType()) || actor.permissions() == null || !actor.permissions().contains("USER_DISABLE"))
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
         if (actor.userId().equals(id))
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.CONFLICT, "You cannot disable your own account");
