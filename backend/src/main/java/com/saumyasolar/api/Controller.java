@@ -173,12 +173,19 @@ public class Controller {
     }
     
     @PatchMapping("/users/{userId}/role")
-    com.saumyasolar.domain.AppUser assignEmployeeRole(@PathVariable UUID userId, @Valid @RequestBody EmployeeRoleAssignment x, Authentication a) {
+    UserView assignEmployeeRole(@PathVariable UUID userId, @Valid @RequestBody EmployeeRoleAssignment x, Authentication a) {
         var actor = p(a);
         if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
                 || actor.permissions() == null || !actor.permissions().contains("ROLE_ASSIGN"))
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
-        return lifecycle.assignEmployeeRole(actor.tenantId(), actor.userId(), userId, x.roleName());
+        var u = lifecycle.assignEmployeeRole(actor.tenantId(), actor.userId(), userId, x.roleName());
+        var roleNames = new HashSet<String>();
+        var permissionCodes = new HashSet<String>();
+        u.getRoles().forEach(role -> {
+            roleNames.add(role.getName());
+            role.getPermissions().forEach(permission -> permissionCodes.add(permission.getCode()));
+        });
+        return new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), roleNames, permissionCodes);
     }
 
     @PostMapping("/users")
