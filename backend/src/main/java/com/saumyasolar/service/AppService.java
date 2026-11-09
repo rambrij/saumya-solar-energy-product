@@ -484,7 +484,7 @@ public class AppService {
     
     public Tenant updateDiscountApprovalThreshold(BigDecimal threshold, Principal p) {
         vendor(p);
-        requirePermission(p, "DISCOUNT_POLICY_MANAGE");
+        requirePermission(p, "QUOTATION_APPROVE_DISCOUNT");
         if (threshold == null || threshold.compareTo(BigDecimal.ZERO) < 0
                 || threshold.compareTo(new BigDecimal("100")) > 0)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Discount approval threshold must be between 0 and 100");
@@ -586,7 +586,7 @@ public class AppService {
     @Transactional
     public SalesLead updateLead(UUID id, Input x, Principal p) {
         vendor(p);
-        requirePermission(p, "LEAD_MANAGE");
+        requirePermission(p, "LEAD_VIEW");
         var l = leads.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
         if (enterpriseSaas != null) enterpriseSaas.assertBranchAccess(l.getBranchId(), p);
         requireEmployee(x.assignedUserId(), p.tenantId());
@@ -818,7 +818,7 @@ public class AppService {
             }
             requirePermission(p, "QUOTATION_APPROVE_DISCOUNT");
         } else {
-            requirePermission(p, "QUOTATION_MANAGE");
+            requirePermission(p, "QUOTATION_SEND");
         }
         if ("send".equals(action) && !"DRAFT".equals(q.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only a draft quotation can be sent");
