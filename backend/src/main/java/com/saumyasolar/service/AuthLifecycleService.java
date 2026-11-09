@@ -33,8 +33,7 @@ public class AuthLifecycleService {
         if (authenticationAudit == null) return;
         var attributes = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
         var request = attributes instanceof org.springframework.web.context.request.ServletRequestAttributes servlet ? servlet.getRequest() : null;
-        try { authenticationAudit.record(action, user == null ? null : user.getTenantId(), user == null ? null : user.getId(), outcome, reason, entityId, request); }
-        catch (RuntimeException ignored) { /* Audit failure must not disclose internal details to the authentication caller. */ }
+        authenticationAudit.record(action, user == null ? null : user.getTenantId(), user == null ? null : user.getId(), outcome, reason, entityId, request);
     }
     @org.springframework.beans.factory.annotation.Value("${app.auth.lockout.max-failed-attempts:5}")
     int maximumFailedLoginAttempts;
@@ -184,6 +183,7 @@ public class AuthLifecycleService {
                 session.setRevoked(true);
                 refresh.save(session);
             });
+            auditAuth("LOGOUT", users.findById(x.getUserId()).orElse(null), "SUCCESS", "SESSION_REVOKED", x.getFamilyId() == null ? null : x.getFamilyId().toString());
         });
     }
     
@@ -200,6 +200,7 @@ public class AuthLifecycleService {
             reset.setToken(hashResetToken(rawToken));
             reset.setExpiresAt(Instant.now().plus(Duration.ofMinutes(30)));
             resets.save(reset);
+            auditAuth("PASSWORD_RESET_REQUESTED", user, "SUCCESS", "RESET_REQUEST_ACCEPTED", null);
             notifications.sendPasswordReset(user.getId(), user.getTenantId(), user.getEmail(), user.getName(), rawToken);
         });
         return out;
@@ -219,6 +220,7 @@ public class AuthLifecycleService {
         challenge.setUsed(false);
         challenge.setCreatedAt(Instant.now());
         mfaChallenges.save(challenge);
+        auditAuth("MFA_CHALLENGE_CREATED", user, "SUCCESS", "EMAIL_MFA_CHALLENGE", challenge.getId().toString());
         if (!notifications.sendMfaCode(user.getId(), user.getTenantId(), user.getEmail(), user.getName(), code)) {
             challenge.setUsed(true);
             mfaChallenges.save(challenge);
@@ -276,6 +278,7 @@ public class AuthLifecycleService {
         if (password == null || password.length() < 12)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password must contain at least 12 characters");
         u.setPasswordHash(encoder.encode(password));
+        auditAuth("PASSWORD_RESET_COMPLETED", u, "SUCCESS", "PASSWORD_CHANGED", null);
         u.setFailedLoginAttempts(0);
         u.setLockedUntil(null);
         u.setTokenVersion(u.getTokenVersion() + 1);
