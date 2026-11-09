@@ -52,10 +52,6 @@ public class AuthCookieService {
         return csrf;
     }
 
-    public String accessToken(HttpServletRequest request) {
-        return cookieValue(request, ACCESS_COOKIE);
-    }
-
     public String refreshToken(HttpServletRequest request) {
         return cookieValue(request, REFRESH_COOKIE);
     }
