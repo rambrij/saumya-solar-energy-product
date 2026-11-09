@@ -168,7 +168,9 @@ public class Controller {
     UserView createVendorEmployee(@Valid @RequestBody EmployeeCreate x, Authentication a) {
         var actor = p(a);
         if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
-                || actor.permissions() == null || !actor.permissions().contains("USER_MANAGE"))
+                || actor.permissions() == null
+                || !actor.permissions().contains("USER_CREATE")
+                || !actor.permissions().contains("ROLE_ASSIGN"))
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
         enterpriseSaas.enforceUserLimit(actor.tenantId());
         var u = lifecycle.createEmployee(actor.tenantId(), actor.userId(), x.name(), x.email(), x.password(), x.roleName());
@@ -224,6 +226,24 @@ public class Controller {
     @GetMapping("/roles")
     List<com.saumyasolar.domain.Role> employeeRoles(Authentication a) {
         return s.employeeRoles(p(a));
+    }
+
+    @PostMapping("/roles")
+    com.saumyasolar.domain.Role createCustomRole(@Valid @RequestBody RolePermissionRequest x, Authentication a) {
+        var actor = p(a);
+        if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
+                || actor.permissions() == null || !actor.permissions().contains("ROLE_CREATE"))
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
+        return lifecycle.createCustomRole(actor.tenantId(), actor.userId(), x.name(), x.permissions());
+    }
+
+    @PatchMapping("/roles/{roleId}")
+    com.saumyasolar.domain.Role updateCustomRole(@PathVariable UUID roleId, @Valid @RequestBody RolePermissionRequest x, Authentication a) {
+        var actor = p(a);
+        if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
+                || actor.permissions() == null || !actor.permissions().contains("ROLE_UPDATE"))
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
+        return lifecycle.updateCustomRole(actor.tenantId(), actor.userId(), roleId, x.permissions());
     }
     
     @Operation(
