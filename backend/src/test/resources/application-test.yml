@@ -17,6 +17,11 @@ spring:
 app:
   auth:
     platform-mfa-enabled: false
+    rate-limit:
+      login-per-window: 10000
+      recovery-per-window: 10000
+      mfa-per-window: 10000
+      window-seconds: 60
   jwt-secret: test-only-jwt-secret-that-is-long-enough-for-hmac-sha-256-and-more
   cors-origins: http://localhost:3000
   seed:
