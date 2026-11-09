@@ -38,13 +38,14 @@ class EnterpriseSaasServiceTest {
     @Mock SubscriptionAssignmentHistoryRepository subscriptionHistory;
     @Mock ProductRepository productRecords;
     @Mock CustomerProfileRepository customerProfiles;
+    @Mock TenantStorageLedgerRepository storageLedger;
 
     EnterpriseSaasService service;
 
     @BeforeEach
     void setUp() {
         service = new EnterpriseSaasService(branches, memberships, plans, subscriptions, tenants,
-                users, audits, warehouses, tenantDomains, new ObjectMapper(), subscriptionHistory, productRecords, customerProfiles);
+                users, audits, warehouses, tenantDomains, new ObjectMapper(), subscriptionHistory, productRecords, customerProfiles, storageLedger);
     }
 
     @Test
