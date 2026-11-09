@@ -37,14 +37,22 @@ async function rotateSession():Promise<AuthSession>{
  const response=await fetch(API_BASE+'/api/v1/auth/refresh',{method:'POST',headers,credentials:'include'});
  if(!response.ok)throw new Error('session');
  const next=await response.json() as AuthSession;
- if(!next.accessToken||!next.user)throw new Error('invalid refresh response');
+ if(!next.user)throw new Error('invalid refresh response');
  setCurrentAuthSession(next);
  return next;
 }
 
 export async function bootstrapSession():Promise<AuthSession|null>{
- if(!csrfToken())return null;
  try{
+  let csrf=csrfToken();
+  if(!csrf){
+   const csrfResponse=await fetch(API_BASE+'/api/v1/auth/csrf',{method:'GET',credentials:'include',headers:{'Accept':'application/json'}});
+   if(!csrfResponse.ok)return null;
+   const payload=await csrfResponse.json() as {csrfToken?:string};
+   if(!payload.csrfToken)return null;
+   csrf=payload.csrfToken;
+   sessionStorage.setItem('saumya-csrf-token',csrf);
+  }
   if(!refreshInFlight)refreshInFlight=rotateSession();
   try{return await refreshInFlight}catch{setCurrentAuthSession(null);return null}finally{refreshInFlight=null}
  }catch{return null}
