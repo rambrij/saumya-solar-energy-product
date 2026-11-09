@@ -868,7 +868,14 @@ public class FinanceService {
     public List<CustomerProfile> serviceCustomers(Principal p) {
         servicePermission(p);
         permission(p, "SERVICE_VIEW");
-        return customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(CustomerProfile::isActive).toList();
+        List<CustomerProfile> active = customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(CustomerProfile::isActive).toList();
+        if (p.roles() != null && p.roles().stream().anyMatch(Set.of("SERVICE_ENGINEER", "TECHNICIAN", "INSTALLER")::contains)) {
+            Set<UUID> assignedCustomers = tickets.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream()
+                    .filter(ticket -> p.userId().equals(ticket.getAssignedEngineerId()))
+                    .map(ServiceRequest::getCustomerId).collect(java.util.stream.Collectors.toSet());
+            return active.stream().filter(customer -> assignedCustomers.contains(customer.getId())).toList();
+        }
+        return active;
     }
     
     public List<AppUser> serviceEngineers(Principal p) {
