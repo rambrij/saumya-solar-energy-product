@@ -24,6 +24,27 @@ import java.security.MessageDigest;
 import java.util.Base64;
 @Service
 public class AuthLifecycleService {
+    private static final java.util.Set<String> VENDOR_ROLE_PERMISSION_CODES = java.util.Set.of(
+            "USER_VIEW", "USER_CREATE", "USER_UPDATE", "USER_DISABLE",
+            "ROLE_VIEW", "ROLE_CREATE", "ROLE_UPDATE", "ROLE_ASSIGN",
+            "CUSTOMER_VIEW", "CUSTOMER_CREATE", "CUSTOMER_UPDATE", "CUSTOMER_EXPORT",
+            "PRODUCT_VIEW", "PRODUCT_CREATE", "PRODUCT_UPDATE", "PRODUCT_ARCHIVE",
+            "PACKAGE_VIEW", "PACKAGE_CREATE", "PACKAGE_UPDATE", "PACKAGE_PUBLISH",
+            "LEAD_VIEW", "LEAD_CREATE", "LEAD_UPDATE", "LEAD_ASSIGN", "LEAD_EXPORT",
+            "SURVEY_VIEW", "SURVEY_CREATE", "SURVEY_ASSIGN", "SURVEY_COMPLETE",
+            "QUOTATION_VIEW", "QUOTATION_CREATE", "QUOTATION_UPDATE", "QUOTATION_SEND",
+            "QUOTATION_APPROVE_DISCOUNT", "QUOTATION_CONVERT",
+            "ORDER_VIEW", "ORDER_CREATE", "ORDER_UPDATE", "ORDER_CANCEL", "ORDER_ASSIGN",
+            "INVENTORY_VIEW", "INVENTORY_RECEIVE", "INVENTORY_RESERVE", "INVENTORY_TRANSFER",
+            "INVENTORY_ADJUST", "INVENTORY_EXPORT",
+            "INSTALLATION_VIEW", "INSTALLATION_SCHEDULE", "INSTALLATION_ASSIGN",
+            "INSTALLATION_UPDATE", "INSTALLATION_COMMISSION",
+            "INVOICE_VIEW", "INVOICE_CREATE", "INVOICE_SEND", "INVOICE_VOID",
+            "PAYMENT_VIEW", "PAYMENT_RECORD", "PAYMENT_REFUND",
+            "SERVICE_VIEW", "SERVICE_CREATE", "SERVICE_ASSIGN", "SERVICE_UPDATE",
+            "SERVICE_RESOLVE", "SERVICE_CLOSE", "REPORT_VIEW", "REPORT_EXPORT",
+            "CMS_VIEW", "CMS_CREATE", "CMS_UPDATE", "CMS_PUBLISH", "AUDIT_VIEW"
+    );
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private EnterpriseSaasService enterpriseSaas;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -379,10 +400,10 @@ public class AuthLifecycleService {
         var result = new java.util.HashSet<Permission>();
         if (codes == null) return result;
         for (String code : codes) {
-            if (code == null || code.isBlank() || java.util.Set.of("PLATFORM_MANAGE", "SUBSCRIPTION_MANAGE", "TENANT_VIEW", "TENANT_UPDATE").contains(code))
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform permissions cannot be assigned to vendor roles");
+            if (code == null || !VENDOR_ROLE_PERMISSION_CODES.contains(code))
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Permission is not assignable to a vendor custom role");
             result.add(permissions.findByCode(code)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown permission code: " + code)));
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Permission is not installed: " + code)));
         }
         return result;
     }
