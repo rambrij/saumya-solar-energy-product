@@ -449,6 +449,70 @@ class Release12TenantIntegrationTest {
     }
 
     @Test
+    void salesExecutiveCanOnlyReadAndUpdateAssignedLeads() throws Exception {
+        var adminToken = accessToken("admin@saumya.local", "Admin@123");
+        var salesUser = users.findByEmailIgnoreCase("sales@saumya.local").orElseThrow();
+        var managerEmail = "sales-manager-" + UUID.randomUUID() + "@example.test";
+        var managerBody = """
+                {"name":"Sales Manager Test","email":"%s","password":"SalesManager-Pass-2026","roleName":"SALES_MANAGER"}
+                """.formatted(managerEmail);
+        var managerResponse = mvc.perform(post("/api/v1/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(managerBody))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var managerId = json.readTree(managerResponse).get("id").asText();
+
+        var firstEnquiry = mvc.perform(post("/api/v1/enquiries")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Assigned Lead","email":"assigned-%s@example.test","phone":"9000000001","propertyType":"Residential"}
+                                """.formatted(UUID.randomUUID())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var firstEnquiryId = json.readTree(firstEnquiry).get("id").asText();
+        var assignedLead = mvc.perform(post("/api/v1/enquiries/" + firstEnquiryId + "/convert")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"assignedUserId":"%s","priority":"MEDIUM"}
+                                """.formatted(salesUser.getId())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var assignedLeadId = json.readTree(assignedLead).get("id").asText();
+
+        var secondEnquiry = mvc.perform(post("/api/v1/enquiries")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Other Lead","email":"other-%s@example.test","phone":"9000000002","propertyType":"Residential"}
+                                """.formatted(UUID.randomUUID())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var secondEnquiryId = json.readTree(secondEnquiry).get("id").asText();
+        var otherLead = mvc.perform(post("/api/v1/enquiries/" + secondEnquiryId + "/convert")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"assignedUserId":"%s","priority":"MEDIUM"}
+                                """.formatted(managerId)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var otherLeadId = json.readTree(otherLead).get("id").asText();
+
+        var salesToken = accessToken("sales@saumya.local", "Sales@123");
+        var visibleLeads = mvc.perform(get("/api/v1/leads").header("Authorization", "Bearer " + salesToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(visibleLeads.contains(assignedLeadId));
+        assertFalse(visibleLeads.contains(otherLeadId));
+        mvc.perform(get("/api/v1/leads/" + otherLeadId + "/history").header("Authorization", "Bearer " + salesToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(patch("/api/v1/leads/" + assignedLeadId)
+                        .header("Authorization", "Bearer " + salesToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"assignedUserId":"%s","stage":"CONTACTED","priority":"HIGH"}
+                                """.formatted(managerId)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void vendorAdminCanCreateCategorizedProductAndConfigurablePackage() throws Exception {
         var token = accessToken("admin@saumya.local", "Admin@123");
         var categoriesJson = mvc.perform(get("/api/v1/categories").header("Authorization", "Bearer " + token))
