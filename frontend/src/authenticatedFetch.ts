@@ -34,7 +34,7 @@ export async function bootstrapSession():Promise<AuthSession|null>{
  if(!sessionStorage.getItem('saumya-csrf-token'))return null;
  try{
   if(!refreshInFlight)refreshInFlight=rotateSession();
-  try{return await refreshInFlight}catch{return null}finally{refreshInFlight=null}
+  try{return await refreshInFlight}catch{setCurrentAuthSession(null);return null}finally{refreshInFlight=null}
  }catch{return null}
 }
 
