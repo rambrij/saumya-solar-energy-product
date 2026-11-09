@@ -756,7 +756,7 @@ class Release12TenantIntegrationTest {
         assertNotNull(line.getTaxPercent());
         assertTrue(persistedOrder.getTotal().compareTo(BigDecimal.ZERO) > 0);
         
-        var vendorToken = accessToken("sales@saumya.local", "Sales@123");
+        var vendorToken = accessToken("admin@saumya.local", "Admin@123");
         mvc.perform(post("/api/v1/orders/" + orderId + "/vendor-decision")
                         .header("Authorization", "Bearer " + vendorToken)
                         .contentType(MediaType.APPLICATION_JSON)
