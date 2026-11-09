@@ -493,7 +493,7 @@ public class AppService {
     
     public List<Role> employeeRoles(Principal p) {
         vendor(p);
-        requirePermission(p, "USER_MANAGE");
+        requirePermission(p, "ROLE_VIEW");
         return roles.findByTenantIdOrderByNameAsc(p.tenantId()).stream()
                 .filter(role -> !java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "CUSTOMER").contains(role.getName()))
                 .toList();
