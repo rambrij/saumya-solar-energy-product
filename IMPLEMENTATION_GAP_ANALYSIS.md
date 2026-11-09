@@ -867,8 +867,13 @@ This addendum supersedes older Phase 1 gap statements in this file where they co
 ### Remaining limitations
 1. Final CI validation is pending for the latest source commit after the above role, service-scope, audit, CIDR and integration-test changes.
 2. Actual Render ingress proxy addresses/ranges, `CORS_ORIGINS`, cookie attributes and HTTPS forwarding chain cannot be verified from repository source; production environment verification remains required.
-3. Browser refresh coalescing is per tab only. Cross-tab refresh coordination is not implemented; simultaneous replay across tabs is deliberately treated as token-family replay and revokes the family.
+3. Cross-tab refresh is now serialized with Web Locks on supported browsers. Browsers without Web Locks retain per-tab coalescing only and may trigger token-family replay protection; define a supported-browser policy or add a separately reviewed fallback.
 4. Cross-site third-party cookie restrictions may affect Vercel/Render default domains; use same-site custom subdomains or a same-origin reverse proxy where possible.
 5. External/mobile clients using the old JSON refresh-token contract must migrate or receive a separately designed client flow.
 
 **Phase 1 status remains conditional, not production-approved, until latest CI passes and deployment proxy/CORS/cookie settings are verified.**
+
+
+### Cross-tab refresh follow-up
+
+`frontend/src/authenticatedFetch.ts` now uses the browser Web Locks API with the shared lock name `saumya-auth-refresh`. The lock encloses CSRF-cookie bootstrap and refresh rotation. Every queued tab fetches the latest CSRF value after acquiring the lock, then rotates the refresh cookie currently shared by the browser. This prevents simultaneous refresh requests from separate supported tabs from reusing the same old refresh token. The frontend test suite verifies lock acquisition and the CSRF-before-refresh sequence. Browsers without Web Locks fall back to per-tab single-flight behavior and remain a documented compatibility limitation.
