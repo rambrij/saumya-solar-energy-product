@@ -188,7 +188,7 @@ class Release3OperationsIntegrationTest {
             line.setLineTotal(new BigDecimal("1000"));
             orderItems.save(line);
         }
-        Principal principal = new Principal(admin.getId(), tenantId, admin.getEmail(), "VENDOR", java.util.Set.of("INVENTORY_MANAGER"), java.util.Set.of("INVENTORY_MANAGE"));
+        Principal principal = new Principal(admin.getId(), tenantId, admin.getEmail(), "VENDOR", java.util.Set.of("INVENTORY_MANAGER"), java.util.Set.of("INVENTORY_RESERVE"));
         java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
         java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
         try {
