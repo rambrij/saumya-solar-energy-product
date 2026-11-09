@@ -15,7 +15,7 @@ export default function RoleManagementPanel({s,error}:Props){
   setLoading(true);
   try{
    const [roleRows,permissionRows,userRows]=await Promise.all([api('/roles',{},s),api('/permissions',{},s),s.user.permissions.includes('USER_VIEW')?api('/users',{},s):Promise.resolve([])]);
-   setRoles(roleRows||[]);setPermissions(permissionRows||[]);setUsers(userRows||[]);
+   setRoles(roleRows||[]);setPermissions(permissionRows||[]);setUsers((userRows||[]).filter((user:any)=>(user.roles||[]).every((role:any)=>(typeof role==='string'?role:role.name)!=='VENDOR_ADMIN')));
   }catch(e:any){error(e.message||'Unable to load role permissions')}
   finally{setLoading(false)}
  };
