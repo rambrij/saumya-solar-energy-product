@@ -20,7 +20,7 @@ function csrfHeaders(headers:Headers):Headers {
  return headers;
 }
 
-async function rotateSession(base:AuthSession|null):Promise<AuthSession>{
+async function rotateSession():Promise<AuthSession>{
  const headers=csrfHeaders(new Headers({'Accept':'application/json'}));
  const response=await fetch(API_BASE+'/api/v1/auth/refresh',{method:'POST',headers,credentials:'include'});
  if(!response.ok)throw new Error('session');
@@ -33,7 +33,7 @@ async function rotateSession(base:AuthSession|null):Promise<AuthSession>{
 export async function bootstrapSession():Promise<AuthSession|null>{
  if(!sessionStorage.getItem('saumya-csrf-token'))return null;
  try{
-  if(!refreshInFlight)refreshInFlight=rotateSession(null);
+  if(!refreshInFlight)refreshInFlight=rotateSession();
   try{return await refreshInFlight}catch{return null}finally{refreshInFlight=null}
  }catch{return null}
 }
@@ -49,7 +49,7 @@ export async function authenticatedFetch(url:string,init:RequestInit={},session?
  let response=await request(active);
  if(response.status===401&&active&&!url.includes('/auth/')){
   try{
-   if(!refreshInFlight)refreshInFlight=rotateSession(active);
+   if(!refreshInFlight)refreshInFlight=rotateSession();
    try{active=await refreshInFlight}finally{refreshInFlight=null}
    response=await request(active);
   }catch{
