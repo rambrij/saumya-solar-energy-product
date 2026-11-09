@@ -701,6 +701,21 @@ class Release12TenantIntegrationTest {
                 "Blocked custom-role platform permission escalation must be durably audited");
     }
 
+
+    @Test
+    void everySeededEmployeeRoleHasItsDeclaredFineGrainedSrsPermissionSet() {
+        var forbidden = java.util.Set.of("PLATFORM_MANAGE", "SUBSCRIPTION_MANAGE", "TENANT_VIEW", "TENANT_UPDATE",
+                "CATALOG_MANAGE", "CATALOG_VIEW", "CUSTOMER_MANAGE", "LEAD_MANAGE", "SURVEY_MANAGE",
+                "QUOTATION_MANAGE", "DISCOUNT_APPROVE", "USER_MANAGE", "INVENTORY_MANAGE", "SERVICE_MANAGE", "FINANCE_MANAGE");
+        com.saumyasolar.config.DataSeeder.employeeRolePermissions().forEach((roleName, expected) -> {
+            var role = roles.findByNameAndTenantId(roleName, vendorTenantId).orElseThrow();
+            var actual = role.getPermissions().stream().map(com.saumyasolar.domain.Permission::getCode)
+                    .collect(java.util.stream.Collectors.toSet());
+            assertTrue(actual.containsAll(expected), "Missing declared permission for " + roleName);
+            assertTrue(java.util.Collections.disjoint(actual, forbidden), "Legacy/platform permission on " + roleName);
+        });
+    }
+
     @Test
     void vendorAdminAndCustomRolesNeverReceivePlatformOrLegacyBroadPermissions() {
         var admin = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
