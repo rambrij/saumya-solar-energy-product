@@ -5,7 +5,6 @@ import com.saumyasolar.repo.AuditEventRepository;
 import com.saumyasolar.security.ClientAddressResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -20,7 +19,7 @@ public class AuthenticationAuditService {
         this.addresses = addresses;
     }
 
-    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    @jakarta.transaction.Transactional
     public void record(String action, UUID tenantId, UUID actorId, String outcome,
                        String safeReason, String entityId, HttpServletRequest request) {
         AuditEvent event = new AuditEvent();
