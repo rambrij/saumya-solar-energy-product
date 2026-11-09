@@ -45,7 +45,7 @@ export default function RoleManagementPanel({s,error}:Props){
  };
  const filtered=roles.filter(role=>String(role.name).toLowerCase().includes(search.toLowerCase()));
  return <section className="role-management-page">
-  <div className="management-heading"><div><p className="eyebrow">CUSTOMERS & TEAM</p><h1>Roles & Permissions</h1><p className="muted">Create tenant-specific roles using the approved SRS permission catalogue. Platform permissions are never assignable to vendor roles.</p></div><button type="button" onClick={startCreate}>＋ Create Custom Role</button></div>
+  <div className="management-heading"><div><p className="eyebrow">CUSTOMERS & TEAM</p><h1>Roles & Permissions</h1><p className="muted">Create tenant-specific roles using the approved SRS permission catalogue. Platform permissions are never assignable to vendor roles.</p></div>{s.user.permissions.includes("ROLE_CREATE")&&<button type="button" onClick={startCreate}>＋ Create Custom Role</button>}</div>
   {selected&&<form className="card form" onSubmit={save}>
    <h2>{selected.id?'Edit Custom Role':'Create Custom Role'}</h2>
    <label>Role name<input value={name} onChange={e=>setName(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g,''))} minLength={3} maxLength={50} pattern="[A-Z][A-Z0-9_]{2,49}" placeholder="e.g. REGIONAL_SALES" required/></label>
@@ -54,7 +54,7 @@ export default function RoleManagementPanel({s,error}:Props){
    <div className="form-actions"><button disabled={saving}>{saving?'Saving…':'Save Role'}</button><button type="button" className="secondary" onClick={()=>setSelected(null)}>Cancel</button></div>
   </form>}
   <div className="card management-list"><div className="table-toolbar"><div><h2>Tenant roles</h2><span className="muted">{filtered.length} roles</span></div><input aria-label="Search roles" placeholder="Search roles…" value={search} onChange={e=>setSearch(e.target.value)}/></div>
-   {loading?<p>Loading roles…</p>:!filtered.length?<p>No roles are configured.</p>:<div className="table-wrap"><table><thead><tr><th>Role</th><th>Type</th><th>Permissions</th><th>Actions</th></tr></thead><tbody>{filtered.map(role=><tr key={role.id}><td><b>{role.name.replaceAll('_',' ')}</b></td><td>{role.customRole?'Custom':'System'}</td><td>{(role.permissions||[]).length}</td><td>{role.customRole?<button type="button" className="secondary" onClick={()=>startEdit(role)}>Edit permissions</button>:<span className="muted">Managed by system</span>}</td></tr>)}</tbody></table></div>}
+   {loading?<p>Loading roles…</p>:!filtered.length?<p>No roles are configured.</p>:<div className="table-wrap"><table><thead><tr><th>Role</th><th>Type</th><th>Permissions</th><th>Actions</th></tr></thead><tbody>{filtered.map(role=><tr key={role.id}><td><b>{role.name.replaceAll('_',' ')}</b></td><td>{role.customRole?'Custom':'System'}</td><td>{(role.permissions||[]).length}</td><td>{role.customRole&&s.user.permissions.includes('ROLE_UPDATE')?<button type="button" className="secondary" onClick={()=>startEdit(role)}>Edit permissions</button>:<span className="muted">Managed by system</span>}</td></tr>)}</tbody></table></div>}
   </div>
  </section>;
 }
