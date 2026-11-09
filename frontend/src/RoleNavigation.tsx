@@ -2,28 +2,28 @@ import React,{useMemo,useState} from 'react';
 import BrandLogo from './BrandLogo';
 
 export type NavigationItem={key:string;label:string;permission?:string|string[];allPermissions?:string[];requiredRoles?:string[]};
-export type NavigationGroup={label:string;items:NavigationItem[]};
+export type NavigationGroup={label:string;items:NavigationItem[];singleLink?:boolean};
 const roleMenus:Record<string,NavigationGroup[]>={
  platform:[
-  {label:'Dashboard',items:[{key:'dashboard',label:'Dashboard'}]},
+  {label:'Dashboard',singleLink:true,items:[{key:'dashboard',label:'Dashboard'}]},
   {label:'Subscriptions',items:[{key:'subscriptions',label:'Plans',permission:'SUBSCRIPTION_MANAGE'},{key:'assignments',label:'Assignments',permission:'SUBSCRIPTION_MANAGE'}]},
-  {label:'Analytics',items:[{key:'analytics',label:'Analytics',permission:'SUBSCRIPTION_MANAGE'}]},
-  {label:'Audit',items:[{key:'audit',label:'Audit',permission:'AUDIT_VIEW'}]},
-  {label:'Tenants',items:[{key:'tenants',label:'Tenants'}]},
-  {label:'Settings',items:[{key:'settings',label:'Settings',permission:'PLATFORM_MANAGE'}]}
+  {label:'Analytics',singleLink:true,items:[{key:'analytics',label:'Analytics',permission:'SUBSCRIPTION_MANAGE'}]},
+  {label:'Audit',singleLink:true,items:[{key:'audit',label:'Audit',permission:'AUDIT_VIEW'}]},
+  {label:'Tenants',singleLink:true,items:[{key:'tenants',label:'Tenants',permission:'PLATFORM_MANAGE'}]},
+  {label:'Settings',singleLink:true,items:[{key:'settings',label:'Settings',permission:'PLATFORM_MANAGE'}]}
  ],
  vendor:[
-  {label:'Overview',items:[{key:'dashboard',label:'Dashboard'}]},
+  {label:'Dashboard',singleLink:true,items:[{key:'dashboard',label:'Dashboard'}]},
   {label:'Catalog',items:[{key:'categories',label:'Categories',permission:'CATALOG_MANAGE'},{key:'products',label:'Products',permission:'CATALOG_MANAGE'},{key:'packages',label:'Solar Packages',permission:'CATALOG_MANAGE'}]},
   {label:'Sales',items:[{key:'enquiries',label:'Enquiries',permission:'LEAD_MANAGE'},{key:'leads',label:'Leads',permission:'LEAD_MANAGE'},{key:'surveys',label:'Site Surveys',permission:'SURVEY_MANAGE'},{key:'quotations',label:'Quotations',permission:'QUOTATION_MANAGE'},{key:'orders',label:'Orders',permission:'ORDER_CREATE'}]},
   {label:'Customers & Team',items:[{key:'customers',label:'Customers',permission:'CUSTOMER_MANAGE'},{key:'users',label:'Users',permission:'USER_VIEW'},{key:'branches',label:'Branches',permission:'BRANCH_MANAGE'}]},
-  {label:'Insights',items:[{key:'analytics',label:'Analytics',allPermissions:['REPORT_VIEW','BRANCH_MANAGE'],requiredRoles:['VENDOR_ADMIN']}] },
-  {label:'Business operations',items:[{key:'operations',label:'Inventory & Operations',permission:['INVENTORY_MANAGE','SURVEY_MANAGE']},{key:'finance-service',label:'Finance & Service',permission:['FINANCE_MANAGE','SERVICE_MANAGE']},{key:'offline-sync',label:'Offline Business Sync'}]},
-  {label:'Account',items:[{key:'subscription',label:'My Subscription',permission:['SUBSCRIPTION_VIEW','SUBSCRIPTION_MANAGE']},{key:'settings',label:'Settings',permission:'DISCOUNT_POLICY_MANAGE'}]}
+  {label:'Insights',items:[{key:'analytics',label:'Analytics',permission:'REPORT_VIEW',requiredRoles:['VENDOR_ADMIN']}]},
+  {label:'Business Operations',items:[{key:'operations',label:'Inventory & Operations',permission:['INVENTORY_MANAGE','SURVEY_MANAGE']},{key:'finance-service',label:'Finance & Service',permission:['FINANCE_MANAGE','SERVICE_MANAGE']},{key:'offline-sync',label:'Offline Business Sync'}]},
+  {label:'Account',items:[{key:'subscription',label:'My Subscription',requiredRoles:['VENDOR_ADMIN']},{key:'settings',label:'Settings',permission:'DISCOUNT_POLICY_MANAGE'}]}
  ],
  customer:[
-  {label:'Overview',items:[{key:'dashboard',label:'Dashboard'}]},
-  {label:'My Account',items:[{key:'profile',label:'My Profile'},{key:'customer-orders',label:'My Orders'},{key:'invoices',label:'My Invoices'},{key:'enquiries',label:'My Enquiries'},{key:'addresses',label:'Addresses'},{key:'settings',label:'Settings'},{key:'logout',label:'Logout'}]}
+  {label:'Dashboard',singleLink:true,items:[{key:'dashboard',label:'Dashboard'}]},
+  {label:'My Account',items:[{key:'profile',label:'My Profile'},{key:'customer-orders',label:'My Orders'},{key:'invoices',label:'My Invoices'},{key:'quotations',label:'My Quotation'},{key:'enquiries',label:'My Enquiries'},{key:'addresses',label:'Addresses'},{key:'settings',label:'Settings'},{key:'logout',label:'Logout'}]}
  ]
 };
 export function getRoleNavigation(role:'platform'|'vendor'|'customer',permissions:string[]=[],roles:string[]=[]):NavigationGroup[]{
@@ -40,13 +40,14 @@ export default function RoleShell({role,active,onNavigate,children,user,onLogout
  const activeGroup=groups.find(g=>g.items.some(i=>i.key===active))?.label;
  const select=(key:string)=>{if(key==='logout')onLogout();else onNavigate(key);setMobileOpen(false)};
  const activeLabel=groups.flatMap(g=>g.items).find(i=>i.key===active)?.label||active;
+ const dashboard=()=>onNavigate('dashboard');
  return <div className={'role-app role-'+role}>
   {mobileOpen&&<button type="button" className="role-drawer-scrim" aria-label="Close menu" onClick={()=>setMobileOpen(false)}/>}
   <aside className={'role-sidebar'+(mobileOpen?' is-open':'')} aria-label="Application navigation">
-   <div className="role-sidebar-brand"><BrandLogo className="role-sidebar-logo"/><span><b>Saumya Solar</b><small>{role==='platform'?'Platform Console':role==='customer'?'Customer Account':'Vendor Workspace'}</small></span><button type="button" className="role-sidebar-close" aria-label="Close menu" onClick={()=>setMobileOpen(false)}>×</button></div>
-   <nav className="role-menu">{groups.map(group=>{const expanded=group.label===activeGroup||!(collapsed[group.label]??true);return <section className="role-menu-group" key={group.label}><button type="button" className="role-menu-group-title" aria-expanded={expanded} onClick={()=>{if(group.label!==activeGroup)setCollapsed(v=>({...v,[group.label]:expanded}))}}>{group.label}<span>{expanded?'−':'＋'}</span></button>{expanded&&<div className="role-menu-items">{group.items.map(item=><button type="button" key={item.key} className={'role-menu-item'+(active===item.key?' active':'')} aria-current={active===item.key?'page':undefined} onClick={()=>select(item.key)}>{item.label}</button>)}</div>}</section>})}</nav>
+   <div className="role-sidebar-brand">{role!=='customer'&&<BrandLogo className="role-sidebar-logo" onClick={dashboard}/>}<span><b>Saumya Solar</b><small>{role==='platform'?'Platform Console':role==='customer'?'Customer Account':'Vendor Workspace'}</small></span><button type="button" className="role-sidebar-close" aria-label="Close menu" onClick={()=>setMobileOpen(false)}>×</button></div>
+   <nav className="role-menu">{groups.map(group=>{const expanded=group.label===activeGroup||!(collapsed[group.label]??true);return <section className="role-menu-group" key={group.label}>{group.singleLink?<button type="button" className={'role-menu-item role-menu-single'+(active===group.items[0].key?' active':'')} aria-current={active===group.items[0].key?'page':undefined} onClick={()=>select(group.items[0].key)}>{group.items[0].label}</button>:<><button type="button" className="role-menu-group-title" aria-expanded={expanded} onClick={()=>{if(group.label!==activeGroup)setCollapsed(v=>({...v,[group.label]:expanded}))}}>{group.label}<span>{expanded?'−':'＋'}</span></button>{expanded&&<div className="role-menu-items">{group.items.map(item=><button type="button" key={item.key} className={'role-menu-item'+(active===item.key?' active':'')} aria-current={active===item.key?'page':undefined} onClick={()=>select(item.key)}>{item.label}</button>)}</div>}</>}</section>})}</nav>
    <div className="role-sidebar-footer"><span className="role-avatar">{(user.name||'U').slice(0,1).toUpperCase()}</span><span><b>{user.name}</b><small>{user.accountType.replaceAll('_',' ')}</small></span></div>
   </aside>
-  <div className="role-main-column"><header className="role-topbar"><BrandLogo className="role-topbar-logo"/><button type="button" className="role-mobile-toggle" aria-label="Open navigation" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(true)}>☰</button><div className="role-breadcrumbs"><span>Workspace</span><span>/</span>{breadcrumbs.length?breadcrumbs.map((x,i)=><React.Fragment key={x}>{i>0&&<span>/</span>}<b>{x}</b></React.Fragment>):<b>{activeLabel}</b>}</div><div className="role-topbar-actions">{planBadge&&<span className="role-plan-badge">{planBadge}</span>}{role!=='customer'&&<><span className="role-topbar-user">{user.name}</span><button type="button" className="role-logout" onClick={onLogout}>Logout</button></>}</div></header><div className="role-content">{children}</div></div>
+  <div className="role-main-column"><header className="role-topbar">{role!=='customer'&&<BrandLogo className="role-topbar-logo" onClick={dashboard}/>}<button type="button" className="role-mobile-toggle" aria-label="Open navigation" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(true)}>☰</button><div className="role-breadcrumbs"><span>Workspace</span><span>/</span>{breadcrumbs.length?breadcrumbs.map((x,i)=><React.Fragment key={x}>{i>0&&<span>/</span>}<b>{x}</b></React.Fragment>):<b>{activeLabel}</b>}</div><div className="role-topbar-actions">{planBadge&&<span className="role-plan-badge">{planBadge}</span>}{role!=='customer'&&<><span className="role-topbar-user">{user.name}</span><button type="button" className="role-logout" onClick={onLogout}>Logout</button></>}</div></header><div className="role-content">{children}</div></div>
  </div>;
 }
