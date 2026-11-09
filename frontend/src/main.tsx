@@ -1,37 +1,8 @@
 import React,{useEffect,useState}from'react';import{createRoot}from'react-dom/client';import'./style.css';import OperationsPanel from './OperationsPanel';import RecordEditor from './RecordEditor';import PublicHome from './PublicHome';import PackageImageUpload from './PackageImageUpload';import FinanceServicePanel from './FinanceServicePanel';import EnterpriseSaasPanel from './EnterpriseSaasPanel';import PlatformAnalyticsPanel from './PlatformAnalyticsPanel';import OfflineSyncPanel from './OfflineSyncPanel';import RoleShell,{getNavigationKeys} from './RoleNavigation';import VendorAnalyticsPanel from './VendorAnalyticsPanel';import PublicSiteHeader from './PublicSiteHeader';import BrandLogo from './BrandLogo';
 const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
 const assetUrl=(value?:string|null)=>!value?'https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&w=900&q=80':value.startsWith('/')?API_BASE+value:value;
-type Session={accessToken:string,refreshToken?:string,user:{id:string;tenantId?:string;name:string;email:string;accountType:string;roles:string[];permissions:string[]}};
-let refreshInFlight:Promise<Session>|null=null;
-async function authenticatedFetch(url:string,init:RequestInit={},session?:Session|null):Promise<Response>{
- let active:Session|null=session||null;
- if(session){try{active=JSON.parse(localStorage.getItem('session')||'null')||session}catch{active=session}}
- const request=(current:Session|null)=>fetch(url,{...init,headers:{...(current?{Authorization:'Bearer '+current.accessToken}:{}),...(init.headers||{})}});
- let response=await request(active);
- if(response.status===401&&active?.refreshToken&&!url.includes('/auth/')){
-  try{
-   const latest=JSON.parse(localStorage.getItem('session')||'null') as Session|null;
-   if(latest?.refreshToken&&latest.refreshToken!==active.refreshToken){
-    active=latest;
-   }else{
-    if(!refreshInFlight){
-     refreshInFlight=(async()=>{
-      const refreshed=await fetch(API_BASE+'/api/v1/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refreshToken:active!.refreshToken})});
-      if(!refreshed.ok)throw new Error('session');
-      const rotated=await refreshed.json();const next={...active!,...rotated} as Session;
-      localStorage.setItem('session',JSON.stringify(next));return next;
-     })();
-    }
-    try{active=await refreshInFlight}finally{refreshInFlight=null}
-   }
-   response=await request(active);
-  }catch{
-   localStorage.removeItem('session');window.dispatchEvent(new CustomEvent('saumya:session-expired'));
-   throw new Error('Your session has expired. Please sign in again.');
-  }
- }
- return response;
-}
+import {authenticatedFetch,sessionForToken,type AuthSession} from './authenticatedFetch';
+type Session=AuthSession;
 async function api(path:string,init:RequestInit={},s?:Session|null){
  const active=s||null;
  const headers=new Headers(init.headers||{});
@@ -125,7 +96,7 @@ function CustomerProfilePanel({s,error}:any){
  return <form className="card form customer-profile" onSubmit={submit}><h1>My Profile</h1><label>Name<input name="name" required maxLength={150} defaultValue={profile.name||''}/></label><label>Phone<input name="phone" maxLength={30} defaultValue={profile.phone||''}/></label><label>Email<input value={profile.email||''} readOnly disabled/></label><button disabled={saving}>{saving?'Saving…':'Save profile'}</button><p className="muted">Email and account role are managed by the identity service and cannot be changed here.</p></form>;
 }
 function CustomerAddresses({token,onError}:any){
- const currentSession=():Session=>({...JSON.parse(localStorage.getItem('session')||'{}'),accessToken:token} as Session);
+ const currentSession=():Session=>sessionForToken(token);
  const [rows,setRows]=useState<any[]>([]),[loading,setLoading]=useState(true),[editing,setEditing]=useState<any>(null),[saving,setSaving]=useState(false);
  const load=async()=>{setLoading(true);try{const r=await authenticatedFetch(API_BASE+'/api/v1/customer/addresses',{},currentSession());const body=await r.json().catch(()=>[]);if(!r.ok)throw Error(body.detail||'Unable to load addresses');setRows(body||[])}catch(e:any){onError(e.message)}finally{setLoading(false)}};
  useEffect(()=>{void load()},[token]);
