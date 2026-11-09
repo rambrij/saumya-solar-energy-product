@@ -157,7 +157,7 @@ public class FinanceService {
     @Transactional
     public Invoice createInvoice(InvoiceCreate input, Principal p) {
         UUID tenant = vendorTenant(p);
-        permission(p, "FINANCE_MANAGE");
+        permission(p, "INVOICE_CREATE");
         permission(p, "INVOICE_CREATE");
         CustomerOrder order = orders.findForUpdate(input.orderId(), tenant).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
         if (!Set.of("CONFIRMED", "PAYMENT_PENDING", "PAYMENT_PARTIAL", "PAID", "MATERIAL_RESERVED", "INSTALLATION_SCHEDULED", "INSTALLATION_IN_PROGRESS", "INSTALLED", "COMMISSIONED", "CLOSED").contains(order.getStatus()))
