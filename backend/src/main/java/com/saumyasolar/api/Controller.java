@@ -118,8 +118,8 @@ public class Controller {
             rs.add(r.getName());
             r.getPermissions().forEach(z -> ps.add(z.getCode()));
         });
-        authCookies.issue(response, lifecycle.newRefresh(u));
-        return new Session(jwt.issue(u), null, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
+        String csrfToken = String csrfToken = String csrfToken = authCookies.issue(response, lifecycle.newRefresh(u));
+        return new Session(jwt.issue(u), null, csrfToken, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
     }
     
     @PostMapping("/auth/mfa/verify")
@@ -133,7 +133,7 @@ public class Controller {
         });
         authCookies.issue(response, lifecycle.newRefresh(u));
         return new Session(
-                jwt.issue(u), null,
+                jwt.issue(u), null, csrfToken,
                 new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), roleNames, permissionCodes)
         );
     }
@@ -145,7 +145,7 @@ public class Controller {
         if (refreshToken == null || refreshToken.isBlank())
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh session is unavailable");
         var rotation = lifecycle.rotateRefresh(refreshToken);
-        authCookies.issue(response, rotation.refreshToken());
+        String csrfToken = authCookies.issue(response, rotation.refreshToken());
         var u = rotation.user();
         var rs = new HashSet<String>();
         var ps = new HashSet<String>();
@@ -153,7 +153,7 @@ public class Controller {
             rs.add(r.getName());
             r.getPermissions().forEach(z -> ps.add(z.getCode()));
         });
-        return new Session(jwt.issue(u), null, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
+        return new Session(jwt.issue(u), null, csrfToken, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
     }
     
     @PostMapping("/auth/logout")
@@ -185,7 +185,7 @@ public class Controller {
     Session register(@Valid @RequestBody Register x, jakarta.servlet.http.HttpServletResponse response) {
         var u = lifecycle.register(x.storeSlug(), x.name(), x.email(), x.password());
         authCookies.issue(response, lifecycle.newRefresh(u));
-        return new Session(jwt.issue(u), null, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), Set.of("CUSTOMER"), Set.of()));
+        return new Session(jwt.issue(u), null, csrfToken, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), Set.of("CUSTOMER"), Set.of()));
     }
     
     @PostMapping("/auth/forgot-password")
