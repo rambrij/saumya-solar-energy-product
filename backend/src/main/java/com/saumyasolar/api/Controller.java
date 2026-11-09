@@ -118,7 +118,7 @@ public class Controller {
             rs.add(r.getName());
             r.getPermissions().forEach(z -> ps.add(z.getCode()));
         });
-        String csrfToken = String csrfToken = String csrfToken = authCookies.issue(response, lifecycle.newRefresh(u));
+        String csrfToken = authCookies.issue(response, lifecycle.newRefresh(u));
         return new Session(jwt.issue(u), null, csrfToken, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
     }
     
@@ -131,7 +131,7 @@ public class Controller {
             roleNames.add(role.getName());
             role.getPermissions().forEach(permission -> permissionCodes.add(permission.getCode()));
         });
-        authCookies.issue(response, lifecycle.newRefresh(u));
+        String csrfToken = authCookies.issue(response, lifecycle.newRefresh(u));
         return new Session(
                 jwt.issue(u), null, csrfToken,
                 new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), roleNames, permissionCodes)
@@ -184,7 +184,7 @@ public class Controller {
     @PostMapping("/auth/register")
     Session register(@Valid @RequestBody Register x, jakarta.servlet.http.HttpServletResponse response) {
         var u = lifecycle.register(x.storeSlug(), x.name(), x.email(), x.password());
-        authCookies.issue(response, lifecycle.newRefresh(u));
+        String csrfToken = authCookies.issue(response, lifecycle.newRefresh(u));
         return new Session(jwt.issue(u), null, csrfToken, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), Set.of("CUSTOMER"), Set.of()));
     }
     
