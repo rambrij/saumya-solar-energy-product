@@ -10,6 +10,10 @@ spring:
     open-in-view: false
   flyway:
     enabled: false
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-test.sql
 app:
   auth:
     platform-mfa-enabled: false
