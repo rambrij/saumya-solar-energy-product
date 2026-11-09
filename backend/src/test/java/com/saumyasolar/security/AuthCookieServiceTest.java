@@ -30,8 +30,10 @@ class AuthCookieServiceTest {
         request.setCookies(new Cookie(AuthCookieService.CSRF_COOKIE, "csrf-value"));
         request.addHeader(AuthCookieService.CSRF_HEADER, "csrf-value");
         assertDoesNotThrow(() -> service.requireCsrf(request));
-        request.setHeader(AuthCookieService.CSRF_HEADER, "different");
-        assertEquals(403, assertThrows(ResponseStatusException.class, () -> service.requireCsrf(request))
+        var mismatch = new MockHttpServletRequest();
+        mismatch.setCookies(new Cookie(AuthCookieService.CSRF_COOKIE, "csrf-value"));
+        mismatch.addHeader(AuthCookieService.CSRF_HEADER, "different");
+        assertEquals(403, assertThrows(ResponseStatusException.class, () -> service.requireCsrf(mismatch))
                 .getStatusCode().value());
     }
 
