@@ -49,6 +49,15 @@ class EnterpriseSaasServiceTest {
     }
 
     @Test
+    void platformTenantUsageRejectsVendorAdministrators() {
+        UUID tenantId=UUID.randomUUID();
+        ResponseStatusException error=assertThrows(ResponseStatusException.class,
+                ()->service.platformTenantUsage(principal(tenantId,Set.of("SUBSCRIPTION_MANAGE")),0,20));
+        assertEquals(HttpStatus.FORBIDDEN,error.getStatusCode());
+        verifyNoInteractions(tenants,storageLedger);
+    }
+
+    @Test
     void branchCreationIsRejectedWhenSubscriptionBranchLimitIsReached() {
         UUID tenantId = UUID.randomUUID();
         when(tenants.findByIdForUpdate(tenantId)).thenReturn(Optional.of(new Tenant()));
