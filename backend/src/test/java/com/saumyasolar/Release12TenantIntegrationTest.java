@@ -128,17 +128,18 @@ class Release12TenantIntegrationTest {
         var loginBody = """
                 {"email":"admin@saumya.local","password":"Admin@123"}
                 """;
-        var loginResponse = mvc.perform(post("/api/v1/auth/login")
+        var loginResult = mvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON).content(loginBody))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+                .andExpect(status().isOk()).andReturn();
+        var loginResponse = loginResult.getResponse().getContentAsString();
         var session = json.readTree(loginResponse);
         var accessToken = session.get("accessToken").asText();
         var csrfToken = session.get("csrfToken").asText();
-        var refreshCookie = loginResponse.getResponse().getCookie("saumya_refresh");
+        var refreshCookie = loginResult.getResponse().getCookie("saumya_refresh");
         var csrfCookie = loginResponse.getResponse().getCookie("XSRF-TOKEN");
         assertNotNull(refreshCookie);
         assertNotNull(csrfCookie);
-        assertTrue(loginResponse.getResponse().getHeaders("Set-Cookie").stream().anyMatch(v -> v.contains("HttpOnly")));
+        assertTrue(loginResult.getResponse().getHeaders("Set-Cookie").stream().anyMatch(v -> v.contains("HttpOnly")));
         assertTrue(loginResponse.getResponse().getHeaders("Set-Cookie").stream().anyMatch(v -> v.contains("SameSite")));
 
         mvc.perform(post("/api/v1/auth/logout")
