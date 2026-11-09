@@ -26,6 +26,10 @@ import java.util.Base64;
 public class AuthLifecycleService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private EnterpriseSaasService enterpriseSaas;
+    @org.springframework.beans.factory.annotation.Value("${app.auth.lockout.max-failed-attempts:5}")
+    int maximumFailedLoginAttempts;
+    @org.springframework.beans.factory.annotation.Value("${app.auth.lockout.duration-minutes:15}")
+    long lockoutDurationMinutes;
     final RefreshTokenRepository refresh;
     final PasswordResetTokenRepository resets;
     final MfaChallengeRepository mfaChallenges;
@@ -64,6 +68,33 @@ public class AuthLifecycleService {
         this.notifications = notifications;
     }
     
+    @Transactional(dontRollbackOn = ResponseStatusException.class)
+    public AppUser authenticate(String email, String password) {
+        String genericFailure = "Invalid email or password.";
+        AppUser user = users.findForUpdateByEmailIgnoreCase(email == null ? "" : email.trim()).orElse(null);
+        if (user == null || !user.isEnabled() || !tenantIsActive(user))
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, genericFailure);
+        Instant now = Instant.now();
+        if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(now))
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, genericFailure);
+        if (user.getLockedUntil() != null && !user.getLockedUntil().isAfter(now)) {
+            user.setLockedUntil(null);
+            user.setFailedLoginAttempts(0);
+        }
+        if (password == null || !encoder.matches(password, user.getPasswordHash())) {
+            int attempts = user.getFailedLoginAttempts() + 1;
+            user.setFailedLoginAttempts(attempts);
+            if (attempts >= Math.max(1, maximumFailedLoginAttempts))
+                user.setLockedUntil(now.plus(Duration.ofMinutes(Math.max(1, lockoutDurationMinutes))));
+            users.save(user);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, genericFailure);
+        }
+        user.setFailedLoginAttempts(0);
+        user.setLockedUntil(null);
+        user.setLastLoginAt(now);
+        return users.save(user);
+    }
+
     public boolean tenantIsActive(AppUser user) {
         if (user.getTenantId() == null) return "PLATFORM".equals(user.getAccountType());
         return tenants.findById(user.getTenantId()).map(t -> "ACTIVE".equals(t.getStatus())).orElse(false);
@@ -79,9 +110,17 @@ public class AuthLifecycleService {
         return x.getToken();
     }
     
+    public record RefreshRotation(AppUser user, String refreshToken) {}
+
+    @Transactional(dontRollbackOn = ResponseStatusException.class)
+    public RefreshRotation rotateRefresh(String token) {
+        AppUser user = consumeRefresh(token);
+        return new RefreshRotation(user, newRefresh(user));
+    }
+
     @Transactional(dontRollbackOn = ResponseStatusException.class)
     public AppUser consumeRefresh(String token) {
-        var x = refresh.findByToken(token)
+        var x = refresh.findByTokenForUpdate(token)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
         if (x.isRevoked()) {
             refresh.findByUserIdAndRevokedFalse(x.getUserId()).forEach(session -> {
