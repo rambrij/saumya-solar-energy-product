@@ -63,6 +63,7 @@ public class Controller {
     final com.saumyasolar.service.SurveyLifecycleService surveyLifecycle;
     final com.saumyasolar.service.EnterpriseSaasService enterpriseSaas;
     final boolean platformMfaEnabled;
+    final com.saumyasolar.security.AuthCookieService authCookies;
     
     Controller(
             AppService s,
@@ -80,7 +81,8 @@ public class Controller {
             com.saumyasolar.service.SurveyLifecycleService surveyLifecycle,
             com.saumyasolar.service.EnterpriseSaasService enterpriseSaas,
             @org.springframework.beans.factory.annotation.Value("${app.auth.platform-mfa-enabled:true}")
-            boolean platformMfaEnabled
+            boolean platformMfaEnabled,
+            com.saumyasolar.security.AuthCookieService authCookies
     ) {
         this.s = s;
         users = u;
@@ -97,6 +99,7 @@ public class Controller {
         this.surveyLifecycle = surveyLifecycle;
         this.enterpriseSaas = enterpriseSaas;
         this.platformMfaEnabled = platformMfaEnabled;
+        this.authCookies = authCookies;
     }
     
     Principal p(Authentication a) {
@@ -104,7 +107,7 @@ public class Controller {
     }
     
     @PostMapping("/auth/login")
-    Object login(@Valid @RequestBody Login x) {
+    Object login(@Valid @RequestBody Login x, jakarta.servlet.http.HttpServletResponse response) {
         var u = lifecycle.authenticate(x.email(), x.password());
         if (platformMfaEnabled && "PLATFORM".equals(u.getAccountType())) {
             return new MfaChallengeRequired(true, lifecycle.createMfaChallenge(u));
@@ -115,11 +118,12 @@ public class Controller {
             rs.add(r.getName());
             r.getPermissions().forEach(z -> ps.add(z.getCode()));
         });
-        return new Session(jwt.issue(u), lifecycle.newRefresh(u), new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
+        authCookies.issue(response, lifecycle.newRefresh(u));
+        return new Session(jwt.issue(u), null, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
     }
     
     @PostMapping("/auth/mfa/verify")
-    Session verifyMfa(@Valid @RequestBody MfaVerify input) {
+    Session verifyMfa(@Valid @RequestBody MfaVerify input, jakarta.servlet.http.HttpServletResponse response) {
         var u = lifecycle.verifyMfaChallenge(input.challengeId(), input.code());
         var roleNames = new HashSet<String>();
         var permissionCodes = new HashSet<String>();
@@ -127,15 +131,21 @@ public class Controller {
             roleNames.add(role.getName());
             role.getPermissions().forEach(permission -> permissionCodes.add(permission.getCode()));
         });
+        authCookies.issue(response, lifecycle.newRefresh(u));
         return new Session(
-                jwt.issue(u), lifecycle.newRefresh(u),
+                jwt.issue(u), null,
                 new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), roleNames, permissionCodes)
         );
     }
     
     @PostMapping("/auth/refresh")
-    Session refresh(@Valid @RequestBody Refresh x) {
-        var rotation = lifecycle.rotateRefresh(x.refreshToken());
+    Session refresh(jakarta.servlet.http.HttpServletRequest request, jakarta.servlet.http.HttpServletResponse response) {
+        authCookies.requireCsrf(request);
+        String refreshToken = authCookies.refreshToken(request);
+        if (refreshToken == null || refreshToken.isBlank())
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh session is unavailable");
+        var rotation = lifecycle.rotateRefresh(refreshToken);
+        authCookies.issue(response, rotation.refreshToken());
         var u = rotation.user();
         var rs = new HashSet<String>();
         var ps = new HashSet<String>();
@@ -143,13 +153,15 @@ public class Controller {
             rs.add(r.getName());
             r.getPermissions().forEach(z -> ps.add(z.getCode()));
         });
-        return new Session(jwt.issue(u), rotation.refreshToken(), new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
+        return new Session(jwt.issue(u), null, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
     }
     
     @PostMapping("/auth/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    void logout(@Valid @RequestBody Refresh x) {
-        lifecycle.logout(x.refreshToken());
+    void logout(jakarta.servlet.http.HttpServletRequest request, jakarta.servlet.http.HttpServletResponse response) {
+        authCookies.requireCsrf(request);
+        lifecycle.logout(authCookies.refreshToken(request));
+        authCookies.clear(response);
     }
     
     @PostMapping("/users")
@@ -170,9 +182,10 @@ public class Controller {
     }
     
     @PostMapping("/auth/register")
-    Session register(@Valid @RequestBody Register x) {
+    Session register(@Valid @RequestBody Register x, jakarta.servlet.http.HttpServletResponse response) {
         var u = lifecycle.register(x.storeSlug(), x.name(), x.email(), x.password());
-        return new Session(jwt.issue(u), lifecycle.newRefresh(u), new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), Set.of("CUSTOMER"), Set.of()));
+        authCookies.issue(response, lifecycle.newRefresh(u));
+        return new Session(jwt.issue(u), null, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), Set.of("CUSTOMER"), Set.of()));
     }
     
     @PostMapping("/auth/forgot-password")
