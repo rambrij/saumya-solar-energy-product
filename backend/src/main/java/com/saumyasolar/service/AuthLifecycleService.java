@@ -360,6 +360,13 @@ public class AuthLifecycleService {
         return tenant;
     }
     
+    public java.util.List<Permission> vendorRolePermissions() {
+        return permissions.findAll().stream()
+                .filter(permission -> VENDOR_ROLE_PERMISSION_CODES.contains(permission.getCode()))
+                .sorted(java.util.Comparator.comparing(Permission::getCode))
+                .toList();
+    }
+
     @Transactional
     public com.saumyasolar.domain.Role createCustomRole(UUID tenantId, UUID actorId, String name, java.util.Set<String> permissionCodes) {
         if (tenantId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
@@ -375,6 +382,7 @@ public class AuthLifecycleService {
         role.setId(UUID.randomUUID());
         role.setTenantId(tenantId);
         role.setName(normalized);
+        role.setCustomRole(true);
         role.getPermissions().addAll(resolveVendorPermissions(permissionCodes));
         var saved = roles.save(role);
         auditAuth("CUSTOM_ROLE_CREATED", users.findById(actorId).orElse(null), "SUCCESS", "CUSTOM_ROLE_CREATED_" + normalized, saved.getId().toString());
