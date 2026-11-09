@@ -174,6 +174,308 @@ public class DataSeeder {
         );
     }
 
+    private static void seedDemoTenantSubscription(
+            UUID tenantId,
+            AppUser platformAdmin,
+            SubscriptionPlanRepository plans,
+            TenantSubscriptionRepository subscriptions,
+            SubscriptionAssignmentHistoryRepository history
+    ) {
+        boolean assigned = subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantId).stream().anyMatch(s -> Set.of("TRIAL", "ACTIVE", "PAST_DUE").contains(s.getStatus()) && ( s.getEndsAt() == null || s.getEndsAt().isAfter(java.time.Instant.now()) ));
+        if (assigned) return;
+        SubscriptionPlan plan = plans.findByPlanCodeIgnoreCase("STARTER").orElse(null);
+        if (plan == null) return;
+        java.time.Instant now = java.time.Instant.now();
+        TenantSubscription s = new TenantSubscription();
+        s.setId(UUID.randomUUID());
+        s.setTenantId(tenantId);
+        s.setPlanId(plan.getId());
+        s.setStatus("ACTIVE");
+        s.setStartsAt(now.minusSeconds(86400 * 10L));
+        s.setRenewsAt(now.plusSeconds(86400 * 20L));
+        s.setBillingCycle(plan.getBillingCycle());
+        s.setAutoRenew(true);
+        s.setNotes("Local demonstration subscription; no payment collection is configured.");
+        s.setCreatedBy(platformAdmin.getId());
+        s.setCreatedAt(now);
+        s.setUpdatedAt(now);
+        subscriptions.save(s);
+        SubscriptionAssignmentHistory h = new SubscriptionAssignmentHistory();
+        h.setId(UUID.randomUUID());
+        h.setTenantId(tenantId);
+        h.setSubscriptionId(s.getId());
+        h.setActorId(platformAdmin.getId());
+        h.setAction("ASSIGNED");
+        h.setNewStatus("ACTIVE");
+        h.setNewPlanId(plan.getId());
+        h.setDetailsJson("{\"source\":\"local-demo-seed\",\"planCode\":\"STARTER\"}");
+        h.setCreatedAt(now);
+        history.save(h);
+    }
+    
+    private static void seedDemoLifecycle(
+            Tenant tenant,
+            AppUser sales,
+            CustomerProfile customer,
+            ProductRepository products,
+            EnquiryRepository enquiries,
+            SalesLeadRepository leads,
+            QuotationRepository quotations,
+            QuotationItemRepository quotationItems,
+            SiteSurveyRepository surveys,
+            CustomerOrderRepository orders,
+            OrderItemRepository orderItems,
+            InvoiceRepository invoices,
+            PaymentRepository payments,
+            InstallationJobRepository installations,
+            ServiceRequestRepository serviceRequests,
+            WarehouseRepository warehouses,
+            InventoryBalanceRepository inventoryBalances,
+            InventoryTransactionRepository inventoryTransactions
+    ) {
+        UUID tenantId = tenant.getId();
+        if (serviceRequests.findByTicketNumberAndTenantId("SR-DEMO-2026-001", tenantId).isPresent()) return;
+        Product product = products.findByTenantIdOrderByIdDesc(tenantId).stream().filter(Product::isActive).findFirst().orElse(null);
+        if (product == null) return;
+        java.time.Instant now = java.time.Instant.now();
+        Product stockProduct = products.findByTenantIdOrderByIdDesc(tenantId).stream().filter(p -> p.isActive() && !"DEMO-PV-550".equals(p.getSku())).findFirst().orElse(product);
+        Warehouse warehouse = warehouses.findByTenantIdOrderByNameAsc(tenantId).stream().findFirst().orElse(null);
+        if (warehouse != null) {
+            InventoryBalance balance = inventoryBalances.findByTenantIdAndWarehouseIdAndProductId(tenantId, warehouse.getId(), stockProduct.getId()).orElseGet(() -> {
+                InventoryBalance b = new InventoryBalance();
+                b.setId(UUID.randomUUID());
+                b.setTenantId(tenantId);
+                b.setWarehouseId(warehouse.getId());
+                b.setProductId(stockProduct.getId());
+                b.setOnHand(new java.math.BigDecimal("25"));
+                b.setReserved(java.math.BigDecimal.ZERO);
+                b.setDamaged(java.math.BigDecimal.ZERO);
+                return inventoryBalances.save(b);
+            });
+            if (inventoryTransactions.findByTenantIdOrderByCreatedAtDesc(tenantId).stream().noneMatch(tx -> "DEMO-OPENING-2026-001".equals(tx.getTransactionReference()))) {
+                InventoryTransaction tx = new InventoryTransaction();
+                tx.setId(UUID.randomUUID());
+                tx.setTransactionReference("DEMO-OPENING-2026-001");
+                tx.setTenantId(tenantId);
+                tx.setWarehouseId(warehouse.getId());
+                tx.setProductId(stockProduct.getId());
+                tx.setType("RECEIPT");
+                tx.setQuantityDelta(new java.math.BigDecimal("25"));
+                tx.setReservedDelta(java.math.BigDecimal.ZERO);
+                tx.setDamagedDelta(java.math.BigDecimal.ZERO);
+                tx.setReason("Opening stock for local solar lifecycle demonstration");
+                tx.setActorId(sales.getId());
+                tx.setCreatedAt(now);
+                inventoryTransactions.save(tx);
+            }
+        }
+        java.math.BigDecimal qty = new java.math.BigDecimal("10"), unit = product.getPrice() == null ? new java.math.BigDecimal("18500") : product.getPrice();
+        java.math.BigDecimal subtotal = unit.multiply(qty), tax = subtotal.multiply(new java.math.BigDecimal("0.18")).setScale(2, java.math.RoundingMode.HALF_UP), total = subtotal.add(tax);
+        Enquiry enquiry = enquiries.findByTenantIdOrderByIdDesc(tenantId).stream().filter(e -> "DEMO-LIFECYCLE-2026".equals(e.getMessage())).findFirst().orElseGet(() -> {
+            Enquiry e = new Enquiry();
+            e.setId(UUID.randomUUID());
+            e.setTenantId(tenantId);
+            e.setCustomerId(customer.getId());
+            e.setName(customer.getName());
+            e.setEmail(customer.getEmail());
+            e.setPhone(customer.getPhone());
+            e.setPropertyType("RESIDENTIAL");
+            e.setMonthlyBill(new java.math.BigDecimal("6500"));
+            e.setRequiredCapacityKw(new java.math.BigDecimal("5.00"));
+            e.setMessage("DEMO-LIFECYCLE-2026: 5 kW rooftop solar enquiry for an Indore residence.");
+            e.setStatus("CONVERTED");
+            e.setCreatedAt(now.minusSeconds(86400 * 20L));
+            return enquiries.save(e);
+        });
+        SalesLead lead = leads.findByTenantIdOrderByIdDesc(tenantId).stream().filter(l -> enquiry.getId().equals(l.getEnquiryId())).findFirst().orElseGet(() -> {
+            SalesLead l = new SalesLead();
+            l.setId(UUID.randomUUID());
+            l.setTenantId(tenantId);
+            l.setEnquiryId(enquiry.getId());
+            l.setCustomerId(customer.getId());
+            l.setStage("QUALIFIED");
+            l.setPriority("HIGH");
+            l.setAssignedUserId(sales.getId());
+            l.setNextFollowUp(now.plusSeconds(86400));
+            l.setCreatedAt(now.minusSeconds(86400 * 19L));
+            return leads.save(l);
+        });
+        SiteSurvey survey = surveys.findByLeadIdAndTenantIdOrderByIdDesc(lead.getId(), tenantId).stream().findFirst().orElseGet(() -> {
+            SiteSurvey s = new SiteSurvey();
+            s.setId(UUID.randomUUID());
+            s.setTenantId(tenantId);
+            s.setLeadId(lead.getId());
+            s.setScheduledAt(now.minusSeconds(86400 * 15L));
+            s.setAssignedUserId(sales.getId());
+            s.setPropertyType("RESIDENTIAL");
+            s.setRoofType("RCC");
+            s.setUsableAreaSqft(new java.math.BigDecimal("850"));
+            s.setShading("LOW");
+            s.setSanctionedLoadKw(new java.math.BigDecimal("6.00"));
+            s.setNotes("South-facing terrace; clear access to inverter location.");
+            s.setStatus("APPROVED");
+            s.setCompletedAt(now.minusSeconds(86400 * 14L));
+            s.setSubmittedAt(now.minusSeconds(86400 * 14L));
+            s.setReviewedBy(sales.getId());
+            s.setReviewedAt(now.minusSeconds(86400 * 13L));
+            s.setFindings("Roof structure suitable for 5 kW rooftop PV installation.");
+            s.setRecommendation("Install 5 kW grid-connected system with 10 x 540 W modules.");
+            return surveys.save(s);
+        });
+        Quotation quotation = quotations.findByTenantIdOrderByIdDesc(tenantId).stream().filter(q -> "DEMO-QUO-2026-001".equals(q.getQuotationNumber())).findFirst().orElseGet(() -> {
+            Quotation q = new Quotation();
+            q.setId(UUID.randomUUID());
+            q.setTenantId(tenantId);
+            q.setQuoteGroupId(UUID.randomUUID());
+            q.setQuotationNumber("DEMO-QUO-2026-001");
+            q.setRevision(1);
+            q.setCustomerId(customer.getId());
+            q.setLeadId(lead.getId());
+            q.setSurveyId(survey.getId());
+            q.setStatus("ACCEPTED");
+            q.setSubtotal(subtotal);
+            q.setDiscountPercent(java.math.BigDecimal.ZERO);
+            q.setDiscountAmount(java.math.BigDecimal.ZERO);
+            q.setTaxAmount(tax);
+            q.setGrandTotal(total);
+            q.setValidUntil(java.time.LocalDate.now().plusDays(15));
+            q.setApprovalRequired(false);
+            q.setDecisionBy(customer.getUserId());
+            q.setDecisionAt(now.minusSeconds(86400 * 10L));
+            q.setCreatedBy(sales.getId());
+            q.setCreatedAt(now.minusSeconds(86400 * 12L));
+            return quotations.save(q);
+        });
+        if (quotationItems.findByTenantIdOrderByIdDesc(tenantId).stream().noneMatch(i -> quotation.getId().equals(i.getQuotationId()))) {
+            QuotationItem qi = new QuotationItem();
+            qi.setId(UUID.randomUUID());
+            qi.setTenantId(tenantId);
+            qi.setQuotationId(quotation.getId());
+            qi.setProductId(product.getId());
+            qi.setDescription(product.getName());
+            qi.setQuantity(10);
+            qi.setUnitPrice(unit);
+            qi.setTaxPercent(new java.math.BigDecimal("18"));
+            qi.setLineTotal(total);
+            qi.setDiscountAmount(java.math.BigDecimal.ZERO);
+            qi.setTaxableAmount(subtotal);
+            qi.setTaxAmount(tax);
+            quotationItems.save(qi);
+        }
+        CustomerOrder order = orders.findByTenantIdOrderByIdDesc(tenantId).stream().filter(o -> quotation.getId().equals(o.getQuotationId())).findFirst().orElseGet(() -> {
+            CustomerOrder o = new CustomerOrder();
+            o.setId(UUID.randomUUID());
+            o.setTenantId(tenantId);
+            o.setQuotationId(quotation.getId());
+            o.setCustomerId(customer.getId());
+            o.setOrderNumber("DEMO-ORD-2026-001");
+            o.setStatus("CONFIRMED");
+            o.setSubtotal(subtotal);
+            o.setDiscountPercent(java.math.BigDecimal.ZERO);
+            o.setDiscountAmount(java.math.BigDecimal.ZERO);
+            o.setTaxTotal(tax);
+            o.setTotal(total);
+            o.setCreatedAt(now.minusSeconds(86400 * 9L));
+            return orders.save(o);
+        });
+        if (orderItems.findByTenantIdOrderByIdDesc(tenantId).stream().noneMatch(i -> order.getId().equals(i.getOrderId()))) {
+            OrderItem oi = new OrderItem();
+            oi.setId(UUID.randomUUID());
+            oi.setTenantId(tenantId);
+            oi.setOrderId(order.getId());
+            oi.setProductId(product.getId());
+            oi.setDescription(product.getName());
+            oi.setQuantity(10);
+            oi.setUnitPrice(unit);
+            oi.setTaxPercent(new java.math.BigDecimal("18"));
+            oi.setLineTotal(total);
+            oi.setDiscountAmount(java.math.BigDecimal.ZERO);
+            oi.setTaxableAmount(subtotal);
+            oi.setTaxAmount(tax);
+            orderItems.save(oi);
+        }
+        Invoice invoice = invoices.findByOrderIdAndTenantId(order.getId(), tenantId).orElseGet(() -> {
+            Invoice i = new Invoice();
+            i.setId(UUID.randomUUID());
+            i.setTenantId(tenantId);
+            i.setOrderId(order.getId());
+            i.setInvoiceNumber("DEMO-INV-2026-001");
+            i.setFiscalYear("2026-27");
+            i.setStatus("PAID");
+            i.setCustomerName(customer.getName());
+            i.setCustomerEmail(customer.getEmail());
+            i.setCustomerAddress(customer.getAddress());
+            i.setVendorName(tenant.getName());
+            i.setCurrency("INR");
+            i.setSubtotal(subtotal);
+            i.setTaxTotal(tax);
+            i.setCgstAmount(tax.divide(new java.math.BigDecimal("2"), 2, java.math.RoundingMode.HALF_UP));
+            i.setSgstAmount(tax.divide(new java.math.BigDecimal("2"), 2, java.math.RoundingMode.HALF_UP));
+            i.setIgstAmount(java.math.BigDecimal.ZERO);
+            i.setGrandTotal(total);
+            i.setTaxTreatment("CGST_SGST");
+            i.setDueDate(java.time.LocalDate.now().plusDays(15));
+            i.setIssuedAt(now.minusSeconds(86400 * 8L));
+            i.setCreatedBy(sales.getId());
+            i.setCreatedAt(now.minusSeconds(86400 * 8L));
+            return invoices.save(i);
+        });
+        if (payments.findByTenantIdOrderByCreatedAtDesc(tenantId).stream().noneMatch(v -> "DEMO-UPI-2026-001".equals(v.getReference()))) {
+            Payment payment = new Payment();
+            payment.setId(UUID.randomUUID());
+            payment.setTenantId(tenantId);
+            payment.setInvoiceId(invoice.getId());
+            payment.setOrderId(order.getId());
+            payment.setAmount(total);
+            payment.setCurrency("INR");
+            payment.setMethod("UPI");
+            payment.setSource("MANUAL");
+            payment.setStatus("CONFIRMED");
+            payment.setReference("DEMO-UPI-2026-001");
+            payment.setPaidAt(now.minusSeconds(86400 * 7L));
+            payment.setRecordedBy(sales.getId());
+            payment.setCreatedAt(now.minusSeconds(86400 * 7L));
+            payments.save(payment);
+        }
+        InstallationJob installation = installations.findByTenantIdAndOrderId(tenantId, order.getId()).orElseGet(() -> {
+            InstallationJob j = new InstallationJob();
+            j.setId(UUID.randomUUID());
+            j.setTenantId(tenantId);
+            j.setOrderId(order.getId());
+            j.setCustomerId(customer.getId());
+            j.setApprovedSurveyId(survey.getId());
+            j.setSiteAddress(customer.getAddress());
+            j.setScheduledAt(now.minusSeconds(86400 * 5L));
+            j.setAssignedEngineerId(sales.getId());
+            j.setCapacityKw(new java.math.BigDecimal("5.00"));
+            j.setTeamName("Indore Solar Installation Team");
+            j.setNotes("Demo commissioned 5 kW rooftop installation.");
+            j.setStatus("COMMISSIONED");
+            j.setCustomerSignedOff(true);
+            j.setCompletedAt(now.minusSeconds(86400 * 3L));
+            j.setCommissionedAt(now.minusSeconds(86400 * 2L));
+            j.setCommissioningNotes("Grid synchronization and handover completed.");
+            j.setCreatedAt(now.minusSeconds(86400 * 8L));
+            return installations.save(j);
+        });
+        ServiceRequest request = new ServiceRequest();
+        request.setId(UUID.randomUUID());
+        request.setTenantId(tenantId);
+        request.setTicketNumber("SR-DEMO-2026-001");
+        request.setCustomerId(customer.getId());
+        request.setInstallationId(installation.getId());
+        request.setProductId(product.getId());
+        request.setCategory("PERFORMANCE");
+        request.setPriority("MEDIUM");
+        request.setDescription("Customer reports intermittent generation drop during afternoon peak hours; please inspect inverter logs and DC connections.");
+        request.setWarrantyStatus("IN_WARRANTY");
+        request.setStatus("OPEN");
+        request.setAssignedEngineerId(sales.getId());
+        request.setCreatedAt(now.minusSeconds(86400));
+        request.setUpdatedAt(now.minusSeconds(86400));
+        serviceRequests.save(request);
+    }
+    
     private static void seedDefaultSubscriptionPlans(SubscriptionPlanRepository plans) {
         String[][] rows = {
                 { "STARTER", "Starter", "For small solar businesses starting digital operations", "MONTHLY", "999.00",
