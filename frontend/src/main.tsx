@@ -22,6 +22,7 @@ async function uploadApi(path:string,file:File,s:Session){
 }
 const send=(path:string,body:any,s:Session,method='POST',headers={})=>api(path,{method,body:body===undefined?undefined:JSON.stringify(body),headers},s);
 function App(){
+ useEffect(()=>{localStorage.removeItem('session')},[]);
  useEffect(()=>{if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});},[]);
  useEffect(()=>{let active=true;void bootstrapSession().then(session=>{if(active&&session){setCurrentAuthSession(session);setS(session)}});return()=>{active=false}},[]);
  useEffect(()=>{const expired=()=>{setCurrentAuthSession(null);setS(null);setMode('login');setMsg('Your session has expired. Please sign in again.')};window.addEventListener('saumya:session-expired',expired);return()=>window.removeEventListener('saumya:session-expired',expired)},[]);
