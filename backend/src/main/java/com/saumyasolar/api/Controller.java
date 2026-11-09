@@ -408,7 +408,7 @@ public class Controller {
     UserView employeeEnabled(@PathVariable UUID id, @RequestBody Input x, Authentication a) {
         var actor = p(a);
         if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
-                || actor.permissions() == null || !actor.permissions().contains("USER_MANAGE"))
+                || actor.permissions() == null || !actor.permissions().contains("USER_DISABLE"))
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
         if (x.active() == null)
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "active is required");
