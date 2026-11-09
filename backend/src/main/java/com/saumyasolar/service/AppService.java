@@ -164,12 +164,13 @@ public class AppService {
         }
         vendor(p);
         switch (type) {
-            case "categories", "products", "packages" -> requireAnyPermission(p, "CATALOG_VIEW", "CATALOG_MANAGE");
-            case "customers" -> requirePermission(p, "CUSTOMER_MANAGE");
-            case "enquiries", "leads" -> requirePermission(p, "LEAD_MANAGE");
-            case "surveys" -> requirePermission(p, "SURVEY_MANAGE");
-            case "quotations" -> requirePermission(p, "QUOTATION_MANAGE");
-            case "orders" -> requirePermission(p, "ORDER_CREATE");
+            case "categories", "products" -> requirePermission(p, "PRODUCT_VIEW");
+            case "packages" -> requirePermission(p, "PACKAGE_VIEW");
+            case "customers" -> requirePermission(p, "CUSTOMER_VIEW");
+            case "enquiries", "leads" -> requirePermission(p, "LEAD_VIEW");
+            case "surveys" -> requirePermission(p, "SURVEY_VIEW");
+            case "quotations" -> requirePermission(p, "QUOTATION_VIEW");
+            case "orders" -> requirePermission(p, "ORDER_VIEW");
             default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         Object rows = switch (type) {
@@ -220,9 +221,10 @@ public class AppService {
         }
         vendor(p);
         switch (type) {
-            case "categories", "products", "packages" -> requirePermission(p, "CATALOG_MANAGE");
-            case "customers" -> requirePermission(p, "CUSTOMER_MANAGE");
-            case "enquiries" -> requirePermission(p, "LEAD_MANAGE");
+            case "categories", "products" -> requirePermission(p, "PRODUCT_CREATE");
+            case "packages" -> requirePermission(p, "PACKAGE_CREATE");
+            case "customers" -> requirePermission(p, "CUSTOMER_CREATE");
+            case "enquiries" -> requirePermission(p, "LEAD_CREATE");
             default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         return switch (type) {
@@ -396,7 +398,7 @@ public class AppService {
     
     private UUID requirePackageManager(Principal p) {
         vendor(p);
-        requirePermission(p, "CATALOG_MANAGE");
+        requirePermission(p, "PACKAGE_UPDATE");
         return p.tenantId();
     }
     
@@ -476,7 +478,7 @@ public class AppService {
     
     public Tenant tenantSettings(Principal p) {
         vendor(p);
-        requirePermission(p, "DISCOUNT_POLICY_MANAGE");
+        requirePermission(p, "QUOTATION_APPROVE_DISCOUNT");
         return tenants.findById(p.tenantId()).orElseThrow();
     }
     
@@ -543,7 +545,7 @@ public class AppService {
     @Transactional
     public SalesLead convertLead(UUID enquiryId, Input x, Principal p) {
         vendor(p);
-        requirePermission(p, "LEAD_MANAGE");
+        requirePermission(p, "LEAD_UPDATE");
         var q = enquiries.findByIdAndTenantId(enquiryId, p.tenantId()).orElseThrow();
         if (!"NEW".equals(q.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Enquiry already converted");
@@ -647,7 +649,7 @@ public class AppService {
     @Transactional
     public SiteSurvey survey(Input x, Principal p) {
         vendor(p);
-        requirePermission(p, "SURVEY_MANAGE");
+        requirePermission(p, "SURVEY_CREATE");
         if (x.leadId() == null || leads.findByIdAndTenantId(x.leadId(), p.tenantId()).isEmpty())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lead must belong to this vendor");
         requireEmployee(x.assignedUserId(), p.tenantId());
@@ -677,7 +679,7 @@ public class AppService {
     @Transactional
     public QuoteView quote(Input x, Principal p) {
         vendor(p);
-        requirePermission(p, "QUOTATION_MANAGE");
+        requirePermission(p, "QUOTATION_CREATE");
         requireCustomer(x.customerId(), p.tenantId());
         if (x.leadId() != null && !Objects.equals(requireLead(x.leadId(), p.tenantId()).getCustomerId(), x.customerId()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lead does not belong to the selected customer");
@@ -814,7 +816,7 @@ public class AppService {
                 else if ("REJECTED".equals(workflowStatus.get())) q.setStatus("APPROVAL_REJECTED");
                 return quotes.save(q);
             }
-            requirePermission(p, "DISCOUNT_APPROVE");
+            requirePermission(p, "QUOTATION_APPROVE_DISCOUNT");
         } else {
             requirePermission(p, "QUOTATION_MANAGE");
         }
