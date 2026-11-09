@@ -877,3 +877,12 @@ This addendum supersedes older Phase 1 gap statements in this file where they co
 ### Cross-tab refresh follow-up
 
 `frontend/src/authenticatedFetch.ts` now uses the browser Web Locks API with the shared lock name `saumya-auth-refresh`. The lock encloses CSRF-cookie bootstrap and refresh rotation. Every queued tab fetches the latest CSRF value after acquiring the lock, then rotates the refresh cookie currently shared by the browser. This prevents simultaneous refresh requests from separate supported tabs from reusing the same old refresh token. The frontend test suite verifies lock acquisition and the CSRF-before-refresh sequence. Browsers without Web Locks fall back to per-tab single-flight behavior and remain a documented compatibility limitation.
+
+
+### Render deployment alignment finding (read-only verification)
+
+The available Render workspace contains a service named `soumya-solar-api` (`https://soumya-solar-api.onrender.com`) configured to deploy from `https://github.com/rambrij/soumya-solar-energy-solution` on `main`, not from the audited `saumya-solar-energy-product` repository or `audit/implementation-gap-analysis` branch.
+
+Its Render ingress IP allowlist is `0.0.0.0/0` (public ingress). This is not the application's trusted reverse-proxy list and must not be interpreted as one. The available service details do not reveal environment variable values, so production `TRUSTED_PROXY_IPS`, `CORS_ORIGINS`, refresh-cookie Secure/SameSite/domain settings and forwarded-header behavior remain unverified. No deployment or Render configuration was modified.
+
+**Production blocker:** the currently inspected Render service is not aligned with the repository being hardened. Repointing it to this repository/branch and verifying runtime environment values requires explicit deployment approval.
