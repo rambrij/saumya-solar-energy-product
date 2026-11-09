@@ -5,11 +5,12 @@ export type NavigationItem={key:string;label:string;permission?:string|string[];
 export type NavigationGroup={label:string;items:NavigationItem[]};
 const roleMenus:Record<string,NavigationGroup[]>={
  platform:[
-  {label:'Workspace',items:[{key:'dashboard',label:'Dashboard'},{key:'tenants',label:'Tenants'}]},
+  {label:'Dashboard',items:[{key:'dashboard',label:'Dashboard'}]},
   {label:'Subscriptions',items:[{key:'subscriptions',label:'Plans',permission:'SUBSCRIPTION_MANAGE'},{key:'assignments',label:'Assignments',permission:'SUBSCRIPTION_MANAGE'}]},
-  {label:'Insights',items:[{key:'analytics',label:'Analytics',permission:'SUBSCRIPTION_MANAGE'}]},
-  {label:'Governance',items:[{key:'audit',label:'Audit',permission:'AUDIT_VIEW'}]},
-  {label:'Administration',items:[{key:'settings',label:'Settings',permission:'PLATFORM_MANAGE'}]}
+  {label:'Analytics',items:[{key:'analytics',label:'Analytics',permission:'SUBSCRIPTION_MANAGE'}]},
+  {label:'Audit',items:[{key:'audit',label:'Audit',permission:'AUDIT_VIEW'}]},
+  {label:'Tenants',items:[{key:'tenants',label:'Tenants'}]},
+  {label:'Settings',items:[{key:'settings',label:'Settings',permission:'PLATFORM_MANAGE'}]}
  ],
  vendor:[
   {label:'Overview',items:[{key:'dashboard',label:'Dashboard'}]},
