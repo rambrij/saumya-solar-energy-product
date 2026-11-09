@@ -100,6 +100,14 @@ public class AppService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
     }
     
+    private boolean hasPermission(Principal p, String code) {
+        return p.permissions() != null && p.permissions().contains(code);
+    }
+
+    private boolean assignedSalesScope(Principal p) {
+        return "VENDOR".equals(p.accountType()) && hasPermission(p, "LEAD_VIEW") && !hasPermission(p, "LEAD_ASSIGN");
+    }
+
     private void requirePermission(Principal p, String code) {
         if (p.permissions() == null || !p.permissions().contains(code))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing permission: " + code);
@@ -127,13 +135,13 @@ public class AppService {
     }
 
     private void assertSalesLeadScope(SalesLead lead, Principal p) {
-        if (p.roles() != null && p.roles().contains("SALES_EXECUTIVE")
+        if (assignedSalesScope(p)
                 && !p.userId().equals(lead.getAssignedUserId()))
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found");
     }
 
     private void assertSalesQuotationScope(Quotation quotation, Principal p) {
-        if (p.roles() == null || !p.roles().contains("SALES_EXECUTIVE")) return;
+        if (!assignedSalesScope(p)) return;
         boolean createdBySelf = p.userId().equals(quotation.getCreatedBy());
         boolean assignedLead = quotation.getLeadId() != null
                 && leads.findByIdAndTenantId(quotation.getLeadId(), p.tenantId())
@@ -202,7 +210,7 @@ public class AppService {
             case "orders" -> orders.findByTenantIdOrderByIdDesc(p.tenantId());
             default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         };
-        if (p.roles() != null && p.roles().contains("SALES_EXECUTIVE")) {
+        if (assignedSalesScope(p)) {
             List<SalesLead> assignedLeads = leads.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
                     .filter(lead -> p.userId().equals(lead.getAssignedUserId())).toList();
             java.util.Set<UUID> assignedLeadIds = assignedLeads.stream().map(SalesLead::getId).collect(java.util.stream.Collectors.toSet());
@@ -226,7 +234,7 @@ public class AppService {
                 default -> rows;
             };
         }
-        if (p.roles() != null && p.roles().stream().anyMatch(Set.of("SERVICE_ENGINEER", "TECHNICIAN", "INSTALLER")::contains)
+        if (hasPermission(p, "SURVEY_VIEW") && !hasPermission(p, "SURVEY_ASSIGN")
                 && "surveys".equals(type)) {
             rows = ((List<SiteSurvey>) rows).stream().filter(survey -> p.userId().equals(survey.getAssignedUserId())).toList();
         }
@@ -592,8 +600,7 @@ public class AppService {
     public SalesLead convertLead(UUID enquiryId, Input x, Principal p) {
         vendor(p);
         requirePermission(p, "LEAD_CREATE");
-        if (p.roles() != null && p.roles().contains("SALES_EXECUTIVE")
-                && !p.permissions().contains("LEAD_ASSIGN")
+        if (!hasPermission(p, "LEAD_ASSIGN")
                 && !Objects.equals(x.assignedUserId(), p.userId()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sales executives may only assign new leads to themselves");
         var q = enquiries.findByIdAndTenantId(enquiryId, p.tenantId()).orElseThrow();
@@ -639,9 +646,8 @@ public class AppService {
         requirePermission(p, "LEAD_UPDATE");
         var l = leads.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
         assertSalesLeadScope(l, p);
-        if (p.roles() != null && p.roles().contains("SALES_EXECUTIVE")
-                && !p.permissions().contains("LEAD_ASSIGN")
-                && x.assignedUserId() != null && !Objects.equals(x.assignedUserId(), l.getAssignedUserId()))
+        if (!hasPermission(p, "LEAD_ASSIGN")
+                && x.assignedUserId() != null && !Objects.equals(x.assignedUserId(), p.userId()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Lead reassignment requires LEAD_ASSIGN");
         if (enterpriseSaas != null) enterpriseSaas.assertBranchAccess(l.getBranchId(), p);
         requireEmployee(x.assignedUserId(), p.tenantId());
@@ -707,13 +713,16 @@ public class AppService {
         requirePermission(p, "SURVEY_CREATE");
         if (x.leadId() == null || leads.findByIdAndTenantId(x.leadId(), p.tenantId()).isEmpty())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lead must belong to this vendor");
-        requireEmployee(x.assignedUserId(), p.tenantId());
+        if (!hasPermission(p, "SURVEY_ASSIGN") && x.assignedUserId() != null && !p.userId().equals(x.assignedUserId()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Survey assignment requires SURVEY_ASSIGN");
+        UUID surveyAssignee = x.assignedUserId() == null && !hasPermission(p, "SURVEY_ASSIGN") ? p.userId() : x.assignedUserId();
+        requireEmployee(surveyAssignee, p.tenantId());
         var e = new SiteSurvey();
         e.setId(UUID.randomUUID());
         e.setTenantId(p.tenantId());
         e.setLeadId(x.leadId());
         e.setScheduledAt(x.scheduledAt());
-        e.setAssignedUserId(x.assignedUserId());
+        e.setAssignedUserId(surveyAssignee);
         e.setPropertyType(x.propertyType());
         e.setRoofType(x.roofType());
         e.setUsableAreaSqft(x.usableAreaSqft());
@@ -736,7 +745,7 @@ public class AppService {
         vendor(p);
         requirePermission(p, "QUOTATION_CREATE");
         requireCustomer(x.customerId(), p.tenantId());
-        if (p.roles() != null && p.roles().contains("SALES_EXECUTIVE") && x.leadId() == null)
+        if (assignedSalesScope(p) && x.leadId() == null)
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sales executives may quote only against an assigned lead");
         if (x.leadId() != null) {
             SalesLead lead = requireLead(x.leadId(), p.tenantId());
