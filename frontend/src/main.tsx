@@ -2,6 +2,7 @@ import React,{useEffect,useState}from'react';import{createRoot}from'react-dom/cl
 const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
 const assetUrl=(value?:string|null)=>!value?'https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&w=900&q=80':value.startsWith('/')?API_BASE+value:value;
 type Session={accessToken:string,refreshToken?:string,user:{id:string;tenantId?:string;name:string;email:string;accountType:string;roles:string[];permissions:string[]}};
+let refreshInFlight:Promise<Session>|null=null;
 async function authenticatedFetch(url:string,init:RequestInit={},session?:Session|null):Promise<Response>{
  let active:Session|null=session||null;
  if(session){try{active=JSON.parse(localStorage.getItem('session')||'null')||session}catch{active=session}}
@@ -9,9 +10,20 @@ async function authenticatedFetch(url:string,init:RequestInit={},session?:Sessio
  let response=await request(active);
  if(response.status===401&&active?.refreshToken&&!url.includes('/auth/')){
   try{
-   const refreshed=await fetch(API_BASE+'/api/v1/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refreshToken:active.refreshToken})});
-   if(!refreshed.ok)throw new Error('session');
-   const rotated=await refreshed.json();active={...active,...rotated};localStorage.setItem('session',JSON.stringify(active));
+   const latest=JSON.parse(localStorage.getItem('session')||'null') as Session|null;
+   if(latest?.refreshToken&&latest.refreshToken!==active.refreshToken){
+    active=latest;
+   }else{
+    if(!refreshInFlight){
+     refreshInFlight=(async()=>{
+      const refreshed=await fetch(API_BASE+'/api/v1/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refreshToken:active!.refreshToken})});
+      if(!refreshed.ok)throw new Error('session');
+      const rotated=await refreshed.json();const next={...active!,...rotated} as Session;
+      localStorage.setItem('session',JSON.stringify(next));return next;
+     })();
+    }
+    try{active=await refreshInFlight}finally{refreshInFlight=null}
+   }
    response=await request(active);
   }catch{
    localStorage.removeItem('session');window.dispatchEvent(new CustomEvent('saumya:session-expired'));
