@@ -98,7 +98,7 @@ function Customer({s,error,logout}:any){
  const load=async()=>{
   setBusy(true);
   try{
-   const [categories,products,packages,q,o,e,i,w,inv,pay,svc,claims,consent,gateway]=await Promise.all([
+   const [categories,products,packages,q,o,e,i,w,inv,pay,svc,claims,consent,gateway,addresses]=await Promise.all([
     api('/catalog-categories',{},s),api('/catalog-products',{},s),api('/catalog-packages',{},s),
     api('/quotations',{},s),api('/customer-orders',{},s),api('/customer-enquiries',{},s),
     api('/customer/installations',{},s),api('/customer/warranties',{},s),api('/invoices',{},s),api('/payments',{},s),api('/service-requests',{},s),api('/customer/warranty-claims',{},s),api('/customer/messaging-consent',{},s),api('/payment-gateways/availability',{},s).catch(()=>({available:false,providers:[]})),api('/customer/addresses',{},s).catch(()=>[])
