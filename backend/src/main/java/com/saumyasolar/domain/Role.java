@@ -24,4 +24,6 @@ public class Role {
             inverseJoinColumns = @JoinColumn(name = "permission_id")
     )
     Set<Permission> permissions = new HashSet<>();
+    @Transient
+    boolean customRole;
 }
