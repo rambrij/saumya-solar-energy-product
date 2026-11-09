@@ -340,7 +340,7 @@ public class AuthLifecycleService {
     }
     
     @Transactional
-    public AppUser createEmployee(UUID tenantId, String name, String email, String password, String roleName) {
+    public AppUser createEmployee(UUID tenantId, UUID actorId, String name, String email, String password, String roleName) {
         if (tenantId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (name == null || name.isBlank() || email == null || email.isBlank()
                 || password == null || password.length() < 12)
@@ -360,7 +360,9 @@ public class AuthLifecycleService {
         u.setAccountType("VENDOR");
         u.setEnabled(true);
         u.getRoles().add(role);
-        return users.save(u);
+        AppUser created = users.save(u);
+        auditAuth("USER_ROLE_ASSIGNED", users.findById(actorId).orElse(null), "SUCCESS", "VENDOR_EMPLOYEE_CREATED_WITH_ROLE_" + roleName, created.getId().toString());
+        return created;
     }
     
     @Transactional
@@ -374,7 +376,9 @@ public class AuthLifecycleService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Vendor admin accounts cannot be disabled through this endpoint");
         employee.setEnabled(enabled);
         employee.setTokenVersion(employee.getTokenVersion() + 1);
-        return users.save(employee);
+        AppUser updated = users.save(employee);
+        auditAuth(enabled ? "USER_ACTIVATED" : "USER_DISABLED", users.findById(actorId).orElse(null), "SUCCESS", "VENDOR_EMPLOYEE_STATUS_CHANGED", employeeId.toString());
+        return updated;
     }
     
     private void provisionEmployeeRoles(UUID tenantId) {
