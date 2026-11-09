@@ -292,6 +292,19 @@ jobs:
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='refresh_token' AND column_name IN ('family_id','replaced_by_token_id','created_at')")" = "3"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM permission WHERE code IN ('PRODUCT_VIEW','SERVICE_RESOLVE','CMS_PUBLISH','ROLE_ASSIGN')")" = "4"
 
+      - name: Apply V54 employee role permission reconciliation
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V54__reconcile_employee_role_permissions.sql
+      - name: Apply V55 strict permission reconciliation and platform support
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V55__strict_permission_reconciliation_and_platform_support.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role r JOIN role_permission rp ON rp.role_id=r.id JOIN permission p ON p.id=rp.permission_id WHERE r.tenant_id IS NULL AND r.name='PLATFORM_SUPPORT' AND p.code IN ('AUDIT_VIEW','TENANT_VIEW')")" = "2"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role r JOIN role_permission rp ON rp.role_id=r.id JOIN permission p ON p.id=rp.permission_id WHERE r.tenant_id IS NOT NULL AND p.code IN ('CATALOG_MANAGE','CATALOG_VIEW','DISCOUNT_POLICY_MANAGE','CUSTOMER_MANAGE','LEAD_MANAGE','SURVEY_MANAGE','QUOTATION_MANAGE','DISCOUNT_APPROVE','USER_MANAGE','INVENTORY_MANAGE','SERVICE_MANAGE','FINANCE_MANAGE')")" = "0"
+      - name: Apply V56 remove platform permissions from tenant roles
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V56__remove_platform_permissions_from_tenant_roles.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role r JOIN role_permission rp ON rp.role_id=r.id JOIN permission p ON p.id=rp.permission_id WHERE r.tenant_id IS NOT NULL AND p.code IN ('PLATFORM_MANAGE','SUBSCRIPTION_MANAGE','TENANT_VIEW','TENANT_UPDATE')")" = "0"
+
   mysql-app-startup:
     name: Start Spring Boot against MySQL 8.4 and Mailpit
     runs-on: ubuntu-latest
