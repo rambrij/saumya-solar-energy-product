@@ -423,3 +423,22 @@ Added:
 7. Production proxy allowlist and scheduler configuration are verified in the deployed environment.
 
 Do not merge or deploy as production-ready until all blockers above are closed.
+
+
+## 17. Latest verified CI results
+
+Workflow run [42659338279](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42659338279) for commit `8888b5dd22df6e3270d0d6cbd9eaaae23fc9b12d` completed successfully:
+- Backend compile and tests: **PASS — 108 tests, 0 failures, 0 errors, 0 skipped**.
+- Frontend component tests: **PASS**.
+- Frontend production build: **PASS**.
+- MySQL 8.4 migrations V1–V53: **PASS**.
+- Spring Boot package/startup/health check against MySQL 8.4 and Mailpit: **PASS**.
+
+The backend test run exposed a pre-existing transactional boundary in `EnterpriseSaasService.enforceUserLimit`: its pessimistic tenant lock was called without an active transaction on the subscribed-tenant path. Added `@Transactional` to that service method. The new role-escalation integration test now exercises that path.
+
+H2 integration-test support was also corrected:
+- `backend/src/test/resources/schema-test.sql` creates the rate-limit bucket table for the test profile.
+- `application-test.yml` loads that schema and raises only test-profile rate limits so unrelated integration tests are not throttled.
+- The rate-limit bucket update now uses portable atomic UPDATE/INSERT-with-duplicate-retry SQL rather than MySQL-only `ON DUPLICATE KEY UPDATE`.
+
+A final workflow was triggered for the subsequent proxy-address parser hardening commit `681c3267cf9b1adeb00d83432955f6283054b8c6`. At report update time that latest run was still in progress. The successful run above is strong validation of the preceding code tree; do not claim the final commit verified until its run completes.
