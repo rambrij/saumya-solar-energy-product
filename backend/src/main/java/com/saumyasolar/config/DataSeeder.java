@@ -68,7 +68,7 @@ public class DataSeeder {
                 pm.put(code, p);
             }
             Role platform = ensureRole(roles, null, "PLATFORM_SUPER_ADMIN");
-            grant(platform, List.of("PLATFORM_MANAGE", "SUBSCRIPTION_MANAGE", "AUDIT_VIEW"), pm);
+            grant(platform, List.of("PLATFORM_MANAGE", "SUBSCRIPTION_MANAGE", "AUDIT_VIEW", "TENANT_VIEW", "TENANT_UPDATE"), pm);
             roles.save(platform);
             Role customer = roles.findByNameAndTenantIdIsNull("CUSTOMER").orElseGet(() -> {
                 Role r = new Role();
