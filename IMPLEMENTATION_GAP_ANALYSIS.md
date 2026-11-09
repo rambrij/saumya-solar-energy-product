@@ -822,3 +822,53 @@ A subsequent run was triggered after adding AuthenticationRateLimitCleanupTest a
 Code-level proxy trust and cleanup are implemented and tested, but deployed CORS_ORIGINS and TRUSTED_PROXY_IPS values have not been inspected. The Render workspace has not been confirmed. Production rollout requires exact CORS origin(s), HTTPS, secure cookie attributes and the immediate trusted proxy IP allowlist. The resolver currently supports exact IPs, not CIDR ranges.
 
 The refresh API contract is now cookie-based; external/mobile clients using refresh-token request bodies must be migrated. Do not roll out until those clients and the production proxy/cookie settings are verified.
+
+
+## Phase 1 production-hardening addendum — 2026-11-09
+
+This addendum supersedes older Phase 1 gap statements in this file where they conflict with the current branch implementation.
+
+### Authorization and role matrix
+- Added restricted global `PLATFORM_SUPPORT` with only `TENANT_VIEW` and `AUDIT_VIEW`; tenant directory and audit-log reads are audited.
+- Platform tenant mutations remain restricted to `PLATFORM_SUPER_ADMIN`.
+- V55 removes deprecated broad grants from all tenant-owned roles, including pre-existing custom roles.
+- V56 removes platform-only grants from tenant-owned roles.
+- New tenant/vendor-admin provisioning and development seeding exclude legacy broad and platform-only permissions.
+- Sales and service/installation assigned-resource scope now derives from fine-grained assignment permissions for the reviewed flows.
+- Custom roles without `LEAD_ASSIGN` or `SERVICE_ASSIGN` are restricted to their assigned records.
+- Role assignment returns a safe DTO rather than the JPA user entity.
+- Denied reserved-role and platform-permission escalation attempts are written in a separate `REQUIRES_NEW` audit transaction.
+
+### Browser session and CSRF
+- The browser access JWT is memory-only (900-second default), not persisted in localStorage or sessionStorage.
+- The refresh token is HttpOnly, Secure and SameSite cookie scoped to `/api/v1/auth`; it is not returned in JSON or accepted from the browser refresh/logout request body.
+- CSRF uses a host-only readable double-submit cookie and `X-CSRF-Token`; `GET /api/v1/auth/csrf` bootstraps new tabs.
+- All identified authenticated upload/download API paths use the shared `authenticatedFetch` refresh/retry behavior.
+- Automated tests cover fresh-tab CSRF bootstrap and ensure session helper does not persist access credentials in localStorage.
+
+### Trusted proxy and rate-limit cleanup
+- `ClientAddressResolver` supports exact IPv4/IPv6 and CIDR allowlists through `TRUSTED_PROXY_IPS`.
+- It rejects malformed hostnames and catch-all `/0` networks and trusts forwarded chains only through configured proxy hops.
+- Two-day rate-limit bucket cleanup remains scheduled.
+- CIDR matching and untrusted-peer rejection have automated unit tests.
+
+### New database migrations
+- V55: all-tenant-role legacy permission cleanup and restricted Platform Support role.
+- V56: platform-only permission removal from tenant roles.
+- The CI MySQL 8.4 migration job was extended to apply V54–V56 and assert the final grant state.
+
+### Additional negative tests
+- Custom sales role can see only assigned leads and cannot reassign them.
+- Custom service viewer can see only tickets assigned to its user and cannot read another engineer's ticket.
+- Every seeded employee role receives its declared permission set and no legacy/platform permissions.
+- Platform Support can read tenant directory/audit logs, cannot mutate platform state, and its reads are audited.
+- A rejected custom-role platform permission escalation is audited despite request rollback.
+
+### Remaining limitations
+1. Final CI validation is pending for the latest source commit after the above role, service-scope, audit, CIDR and integration-test changes.
+2. Actual Render ingress proxy addresses/ranges, `CORS_ORIGINS`, cookie attributes and HTTPS forwarding chain cannot be verified from repository source; production environment verification remains required.
+3. Browser refresh coalescing is per tab only. Cross-tab refresh coordination is not implemented; simultaneous replay across tabs is deliberately treated as token-family replay and revokes the family.
+4. Cross-site third-party cookie restrictions may affect Vercel/Render default domains; use same-site custom subdomains or a same-origin reverse proxy where possible.
+5. External/mobile clients using the old JSON refresh-token contract must migrate or receive a separately designed client flow.
+
+**Phase 1 status remains conditional, not production-approved, until latest CI passes and deployment proxy/CORS/cookie settings are verified.**
