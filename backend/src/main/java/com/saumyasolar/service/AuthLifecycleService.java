@@ -249,6 +249,8 @@ public class AuthLifecycleService {
         if (password == null || password.length() < 12)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password must contain at least 12 characters");
         u.setPasswordHash(encoder.encode(password));
+        u.setFailedLoginAttempts(0);
+        u.setLockedUntil(null);
         u.setTokenVersion(u.getTokenVersion() + 1);
         users.save(u);
         x.setUsed(true);
