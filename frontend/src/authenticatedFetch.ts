@@ -35,7 +35,7 @@ function isUnsafe(method:string):boolean {
 type LockManagerLike={request<T>(name:string,callback:()=>Promise<T>):Promise<T>};
 
 function withCrossTabRefreshLock<T>(task:()=>Promise<T>):Promise<T>{
- const locks=(navigator as Navigator & {locks?:LockManagerLike}).locks;
+ const locks=window.isSecureContext?(navigator as Navigator & {locks?:LockManagerLike}).locks:undefined;
  return locks && typeof locks.request==='function'?locks.request('saumya-auth-refresh',task):task();
 }
 
