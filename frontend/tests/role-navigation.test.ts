@@ -5,8 +5,8 @@ describe('role navigation configuration',()=>{
  it('keeps platform plans, assignments, analytics and audit in distinct groups',()=>{
   const groups=getRoleNavigation('platform',['SUBSCRIPTION_MANAGE','AUDIT_VIEW','PLATFORM_MANAGE']);
   expect(groups.find(g=>g.label==='Subscriptions')?.items.map(i=>i.key)).toEqual(['subscriptions','assignments']);
-  expect(groups.find(g=>g.label==='Insights')?.items.map(i=>i.key)).toEqual(['analytics']);
-  expect(groups.find(g=>g.label==='Governance')?.items.map(i=>i.key)).toEqual(['audit']);
+  expect(groups.find(g=>g.label==='Analytics')?.items.map(i=>i.key)).toEqual(['analytics']);
+  expect(groups.find(g=>g.label==='Audit')?.items.map(i=>i.key)).toEqual(['audit']);
  });
  it('exposes analytics only when vendor admin has both reporting and branch permissions',()=>{
   expect(getNavigationKeys('vendor',['REPORT_VIEW'])).not.toContain('analytics');
