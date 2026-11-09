@@ -149,7 +149,7 @@ public class PaymentGatewayCheckoutService {
     
     private void authorizeInvoice(Invoice invoice, Principal actor) {
         if ("VENDOR".equals(actor.accountType())) {
-            if (actor.permissions() == null || !actor.permissions().contains("FINANCE_MANAGE"))
+            if (actor.permissions() == null || !actor.permissions().contains("PAYMENT_RECORD"))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Finance permission required");
             return;
         }
