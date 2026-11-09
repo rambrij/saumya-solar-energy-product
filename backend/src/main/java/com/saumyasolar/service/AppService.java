@@ -586,7 +586,7 @@ public class AppService {
     @Transactional
     public SalesLead updateLead(UUID id, Input x, Principal p) {
         vendor(p);
-        requirePermission(p, "LEAD_VIEW");
+        requirePermission(p, "LEAD_UPDATE");
         var l = leads.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
         if (enterpriseSaas != null) enterpriseSaas.assertBranchAccess(l.getBranchId(), p);
         requireEmployee(x.assignedUserId(), p.tenantId());
