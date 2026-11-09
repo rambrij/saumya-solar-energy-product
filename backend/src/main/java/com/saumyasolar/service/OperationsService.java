@@ -757,6 +757,7 @@ public class OperationsService {
     @Transactional
     public InstallationChecklistItem updateChecklist(UUID id, UUID itemId, ChecklistUpdateInput x, Principal p) {
         UUID t = tenant(p);
+        permission(p, "INSTALLATION_UPDATE");
         InstallationJob j = installation(id, t, p);
         InstallationChecklistItem c = checklist.findByIdAndTenantIdAndInstallationId(itemId, t, id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         c.setCompleted(Boolean.TRUE.equals(x.completed()));
