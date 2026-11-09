@@ -115,6 +115,29 @@ class AuthLifecycleServiceTest {
     }
 
     @Test
+    void customTenantRoleCanBeAssignedToAnEmployeeInTheSameTenant() {
+        UUID tenantId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        UUID employeeId = UUID.randomUUID();
+        AppUser employee = new AppUser();
+        employee.setId(employeeId);
+        employee.setTenantId(tenantId);
+        employee.setAccountType("VENDOR");
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setTenantId(tenantId);
+        role.setName("CUSTOM_SALES_READ");
+        when(users.findById(employeeId)).thenReturn(Optional.of(employee));
+        when(roles.findByNameAndTenantId("CUSTOM_SALES_READ", tenantId)).thenReturn(Optional.of(role));
+        when(users.save(any(AppUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AppUser assigned = service.assignEmployeeRole(tenantId, actorId, employeeId, "CUSTOM_SALES_READ");
+
+        assertEquals(1, assigned.getRoles().size());
+        assertEquals(role.getId(), assigned.getRoles().iterator().next().getId());
+    }
+
+    @Test
     void replayOfRotatedRefreshTokenRevokesEveryTokenInItsFamily() {
         UUID familyId = UUID.randomUUID();
         var oldToken = new com.saumyasolar.domain.RefreshToken();
