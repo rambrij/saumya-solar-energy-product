@@ -29,8 +29,8 @@ public class QuotationRevisionService {
     public QuoteView revise(UUID id, Principal p) {
         if (!"VENDOR".equals(p.accountType()) || p.tenantId() == null)
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-        if (p.permissions() == null || !p.permissions().contains("QUOTATION_MANAGE"))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing permission: QUOTATION_MANAGE");
+        if (p.permissions() == null || !p.permissions().contains("QUOTATION_UPDATE"))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing permission: QUOTATION_UPDATE");
         var old = quotes.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
         if (!Set.of("SENT", "REJECTED", "APPROVAL_REJECTED").contains(old.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only sent/rejected quotations can be revised");
