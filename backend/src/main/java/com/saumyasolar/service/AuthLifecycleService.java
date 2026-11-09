@@ -397,6 +397,7 @@ public class AuthLifecycleService {
         if (java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT", "CUSTOMER").contains(role.getName())
                 || com.saumyasolar.config.DataSeeder.employeeRolePermissions().containsKey(role.getName()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "System roles cannot be modified");
+        role.setCustomRole(true);
         role.getPermissions().clear();
         role.getPermissions().addAll(resolveVendorPermissions(permissionCodes));
         var saved = roles.save(role);
