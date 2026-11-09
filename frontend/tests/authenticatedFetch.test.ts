@@ -11,22 +11,26 @@ describe('HttpOnly-cookie authenticatedFetch',()=>{
   setCurrentAuthSession(session);
   const fetchMock=vi.fn()
    .mockResolvedValueOnce(new Response('',{status:401}))
-   .mockResolvedValueOnce(new Response(JSON.stringify({...session,accessToken:'access-new',csrfToken:'csrf-new'}),{status:200,headers:{'Content-Type':'application/json'}}))
+   .mockResolvedValueOnce(new Response(JSON.stringify({csrfToken:'csrf-rotated'}),{status:200,headers:{'Content-Type':'application/json'}}))
+   .mockResolvedValueOnce(new Response(JSON.stringify({...session,accessToken:'access-new',csrfToken:'csrf-rotated'}),{status:200,headers:{'Content-Type':'application/json'}}))
    .mockResolvedValueOnce(new Response('ok',{status:200}));
   vi.stubGlobal('fetch',fetchMock);
   const response=await authenticatedFetch('/api/v1/products',{},session);
   expect(response.status).toBe(200);
-  expect(fetchMock).toHaveBeenCalledTimes(3);
+  expect(fetchMock).toHaveBeenCalledTimes(4);
+  expect(String(fetchMock.mock.calls[1][0])).toContain('/auth/csrf');
   expect(fetchMock.mock.calls[1][1]?.credentials).toBe('include');
-  expect(new Headers(fetchMock.mock.calls[1][1]?.headers).get('X-CSRF-Token')).toBe('csrf-old');
-  expect(new Headers(fetchMock.mock.calls[2][1]?.headers).get('Authorization')).toBe('Bearer access-new');
-  expect(sessionStorage.getItem('saumya-csrf-token')).toBe('csrf-new');
+  expect(String(fetchMock.mock.calls[2][0])).toContain('/auth/refresh');
+  expect(new Headers(fetchMock.mock.calls[2][1]?.headers).get('X-CSRF-Token')).toBe('csrf-rotated');
+  expect(new Headers(fetchMock.mock.calls[3][1]?.headers).get('Authorization')).toBe('Bearer access-new');
+  expect(sessionStorage.getItem('saumya-csrf-token')).toBe('csrf-rotated');
  });
 
  it('shares one cookie refresh operation for concurrent expired requests',async()=>{
   setCurrentAuthSession(session);
   let refreshCalls=0;
   const fetchMock=vi.fn(async(url:string,init?:RequestInit)=>{
+   if(url.includes('/auth/csrf'))return new Response(JSON.stringify({csrfToken:'csrf-new'}),{status:200,headers:{'Content-Type':'application/json'}});
    if(url.includes('/auth/refresh')){
     refreshCalls++;
     await Promise.resolve();
@@ -45,14 +49,16 @@ describe('HttpOnly-cookie authenticatedFetch',()=>{
   expect(refreshCalls).toBe(1);
  });
 
- it('bootstraps a new in-memory session after page reload using cookie and CSRF token',async()=>{
-  sessionStorage.setItem('saumya-csrf-token','csrf-persisted');
-  const fetchMock=vi.fn().mockResolvedValue(new Response(JSON.stringify({...session,accessToken:'bootstrapped'}),{status:200,headers:{'Content-Type':'application/json'}}));
+ it('bootstraps a new in-memory session after page reload using the current cookie CSRF value',async()=>{
+  const fetchMock=vi.fn()
+   .mockResolvedValueOnce(new Response(JSON.stringify({csrfToken:'csrf-current'}),{status:200,headers:{'Content-Type':'application/json'}}))
+   .mockResolvedValueOnce(new Response(JSON.stringify({...session,accessToken:'bootstrapped',csrfToken:'csrf-current'}),{status:200,headers:{'Content-Type':'application/json'}}));
   vi.stubGlobal('fetch',fetchMock);
   const result=await bootstrapSession();
   expect(result?.accessToken).toBe('bootstrapped');
-  expect(fetchMock.mock.calls[0][1]?.credentials).toBe('include');
-  expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get('X-CSRF-Token')).toBe('csrf-persisted');
+  expect(String(fetchMock.mock.calls[0][0])).toContain('/auth/csrf');
+  expect(String(fetchMock.mock.calls[1][0])).toContain('/auth/refresh');
+  expect(new Headers(fetchMock.mock.calls[1][1]?.headers).get('X-CSRF-Token')).toBe('csrf-current');
  });
 
 
