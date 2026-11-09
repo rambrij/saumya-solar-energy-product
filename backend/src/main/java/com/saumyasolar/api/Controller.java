@@ -1,5 +1,7 @@
 package com.saumyasolar.api;
 
+import io.swagger.v3.oas.annotations.Operation;
+
 import com.lowagie.text.Document;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.pdf.PdfWriter;
@@ -205,6 +207,7 @@ public class Controller {
         return s.employeeRoles(p(a));
     }
 
+    @Operation(summary="Create customer enquiry",description="Creates a tenant-scoped enquiry for the authenticated customer and optionally snapshots one of their saved addresses. Existing clients may omit addressId.")
     @PostMapping("/customer/enquiries")
     com.saumyasolar.domain.Enquiry customerEnquiry(@Valid @RequestBody CustomerEnquiryRequest x, Authentication a) {
         return s.createCustomerEnquiry(x.propertyType(),x.monthlyBill(),x.requiredCapacityKw(),x.message(),x.addressId(),p(a));
