@@ -501,9 +501,15 @@ public class OperationsService {
     @Transactional
     public CustomerOrder transition(UUID id, OrderTransitionInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "ORDER_UPDATE");
         CustomerOrder o = order(id, t);
         String old = o.getStatus(), next = x.status().toUpperCase(Locale.ROOT);
+        if ("CANCELLED".equals(next)) {
+            permission(p, "ORDER_CANCEL");
+            if (x.reason() == null || x.reason().isBlank())
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order cancellation reason is required");
+        } else {
+            permission(p, "ORDER_UPDATE");
+        }
         Map<String, Set<String>> allowed = Map.of("CONFIRMED", Set.of("PAYMENT_PENDING", "PAID", "ON_HOLD", "CANCELLED"), "PAYMENT_PENDING", Set.of("PAYMENT_PARTIAL", "PAID", "ON_HOLD", "CANCELLED"), "PAYMENT_PARTIAL", Set.of("PAID", "ON_HOLD", "CANCELLED"), "PAID", Set.of("MATERIAL_RESERVED", "ON_HOLD", "CANCELLED"), "MATERIAL_RESERVED", Set.of("INSTALLATION_SCHEDULED", "CONFIRMED", "ON_HOLD", "CANCELLED"), "INSTALLATION_SCHEDULED", Set.of("INSTALLATION_IN_PROGRESS", "MATERIAL_RESERVED", "ON_HOLD", "CANCELLED"), "INSTALLATION_IN_PROGRESS", Set.of("INSTALLATION_SCHEDULED", "ON_HOLD"), "INSTALLED", Set.of("COMMISSIONED"), "COMMISSIONED", Set.of("CLOSED"));
         if (!allowed.getOrDefault(old, Set.of()).contains(next))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Order cannot move from " + old + " to " + next);
