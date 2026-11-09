@@ -33,6 +33,10 @@ export default function RoleManagementPanel({s,error}:Props){
   setSelected(role);setName(role.name);setCodes((role.permissions||[]).map((p:any)=>p.code));
  };
  const toggle=(code:string)=>setCodes(current=>current.includes(code)?current.filter(x=>x!==code):[...current,code]);
+ const remove=async(role:any)=>{
+  if(!window.confirm('Delete custom role '+role.name+'? Roles assigned to employees cannot be deleted.'))return;
+  try{await api('/roles/'+role.id,{method:'DELETE'},s);await load();error('Custom role deleted.')}catch(e:any){error(e.message||'Unable to delete role')}
+ };
  const save=async(e:React.FormEvent<HTMLFormElement>)=>{
   e.preventDefault();setSaving(true);
   try{
@@ -54,7 +58,7 @@ export default function RoleManagementPanel({s,error}:Props){
    <div className="form-actions"><button disabled={saving}>{saving?'Saving…':'Save Role'}</button><button type="button" className="secondary" onClick={()=>setSelected(null)}>Cancel</button></div>
   </form>}
   <div className="card management-list"><div className="table-toolbar"><div><h2>Tenant roles</h2><span className="muted">{filtered.length} roles</span></div><input aria-label="Search roles" placeholder="Search roles…" value={search} onChange={e=>setSearch(e.target.value)}/></div>
-   {loading?<p>Loading roles…</p>:!filtered.length?<p>No roles are configured.</p>:<div className="table-wrap"><table><thead><tr><th>Role</th><th>Type</th><th>Permissions</th><th>Actions</th></tr></thead><tbody>{filtered.map(role=><tr key={role.id}><td><b>{role.name.replaceAll('_',' ')}</b></td><td>{role.customRole?'Custom':'System'}</td><td>{(role.permissions||[]).length}</td><td>{role.customRole&&s.user.permissions.includes('ROLE_UPDATE')?<button type="button" className="secondary" onClick={()=>startEdit(role)}>Edit permissions</button>:<span className="muted">Managed by system</span>}</td></tr>)}</tbody></table></div>}
+   {loading?<p>Loading roles…</p>:!filtered.length?<p>No roles are configured.</p>:<div className="table-wrap"><table><thead><tr><th>Role</th><th>Type</th><th>Permissions</th><th>Actions</th></tr></thead><tbody>{filtered.map(role=><tr key={role.id}><td><b>{role.name.replaceAll('_',' ')}</b></td><td>{role.customRole?'Custom':'System'}</td><td>{(role.permissions||[]).length}</td><td>{role.customRole?<div className="actions">{s.user.permissions.includes('ROLE_UPDATE')&&<><button type="button" className="secondary" onClick={()=>startEdit(role)}>Edit permissions</button><button type="button" className="danger" onClick={()=>void remove(role)}>Delete</button></>}</div>:<span className="muted">Managed by system</span>}</td></tr>)}</tbody></table></div>}
   </div>
  </section>;
 }
