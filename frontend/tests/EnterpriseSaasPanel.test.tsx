@@ -37,7 +37,7 @@ describe('Platform subscription administration',()=>{
    return ok([]) as any;
   });
   render(<EnterpriseSaasPanel mode="platform" section="assignments" s={session} error={vi.fn()}/>);
-  fireEvent.change(screen.getByPlaceholderText('Type at least 2 characters…'),{target:{value:'sa'}});
+  fireEvent.change(await screen.findByPlaceholderText('Type at least 2 characters…'),{target:{value:'sa'}});
   fireEvent.click(await screen.findByRole('button',{name:/Saumya Solar/}));
   expect(await screen.findByText('Assignment history')).toBeTruthy();
   await waitFor(()=>expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/platform/tenants/tenant-1/subscription-history'),expect.any(Object)));
