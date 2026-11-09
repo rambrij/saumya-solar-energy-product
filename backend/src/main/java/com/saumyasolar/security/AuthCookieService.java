@@ -43,12 +43,13 @@ public class AuthCookieService {
         this.ttlDays = Math.max(1, ttlDays);
     }
 
-    public void issue(HttpServletResponse response, String refreshToken) {
+    public String issue(HttpServletResponse response, String refreshToken) {
         byte[] bytes = new byte[32];
         new SecureRandom().nextBytes(bytes);
         String csrf = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         response.addHeader(HttpHeaders.SET_COOKIE, cookie(REFRESH_COOKIE, refreshToken, true, "/api/v1/auth", Duration.ofDays(ttlDays)));
         response.addHeader(HttpHeaders.SET_COOKIE, cookie(CSRF_COOKIE, csrf, false, "/", Duration.ofDays(ttlDays)));
+        return csrf;
     }
 
     public String refreshToken(HttpServletRequest request) {
