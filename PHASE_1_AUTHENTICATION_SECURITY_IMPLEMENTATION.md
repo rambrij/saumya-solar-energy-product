@@ -575,3 +575,12 @@ Source commit `8a079a8ff0641dd253f9b04ed470a837f24bf836` passed backend compilat
 4. External/mobile clients that previously supplied refresh tokens in JSON must migrate to the cookie contract or use a separately designed non-browser client authentication flow.
 
 **Completion decision:** Source implementation is substantially hardened, but do not mark Phase 1 production-ready until the latest CI run passes and the deployed proxy/CORS/cookie configuration is verified.
+
+
+### 19.6 Render deployment alignment check
+
+Read-only Render inspection of the sole available workspace (`My Workspace`) found a service named `soumya-solar-api` at `https://soumya-solar-api.onrender.com`, but it is configured to deploy from `https://github.com/rambrij/soumya-solar-energy-solution` on branch `main`. It is **not** connected to `rambrij/saumya-solar-energy-product` or `audit/implementation-gap-analysis`.
+
+The Render service details expose an unrestricted public ingress allowlist (`0.0.0.0/0`), which is distinct from the application's `TRUSTED_PROXY_IPS` allowlist and is not evidence of trusted forwarded-client handling. The service inspection response does not expose its environment variable values, so `TRUSTED_PROXY_IPS`, `CORS_ORIGINS`, `AUTH_REFRESH_COOKIE_SECURE`, `AUTH_REFRESH_COOKIE_SAME_SITE` and `AUTH_REFRESH_COOKIE_DOMAIN` could not be verified. No Render service configuration, environment variable or deployment was changed.
+
+**Deployment blocker:** production is not proven to be running this repository/branch. Before rollout, explicitly approve repointing the Render API service to the intended repository/branch, then verify its exact CORS/cookie/proxy settings and deploy health. Do not infer these values from source defaults.
