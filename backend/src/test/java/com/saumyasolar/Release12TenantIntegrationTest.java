@@ -367,6 +367,10 @@ class Release12TenantIntegrationTest {
         quote.setQuotationNumber("FOREIGN-" + UUID.randomUUID().toString().substring(0, 8));
         quote.setCustomerId(customer.getId());
         quote.setStatus("DRAFT");
+        quote.setSubtotal(BigDecimal.ZERO);
+        quote.setDiscountPercent(BigDecimal.ZERO);
+        quote.setDiscountAmount(BigDecimal.ZERO);
+        quote.setTaxAmount(BigDecimal.ZERO);
         quote.setGrandTotal(BigDecimal.ZERO);
         quote.setCreatedAt(Instant.now());
         quotations.save(quote);
@@ -378,6 +382,10 @@ class Release12TenantIntegrationTest {
         order.setCustomerId(customer.getId());
         order.setOrderNumber("FOREIGN-ORDER-" + UUID.randomUUID().toString().substring(0, 8));
         order.setStatus("PENDING");
+        order.setSubtotal(BigDecimal.ZERO);
+        order.setDiscountPercent(BigDecimal.ZERO);
+        order.setDiscountAmount(BigDecimal.ZERO);
+        order.setTaxTotal(BigDecimal.ZERO);
         order.setTotal(BigDecimal.ZERO);
         order.setCreatedAt(Instant.now());
         customerOrders.save(order);
@@ -388,8 +396,15 @@ class Release12TenantIntegrationTest {
         invoice.setOrderId(order.getId());
         invoice.setInvoiceNumber("FOREIGN-INV-" + UUID.randomUUID().toString().substring(0, 8));
         invoice.setStatus("DRAFT");
+        invoice.setFiscalYear("2026-27");
         invoice.setCustomerName(customer.getName());
+        invoice.setCustomerEmail(customer.getEmail());
+        invoice.setVendorName(foreignTenant.getName());
+        invoice.setSubtotal(BigDecimal.ZERO);
+        invoice.setTaxTotal(BigDecimal.ZERO);
         invoice.setGrandTotal(BigDecimal.ZERO);
+        invoice.setTaxTreatment("INTRA_STATE");
+        invoice.setDueDate(java.time.LocalDate.now().plusDays(30));
         invoice.setCreatedAt(Instant.now());
         invoices.save(invoice);
 
@@ -399,6 +414,8 @@ class Release12TenantIntegrationTest {
         ticket.setCustomerId(customer.getId());
         ticket.setTicketNumber("FOREIGN-SVC-" + UUID.randomUUID().toString().substring(0, 8));
         ticket.setCategory("GENERAL");
+        ticket.setPriority("LOW");
+        ticket.setWarrantyStatus("UNKNOWN");
         ticket.setStatus("OPEN");
         ticket.setDescription("Foreign tenant test record");
         ticket.setCreatedAt(Instant.now());
@@ -410,6 +427,7 @@ class Release12TenantIntegrationTest {
         installation.setCustomerId(customer.getId());
         installation.setOrderId(order.getId());
         installation.setStatus("SCHEDULED");
+        installation.setCapacityKw(BigDecimal.ZERO);
         installation.setScheduledAt(Instant.now());
         installationJobs.save(installation);
 
