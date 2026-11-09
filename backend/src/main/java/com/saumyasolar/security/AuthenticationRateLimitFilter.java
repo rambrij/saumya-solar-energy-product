@@ -47,9 +47,17 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
         this(jdbc, mapper, new ClientAddressResolver(""), loginLimit, recoveryLimit, mfaLimit, windowSeconds);
     }
 
+    private String requestPath(HttpServletRequest request) {
+        String path = request.getServletPath();
+        if (path == null || path.isBlank()) path = request.getRequestURI();
+        String context = request.getContextPath();
+        if (context != null && !context.isBlank() && path.startsWith(context)) path = path.substring(context.length());
+        return path;
+    }
+
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        String path = request.getServletPath();
+        String path = requestPath(request);
         return !("POST".equalsIgnoreCase(request.getMethod()) &&
                 (path.equals("/api/v1/auth/login") ||
                  path.equals("/api/v1/auth/refresh") ||
@@ -61,7 +69,7 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        String path = request.getServletPath();
+        String path = requestPath(request);
         int limit = path.endsWith("/login") || path.endsWith("/refresh") ? loginLimit
                 : path.endsWith("/mfa/verify") ? mfaLimit : recoveryLimit;
         String address = addressResolver.resolve(request);
