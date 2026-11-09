@@ -164,6 +164,15 @@ public class Controller {
         authCookies.clear(response);
     }
     
+    @PatchMapping("/users/{userId}/role")
+    AppUser assignEmployeeRole(@PathVariable UUID userId, @Valid @RequestBody EmployeeRoleAssignment x, Authentication a) {
+        var actor = p(a);
+        if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
+                || actor.permissions() == null || !actor.permissions().contains("ROLE_ASSIGN"))
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
+        return lifecycle.assignEmployeeRole(actor.tenantId(), actor.userId(), userId, x.roleName());
+    }
+
     @PostMapping("/users")
     UserView createVendorEmployee(@Valid @RequestBody EmployeeCreate x, Authentication a) {
         var actor = p(a);
