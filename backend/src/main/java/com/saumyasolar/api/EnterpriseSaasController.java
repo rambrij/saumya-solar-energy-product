@@ -76,6 +76,7 @@ public class EnterpriseSaasController {
  }
  @PatchMapping("/warehouses/{id}/branch") public Warehouse assignWarehouseBranch(@PathVariable UUID id,@RequestBody WarehouseBranchRequest x,Authentication a){return service.assignWarehouseBranch(id,x.branchId(),p(a));}
  @GetMapping("/subscription") public Map<String,Object> currentSubscription(Authentication a){return service.currentSubscription(p(a));}
+ @GetMapping("/platform/analytics/tenant-usage") public Map<String,Object> platformTenantUsage(@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size,Authentication a){return service.platformTenantUsage(p(a),page,size);}
  @GetMapping("/audit-events") public List<AuditEvent> auditEvents(@RequestParam Instant from,@RequestParam Instant to,
   @RequestParam(required=false) UUID actorId,@RequestParam(required=false) String action,
   @RequestParam(required=false) String entityType,@RequestParam(required=false) String outcome,Authentication a){
