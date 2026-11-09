@@ -15,6 +15,8 @@ import com.saumyasolar.domain.InstallationJob;
 import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.AppUserRepository;
+import com.saumyasolar.repo.RoleRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import com.saumyasolar.repo.EnquiryRepository;
 import com.saumyasolar.repo.ProductCategoryRepository;
 import com.saumyasolar.repo.ProductRepository;
@@ -55,6 +57,10 @@ class Release12TenantIntegrationTest {
     ObjectMapper json;
     @Autowired
     AppUserRepository users;
+    @Autowired
+    RoleRepository roles;
+    @Autowired
+    PasswordEncoder passwordEncoder;
     @Autowired
     TenantRepository tenants;
     @Autowired
@@ -141,6 +147,42 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
     
+
+    @Test
+    void platformSupportCanReadTenantDirectoryButCannotMutatePlatformState() throws Exception {
+        var supportRole = roles.findByNameAndTenantIdIsNull("PLATFORM_SUPPORT").orElseThrow();
+        var support = new AppUser();
+        support.setId(UUID.randomUUID());
+        support.setName("Read Only Support");
+        support.setEmail("support-" + UUID.randomUUID() + "@example.test");
+        support.setPasswordHash(passwordEncoder.encode("Support-Password-2026"));
+        support.setAccountType("PLATFORM");
+        support.setEnabled(true);
+        support.getRoles().add(supportRole);
+        users.save(support);
+        var token = accessToken(support.getEmail(), "Support-Password-2026");
+        mvc.perform(get("/api/v1/platform/tenants").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/tenants").header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Support Must Not Create","slug":"support-must-not-create","adminName":"Support","adminEmail":"support-new@example.test","adminPassword":"Support-Password-2026"}
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void csrfBootstrapReturnsTheReadableDoubleSubmitCookieValue() throws Exception {
+        var login = mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"admin@saumya.local\",\"password\":\"Admin@123\"}"))
+                .andExpect(status().isOk()).andReturn();
+        var csrfCookie = login.getResponse().getCookie("XSRF-TOKEN");
+        assertNotNull(csrfCookie);
+        mvc.perform(get("/api/v1/auth/csrf").cookie(csrfCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.csrfToken").value(csrfCookie.getValue()));
+    }
+
     @Test
     void logoutRevokesAccessAndRefreshTokens() throws Exception {
         var loginBody = """
