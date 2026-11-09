@@ -340,13 +340,61 @@ public class AuthLifecycleService {
     }
     
     @Transactional
+    public com.saumyasolar.domain.Role createCustomRole(UUID tenantId, UUID actorId, String name, java.util.Set<String> permissionCodes) {
+        if (tenantId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        String normalized = name == null ? "" : name.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!normalized.matches("[A-Z][A-Z0-9_]{2,49}"))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role name must use 3-50 uppercase letters, digits or underscores");
+        if (java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT", "CUSTOMER").contains(normalized)
+                || com.saumyasolar.config.DataSeeder.employeeRolePermissions().containsKey(normalized))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Reserved role names cannot be created as custom roles");
+        if (roles.findByNameAndTenantId(normalized, tenantId).isPresent())
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Role already exists");
+        var role = new com.saumyasolar.domain.Role();
+        role.setId(UUID.randomUUID());
+        role.setTenantId(tenantId);
+        role.setName(normalized);
+        role.getPermissions().addAll(resolveVendorPermissions(permissionCodes));
+        var saved = roles.save(role);
+        auditAuth("CUSTOM_ROLE_CREATED", users.findById(actorId).orElse(null), "SUCCESS", "CUSTOM_ROLE_CREATED_" + normalized, saved.getId().toString());
+        return saved;
+    }
+
+    @Transactional
+    public com.saumyasolar.domain.Role updateCustomRole(UUID tenantId, UUID actorId, UUID roleId, java.util.Set<String> permissionCodes) {
+        if (tenantId == null || roleId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        var role = roles.findByIdAndTenantId(roleId, tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Role not found"));
+        if (java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT", "CUSTOMER").contains(role.getName())
+                || com.saumyasolar.config.DataSeeder.employeeRolePermissions().containsKey(role.getName()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "System roles cannot be modified");
+        role.getPermissions().clear();
+        role.getPermissions().addAll(resolveVendorPermissions(permissionCodes));
+        var saved = roles.save(role);
+        auditAuth("CUSTOM_ROLE_UPDATED", users.findById(actorId).orElse(null), "SUCCESS", "CUSTOM_ROLE_UPDATED_" + role.getName(), saved.getId().toString());
+        return saved;
+    }
+
+    private java.util.Set<Permission> resolveVendorPermissions(java.util.Set<String> codes) {
+        var result = new java.util.HashSet<Permission>();
+        if (codes == null) return result;
+        for (String code : codes) {
+            if (code == null || code.isBlank() || java.util.Set.of("PLATFORM_MANAGE", "SUBSCRIPTION_MANAGE", "TENANT_VIEW", "TENANT_UPDATE").contains(code))
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform permissions cannot be assigned to vendor roles");
+            result.add(permissions.findByCode(code)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown permission code: " + code)));
+        }
+        return result;
+    }
+
+    @Transactional
     public AppUser createEmployee(UUID tenantId, UUID actorId, String name, String email, String password, String roleName) {
         if (tenantId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (name == null || name.isBlank() || email == null || email.isBlank()
                 || password == null || password.length() < 12)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name, email and a password of at least 12 characters are required");
-        if (roleName == null || !com.saumyasolar.config.DataSeeder.employeeRolePermissions().containsKey(roleName))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select a supported employee role");
+        if (roleName == null || java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT", "CUSTOMER").contains(roleName))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This role cannot be assigned to a vendor employee");
         if (users.findByEmailIgnoreCase(email).isPresent())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email exists");
         var role = roles.findByNameAndTenantId(roleName, tenantId)
