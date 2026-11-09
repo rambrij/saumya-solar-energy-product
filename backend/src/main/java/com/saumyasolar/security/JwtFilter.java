@@ -20,11 +20,13 @@ public class JwtFilter extends OncePerRequestFilter {
     private final JwtService j;
     private final AppUserRepository users;
     private final TenantRepository tenants;
+    private final AuthCookieService cookies;
     
-    JwtFilter(JwtService j, AppUserRepository users, TenantRepository tenants) {
+    JwtFilter(JwtService j, AppUserRepository users, TenantRepository tenants, AuthCookieService cookies) {
         this.j = j;
         this.users = users;
         this.tenants = tenants;
+        this.cookies = cookies;
     }
     
     @Override
@@ -36,8 +38,9 @@ public class JwtFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest r, HttpServletResponse s, FilterChain c)
             throws ServletException, IOException {
         var h = r.getHeader("Authorization");
-        if (h != null && h.startsWith("Bearer ")) try {
-            var tokenPrincipal = j.parse(h.substring(7));
+        String token = h != null && h.startsWith("Bearer ") ? h.substring(7) : cookies.accessToken(r);
+        if (token != null && !token.isBlank()) try {
+            var tokenPrincipal = j.parse(token);
             var user = users.findById(tokenPrincipal.userId()).filter(AppUser::isEnabled)
                     .orElseThrow(() -> new IllegalArgumentException("User is disabled or no longer exists"));
             if (!java.util.Objects.equals(user.getTenantId(), tokenPrincipal.tenantId())
