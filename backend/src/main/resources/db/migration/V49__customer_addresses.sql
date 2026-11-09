@@ -1,4 +1,5 @@
 -- Customer-owned saved addresses. Records are isolated by both tenant and customer profile.
+ALTER TABLE customer_profile ADD UNIQUE KEY uq_customer_profile_tenant_id (tenant_id,id);
 CREATE TABLE customer_address (
  id BINARY(16) PRIMARY KEY,
  tenant_id BINARY(16) NOT NULL,
@@ -15,6 +16,6 @@ CREATE TABLE customer_address (
  created_at TIMESTAMP(6) NOT NULL,
  updated_at TIMESTAMP(6) NOT NULL,
  CONSTRAINT fk_customer_address_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(id),
- CONSTRAINT fk_customer_address_profile FOREIGN KEY (customer_id) REFERENCES customer_profile(id),
+ CONSTRAINT fk_customer_address_profile FOREIGN KEY (tenant_id,customer_id) REFERENCES customer_profile(tenant_id,id),
  INDEX ix_customer_address_owner_default (tenant_id,customer_id,is_default,created_at)
 );
