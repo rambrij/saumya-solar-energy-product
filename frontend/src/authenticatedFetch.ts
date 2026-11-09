@@ -10,7 +10,7 @@ export function sessionForToken(token:string):AuthSession {
 export async function authenticatedFetch(url:string,init:RequestInit={},session?:AuthSession|null):Promise<Response>{
  let active:AuthSession|null=session||null;
  if(session){try{active=JSON.parse(localStorage.getItem('session')||'null')||session}catch{active=session}}
- const request=(current:AuthSession|null)=>fetch(url,{...init,headers:{...(current?{Authorization:'Bearer '+current.accessToken}:{}),...(init.headers||{})}});
+ const request=(current:AuthSession|null)=>{const headers=new Headers(init.headers||{});if(current)headers.set('Authorization','Bearer '+current.accessToken);return fetch(url,{...init,headers})};
  let response=await request(active);
  if(response.status===401&&active?.refreshToken&&!url.includes('/auth/')){
   try{
