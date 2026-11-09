@@ -791,3 +791,34 @@ The latest source commit after this successful run adds stricter numeric-only tr
 
 
 Final source verification: workflow run [42659414140](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42659414140) for source commit `681c3267cf9b1adeb00d83432955f6283054b8c6` completed with all four jobs successful: backend compile/tests (108 tests, 0 failures/errors), frontend tests/build, MySQL V1–V53 migration validation, and Spring Boot startup/health against MySQL 8.4 and Mailpit. Only documentation files were changed after that verified source commit.
+
+
+---
+
+## Phase 1 security blocker closure addendum — 2026-11-09
+
+The previously open Phase 1 production blockers have been addressed in code on this branch. See PHASE_1_AUTHENTICATION_SECURITY_IMPLEMENTATION.md §18 for the complete traceability and file-level evidence.
+
+| Previously open gap | Closure | Evidence |
+|---|---|---|
+| Authentication audit-event persistence | Reused append-only audit_event; persisted login, lockout, refresh/replay, logout, password-reset, MFA, role and account-state events. | AuthenticationAuditService; AuthLifecycleService; AuthenticationAuditServiceTest |
+| Fine-grained permission reconciliation | Replaced legacy broad checks across core services/controllers with SRS operation permissions; standard role grants reconciled; V54 removes deprecated broad employee grants. | DataSeeder.employeeRolePermissions; V54__reconcile_employee_role_permissions.sql; AppService; CatalogAdminService; OperationsService; FinanceService; SurveyLifecycleService; OfflineSyncService; PaymentGatewayCheckoutService; QuotationRevisionService; Phase2OperationsController; ServiceCommentController; WarrantyClaimAttachmentService |
+| Custom role lifecycle | Tenant-scoped create, edit, delete-unused and employee assignment; strict vendor permission allowlist; platform/system roles protected. | Controller role/permission endpoints; AuthLifecycleService; RoleManagementPanel; AuthLifecycleServiceTest |
+| Assigned-resource scope | Sales Executive and field-engineer resource access is restricted to assigned records; Sales Manager remains tenant-wide for leads. | AppService assigned filters; SurveyLifecycleService; OperationsService; FinanceService; CatalogAdminService; Release12TenantIntegrationTest |
+| HttpOnly refresh-token storage | Refresh token moved out of JSON/localStorage to HttpOnly Secure SameSite cookie; double-submit CSRF on refresh/logout; access token memory-only; legacy localStorage session cleared. | AuthCookieService; Controller; Models.Session; SecurityConfig; authenticatedFetch.ts; main.tsx; AuthCookieServiceTest; Release12TenantIntegrationTest |
+| Direct upload/download session refresh | Authenticated direct requests use common refresh/retry helper; FormData and binary responses preserved. | authenticatedFetch.ts; main.tsx and authenticated panel components; authenticatedFetch.test.ts |
+| Refresh-token family replay | Reuse revokes active tokens in the family under database locking. | RefreshToken family fields; AuthLifecycleService; V53; concurrent replay integration test |
+| Reverse-proxy IP trust and bucket retention | Forwarded IP headers are trusted only from allowlisted immediate peers; scheduled two-day bucket cleanup. | ClientAddressResolver; AuthenticationRateLimitFilter; AuthenticationRateLimitCleanup; ClientAddressResolverTest; AuthenticationRateLimitCleanupTest |
+| Cross-tenant and privilege tests | Added cross-tenant negative checks for orders, quotations, invoices, service requests and installations; assigned-lead and platform-role escalation tests. | Release12TenantIntegrationTest |
+
+### Phase 1 validation status
+
+Workflow run [42669708678](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42669708678) passed backend compile/tests (116 tests, no failures), frontend production build, MySQL 8.4 Flyway migrations through V54, and Spring Boot startup/health check.
+
+A subsequent run was triggered after adding AuthenticationRateLimitCleanupTest and updating the SRS/report. Its completion must be checked before treating the latest documentation/test-only commits as finally validated.
+
+### Operational caveat
+
+Code-level proxy trust and cleanup are implemented and tested, but deployed CORS_ORIGINS and TRUSTED_PROXY_IPS values have not been inspected. The Render workspace has not been confirmed. Production rollout requires exact CORS origin(s), HTTPS, secure cookie attributes and the immediate trusted proxy IP allowlist. The resolver currently supports exact IPs, not CIDR ranges.
+
+The refresh API contract is now cookie-based; external/mobile clients using refresh-token request bodies must be migrated. Do not roll out until those clients and the production proxy/cookie settings are verified.
