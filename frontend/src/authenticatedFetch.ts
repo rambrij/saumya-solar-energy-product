@@ -32,27 +32,38 @@ function isUnsafe(method:string):boolean {
  return !['GET','HEAD','OPTIONS','TRACE'].includes(method.toUpperCase());
 }
 
+type LockManagerLike={request<T>(name:string,callback:()=>Promise<T>):Promise<T>};
+
+function withCrossTabRefreshLock<T>(task:()=>Promise<T>):Promise<T>{
+ const locks=(navigator as Navigator & {locks?:LockManagerLike}).locks;
+ return locks?locks.request('saumya-auth-refresh',task):task();
+}
+
 async function rotateSession():Promise<AuthSession>{
- const headers=csrfHeaders(new Headers({'Accept':'application/json'}));
- const response=await fetch(API_BASE+'/api/v1/auth/refresh',{method:'POST',headers,credentials:'include'});
- if(!response.ok)throw new Error('session');
- const next=await response.json() as AuthSession;
- if(!next.accessToken||!next.user)throw new Error('invalid refresh response');
- setCurrentAuthSession(next);
- return next;
+ return withCrossTabRefreshLock(async()=>{
+  // Refresh cookies are shared by same-origin tabs. Always fetch the matching
+  // CSRF value after acquiring the cross-tab lock, so a queued tab uses the
+  // refresh cookie and CSRF cookie rotated by the preceding tab.
+  const csrfResponse=await fetch(API_BASE+'/api/v1/auth/csrf',{
+   method:'GET',credentials:'include',headers:{'Accept':'application/json'}
+  });
+  if(!csrfResponse.ok)throw new Error('session');
+  const csrfPayload=await csrfResponse.json() as {csrfToken?:string};
+  if(!csrfPayload.csrfToken)throw new Error('csrf');
+  sessionStorage.setItem('saumya-csrf-token',csrfPayload.csrfToken);
+
+  const headers=new Headers({'Accept':'application/json','X-CSRF-Token':csrfPayload.csrfToken});
+  const response=await fetch(API_BASE+'/api/v1/auth/refresh',{method:'POST',headers,credentials:'include'});
+  if(!response.ok)throw new Error('session');
+  const next=await response.json() as AuthSession;
+  if(!next.accessToken||!next.user)throw new Error('invalid refresh response');
+  setCurrentAuthSession(next);
+  return next;
+ });
 }
 
 export async function bootstrapSession():Promise<AuthSession|null>{
  try{
-  let csrf=csrfToken();
-  if(!csrf){
-   const csrfResponse=await fetch(API_BASE+'/api/v1/auth/csrf',{method:'GET',credentials:'include',headers:{'Accept':'application/json'}});
-   if(!csrfResponse.ok)return null;
-   const payload=await csrfResponse.json() as {csrfToken?:string};
-   if(!payload.csrfToken)return null;
-   csrf=payload.csrfToken;
-   sessionStorage.setItem('saumya-csrf-token',csrf);
-  }
   if(!refreshInFlight)refreshInFlight=rotateSession();
   try{return await refreshInFlight}catch{setCurrentAuthSession(null);return null}finally{refreshInFlight=null}
  }catch{return null}
