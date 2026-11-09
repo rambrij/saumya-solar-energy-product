@@ -75,7 +75,7 @@ public class EnterpriseSaasService {
     }
     
     private void platform(Principal p, String code) {
-        if (!"PLATFORM".equals(p.accountType()) || p.roles() == null || !p.roles().contains("PLATFORM_SUPER_ADMIN"))
+        if (!"PLATFORM".equals(p.accountType()) || p.roles() == null || p.roles().stream().noneMatch(Set.of("PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT")::contains))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform Super Admin required");
         permission(p, code);
     }
