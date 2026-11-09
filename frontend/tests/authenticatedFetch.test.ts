@@ -76,6 +76,25 @@ describe('HttpOnly-cookie authenticatedFetch',()=>{
   expect(new Headers(fetchMock.mock.calls[1][1]?.headers).get('X-CSRF-Token')).toBe('csrf-from-api');
  });
 
+
+ it('uses the browser-wide Web Lock while rotating refresh cookies',async()=>{
+  const descriptor=Object.getOwnPropertyDescriptor(navigator,'locks');
+  const request=vi.fn(async(_name:string,task:()=>Promise<unknown>)=>task());
+  Object.defineProperty(navigator,'locks',{configurable:true,value:{request}});
+  const fetchMock=vi.fn()
+   .mockResolvedValueOnce(new Response(JSON.stringify({csrfToken:'csrf-lock'}),{status:200,headers:{'Content-Type':'application/json'}}))
+   .mockResolvedValueOnce(new Response(JSON.stringify({...session,accessToken:'locked-refresh',csrfToken:'csrf-lock'}),{status:200,headers:{'Content-Type':'application/json'}}));
+  vi.stubGlobal('fetch',fetchMock);
+  try{
+   const result=await bootstrapSession();
+   expect(result?.accessToken).toBe('locked-refresh');
+   expect(request).toHaveBeenCalledWith('saumya-auth-refresh',expect.any(Function));
+  }finally{
+   if(descriptor)Object.defineProperty(navigator,'locks',descriptor);
+   else delete (navigator as Navigator & {locks?:unknown}).locks;
+  }
+ });
+
  it('keeps access credentials in memory and never persists them in localStorage',()=>{
   localStorage.clear();
   setCurrentAuthSession(session);
