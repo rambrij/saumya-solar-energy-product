@@ -4,6 +4,7 @@ type Props={s:any;error:(message:string)=>void};
 export default function RoleManagementPanel({s,error}:Props){
  const[roles,setRoles]=useState<any[]>([]);
  const[permissions,setPermissions]=useState<any[]>([]);
+ const[users,setUsers]=useState<any[]>([]);
  const[selected,setSelected]=useState<any>(null);
  const[name,setName]=useState('');
  const[codes,setCodes]=useState<string[]>([]);
@@ -13,8 +14,8 @@ export default function RoleManagementPanel({s,error}:Props){
  const load=async()=>{
   setLoading(true);
   try{
-   const [roleRows,permissionRows]=await Promise.all([api('/roles',{},s),api('/permissions',{},s)]);
-   setRoles(roleRows||[]);setPermissions(permissionRows||[]);
+   const [roleRows,permissionRows,userRows]=await Promise.all([api('/roles',{},s),api('/permissions',{},s),s.user.permissions.includes('USER_VIEW')?api('/users',{},s):Promise.resolve([])]);
+   setRoles(roleRows||[]);setPermissions(permissionRows||[]);setUsers(userRows||[]);
   }catch(e:any){error(e.message||'Unable to load role permissions')}
   finally{setLoading(false)}
  };
@@ -33,6 +34,9 @@ export default function RoleManagementPanel({s,error}:Props){
   setSelected(role);setName(role.name);setCodes((role.permissions||[]).map((p:any)=>p.code));
  };
  const toggle=(code:string)=>setCodes(current=>current.includes(code)?current.filter(x=>x!==code):[...current,code]);
+ const assign=async(user:any,roleName:string)=>{
+  try{await send('/users/'+user.id+'/role',{roleName},s,'PATCH');await load();error('Employee role updated.')}catch(e:any){error(e.message||'Unable to assign role')}
+ };
  const remove=async(role:any)=>{
   if(!window.confirm('Delete custom role '+role.name+'? Roles assigned to employees cannot be deleted.'))return;
   try{await api('/roles/'+role.id,{method:'DELETE'},s);await load();error('Custom role deleted.')}catch(e:any){error(e.message||'Unable to delete role')}
@@ -60,6 +64,9 @@ export default function RoleManagementPanel({s,error}:Props){
   <div className="card management-list"><div className="table-toolbar"><div><h2>Tenant roles</h2><span className="muted">{filtered.length} roles</span></div><input aria-label="Search roles" placeholder="Search roles…" value={search} onChange={e=>setSearch(e.target.value)}/></div>
    {loading?<p>Loading roles…</p>:!filtered.length?<p>No roles are configured.</p>:<div className="table-wrap"><table><thead><tr><th>Role</th><th>Type</th><th>Permissions</th><th>Actions</th></tr></thead><tbody>{filtered.map(role=><tr key={role.id}><td><b>{role.name.replaceAll('_',' ')}</b></td><td>{role.customRole?'Custom':'System'}</td><td>{(role.permissions||[]).length}</td><td>{role.customRole?<div className="actions">{s.user.permissions.includes('ROLE_UPDATE')&&<><button type="button" className="secondary" onClick={()=>startEdit(role)}>Edit permissions</button><button type="button" className="danger" onClick={()=>void remove(role)}>Delete</button></>}</div>:<span className="muted">Managed by system</span>}</td></tr>)}</tbody></table></div>}
   </div>
+  {s.user.permissions.includes('USER_VIEW')&&s.user.permissions.includes('ROLE_ASSIGN')&&<div className="card management-list"><div className="table-toolbar"><div><h2>Employee role assignments</h2><span className="muted">Assign predefined or custom tenant roles</span></div></div>
+   {!users.length?<p>No vendor employees are available.</p>:<div className="table-wrap"><table><thead><tr><th>Employee</th><th>Email</th><th>Current role</th><th>Assign role</th></tr></thead><tbody>{users.map(user=><tr key={user.id}><td>{user.name}</td><td>{user.email}</td><td>{(user.roles||[]).map((r:any)=>typeof r==='string'?r:r.name).join(', ')||'—'}</td><td><select aria-label={'Role for '+user.name} value={(user.roles||[]).map((r:any)=>typeof r==='string'?r:r.name)[0]||''} onChange={e=>void assign(user,e.target.value)}><option value="" disabled>Select role</option>{roles.map(role=><option key={role.id} value={role.name}>{role.name.replaceAll('_',' ')}</option>)}</select></td></tr>)}</tbody></table></div>}
+  </div>}
  </section>;
 }
 
