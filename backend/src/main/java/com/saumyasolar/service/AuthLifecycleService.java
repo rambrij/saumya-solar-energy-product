@@ -384,8 +384,11 @@ public class AuthLifecycleService {
         if (!normalized.matches("[A-Z][A-Z0-9_]{2,49}"))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role name must use 3-50 uppercase letters, digits or underscores");
         if (java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT", "CUSTOMER").contains(normalized)
-                || com.saumyasolar.config.DataSeeder.employeeRolePermissions().containsKey(normalized))
+                || com.saumyasolar.config.DataSeeder.employeeRolePermissions().containsKey(normalized)) {
+            if (java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT").contains(normalized))
+                auditRoleEscalation(actorId, normalized);
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Reserved role names cannot be created as custom roles");
+        }
         if (roles.findByNameAndTenantId(normalized, tenantId).isPresent())
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Role already exists");
         if (permissionCodes != null && permissionCodes.stream().anyMatch(code -> !VENDOR_ROLE_PERMISSION_CODES.contains(code))) {
