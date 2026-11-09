@@ -329,9 +329,7 @@ public class EnterpriseSaasService {
    long branchCount=branches.countByTenantIdAndActiveTrue(id);
    long warehouseCount=warehouses.findByTenantIdOrderByNameAsc(id).stream().filter(Warehouse::isActive).count();
    long storageBytes=Math.max(0,storageLedger.sumByteDeltaByTenantId(id));
-   TenantSubscription current=subscriptions.findByTenantIdOrderByCreatedAtDesc(id).stream()
-    .filter(v->Set.of("ACTIVE","TRIAL","PAST_DUE").contains(v.getStatus()))
-    .max(Comparator.comparing(TenantSubscription::getStartsAt,Comparator.nullsFirst(Comparator.naturalOrder()))).orElse(null);
+   TenantSubscription current=effectiveSubscription(id).orElse(null);
    SubscriptionPlan plan=current==null?null:plans.findById(current.getPlanId()).orElse(null);
    Map<String,Object> row=new LinkedHashMap<>();row.put("tenantId",id);row.put("tenantName",tenant.getName());row.put("tenantSlug",tenant.getSlug());
    row.put("tenantStatus",tenant.getStatus());row.put("planName",plan==null?"Unassigned":plan.getName());row.put("subscriptionStatus",current==null?"UNASSIGNED":current.getStatus());
