@@ -26,6 +26,8 @@ public class AppService {
     private IntegrationManagementService integrationManagement;
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     private EnterpriseSaasService enterpriseSaas;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private CustomerAddressRepository customerAddresses;
 
     final TenantRepository tenants;
     final AppUserRepository users;
@@ -491,6 +493,12 @@ public class AppService {
 
     @Transactional
     public Enquiry createCustomerEnquiry(Input x, Principal p) {
+        return createCustomerEnquiry(x.propertyType(),x.monthlyBill(),x.requiredCapacityKw(),x.message(),null,p);
+    }
+
+    @Transactional
+    public Enquiry createCustomerEnquiry(String propertyType, BigDecimal monthlyBill, BigDecimal requiredCapacityKw,
+                                         String message, UUID addressId, Principal p) {
         if (!"CUSTOMER".equals(p.accountType()) || p.tenantId() == null)
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         var profile = customers.findByTenantIdAndUserId(p.tenantId(), p.userId())
@@ -502,10 +510,20 @@ public class AppService {
         enquiry.setName(profile.getName());
         enquiry.setEmail(profile.getEmail());
         enquiry.setPhone(profile.getPhone());
-        enquiry.setPropertyType(x.propertyType());
-        enquiry.setMonthlyBill(x.monthlyBill());
-        enquiry.setRequiredCapacityKw(x.requiredCapacityKw());
-        enquiry.setMessage(x.message());
+        enquiry.setPropertyType(propertyType);
+        enquiry.setMonthlyBill(monthlyBill);
+        enquiry.setRequiredCapacityKw(requiredCapacityKw);
+        enquiry.setMessage(message);
+        if(addressId!=null){
+            if(customerAddresses==null)throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Saved address service is unavailable");
+            CustomerAddress address=customerAddresses.findByIdAndTenantIdAndCustomerId(addressId,p.tenantId(),profile.getId())
+                    .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Saved address not found"));
+            enquiry.setAddressId(address.getId());
+            enquiry.setSiteAddress(java.util.stream.Stream.of(address.getLine1(),address.getLine2(),address.getLandmark()).filter(java.util.Objects::nonNull).filter(v->!v.isBlank()).collect(java.util.stream.Collectors.joining(", ")));
+            enquiry.setCityPincode(address.getCity()+", "+address.getState()+" "+address.getPincode());
+        } else if(profile.getAddress()!=null&&!profile.getAddress().isBlank()) {
+            enquiry.setSiteAddress(profile.getAddress());
+        }
         enquiry.setStatus("NEW");
         enquiry.setCreatedAt(Instant.now());
         return enquiries.save(enquiry);
