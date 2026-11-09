@@ -1,6 +1,6 @@
 import React,{useMemo,useState} from 'react';
 
-export type NavigationItem={key:string;label:string;permission?:string};
+export type NavigationItem={key:string;label:string;permission?:string|string[]};
 export type NavigationGroup={label:string;items:NavigationItem[]};
 const roleMenus:Record<string,NavigationGroup[]>={
  platform:[
@@ -15,14 +15,14 @@ const roleMenus:Record<string,NavigationGroup[]>={
   {label:'Customers & Team',items:[{key:'customers',label:'Customers',permission:'CUSTOMER_MANAGE'},{key:'users',label:'Users',permission:'USER_VIEW'},{key:'branches',label:'Branches',permission:'BRANCH_MANAGE'}]},
   {label:'Insights',items:[{key:'analytics',label:'Analytics',permission:'BRANCH_MANAGE'}]},
   {label:'Business operations',items:[{key:'operations',label:'Inventory & Operations',permission:'INVENTORY_MANAGE'},{key:'finance-service',label:'Finance & Service',permission:'FINANCE_MANAGE'},{key:'offline-sync',label:'Offline Business Sync'}]},
-  {label:'Account',items:[{key:'subscription',label:'My Subscription',permission:'SUBSCRIPTION_VIEW'},{key:'settings',label:'Settings',permission:'DISCOUNT_POLICY_MANAGE'}]}
+  {label:'Account',items:[{key:'subscription',label:'My Subscription',permission:['SUBSCRIPTION_VIEW','SUBSCRIPTION_MANAGE']},{key:'settings',label:'Settings',permission:'DISCOUNT_POLICY_MANAGE'}]}
  ],
  customer:[
   {label:'My Account',items:[{key:'dashboard',label:'Account Overview'},{key:'catalog',label:'Our Products'},{key:'request',label:'Request a Quotation'},{key:'enquiries',label:'My Enquiries'},{key:'quotations',label:'My Quotations'},{key:'customer-orders',label:'My Orders'},{key:'invoices',label:'My Invoices'},{key:'payments',label:'My Payments'},{key:'my-installations',label:'My Installations'},{key:'warranties',label:'My Warranties'},{key:'warranty-claims',label:'Warranty Claims'},{key:'service',label:'Service Requests'},{key:'notifications',label:'Notification Preferences'}]}
  ]
 };
 export function getRoleNavigation(role:'platform'|'vendor'|'customer',permissions:string[]=[]):NavigationGroup[]{
- return roleMenus[role].map(group=>({...group,items:group.items.filter(item=>!item.permission||permissions.includes(item.permission))})).filter(group=>group.items.length>0);
+ return roleMenus[role].map(group=>({...group,items:group.items.filter(item=>!item.permission||(Array.isArray(item.permission)?item.permission.some(p=>permissions.includes(p)):permissions.includes(item.permission)))})).filter(group=>group.items.length>0);
 }
 export function getNavigationKeys(role:'platform'|'vendor'|'customer',permissions:string[]=[]):string[]{
  return getRoleNavigation(role,permissions).flatMap(group=>group.items.map(item=>item.key));
@@ -42,6 +42,6 @@ export default function RoleShell({role,active,onNavigate,children,user,onLogout
    <nav className="role-menu">{groups.map(group=><section className="role-menu-group" key={group.label}><button type="button" className="role-menu-group-title" aria-expanded={!(collapsed[group.label]??(group.label!==activeGroup))} onClick={()=>setCollapsed(v=>({...v,[group.label]:!(v[group.label]??(group.label!==activeGroup))}))}>{group.label}<span>{(collapsed[group.label]??(group.label!==activeGroup))?'＋':'−'}</span></button>{!(collapsed[group.label]??(group.label!==activeGroup))&&<div className="role-menu-items">{group.items.map(item=><button type="button" key={item.key} className={'role-menu-item'+(active===item.key?' active':'')} aria-current={active===item.key?'page':undefined} onClick={()=>select(item.key)}>{item.label}</button>)}</div>}</section>)}</nav>
    <div className="role-sidebar-footer"><span className="role-avatar">{(user.name||'U').slice(0,1).toUpperCase()}</span><span><b>{user.name}</b><small>{user.accountType.replaceAll('_',' ')}</small></span></div>
   </aside>
-  <div className="role-main-column"><header className="role-topbar"><button type="button" className="role-mobile-toggle" aria-label="Open navigation" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(true)}>☰</button><div className="role-breadcrumbs"><span>Workspace</span><span>/</span>{breadcrumbs.length?breadcrumbs.map((x,i)=><React.Fragment key={x}>{i>0&&<span>/</span>}<b>{x}</b></React.Fragment>):<b>{activeLabel}</b>}</div><div className="role-topbar-actions">{planBadge&&<span className="role-plan-badge">{planBadge}</span>}<span className="role-topbar-user">{user.name}</span><button type="button" className="role-logout" onClick={onLogout}>Logout</button></div></header><main className="role-content">{children}</main></div>
+  <div className="role-main-column"><header className="role-topbar"><button type="button" className="role-mobile-toggle" aria-label="Open navigation" aria-expanded={mobileOpen} onClick={()=>setMobileOpen(true)}>☰</button><div className="role-breadcrumbs"><span>Workspace</span><span>/</span>{breadcrumbs.length?breadcrumbs.map((x,i)=><React.Fragment key={x}>{i>0&&<span>/</span>}<b>{x}</b></React.Fragment>):<b>{activeLabel}</b>}</div><div className="role-topbar-actions">{planBadge&&<span className="role-plan-badge">{planBadge}</span>}{role!=='customer'&&<><span className="role-topbar-user">{user.name}</span><button type="button" className="role-logout" onClick={onLogout}>Logout</button></>}</div></header><main className="role-content">{children}</main></div>
  </div>;
 }
