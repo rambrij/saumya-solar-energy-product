@@ -133,21 +133,23 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var session = json.readTree(loginResponse);
         var accessToken = session.get("accessToken").asText();
-        var refreshToken = session.get("refreshToken").asText();
-        
+        var csrfToken = session.get("csrfToken").asText();
+        var refreshCookie = loginResponse.getResponse().getCookie("saumya_refresh");
+        var csrfCookie = loginResponse.getResponse().getCookie("XSRF-TOKEN");
+        assertNotNull(refreshCookie);
+        assertNotNull(csrfCookie);
+        assertTrue(loginResponse.getResponse().getHeaders("Set-Cookie").stream().anyMatch(v -> v.contains("HttpOnly")));
+        assertTrue(loginResponse.getResponse().getHeaders("Set-Cookie").stream().anyMatch(v -> v.contains("SameSite")));
+
         mvc.perform(post("/api/v1/auth/logout")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"refreshToken":"%s"}
-                                """.formatted(refreshToken)))
+                        .cookie(refreshCookie, csrfCookie)
+                        .header("X-CSRF-Token", csrfToken))
                 .andExpect(status().isNoContent());
         mvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isUnauthorized());
         mvc.perform(post("/api/v1/auth/refresh")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"refreshToken":"%s"}
-                                """.formatted(refreshToken)))
+                        .cookie(refreshCookie, csrfCookie)
+                        .header("X-CSRF-Token", csrfToken))
                 .andExpect(status().isUnauthorized());
     }
     
