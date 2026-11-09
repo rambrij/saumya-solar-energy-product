@@ -79,6 +79,8 @@ describe('HttpOnly-cookie authenticatedFetch',()=>{
 
  it('uses the browser-wide Web Lock while rotating refresh cookies',async()=>{
   const descriptor=Object.getOwnPropertyDescriptor(navigator,'locks');
+  const secureDescriptor=Object.getOwnPropertyDescriptor(window,'isSecureContext');
+  Object.defineProperty(window,'isSecureContext',{configurable:true,value:true});
   const request=vi.fn(async(_name:string,task:()=>Promise<unknown>)=>task());
   Object.defineProperty(navigator,'locks',{configurable:true,value:{request}});
   const fetchMock=vi.fn()
@@ -92,6 +94,8 @@ describe('HttpOnly-cookie authenticatedFetch',()=>{
   }finally{
    if(descriptor)Object.defineProperty(navigator,'locks',descriptor);
    else delete (navigator as Navigator & {locks?:unknown}).locks;
+   if(secureDescriptor)Object.defineProperty(window,'isSecureContext',secureDescriptor);
+   else delete (window as Window & {isSecureContext?:boolean}).isSecureContext;
   }
  });
 
