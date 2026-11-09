@@ -44,7 +44,7 @@ public class CustomerAccountService {
  @Transactional public CustomerAddress createAddress(AddressInput input,Principal actor){
   CustomerProfile c=customer(actor);validate(input);
   CustomerAddress a=new CustomerAddress();a.setId(UUID.randomUUID());a.setTenantId(actor.tenantId());a.setCustomerId(c.getId());
-  apply(a,input);Instant now=Instant.now();a.setCreatedAt(now);a.setUpdatedAt(now);
+  Instant now=Instant.now();a.setCreatedAt(now);a.setUpdatedAt(now);
   boolean makeDefault=input.isDefault()||addresses.countByTenantIdAndCustomerId(actor.tenantId(),c.getId())==0;
   if(makeDefault)clearDefault(actor.tenantId(),c.getId());apply(a,input);a.setDefault(makeDefault);
   return addresses.save(a);
