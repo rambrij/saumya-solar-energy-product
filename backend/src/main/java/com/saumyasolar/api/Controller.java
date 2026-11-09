@@ -206,8 +206,8 @@ public class Controller {
     }
 
     @PostMapping("/customer/enquiries")
-    com.saumyasolar.domain.Enquiry customerEnquiry(@RequestBody Input x, Authentication a) {
-        return s.createCustomerEnquiry(x, p(a));
+    com.saumyasolar.domain.Enquiry customerEnquiry(@Valid @RequestBody CustomerEnquiryRequest x, Authentication a) {
+        return s.createCustomerEnquiry(x.propertyType(),x.monthlyBill(),x.requiredCapacityKw(),x.message(),x.addressId(),p(a));
     }
 
     @GetMapping("/platform/tenants")
