@@ -1,4 +1,5 @@
 import React,{useEffect,useMemo,useState} from 'react';
+import {authenticatedFetch} from './authenticatedFetch';
 type Props={s:any;error:(message:string)=>void};
 export default function RoleManagementPanel({s,error}:Props){
  const[roles,setRoles]=useState<any[]>([]);
@@ -68,4 +69,3 @@ async function api(path:string,init:RequestInit={},s:any){
 async function send(path:string,body:any,s:any,method='POST'){
  return api(path,{method,body:JSON.stringify(body)},s);
 }
-import {authenticatedFetch} from './authenticatedFetch';
