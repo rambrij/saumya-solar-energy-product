@@ -1,35 +1,60 @@
-const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
-export type AuthSession={accessToken:string;refreshToken?:string;user:{id:string;tenantId?:string;name:string;email:string;accountType:string;roles:string[];permissions:string[]}};
+const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\\/+$/,'');
+export type AuthSession={accessToken:string;csrfToken?:string;user:{id:string;tenantId?:string;name:string;email:string;accountType:string;roles:string[];permissions:string[]}};
+let currentSession:AuthSession|null=null;
 let refreshInFlight:Promise<AuthSession>|null=null;
 
+export function setCurrentAuthSession(session:AuthSession|null):void {
+ currentSession=session;
+ if(session?.csrfToken)sessionStorage.setItem('saumya-csrf-token',session.csrfToken);
+ if(!session){sessionStorage.removeItem('saumya-csrf-token');}
+}
+
 export function sessionForToken(token:string):AuthSession {
- const stored=JSON.parse(localStorage.getItem('session')||'{}');
- return {...stored,accessToken:token} as AuthSession;
+ if(!currentSession)throw new Error('Authenticated session is not initialized');
+ return {...currentSession,accessToken:token};
+}
+
+function csrfHeaders(headers:Headers):Headers {
+ const csrf=sessionStorage.getItem('saumya-csrf-token');
+ if(csrf)headers.set('X-CSRF-Token',csrf);
+ return headers;
+}
+
+async function rotateSession(base:AuthSession|null):Promise<AuthSession>{
+ const headers=csrfHeaders(new Headers({'Accept':'application/json'}));
+ const response=await fetch(API_BASE+'/api/v1/auth/refresh',{method:'POST',headers,credentials:'include'});
+ if(!response.ok)throw new Error('session');
+ const next=await response.json() as AuthSession;
+ if(!next.accessToken||!next.user)throw new Error('invalid refresh response');
+ setCurrentAuthSession(next);
+ return next;
+}
+
+export async function bootstrapSession():Promise<AuthSession|null>{
+ if(!sessionStorage.getItem('saumya-csrf-token'))return null;
+ try{
+  if(!refreshInFlight)refreshInFlight=rotateSession(null);
+  try{return await refreshInFlight}catch{return null}finally{refreshInFlight=null}
+ }catch{return null}
 }
 
 export async function authenticatedFetch(url:string,init:RequestInit={},session?:AuthSession|null):Promise<Response>{
- let active:AuthSession|null=session||null;
- if(session){try{active=JSON.parse(localStorage.getItem('session')||'null')||session}catch{active=session}}
- const request=(current:AuthSession|null)=>{const headers=new Headers(init.headers||{});if(current)headers.set('Authorization','Bearer '+current.accessToken);return fetch(url,{...init,headers})};
+ let active:AuthSession|null=currentSession||session||null;
+ const request=(current:AuthSession|null)=>{
+  const headers=new Headers(init.headers||{});
+  if(current)headers.set('Authorization','Bearer '+current.accessToken);
+  if(url.includes('/auth/logout'))csrfHeaders(headers);
+  return fetch(url,{...init,headers,credentials:'include'});
+ };
  let response=await request(active);
- if(response.status===401&&active?.refreshToken&&!url.includes('/auth/')){
+ if(response.status===401&&active&&!url.includes('/auth/')){
   try{
-   const latest=JSON.parse(localStorage.getItem('session')||'null') as AuthSession|null;
-   if(latest?.refreshToken&&latest.refreshToken!==active.refreshToken) active=latest;
-   else{
-    if(!refreshInFlight){
-     refreshInFlight=(async()=>{
-      const refreshed=await fetch(API_BASE+'/api/v1/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refreshToken:active!.refreshToken})});
-      if(!refreshed.ok)throw new Error('session');
-      const rotated=await refreshed.json();const next={...active!,...rotated} as AuthSession;
-      localStorage.setItem('session',JSON.stringify(next));return next;
-     })();
-    }
-    try{active=await refreshInFlight}finally{refreshInFlight=null}
-   }
+   if(!refreshInFlight)refreshInFlight=rotateSession(active);
+   try{active=await refreshInFlight}finally{refreshInFlight=null}
    response=await request(active);
   }catch{
-   localStorage.removeItem('session');window.dispatchEvent(new CustomEvent('saumya:session-expired'));
+   setCurrentAuthSession(null);
+   window.dispatchEvent(new CustomEvent('saumya:session-expired'));
    throw new Error('Your session has expired. Please sign in again.');
   }
  }
