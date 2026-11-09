@@ -400,6 +400,65 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
     
+
+    @Test
+    void customServiceViewerCanOnlyReadTicketsAssignedToItsUser() throws Exception {
+        var adminToken = accessToken("admin@saumya.local", "Admin@123");
+        mvc.perform(post("/api/v1/roles").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"CUSTOM_SERVICE_READ","permissions":["SERVICE_VIEW"]}
+                                """))
+                .andExpect(status().isOk());
+        var email = "custom-service-" + UUID.randomUUID() + "@example.test";
+        var password = "Custom-Service-Password-2026";
+        var userResponse = mvc.perform(post("/api/v1/users").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Custom Service Reader","email":"%s","password":"%s","roleName":"CUSTOM_SERVICE_READ"}
+                                """.formatted(email, password)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var customUserId = UUID.fromString(json.readTree(userResponse).get("id").asText());
+        var otherUserId = users.findByEmailIgnoreCase("sales@saumya.local").orElseThrow().getId();
+
+        ServiceRequest assigned = new ServiceRequest();
+        assigned.setId(UUID.randomUUID());
+        assigned.setTenantId(vendorTenantId);
+        assigned.setTicketNumber("CUSTOM-ASSIGNED-" + UUID.randomUUID().toString().substring(0, 8));
+        assigned.setCategory("GENERAL");
+        assigned.setPriority("LOW");
+        assigned.setWarrantyStatus("UNKNOWN");
+        assigned.setStatus("ASSIGNED");
+        assigned.setDescription("Assigned custom-role test ticket");
+        assigned.setAssignedEngineerId(customUserId);
+        assigned.setCreatedAt(Instant.now());
+        assigned.setUpdatedAt(Instant.now());
+        serviceRequests.save(assigned);
+
+        ServiceRequest other = new ServiceRequest();
+        other.setId(UUID.randomUUID());
+        other.setTenantId(vendorTenantId);
+        other.setTicketNumber("CUSTOM-OTHER-" + UUID.randomUUID().toString().substring(0, 8));
+        other.setCategory("GENERAL");
+        other.setPriority("LOW");
+        other.setWarrantyStatus("UNKNOWN");
+        other.setStatus("ASSIGNED");
+        other.setDescription("Other employee ticket");
+        other.setAssignedEngineerId(otherUserId);
+        other.setCreatedAt(Instant.now());
+        other.setUpdatedAt(Instant.now());
+        serviceRequests.save(other);
+
+        var customToken = accessToken(email, password);
+        var list = mvc.perform(get("/api/v1/service-requests").header("Authorization", "Bearer " + customToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(list.contains(assigned.getTicketNumber()));
+        assertFalse(list.contains(other.getTicketNumber()));
+        mvc.perform(get("/api/v1/service-requests/" + other.getId())
+                        .header("Authorization", "Bearer " + customToken))
+                .andExpect(status().isForbidden());
+    }
+
     @Test
     void vendorCannotReadAnotherTenantsOrdersQuotesInvoicesServiceOrInstallationRecords() throws Exception {
         var foreignTenant = new Tenant();
