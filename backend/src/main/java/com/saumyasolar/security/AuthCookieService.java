@@ -87,7 +87,7 @@ public class AuthCookieService {
     private String cookie(String name, String value, boolean httpOnly, String path, Duration maxAge) {
         ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(name, value)
                 .httpOnly(httpOnly).secure(secure).sameSite(sameSite).path(path).maxAge(maxAge);
-        if (!domain.isBlank()) builder.domain(domain);
+        if (!domain.isBlank() && REFRESH_COOKIE.equals(name)) builder.domain(domain);
         return builder.build().toString();
     }
 }
