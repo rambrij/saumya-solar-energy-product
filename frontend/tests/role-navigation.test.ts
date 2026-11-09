@@ -11,7 +11,8 @@ describe('role navigation configuration',()=>{
  it('exposes analytics only when vendor admin has both reporting and branch permissions',()=>{
   expect(getNavigationKeys('vendor',['REPORT_VIEW'])).not.toContain('analytics');
   expect(getNavigationKeys('vendor',['BRANCH_MANAGE'])).not.toContain('analytics');
-  expect(getNavigationKeys('vendor',['REPORT_VIEW','BRANCH_MANAGE'])).toContain('analytics');
+  expect(getNavigationKeys('vendor',['REPORT_VIEW','BRANCH_MANAGE'],['SALES_MANAGER'])).not.toContain('analytics');
+  expect(getNavigationKeys('vendor',['REPORT_VIEW','BRANCH_MANAGE'],['VENDOR_ADMIN'])).toContain('analytics');
  });
  it('shows only customer-owned account functions and logout',()=>{
   const groups=getRoleNavigation('customer');
