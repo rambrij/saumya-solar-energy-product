@@ -170,7 +170,7 @@ public class CatalogAdminService {
     public CustomerProfile updateCustomer(UUID id, CustomerInput x, Principal p) {
         UUID t = tenant(p);
         require(p, "CUSTOMER_UPDATE");
-        CustomerProfile e = customer(id, t);
+        CustomerProfile e = customer(id, t, p);
         customers.findByTenantIdAndEmailIgnoreCase(t, x.email()).filter(v -> !v.getId().equals(id)).ifPresent(v -> {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Customer email already exists");
         });
