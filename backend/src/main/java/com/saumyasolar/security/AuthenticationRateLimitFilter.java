@@ -62,16 +62,14 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
         Instant now = Instant.now();
         Instant windowStart = now.minusSeconds(windowSeconds);
         jdbc.update("""
-                INSERT INTO auth_rate_limit_bucket(bucket_key, window_started_at, request_count, blocked_until, updated_at)
-                VALUES (?, ?, 1, NULL, ?)
+                INSERT INTO auth_rate_limit_bucket(bucket_key, window_started_at, request_count, updated_at)
+                VALUES (?, ?, 1, ?)
                 ON DUPLICATE KEY UPDATE
                   request_count = IF(window_started_at <= ?, 1, request_count + 1),
                   window_started_at = IF(window_started_at <= ?, VALUES(window_started_at), window_started_at),
-                  blocked_until = IF(window_started_at <= ?, NULL, blocked_until),
                   updated_at = VALUES(updated_at)
                 """, key, java.sql.Timestamp.from(now), java.sql.Timestamp.from(now),
-                java.sql.Timestamp.from(windowStart), java.sql.Timestamp.from(windowStart),
-                java.sql.Timestamp.from(windowStart));
+                java.sql.Timestamp.from(windowStart), java.sql.Timestamp.from(windowStart));
         Integer count = jdbc.queryForObject(
                 "SELECT request_count FROM auth_rate_limit_bucket WHERE bucket_key = ?",
                 Integer.class, key);
