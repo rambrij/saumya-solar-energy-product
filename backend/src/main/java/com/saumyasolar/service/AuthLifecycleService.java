@@ -221,6 +221,7 @@ public class AuthLifecycleService {
         challenge.setCreatedAt(Instant.now());
         mfaChallenges.save(challenge);
         auditAuth("MFA_CHALLENGE_CREATED", user, "SUCCESS", "EMAIL_MFA_CHALLENGE", challenge.getId().toString());
+        auditAuth("MFA_CHALLENGE_CREATED", user, "SUCCESS", "EMAIL_MFA_CHALLENGE", challenge.getId().toString());
         if (!notifications.sendMfaCode(user.getId(), user.getTenantId(), user.getEmail(), user.getName(), code)) {
             challenge.setUsed(true);
             mfaChallenges.save(challenge);
@@ -256,9 +257,11 @@ public class AuthLifecycleService {
         }
         challenge.setUsed(true);
         mfaChallenges.save(challenge);
-        return users.findById(challenge.getUserId()).filter(AppUser::isEnabled)
+        AppUser verified = users.findById(challenge.getUserId()).filter(AppUser::isEnabled)
                 .filter(this::tenantIsActive)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        auditAuth("MFA_VERIFIED", verified, "SUCCESS", "EMAIL_MFA_VERIFICATION", challenge.getId().toString());
+        return verified;
     }
     
     private String hashResetToken(String token) {
