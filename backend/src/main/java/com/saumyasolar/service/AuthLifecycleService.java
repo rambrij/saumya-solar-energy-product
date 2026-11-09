@@ -428,7 +428,8 @@ public class AuthLifecycleService {
         if (tenantId == null || roleId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         var role = roles.findByIdAndTenantId(roleId, tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Role not found"));
-        if (com.saumyasolar.config.DataSeeder.employeeRolePermissions().containsKey(role.getName()))
+        if (java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT", "CUSTOMER").contains(role.getName())
+                || com.saumyasolar.config.DataSeeder.employeeRolePermissions().containsKey(role.getName()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "System roles cannot be deleted");
         if (users.existsByTenantIdAndRoles_Id(tenantId, roleId))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Role is assigned to one or more employees");
