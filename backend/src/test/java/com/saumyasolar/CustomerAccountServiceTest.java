@@ -25,7 +25,7 @@ class CustomerAccountServiceTest {
   UUID tenant=UUID.randomUUID(),userId=UUID.randomUUID();when(profiles.findByTenantIdAndUserId(tenant,userId)).thenReturn(Optional.empty());
   CustomerAccountService service=new CustomerAccountService(profiles,addresses,users);Principal actor=new Principal(userId,tenant,"customer@example.test","CUSTOMER",Set.of("CUSTOMER"),Set.of(),0);
   assertThrows(org.springframework.web.server.ResponseStatusException.class,()->service.addresses(actor));
-  verify(addresses,never()).findByTenantIdAndCustomerIdOrderByIsDefaultDescCreatedAtDesc(any(),any());
+  verify(addresses,never()).findOwnedAddresses(any(),any());
  }
  @Test void nonCustomerCannotUpdateProfile(){
   CustomerAccountService service=new CustomerAccountService(mock(CustomerProfileRepository.class),mock(CustomerAddressRepository.class),mock(AppUserRepository.class));
