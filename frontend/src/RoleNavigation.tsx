@@ -14,7 +14,7 @@ const roleMenus:Record<string,NavigationGroup[]>={
   {label:'Sales',items:[{key:'enquiries',label:'Enquiries',permission:'LEAD_MANAGE'},{key:'leads',label:'Leads',permission:'LEAD_MANAGE'},{key:'surveys',label:'Site Surveys',permission:'SURVEY_MANAGE'},{key:'quotations',label:'Quotations',permission:'QUOTATION_MANAGE'},{key:'orders',label:'Orders',permission:'ORDER_CREATE'}]},
   {label:'Customers & Team',items:[{key:'customers',label:'Customers',permission:'CUSTOMER_MANAGE'},{key:'users',label:'Users',permission:'USER_VIEW'},{key:'branches',label:'Branches',permission:'BRANCH_MANAGE'}]},
   {label:'Insights',items:[{key:'analytics',label:'Analytics',permission:'BRANCH_MANAGE'}]},
-  {label:'Business operations',items:[{key:'operations',label:'Inventory & Operations',permission:'INVENTORY_MANAGE'},{key:'finance-service',label:'Finance & Service',permission:'FINANCE_MANAGE'},{key:'offline-sync',label:'Offline Business Sync'}]},
+  {label:'Business operations',items:[{key:'operations',label:'Inventory & Operations',permission:['INVENTORY_MANAGE','SURVEY_MANAGE']},{key:'finance-service',label:'Finance & Service',permission:['FINANCE_MANAGE','SERVICE_MANAGE']},{key:'offline-sync',label:'Offline Business Sync'}]},
   {label:'Account',items:[{key:'subscription',label:'My Subscription',permission:['SUBSCRIPTION_VIEW','SUBSCRIPTION_MANAGE']},{key:'settings',label:'Settings',permission:'DISCOUNT_POLICY_MANAGE'}]}
  ],
  customer:[
