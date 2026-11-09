@@ -14,7 +14,7 @@ export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'ven
  const [auditFilters,setAuditFilters]=useState({actorId:'',action:'',entityType:'',outcome:''});
  const [editPlanId,setEditPlanId]=useState<string|null>(null),[planQuery,setPlanQuery]=useState(''),[planStatusFilter,setPlanStatusFilter]=useState('ALL'),[planSort,setPlanSort]=useState('DISPLAY'),[planPage,setPlanPage]=useState(0),[tenantSearch,setTenantSearch]=useState(''),[tenantOptions,setTenantOptions]=useState<any[]>([]),[selectedTenantId,setSelectedTenantId]=useState(''),[editingAssignmentId,setEditingAssignmentId]=useState<string|null>(null),[tenantSubscriptions,setTenantSubscriptions]=useState<any[]>([]),[assignmentHistory,setAssignmentHistory]=useState<any[]>([]);
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[panelError,setPanelError]=useState('');
- const [planModalOpen,setPlanModalOpen]=useState(false),[assignmentModalOpen,setAssignmentModalOpen]=useState(false),[activePlatformTab,setActivePlatformTab]=useState('plans'),[selectedTenant,setSelectedTenant]=useState<any>(null);
+ const [planModalOpen,setPlanModalOpen]=useState(false),[assignmentModalOpen,setAssignmentModalOpen]=useState(false),[activePlatformTab,setActivePlatformTab]=useState('plans'),[selectedTenant,setSelectedTenant]=useState<any>(null),[analyticsData,setAnalyticsData]=useState<any>(null),[analyticsLoading,setAnalyticsLoading]=useState(false);
  const featureKeys=['branches','multiWarehouse','customBranding','customDomains','approvalWorkflows','accountingIntegration','paymentGateway','apiIntegrations'];
  const load=async()=>{
   setLoading(true);setPanelError('');
@@ -103,6 +103,19 @@ export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'ven
  };
  const filteredPlans=plans.filter(p=>(!planQuery.trim()||(p.name+' '+p.planCode).toLowerCase().includes(planQuery.trim().toLowerCase()))&&(planStatusFilter==='ALL'||(planStatusFilter==='ACTIVE'?p.active:!p.active))).sort((a,b)=>planSort==='PRICE'?(Number(a.price)-Number(b.price)):planSort==='NAME'?a.name.localeCompare(b.name):(Number(a.displayOrder)-Number(b.displayOrder)));const visiblePlans=filteredPlans.slice(planPage*5,planPage*5+5);
  const cancelTenantSubscription=async(row:any)=>{if(!selectedTenantId||!window.confirm('Cancel this tenant subscription? The assignment and history will be retained.'))return;try{await request('/platform/tenants/'+selectedTenantId+'/subscriptions/'+row.id+'/cancel',s,'POST');await selectTenant(selectedTenantId);error('Subscription cancelled.')}catch(e:any){setPanelError(e.message)}};
+ const loadAnalytics=async()=>{setAnalyticsLoading(true);try{
+   const first=await request('/platform/tenants?search=&status=ALL&page=0&size=100',s);
+   const pageCount=Math.max(1,Number(first.totalPages||1));
+   const otherPages=await Promise.all(Array.from({length:Math.max(0,pageCount-1)},(_,i)=>request('/platform/tenants?search=&status=ALL&page='+(i+1)+'&size=100',s)));
+   const tenants=[...(first.items||[]),...otherPages.flatMap((v:any)=>v.items||[])];
+   const counts:any=Object.fromEntries(plans.map(p=>[p.id,0]));
+   for(let start=0;start<tenants.length;start+=20){
+    const batch=tenants.slice(start,start+20);
+    const rows=await Promise.all(batch.map((t:any)=>request('/platform/tenants/'+t.id+'/subscriptions',s).catch(()=>[])));
+    rows.forEach((assignments:any[])=>{const current=(assignments||[]).find(v=>['ACTIVE','TRIAL','PAST_DUE'].includes(v.status));if(current&&counts[current.planId]!==undefined)counts[current.planId]++});
+   }
+   setAnalyticsData({totalTenants:first.total??tenants.length,counts});
+  }catch(e:any){setPanelError(e.message)}finally{setAnalyticsLoading(false)}};
  const loadAudit=async()=>{
   try{const from=new Date(Date.now()-30*86400000).toISOString(),to=new Date().toISOString();const params=new URLSearchParams({from,to});Object.entries(auditFilters).forEach(([key,value])=>{if(value.trim())params.set(key,value.trim())});setAudits(await request('/audit-events?'+params.toString(),s));}
   catch(e:any){setPanelError(e.message)}
@@ -164,7 +177,7 @@ export default function EnterpriseSaasPanel({mode,s,error}:{mode:'platform'|'ven
       <button type="button" onClick={()=>setAssignmentModalOpen(true)} disabled={!selectedTenantId}>Assign / Replace Subscription</button>
       <h3>Assignment history</h3>{assignmentHistory.length?<div className="table-wrap"><table><thead><tr><th>When</th><th>Action</th><th>Previous status</th><th>New status</th><th>Actor</th></tr></thead><tbody>{assignmentHistory.map(h=><tr key={h.id}><td>{new Date(h.createdAt).toLocaleString()}</td><td>{h.action}</td><td>{h.previousStatus||'—'}</td><td>{h.newStatus||'—'}</td><td>{h.actorId||'System'}</td></tr>)}</tbody></table></div>:<p>No assignment history.</p>}</>}
     </div>}
-    {activePlatformTab==='analytics'&&<div className="card subscription-analytics"><h2>Subscription analytics</h2><div className="analytics-stats"><article><span>Total plans</span><strong>{plans.length}</strong></article><article><span>Active plans</span><strong>{plans.filter(p=>p.active).length}</strong></article><article><span>Inactive plans</span><strong>{plans.filter(p=>!p.active).length}</strong></article></div><h3>Plan status distribution</h3><div className="analytics-bars">{plans.map(p=><div key={p.id}><span>{p.name}</span><div><i style={{width:(p.active?100:35)+'%'}}/></div><b>{p.active?'Active':'Inactive'}</b></div>)}</div><p className="muted">Tenant assignment details and history are available in Tenant Subscriptions.</p></div>}
+    {activePlatformTab==='analytics'&&<div className="card subscription-analytics"><div className="platform-heading"><div><h2>Subscription analytics</h2><p className="muted">Current tenant assignments by plan.</p></div><button type="button" className="secondary" onClick={()=>void loadAnalytics()}>Refresh analytics</button></div><div className="analytics-stats"><article><span>Total tenants</span><strong>{analyticsData?.totalTenants??'—'}</strong></article><article><span>Active plans</span><strong>{plans.filter(p=>p.active).length}</strong></article><article><span>Inactive plans</span><strong>{plans.filter(p=>!p.active).length}</strong></article></div>{analyticsLoading?<p>Calculating tenant distribution…</p>:analyticsData?<><h3>Tenants per plan</h3><div className="analytics-bars">{plans.map(p=><div key={p.id}><span>{p.name}</span><div><i style={{width:((analyticsData.totalTenants?analyticsData.counts[p.id]/analyticsData.totalTenants:0)*100)+'%'}}/></div><b>{analyticsData.counts[p.id]||0}</b></div>)}</div></>:<p className="muted">Select refresh to calculate tenant assignment counts.</p>}<p className="muted">Platform-wide resource usage is not exposed by the current API; this view reports tenant adoption without inventing usage figures.</p></div>}
    </>}
    {audits.length>0&&<div className="card"><h2>Recent audit events</h2><div className="table-wrap"><table><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Entity</th><th>Outcome</th></tr></thead><tbody>{audits.map((a:any)=><tr key={a.id}><td>{new Date(a.createdAt).toLocaleString()}</td><td>{a.actorId||a.actorType}</td><td>{a.action}</td><td>{a.entityType} · {a.entityId||'—'}</td><td>{a.outcome}</td></tr>)}</tbody></table></div></div>}
  </section>;
