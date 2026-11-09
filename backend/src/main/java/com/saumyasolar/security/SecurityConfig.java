@@ -35,7 +35,7 @@ public class SecurityConfig {
     }
     
     @Bean
-    SecurityFilterChain chain(HttpSecurity http, JwtFilter jwtFilter, SubscriptionEnforcementFilter subscriptionFilter)
+    SecurityFilterChain chain(HttpSecurity http, JwtFilter jwtFilter, AuthenticationRateLimitFilter rateLimitFilter, SubscriptionEnforcementFilter subscriptionFilter)
             throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
@@ -52,6 +52,7 @@ public class SecurityConfig {
                                 "/actuator/health", "/swagger-ui/**", "/v3/api-docs/**"
                         ).permitAll()
                         .anyRequest().authenticated())
+                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(subscriptionFilter, JwtFilter.class)
                 .build();
