@@ -220,7 +220,7 @@ public class OfflineSyncService {
                 }
             } else {
                 if (!"VENDOR".equals(actor.accountType()) || actor.permissions() == null
-                        || !actor.permissions().contains("SERVICE_MANAGE"))
+                        || !actor.permissions().contains("SERVICE_UPDATE"))
                     throw new ResponseStatusException(HttpStatus.FORBIDDEN);
                 boolean manager = actor.roles() != null && actor.roles().stream()
                         .anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r));
