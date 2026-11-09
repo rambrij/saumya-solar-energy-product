@@ -8,6 +8,7 @@ import lombok.Setter;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+import java.time.Instant;
 @Entity
 @Table(name = "app_user")
 @Getter
@@ -23,6 +24,9 @@ public class AppUser {
     String accountType;
     boolean enabled;
     int tokenVersion;
+    int failedLoginAttempts;
+    Instant lockedUntil;
+    Instant lastLoginAt;
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_role",
