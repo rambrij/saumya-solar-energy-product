@@ -35,6 +35,9 @@ class AuthLifecycleServiceTest {
                 mock(RoleRepository.class), mock(PermissionRepository.class),
                 mock(CustomerProfileRepository.class), mock(ProductCategoryRepository.class),
                 encoder, mock(NotificationService.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "maximumFailedLoginAttempts", 5);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "lockoutDurationMinutes", 15L);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "refreshTokenTtlDays", 7L);
         user = new AppUser();
         user.setId(UUID.randomUUID());
         user.setEmail("admin@example.test");
