@@ -26,6 +26,16 @@ import java.util.Base64;
 public class AuthLifecycleService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private EnterpriseSaasService enterpriseSaas;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private AuthenticationAuditService authenticationAudit;
+
+    private void auditAuth(String action, AppUser user, String outcome, String reason, String entityId) {
+        if (authenticationAudit == null) return;
+        var attributes = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+        var request = attributes instanceof org.springframework.web.context.request.ServletRequestAttributes servlet ? servlet.getRequest() : null;
+        try { authenticationAudit.record(action, user == null ? null : user.getTenantId(), user == null ? null : user.getId(), outcome, reason, entityId, request); }
+        catch (RuntimeException ignored) { /* Audit failure must not disclose internal details to the authentication caller. */ }
+    }
     @org.springframework.beans.factory.annotation.Value("${app.auth.lockout.max-failed-attempts:5}")
     int maximumFailedLoginAttempts;
     @org.springframework.beans.factory.annotation.Value("${app.auth.lockout.duration-minutes:15}")
@@ -74,11 +84,15 @@ public class AuthLifecycleService {
     public AppUser authenticate(String email, String password) {
         String genericFailure = "Invalid email or password.";
         AppUser user = users.findForUpdateByEmailIgnoreCase(email == null ? "" : email.trim()).orElse(null);
-        if (user == null || !user.isEnabled() || !tenantIsActive(user))
+        if (user == null || !user.isEnabled() || !tenantIsActive(user)) {
+            auditAuth("LOGIN_FAILED", user, "DENIED", "INVALID_CREDENTIALS_OR_INACTIVE_ACCOUNT", null);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, genericFailure);
+        }
         Instant now = Instant.now();
-        if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(now))
+        if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(now)) {
+            auditAuth("LOGIN_LOCKED", user, "DENIED", "ACCOUNT_TEMPORARILY_LOCKED", null);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, genericFailure);
+        }
         if (user.getLockedUntil() != null && !user.getLockedUntil().isAfter(now)) {
             user.setLockedUntil(null);
             user.setFailedLoginAttempts(0);
@@ -89,12 +103,15 @@ public class AuthLifecycleService {
             if (attempts >= Math.max(1, maximumFailedLoginAttempts))
                 user.setLockedUntil(now.plus(Duration.ofMinutes(Math.max(1, lockoutDurationMinutes))));
             users.save(user);
+            auditAuth(attempts >= Math.max(1, maximumFailedLoginAttempts) ? "LOGIN_LOCKOUT" : "LOGIN_FAILED", user, "DENIED", attempts >= Math.max(1, maximumFailedLoginAttempts) ? "FAILED_ATTEMPT_THRESHOLD_REACHED" : "INVALID_CREDENTIALS", null);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, genericFailure);
         }
         user.setFailedLoginAttempts(0);
         user.setLockedUntil(null);
         user.setLastLoginAt(now);
-        return users.save(user);
+        AppUser authenticated = users.save(user);
+        auditAuth("LOGIN_SUCCEEDED", authenticated, "SUCCESS", "PASSWORD_AUTHENTICATION", null);
+        return authenticated;
     }
 
     public boolean tenantIsActive(AppUser user) {
@@ -102,10 +119,14 @@ public class AuthLifecycleService {
         return tenants.findById(user.getTenantId()).map(t -> "ACTIVE".equals(t.getStatus())).orElse(false);
     }
     
-    public String newRefresh(AppUser u) {
+    public String newRefresh(AppUser u) { return newRefresh(u, UUID.randomUUID()); }
+
+    private String newRefresh(AppUser u, UUID familyId) {
         var x = new RefreshToken();
         x.setId(UUID.randomUUID());
         x.setUserId(u.getId());
+        x.setFamilyId(familyId);
+        x.setCreatedAt(Instant.now());
         x.setToken(UUID.randomUUID() + "." + UUID.randomUUID());
         x.setExpiresAt(Instant.now().plus(Duration.ofDays(Math.max(1, refreshTokenTtlDays))));
         refresh.save(x);
@@ -117,7 +138,12 @@ public class AuthLifecycleService {
     @Transactional(dontRollbackOn = ResponseStatusException.class)
     public RefreshRotation rotateRefresh(String token) {
         AppUser user = consumeRefresh(token);
-        return new RefreshRotation(user, newRefresh(user));
+        RefreshToken previous = refresh.findByToken(token).orElseThrow();
+        String rotated = newRefresh(user, previous.getFamilyId());
+        RefreshToken replacement = refresh.findByToken(rotated).orElseThrow();
+        previous.setReplacedByTokenId(replacement.getId());
+        refresh.save(previous);
+        return new RefreshRotation(user, rotated);
     }
 
     @Transactional(dontRollbackOn = ResponseStatusException.class)
@@ -125,11 +151,10 @@ public class AuthLifecycleService {
         var x = refresh.findByTokenForUpdate(token)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
         if (x.isRevoked()) {
-            refresh.findByUserIdAndRevokedFalse(x.getUserId()).forEach(session -> {
-                session.setRevoked(true);
-                refresh.save(session);
-            });
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token reuse detected; sessions revoked");
+            if (x.getFamilyId() != null) refresh.findByFamilyIdForUpdate(x.getFamilyId()).forEach(session -> { session.setRevoked(true); refresh.save(session); });
+            else refresh.findByUserIdAndRevokedFalse(x.getUserId()).forEach(session -> { session.setRevoked(true); refresh.save(session); });
+            auditAuth("REFRESH_REPLAY_DETECTED", users.findById(x.getUserId()).orElse(null), "DENIED", "REFRESH_TOKEN_REUSE", x.getFamilyId() == null ? null : x.getFamilyId().toString());
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token reuse detected; token family revoked");
         }
         if (!x.getExpiresAt().isAfter(Instant.now())) {
             x.setRevoked(true);
@@ -138,9 +163,11 @@ public class AuthLifecycleService {
         }
         x.setRevoked(true);
         refresh.save(x);
-        return users.findById(x.getUserId())
+        AppUser refreshed = users.findById(x.getUserId())
                 .filter(u -> u.isEnabled() && tenantIsActive(u))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        auditAuth("REFRESH_ROTATED", refreshed, "SUCCESS", "REFRESH_TOKEN_ROTATED", x.getFamilyId() == null ? null : x.getFamilyId().toString());
+        return refreshed;
     }
     
     @Transactional
