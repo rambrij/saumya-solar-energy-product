@@ -18,7 +18,7 @@ const roleMenus:Record<string,NavigationGroup[]>={
   {label:'Account',items:[{key:'subscription',label:'My Subscription',permission:['SUBSCRIPTION_VIEW','SUBSCRIPTION_MANAGE']},{key:'settings',label:'Settings',permission:'DISCOUNT_POLICY_MANAGE'}]}
  ],
  customer:[
-  {label:'My Account',items:[{key:'dashboard',label:'Account Overview'},{key:'catalog',label:'Our Products'},{key:'request',label:'Request a Quotation'},{key:'enquiries',label:'My Enquiries'},{key:'quotations',label:'My Quotations'},{key:'customer-orders',label:'My Orders'},{key:'invoices',label:'My Invoices'},{key:'payments',label:'My Payments'},{key:'my-installations',label:'My Installations'},{key:'warranties',label:'My Warranties'},{key:'warranty-claims',label:'Warranty Claims'},{key:'service',label:'Service Requests'},{key:'notifications',label:'Notification Preferences'}]}
+  {label:'My Account',items:[{key:'dashboard',label:'Account Overview'},{key:'profile',label:'My Profile'},{key:'catalog',label:'Our Products'},{key:'request',label:'Request a Quotation'},{key:'enquiries',label:'My Enquiries'},{key:'quotations',label:'My Quotations'},{key:'customer-orders',label:'My Orders'},{key:'invoices',label:'My Invoices'},{key:'payments',label:'My Payments'},{key:'my-installations',label:'My Installations'},{key:'warranties',label:'My Warranties'},{key:'warranty-claims',label:'Warranty Claims'},{key:'service',label:'Service Requests'},{key:'notifications',label:'Notification Preferences'}]}
  ]
 };
 export function getRoleNavigation(role:'platform'|'vendor'|'customer',permissions:string[]=[]):NavigationGroup[]{
