@@ -142,7 +142,7 @@ class EnterpriseSaasServiceTest {
                 ResponseStatusException.class,
                 () -> service.assignWarehouseBranch(
                         warehouseId, foreignBranchId,
-                        principal(tenantId, Set.of("INVENTORY_MANAGE", "BRANCH_MANAGE"))
+                        principal(tenantId, Set.of("INVENTORY_TRANSFER", "BRANCH_MANAGE"))
                 )
         );
         
