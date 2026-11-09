@@ -2,7 +2,21 @@ import React,{useEffect,useState}from'react';import{createRoot}from'react-dom/cl
 const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
 const assetUrl=(value?:string|null)=>!value?'https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&w=900&q=80':value.startsWith('/')?API_BASE+value:value;
 type Session={accessToken:string,refreshToken?:string,user:{id:string;tenantId?:string;name:string;email:string;accountType:string;roles:string[];permissions:string[]}};
-async function api(path:string,init:RequestInit={},s?:Session|null){const r=await fetch(API_BASE+'/api/v1'+path,{...init,headers:{'Content-Type':'application/json',...(s?{Authorization:`Bearer ${s.accessToken}`}:{ }),...(init.headers||{})}});if(!r.ok){const b=await r.json().catch(()=>({detail:r.statusText}));if(r.status===401&&s){localStorage.removeItem('session');window.location.reload()}throw new Error(b.detail||b.message||b.title||`${r.status} ${r.statusText}`)}return r.status===204?null:r.json()}
+async function api(path:string,init:RequestInit={},s?:Session|null){
+ let active:Session|null=s||null;
+ if(s){try{active=JSON.parse(localStorage.getItem('session')||'null')||s}catch{active=s}}
+ const request=(session:Session|null)=>fetch(API_BASE+'/api/v1'+path,{...init,headers:{'Content-Type':'application/json',...(session?{Authorization:'Bearer '+session.accessToken}:{}),...(init.headers||{})}});
+ let r=await request(active);
+ if(r.status===401&&active?.refreshToken&&!path.startsWith('/auth/')){
+  try{
+   const rr=await fetch(API_BASE+'/api/v1/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refreshToken:active.refreshToken})});
+   if(rr.ok){const rotated=await rr.json();active={...active,...rotated};localStorage.setItem('session',JSON.stringify(active));r=await request(active)}
+   else{localStorage.removeItem('session');window.location.reload();throw new Error('Your session has expired. Please sign in again.')}
+  }catch(e){if(e instanceof Error&&e.message.includes('session has expired'))throw e;localStorage.removeItem('session');window.location.reload();throw new Error('Your session has expired. Please sign in again.')}
+ }
+ if(!r.ok){const b=await r.json().catch(()=>({detail:r.statusText}));const detail=r.status===429?'Too many requests. Please wait before trying again.':r.status===403?'You do not have permission to perform this action.':b.detail||b.message||b.title||String(r.status)+' '+r.statusText;throw new Error(detail)}
+ return r.status===204?null:r.json()
+}
 async function uploadApi(path:string,file:File,s:Session){const form=new FormData();form.append('file',file);const r=await fetch(API_BASE+'/api/v1'+path,{method:'POST',headers:{Authorization:`Bearer ${s.accessToken}`},body:form});const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.detail||body.message||`Image upload failed (${r.status})`);return body}
 const send=(path:string,body:any,s:Session,method='POST',headers={})=>api(path,{method,body:body===undefined?undefined:JSON.stringify(body),headers},s);
 function App(){
