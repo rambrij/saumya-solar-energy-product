@@ -55,7 +55,7 @@ class SurveyLifecycleIntegrationTest {
         actorId = admin.getId();
         actor = new Principal(
                 actorId, tenantId, admin.getEmail(), "VENDOR",
-                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_MANAGE")
+                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_CREATE", "SURVEY_VIEW", "SURVEY_COMPLETE", "SURVEY_ASSIGN")
         );
         SalesLead lead = new SalesLead();
         lead.setId(UUID.randomUUID());
@@ -134,7 +134,7 @@ class SurveyLifecycleIntegrationTest {
         tenants.save(other);
         Principal foreign = new Principal(
                 actorId, other.getId(), "foreign@example.test", "VENDOR",
-                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_MANAGE")
+                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_CREATE", "SURVEY_VIEW", "SURVEY_COMPLETE", "SURVEY_ASSIGN")
         );
         ResponseStatusException notFound = assertThrows(
                 ResponseStatusException.class,
@@ -184,7 +184,7 @@ class SurveyLifecycleIntegrationTest {
         
         Principal foreign = new Principal(
                 actorId, UUID.randomUUID(), "foreign@example.test", "VENDOR",
-                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_MANAGE")
+                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_CREATE", "SURVEY_VIEW", "SURVEY_COMPLETE", "SURVEY_ASSIGN")
         );
         ResponseStatusException hidden = assertThrows(
                 ResponseStatusException.class,
