@@ -1,6 +1,6 @@
 import React,{useState} from 'react';import BrandLogo from './BrandLogo';
 const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
-const nav=[['Home','/'],['Our Products','/products'],['Packages','/packages'],['Mounting Structures','/mounting-structures'],['Solar Technology','/solar-technology'],['About Us','/about'],['Contact','/contact']];
+const nav=[['Home','/'],['Our Products','/products'],['Packages','/packages'],['Request a Quotation','/contact'],['Mounting Structures','/mounting-structures'],['Solar Technology','/solar-technology'],['About Us','/about'],['Contact','/contact']];
 type Props={branding?:any;path?:string;onLogin?:()=>void;onRegister?:()=>void;accountName?:string;onLogout?:()=>void};
 export default function PublicSiteHeader({branding,path=typeof window!=='undefined'?window.location.pathname:'/',onLogin,onRegister,accountName,onLogout}:Props){
  const [menuOpen,setMenuOpen]=useState(false),[accountOpen,setAccountOpen]=useState(false);
