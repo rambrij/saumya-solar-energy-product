@@ -565,7 +565,7 @@ This addendum supersedes conflicting earlier statements in Sections 1–18 about
 
 ### 19.4 Latest source validation
 
-Source commit `8a079a8ff0641dd253f9b04ed470a837f24bf836` passed backend compilation and 127 backend tests (0 failures/errors/skips), frontend typecheck/component tests/production build, and Spring Boot startup/health against MySQL 8.4 and Mailpit in workflow run [42673236804](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42673236804). The MySQL migration job through V56 passed in workflow run [42672708442](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42672708442); migrations did not change between those source commits. Subsequent source change `b24bdfb` adds Web Locks cross-tab refresh serialization and its tests; the latest workflow for that change must pass before final completion.
+Final source commit `aca7facda4fbd4133f79b732c9b5b1bc0ce1e931` passed workflow run [42674221540](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42674221540): backend compile and **127 tests passed (0 failures, 0 errors, 0 skipped)**; frontend typecheck, **20 component tests**, and production build passed; MySQL 8.4 migration validation V1–V56 passed (including explicit V54/V55/V56 grant assertions); and Spring Boot package/startup/health against MySQL 8.4 and Mailpit passed. The workflow conclusion is SUCCESS.
 
 ### 19.5 Remaining production limitations
 
@@ -574,7 +574,7 @@ Source commit `8a079a8ff0641dd253f9b04ed470a837f24bf836` passed backend compilat
 3. Browser third-party-cookie restrictions can block SameSite=None cookies when frontend and API use unrelated registrable domains. Prefer same-site subdomains or a same-origin reverse proxy.
 4. External/mobile clients that previously supplied refresh tokens in JSON must migrate to the cookie contract or use a separately designed non-browser client authentication flow.
 
-**Completion decision:** Source implementation is substantially hardened, but do not mark Phase 1 production-ready until the latest CI run passes and the deployed proxy/CORS/cookie configuration is verified.
+**Completion decision:** The code-level Phase 1 validation gates pass on the final source commit. Production rollout remains blocked by deployment alignment: the inspected Render API service still deploys a different repository on `main`, and its runtime proxy/CORS/cookie environment values cannot be read from the available service details. Do not mark the deployed application production-ready until that service is explicitly aligned and its runtime settings are verified.
 
 
 ### 19.6 Render deployment alignment check
