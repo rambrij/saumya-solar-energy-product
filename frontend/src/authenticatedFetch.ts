@@ -1,4 +1,4 @@
-const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\\/+$/,'');
+const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
 export type AuthSession={accessToken:string;csrfToken?:string;user:{id:string;tenantId?:string;name:string;email:string;accountType:string;roles:string[];permissions:string[]}};
 let currentSession:AuthSession|null=null;
 let refreshInFlight:Promise<AuthSession>|null=null;
