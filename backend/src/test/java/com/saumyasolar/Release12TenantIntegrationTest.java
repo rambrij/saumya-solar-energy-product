@@ -157,8 +157,11 @@ class Release12TenantIntegrationTest {
         var csrfCookie = responseCookie(loginResult, "XSRF-TOKEN");
         assertNotNull(refreshCookie);
         assertNotNull(csrfCookie);
+        assertFalse(session.has("refreshToken"));
         assertTrue(loginResult.getResponse().getHeaders("Set-Cookie").stream().anyMatch(v -> v.contains("HttpOnly")));
         assertTrue(loginResult.getResponse().getHeaders("Set-Cookie").stream().anyMatch(v -> v.contains("SameSite")));
+        mvc.perform(post("/api/v1/auth/refresh").cookie(refreshCookie))
+                .andExpect(status().isForbidden());
 
         mvc.perform(post("/api/v1/auth/logout")
                         .cookie(refreshCookie, csrfCookie)
