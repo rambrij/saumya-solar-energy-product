@@ -906,7 +906,8 @@ public class AppService {
     
     public java.util.List<Quotation> quotationRevisions(UUID id, Principal p) {
         if (p.tenantId() == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-        var quotation = quotes.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
+        var quotation = quotes.findByIdAndTenantId(id, p.tenantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Quotation not found"));
         if ("CUSTOMER".equals(p.accountType())) {
             var customer = customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
                     .filter(x -> p.userId().equals(x.getUserId())).findFirst()
