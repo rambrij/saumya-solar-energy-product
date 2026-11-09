@@ -185,6 +185,34 @@ public class AppService {
             case "orders" -> orders.findByTenantIdOrderByIdDesc(p.tenantId());
             default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         };
+        if (p.roles() != null && p.roles().contains("SALES_EXECUTIVE")) {
+            List<SalesLead> assignedLeads = leads.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
+                    .filter(lead -> p.userId().equals(lead.getAssignedUserId())).toList();
+            java.util.Set<UUID> assignedLeadIds = assignedLeads.stream().map(SalesLead::getId).collect(java.util.stream.Collectors.toSet());
+            java.util.Set<UUID> assignedEnquiryIds = assignedLeads.stream().map(SalesLead::getEnquiryId).filter(Objects::nonNull).collect(java.util.stream.Collectors.toSet());
+            java.util.Set<UUID> assignedCustomerIds = assignedLeads.stream().map(SalesLead::getCustomerId).filter(Objects::nonNull).collect(java.util.stream.Collectors.toSet());
+            java.util.Set<UUID> assignedQuotationIds = quotes.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
+                    .filter(q -> p.userId().equals(q.getCreatedBy()) || assignedLeadIds.contains(q.getLeadId()))
+                    .map(Quotation::getId).collect(java.util.stream.Collectors.toSet());
+            rows = switch (type) {
+                case "leads" -> assignedLeads;
+                case "enquiries" -> ((List<Enquiry>) rows).stream().filter(e -> assignedEnquiryIds.contains(e.getId())).toList();
+                case "customers" -> ((List<CustomerProfile>) rows).stream().filter(customer -> assignedCustomerIds.contains(customer.getId())).toList();
+                case "surveys" -> ((List<SiteSurvey>) rows).stream().filter(survey -> p.userId().equals(survey.getAssignedUserId())).toList();
+                case "quotations" -> ((List<Quotation>) rows).stream().filter(q -> assignedQuotationIds.contains(q.getId())).toList();
+                case "orders" -> {
+                    java.util.Set<UUID> assignedOrderIds = orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
+                            .filter(order -> assignedQuotationIds.contains(order.getQuotationId()))
+                            .map(CustomerOrder::getId).collect(java.util.stream.Collectors.toSet());
+                    yield ((List<CustomerOrder>) rows).stream().filter(order -> assignedOrderIds.contains(order.getId())).toList();
+                }
+                default -> rows;
+            };
+        }
+        if (p.roles() != null && p.roles().stream().anyMatch(Set.of("SERVICE_ENGINEER", "TECHNICIAN", "INSTALLER")::contains)
+                && "surveys".equals(type)) {
+            rows = ((List<SiteSurvey>) rows).stream().filter(survey -> p.userId().equals(survey.getAssignedUserId())).toList();
+        }
         if (enterpriseSaas == null) return rows;
         return switch (type) {
             case "enquiries" -> enterpriseSaas.filterBranchRecords((List<Enquiry>) rows, Enquiry::getBranchId, p);
