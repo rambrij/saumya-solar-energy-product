@@ -2,25 +2,23 @@ import {describe,expect,it} from 'vitest';
 import {getNavigationKeys,getRoleNavigation} from '../src/RoleNavigation';
 
 describe('role navigation configuration',()=>{
- it('keeps platform subscriptions and analytics in separate sections',()=>{
-  const groups=getRoleNavigation('platform');
-  expect(groups.find(g=>g.label==='Subscriptions')?.items.map(i=>i.key)).toContain('subscriptions');
-  expect(groups.find(g=>g.label==='Insights')?.items.map(i=>i.key)).toContain('analytics');
+ it('keeps platform plans, assignments, analytics and audit in distinct groups',()=>{
+  const groups=getRoleNavigation('platform',['SUBSCRIPTION_MANAGE','AUDIT_VIEW','PLATFORM_MANAGE']);
+  expect(groups.find(g=>g.label==='Subscriptions')?.items.map(i=>i.key)).toEqual(['subscriptions','assignments']);
+  expect(groups.find(g=>g.label==='Insights')?.items.map(i=>i.key)).toEqual(['analytics']);
+  expect(groups.find(g=>g.label==='Governance')?.items.map(i=>i.key)).toEqual(['audit']);
  });
- it('filters vendor modules by the existing permission codes',()=>{
-  const keys=getNavigationKeys('vendor',['CATALOG_MANAGE','BRANCH_MANAGE','SUBSCRIPTION_VIEW']);
-  expect(keys).toContain('products');
-  expect(keys).toContain('branches');
-  expect(keys).toContain('analytics');
-  expect(keys).toContain('subscription');
-  expect(keys).not.toContain('users');
-  expect(keys).not.toContain('finance-service');
+ it('exposes analytics only when vendor admin has both reporting and branch permissions',()=>{
+  expect(getNavigationKeys('vendor',['REPORT_VIEW'])).not.toContain('analytics');
+  expect(getNavigationKeys('vendor',['BRANCH_MANAGE'])).not.toContain('analytics');
+  expect(getNavigationKeys('vendor',['REPORT_VIEW','BRANCH_MANAGE'])).toContain('analytics');
  });
- it('does not expose vendor-only synchronization to customer navigation',()=>{
+ it('shows only customer-owned account functions and logout',()=>{
+  const groups=getRoleNavigation('customer');
   const keys=getNavigationKeys('customer');
-  expect(keys).toContain('customer-orders');
-  expect(keys).toContain('invoices');
+  expect(groups.find(g=>g.label==='My Account')?.items.map(i=>i.key)).toEqual(['profile','customer-orders','invoices','enquiries','addresses','settings','logout']);
+  expect(keys).toContain('dashboard');
+  expect(keys).not.toContain('catalog');
   expect(keys).not.toContain('offline-sync');
-  expect(keys).not.toContain('settings');
  });
 });
