@@ -32,8 +32,11 @@ public class AuthCookieService {
             @Value("${app.auth.refresh-cookie-same-site:Strict}") String sameSite,
             @Value("${app.auth.refresh-cookie-domain:}") String domain,
             @Value("${app.auth.refresh-token-ttl-days:7}") long ttlDays) {
-        if (!"Strict".equalsIgnoreCase(sameSite) && !"Lax".equalsIgnoreCase(sameSite))
-            throw new IllegalArgumentException("Refresh cookie SameSite must be Strict or Lax");
+        if (!"Strict".equalsIgnoreCase(sameSite) && !"Lax".equalsIgnoreCase(sameSite)
+                && !"None".equalsIgnoreCase(sameSite))
+            throw new IllegalArgumentException("Refresh cookie SameSite must be Strict, Lax or None");
+        if ("None".equalsIgnoreCase(sameSite) && !secure)
+            throw new IllegalArgumentException("SameSite=None requires Secure cookies");
         this.secure = secure;
         this.sameSite = sameSite;
         this.domain = domain == null ? "" : domain.trim();
