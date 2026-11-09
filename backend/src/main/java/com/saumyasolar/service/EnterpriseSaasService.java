@@ -9,10 +9,10 @@ import java.time.Instant;import java.util.*;import java.math.BigDecimal;
 public class EnterpriseSaasService {
  private final BranchRepository branches;private final BranchMembershipRepository memberships;
  private final SubscriptionPlanRepository plans;private final TenantSubscriptionRepository subscriptions;
- private final TenantRepository tenants;private final AppUserRepository users;private final AuditEventRepository audits;private final SubscriptionAssignmentHistoryRepository subscriptionHistory;private final ProductRepository productRecords;private final CustomerProfileRepository customerProfiles;private final WarehouseRepository warehouses;private final TenantDomainRepository tenantDomains;private final ObjectMapper mapper;
+ private final TenantRepository tenants;private final AppUserRepository users;private final AuditEventRepository audits;private final SubscriptionAssignmentHistoryRepository subscriptionHistory;private final ProductRepository productRecords;private final CustomerProfileRepository customerProfiles;private final WarehouseRepository warehouses;private final TenantStorageLedgerRepository storageLedger;private final TenantDomainRepository tenantDomains;private final ObjectMapper mapper;
  public EnterpriseSaasService(BranchRepository b,BranchMembershipRepository m,SubscriptionPlanRepository pl,
-  TenantSubscriptionRepository s,TenantRepository t,AppUserRepository u,AuditEventRepository a,WarehouseRepository wr,TenantDomainRepository td,ObjectMapper om,SubscriptionAssignmentHistoryRepository sh,ProductRepository pr,CustomerProfileRepository cp){
-  branches=b;memberships=m;plans=pl;subscriptions=s;tenants=t;users=u;audits=a;warehouses=wr;tenantDomains=td;mapper=om;subscriptionHistory=sh;productRecords=pr;customerProfiles=cp;
+  TenantSubscriptionRepository s,TenantRepository t,AppUserRepository u,AuditEventRepository a,WarehouseRepository wr,TenantDomainRepository td,ObjectMapper om,SubscriptionAssignmentHistoryRepository sh,ProductRepository pr,CustomerProfileRepository cp,TenantStorageLedgerRepository storageLedger){
+  branches=b;memberships=m;plans=pl;subscriptions=s;tenants=t;users=u;audits=a;warehouses=wr;tenantDomains=td;mapper=om;subscriptionHistory=sh;productRecords=pr;customerProfiles=cp;this.storageLedger=storageLedger;
  }
  private void permission(Principal p,String code){if(p.permissions()==null||!p.permissions().contains(code))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Missing permission: "+code);}
  private UUID vendor(Principal p,String code){if(!"VENDOR".equals(p.accountType())||p.tenantId()==null)throw new ResponseStatusException(HttpStatus.FORBIDDEN);permission(p,code);return p.tenantId();}
@@ -317,6 +317,35 @@ public class EnterpriseSaasService {
   catch(Exception e){throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Subscription entitlements are invalid; contact the platform administrator");}
  }
 
+ public Map<String,Object> platformTenantUsage(Principal p,int page,int size){
+  platform(p,"SUBSCRIPTION_MANAGE");
+  int safePage=Math.max(0,page),safeSize=Math.max(1,Math.min(100,size));
+  org.springframework.data.domain.Page<Tenant> tenantPage=tenants.findAll(org.springframework.data.domain.PageRequest.of(safePage,safeSize,org.springframework.data.domain.Sort.by("name").ascending()));
+  List<Map<String,Object>> rows=new ArrayList<>();
+  for(Tenant tenant:tenantPage.getContent()){
+   UUID id=tenant.getId();
+   long userCount=users.findByTenantId(id).stream().filter(AppUser::isEnabled).filter(u->"VENDOR".equals(u.getAccountType())).count();
+   long productCount=productRecords.countByTenantIdAndActiveTrue(id);
+   long branchCount=branches.countByTenantIdAndActiveTrue(id);
+   long warehouseCount=warehouses.findByTenantIdOrderByNameAsc(id).stream().filter(Warehouse::isActive).count();
+   long storageBytes=Math.max(0,storageLedger.sumByteDeltaByTenantId(id));
+   TenantSubscription current=subscriptions.findByTenantIdOrderByCreatedAtDesc(id).stream()
+    .filter(v->Set.of("ACTIVE","TRIAL","PAST_DUE").contains(v.getStatus()))
+    .max(Comparator.comparing(TenantSubscription::getStartsAt,Comparator.nullsFirst(Comparator.naturalOrder()))).orElse(null);
+   SubscriptionPlan plan=current==null?null:plans.findById(current.getPlanId()).orElse(null);
+   Map<String,Object> row=new LinkedHashMap<>();row.put("tenantId",id);row.put("tenantName",tenant.getName());row.put("tenantSlug",tenant.getSlug());
+   row.put("tenantStatus",tenant.getStatus());row.put("planName",plan==null?"Unassigned":plan.getName());row.put("subscriptionStatus",current==null?"UNASSIGNED":current.getStatus());
+   row.put("users",usageValue(userCount,plan==null?null:plan.getMaxUsers()));
+   row.put("products",usageValue(productCount,plan==null?null:plan.getMaxProducts()));
+   row.put("branches",usageValue(branchCount,plan==null?null:plan.getMaxBranches()));
+   row.put("warehouses",usageValue(warehouseCount,plan==null?null:plan.getMaxWarehouses()));
+   row.put("storageMb",usageValue((storageBytes+1048575L)/1048576L,plan==null?null:plan.getMaxStorageMb()));
+   rows.add(row);
+  }
+  Map<String,Object> result=new LinkedHashMap<>();result.put("items",rows);result.put("page",tenantPage.getNumber());result.put("size",tenantPage.getSize());
+  result.put("total",tenantPage.getTotalElements());result.put("totalPages",tenantPage.getTotalPages());return result;
+ }
+ private Map<String,Object> usageValue(long used,Number limit){Map<String,Object> v=new LinkedHashMap<>();v.put("used",used);v.put("limit",limit);v.put("remaining",limit==null?null:Math.max(0,limit.longValue()-used));return v;}
  public List<AuditEvent> auditEvents(Principal p,Instant from,Instant to,UUID actorId,String action,String entityType,String outcome){
   UUID tenant=null;
   if("PLATFORM".equals(p.accountType()))platform(p,"AUDIT_VIEW");
