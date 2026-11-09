@@ -405,6 +405,19 @@ public class AuthLifecycleService {
         return saved;
     }
 
+    @Transactional
+    public void deleteCustomRole(UUID tenantId, UUID actorId, UUID roleId) {
+        if (tenantId == null || roleId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        var role = roles.findByIdAndTenantId(roleId, tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Role not found"));
+        if (com.saumyasolar.config.DataSeeder.employeeRolePermissions().containsKey(role.getName()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "System roles cannot be deleted");
+        if (users.existsByTenantIdAndRoles_Id(tenantId, roleId))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Role is assigned to one or more employees");
+        roles.delete(role);
+        auditAuth("CUSTOM_ROLE_DELETED", users.findById(actorId).orElse(null), "SUCCESS", "CUSTOM_ROLE_DELETED_" + role.getName(), roleId.toString());
+    }
+
     private java.util.Set<Permission> resolveVendorPermissions(java.util.Set<String> codes) {
         var result = new java.util.HashSet<Permission>();
         if (codes == null) return result;
