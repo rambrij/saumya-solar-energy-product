@@ -61,7 +61,7 @@ public class CustomerAccountService {
   CustomerAddress a=addresses.findByIdAndTenantIdAndCustomerId(id,actor.tenantId(),c.getId())
    .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Address not found"));
   boolean wasDefault=a.isDefault();addresses.delete(a);
-  if(wasDefault)addresses.findByTenantIdAndCustomerIdOrderByIsDefaultDescCreatedAtDesc(actor.tenantId(),c.getId()).stream().findFirst().ifPresent(next->{next.setDefault(true);next.setUpdatedAt(Instant.now());addresses.save(next);});
+  if(wasDefault)addresses.findOwnedAddresses(actor.tenantId(),c.getId()).stream().findFirst().ifPresent(next->{next.setDefault(true);next.setUpdatedAt(Instant.now());addresses.save(next);});
  }
  private void clearDefault(UUID tenant,UUID customer){
   addresses.findByTenantIdAndCustomerIdOrderByIsDefaultDescCreatedAtDesc(tenant,customer).stream().filter(CustomerAddress::isDefault).forEach(a->{a.setDefault(false);a.setUpdatedAt(Instant.now());addresses.save(a);});
