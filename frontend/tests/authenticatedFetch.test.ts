@@ -55,6 +55,28 @@ describe('HttpOnly-cookie authenticatedFetch',()=>{
   expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get('X-CSRF-Token')).toBe('csrf-persisted');
  });
 
+
+ it('obtains the CSRF double-submit value from the API for a fresh tab before refresh',async()=>{
+  const fetchMock=vi.fn()
+   .mockResolvedValueOnce(new Response(JSON.stringify({csrfToken:'csrf-from-api'}),{status:200,headers:{'Content-Type':'application/json'}}))
+   .mockResolvedValueOnce(new Response(JSON.stringify({...session,accessToken:'fresh-tab-access'}),{status:200,headers:{'Content-Type':'application/json'}}));
+  vi.stubGlobal('fetch',fetchMock);
+  const result=await bootstrapSession();
+  expect(result?.accessToken).toBe('fresh-tab-access');
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(String(fetchMock.mock.calls[0][0])).toContain('/auth/csrf');
+  expect(fetchMock.mock.calls[0][1]?.credentials).toBe('include');
+  expect(String(fetchMock.mock.calls[1][0])).toContain('/auth/refresh');
+  expect(new Headers(fetchMock.mock.calls[1][1]?.headers).get('X-CSRF-Token')).toBe('csrf-from-api');
+ });
+
+ it('keeps access credentials in memory and never persists them in localStorage',()=>{
+  localStorage.clear();
+  setCurrentAuthSession(session);
+  expect(localStorage.length).toBe(0);
+  expect(sessionStorage.getItem('saumya-csrf-token')).toBe('csrf-old');
+ });
+
  it('clears the in-memory session when refresh is rejected',async()=>{
   setCurrentAuthSession(session);
   const expired=vi.fn();
