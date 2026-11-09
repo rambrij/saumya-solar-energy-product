@@ -340,7 +340,7 @@ public class AuthLifecycleService {
         vendorAdmin.setId(UUID.randomUUID());
         vendorAdmin.setTenantId(tenant.getId());
         vendorAdmin.setName("VENDOR_ADMIN");
-        permissions.findAll().stream().filter(permission -> !"PLATFORM_MANAGE".equals(permission.getCode()))
+        permissions.findAll().stream().filter(permission -> !java.util.Set.of("PLATFORM_MANAGE", "SUBSCRIPTION_MANAGE", "TENANT_VIEW", "TENANT_UPDATE").contains(permission.getCode()))
                 .forEach(vendorAdmin.getPermissions()::add);
         roles.save(vendorAdmin);
         
