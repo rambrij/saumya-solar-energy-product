@@ -118,8 +118,9 @@ public class Controller {
             rs.add(r.getName());
             r.getPermissions().forEach(z -> ps.add(z.getCode()));
         });
-        String csrfToken = authCookies.issue(response, lifecycle.newRefresh(u));
-        return new Session(jwt.issue(u), csrfToken, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
+        String accessToken = jwt.issue(u);
+        String csrfToken = authCookies.issue(response, accessToken, lifecycle.newRefresh(u));
+        return new Session(null, csrfToken, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
     }
     
     @PostMapping("/auth/mfa/verify")
@@ -131,9 +132,10 @@ public class Controller {
             roleNames.add(role.getName());
             role.getPermissions().forEach(permission -> permissionCodes.add(permission.getCode()));
         });
-        String csrfToken = authCookies.issue(response, lifecycle.newRefresh(u));
+        String accessToken = jwt.issue(u);
+        String csrfToken = authCookies.issue(response, accessToken, lifecycle.newRefresh(u));
         return new Session(
-                jwt.issue(u), csrfToken,
+                null, csrfToken,
                 new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), roleNames, permissionCodes)
         );
     }
@@ -145,7 +147,8 @@ public class Controller {
         if (refreshToken == null || refreshToken.isBlank())
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh session is unavailable");
         var rotation = lifecycle.rotateRefresh(refreshToken);
-        String csrfToken = authCookies.issue(response, rotation.refreshToken());
+        String accessToken = jwt.issue(u);
+        String csrfToken = authCookies.issue(response, accessToken, rotation.refreshToken());
         var u = rotation.user();
         var rs = new HashSet<String>();
         var ps = new HashSet<String>();
@@ -153,7 +156,7 @@ public class Controller {
             rs.add(r.getName());
             r.getPermissions().forEach(z -> ps.add(z.getCode()));
         });
-        return new Session(jwt.issue(u), csrfToken, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
+        return new Session(null, csrfToken, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
     }
     
     @PostMapping("/auth/logout")
