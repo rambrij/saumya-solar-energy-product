@@ -600,13 +600,16 @@ public class AppService {
     public SalesLead convertLead(UUID enquiryId, Input x, Principal p) {
         vendor(p);
         requirePermission(p, "LEAD_CREATE");
-        if (!hasPermission(p, "LEAD_ASSIGN")
-                && !Objects.equals(x.assignedUserId(), p.userId()))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sales executives may only assign new leads to themselves");
+        UUID leadAssignee = x.assignedUserId();
+        if (!hasPermission(p, "LEAD_ASSIGN")) {
+            if (leadAssignee != null && !Objects.equals(leadAssignee, p.userId()))
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Lead assignment requires LEAD_ASSIGN");
+            leadAssignee = p.userId();
+        }
         var q = enquiries.findByIdAndTenantId(enquiryId, p.tenantId()).orElseThrow();
         if (!"NEW".equals(q.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Enquiry already converted");
-        requireEmployee(x.assignedUserId(), p.tenantId());
+        requireEmployee(leadAssignee, p.tenantId());
         if (q.getCustomerId() == null) {
             CustomerProfile customer = customers.findByTenantIdAndEmailIgnoreCase(p.tenantId(), q.getEmail())
                     .orElseGet(() -> {
@@ -630,7 +633,7 @@ public class AppService {
         l.setCustomerId(q.getCustomerId());
         l.setStage("NEW");
         l.setPriority(x.priority() == null ? "MEDIUM" : x.priority());
-        l.setAssignedUserId(x.assignedUserId());
+        l.setAssignedUserId(leadAssignee);
         l.setNextFollowUp(x.nextFollowUp());
         l.setCreatedAt(Instant.now());
         leads.save(l);
