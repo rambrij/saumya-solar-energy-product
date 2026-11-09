@@ -41,7 +41,10 @@ public class ClientAddressResolver {
     private String normalize(String value) { return normalizeAddress(value); }
 
     private static String normalizeAddress(String value) {
-        if (value == null || !value.matches("[0-9a-fA-F:.]+")) return null;
+        if (value == null) return null;
+        boolean ipv4 = value.matches("(?:[0-9]{1,3}\\.){3}[0-9]{1,3}");
+        boolean ipv6 = value.contains(":") && value.matches("[0-9a-fA-F:.]+");
+        if (!ipv4 && !ipv6) return null;
         try { return InetAddress.getByName(value).getHostAddress(); }
         catch (Exception ignored) { return null; }
     }
