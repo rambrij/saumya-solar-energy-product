@@ -775,3 +775,16 @@ A safe migration needs coordinated backend cookie issuance/clearing, SameSite/Se
 ### Current Phase 1 decision
 
 **Still PARTIALLY IMPLEMENTED — do not merge/deploy as production-ready.** The additional source work closes authentication auditing, refresh-family handling, trusted proxy configuration/cleanup and direct-fetch refresh gaps. The remaining critical blockers are the uncompleted fine-grained backend permission enforcement, localStorage refresh-token exposure, and successful latest-commit CI/test verification. Comprehensive tenant-resource negative tests and database-backed refresh replay race tests are also outstanding.
+
+
+### Latest CI verification addendum (2026-11-09)
+
+Workflow run [42659338279](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42659338279) completed successfully for commit `8888b5dd22df6e3270d0d6cbd9eaaae23fc9b12d`:
+- Backend compile and tests: 108 tests, 0 failures, 0 errors, 0 skipped.
+- Frontend component tests and production build: passed.
+- MySQL 8.4 migration validation through V53: passed.
+- Spring Boot package, startup and health check against MySQL 8.4/Mailpit: passed.
+
+The H2 test profile now initializes `auth_rate_limit_bucket` through `schema-test.sql`; integration-test rate limits are raised only in the test profile. A test exposed that `EnterpriseSaasService.enforceUserLimit` executed a pessimistic tenant lock without an active transaction on subscribed-tenant requests. The method is now transactional, and the employee platform-role escalation integration test exercises that path.
+
+The latest source commit after this successful run adds stricter numeric-only trusted-proxy address parsing. Its workflow run was still in progress when this addendum was written. Permission enforcement and localStorage refresh-token storage remain explicit Phase 1 gaps; successful builds do not close those design gaps.
