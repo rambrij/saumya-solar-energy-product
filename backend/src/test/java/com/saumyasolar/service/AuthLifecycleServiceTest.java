@@ -1,6 +1,8 @@
 package com.saumyasolar.service;
 
 import com.saumyasolar.domain.AppUser;
+import com.saumyasolar.domain.Permission;
+import com.saumyasolar.domain.Role;
 import com.saumyasolar.repo.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,6 +23,8 @@ class AuthLifecycleServiceTest {
     private AppUserRepository users;
     private RefreshTokenRepository refresh;
     private PasswordEncoder encoder;
+    private PermissionRepository permissions;
+    private RoleRepository roles;
     private AuthLifecycleService service;
     private AppUser user;
 
@@ -32,8 +36,10 @@ class AuthLifecycleServiceTest {
         users = mock(AppUserRepository.class);
         TenantRepository tenants = mock(TenantRepository.class);
         encoder = mock(PasswordEncoder.class);
+        roles = mock(RoleRepository.class);
+        permissions = mock(PermissionRepository.class);
         service = new AuthLifecycleService(refresh, resets, mfa, users, tenants,
-                mock(RoleRepository.class), mock(PermissionRepository.class),
+                roles, permissions,
                 mock(CustomerProfileRepository.class), mock(ProductCategoryRepository.class),
                 encoder, mock(NotificationService.class));
         org.springframework.test.util.ReflectionTestUtils.setField(service, "maximumFailedLoginAttempts", 5);
@@ -87,6 +93,27 @@ class AuthLifecycleServiceTest {
                         () -> service.authenticate("admin@example.test", "correct")).getStatusCode());
         verify(encoder, never()).matches(anyString(), anyString());
     }
+    @Test
+    void customRoleAcceptsOnlySrsVendorPermissionCodes() {
+        UUID tenantId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        Permission leadView = new Permission();
+        leadView.setId(UUID.randomUUID());
+        leadView.setCode("LEAD_VIEW");
+        when(roles.findByNameAndTenantId("CUSTOM_SALES_READ", tenantId)).thenReturn(Optional.empty());
+        when(permissions.findByCode("LEAD_VIEW")).thenReturn(Optional.of(leadView));
+        when(roles.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Role created = service.createCustomRole(tenantId, actorId, "custom_sales_read", java.util.Set.of("LEAD_VIEW"));
+        assertEquals("CUSTOM_SALES_READ", created.getName());
+        assertEquals(tenantId, created.getTenantId());
+        assertTrue(created.getPermissions().stream().anyMatch(permission -> "LEAD_VIEW".equals(permission.getCode())));
+
+        ResponseStatusException blocked = assertThrows(ResponseStatusException.class,
+                () -> service.createCustomRole(tenantId, actorId, "CUSTOM_PLATFORM", java.util.Set.of("PLATFORM_MANAGE")));
+        assertEquals(HttpStatus.FORBIDDEN, blocked.getStatusCode());
+    }
+
     @Test
     void replayOfRotatedRefreshTokenRevokesEveryTokenInItsFamily() {
         UUID familyId = UUID.randomUUID();
