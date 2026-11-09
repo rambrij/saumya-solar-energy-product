@@ -17,9 +17,9 @@ const roleMenus:Record<string,NavigationGroup[]>={
   {label:'Catalog',items:[{key:'categories',label:'Categories',permission:'CATALOG_MANAGE'},{key:'products',label:'Products',permission:'CATALOG_MANAGE'},{key:'packages',label:'Solar Packages',permission:'CATALOG_MANAGE'}]},
   {label:'Sales',items:[{key:'enquiries',label:'Enquiries',permission:'LEAD_MANAGE'},{key:'leads',label:'Leads',permission:'LEAD_MANAGE'},{key:'surveys',label:'Site Surveys',permission:'SURVEY_MANAGE'},{key:'quotations',label:'Quotations',permission:'QUOTATION_MANAGE'},{key:'orders',label:'Orders',permission:'ORDER_CREATE'}]},
   {label:'Customers & Team',items:[{key:'customers',label:'Customers',permission:'CUSTOMER_MANAGE'},{key:'users',label:'Users',permission:'USER_VIEW'},{key:'branches',label:'Branches',permission:'BRANCH_MANAGE'}]},
-  {label:'Insights',items:[{key:'analytics',label:'Analytics',permission:'REPORT_VIEW',requiredRoles:['VENDOR_ADMIN']}]},
+  {label:'Insights',items:[{key:'analytics',label:'Analytics',allPermissions:['REPORT_VIEW','BRANCH_MANAGE'],requiredRoles:['VENDOR_ADMIN']}]},
   {label:'Business Operations',items:[{key:'operations',label:'Inventory & Operations',permission:['INVENTORY_MANAGE','SURVEY_MANAGE']},{key:'finance-service',label:'Finance & Service',permission:['FINANCE_MANAGE','SERVICE_MANAGE']},{key:'offline-sync',label:'Offline Business Sync'}]},
-  {label:'Account',items:[{key:'subscription',label:'My Subscription',requiredRoles:['VENDOR_ADMIN']},{key:'settings',label:'Settings',permission:'DISCOUNT_POLICY_MANAGE'}]}
+  {label:'Account',items:[{key:'subscription',label:'My Subscription',requiredRoles:['VENDOR_ADMIN']},{key:'settings',label:'Settings',permission:'DISCOUNT_POLICY_MANAGE',requiredRoles:['VENDOR_ADMIN']}]}
  ],
  customer:[
   {label:'Dashboard',singleLink:true,items:[{key:'dashboard',label:'Dashboard'}]},
