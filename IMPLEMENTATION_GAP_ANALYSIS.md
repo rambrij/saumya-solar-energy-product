@@ -886,3 +886,17 @@ The available Render workspace contains a service named `soumya-solar-api` (`htt
 Its Render ingress IP allowlist is `0.0.0.0/0` (public ingress). This is not the application's trusted reverse-proxy list and must not be interpreted as one. The available service details do not reveal environment variable values, so production `TRUSTED_PROXY_IPS`, `CORS_ORIGINS`, refresh-cookie Secure/SameSite/domain settings and forwarded-header behavior remain unverified. No deployment or Render configuration was modified.
 
 **Production blocker:** the currently inspected Render service is not aligned with the repository being hardened. Repointing it to this repository/branch and verifying runtime environment values requires explicit deployment approval.
+
+
+### Final source CI result — 2026-11-09
+
+Final source commit `aca7facda4fbd4133f79b732c9b5b1bc0ce1e931` passed [GitHub Actions run 42674221540](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42674221540):
+- Backend compile and tests: **127 passed, 0 failures, 0 errors, 0 skipped**.
+- Frontend typecheck, **20 component tests**, and production build: **PASS**.
+- MySQL 8.4 migration validation V1–V56, including explicit V54/V55/V56 assertions: **PASS**.
+- Spring Boot package/startup/health against MySQL 8.4 and Mailpit: **PASS**.
+- Overall workflow conclusion: **SUCCESS**.
+
+The report and gap analysis were updated after this source commit; no application source changes were made after the passing CI run.
+
+The remaining production blocker is outside the source tree: the inspected Render API service still points at the legacy `saumya-solar-energy-solution` repository on `main`, not this repository/branch. Its runtime CORS, cookie and trusted-proxy environment values are not exposed in the service inspection response. Do not claim production deployment readiness until the intended Render service is explicitly aligned and its runtime settings are verified.
