@@ -491,3 +491,8 @@ main:has(>.role-app){max-width:none;margin:0;padding:0}
 .analytics-stat-card strong{overflow-wrap:anywhere}
 @media(max-width:800px){.analytics-two-column{grid-template-columns:1fr}}
 @media(max-width:540px){.analytics-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-two-column{gap:12px}.analytics-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+.brand-logo-button{display:inline-flex;align-items:center;justify-content:center;padding:0;border:0;background:transparent;cursor:pointer;line-height:0}
+.brand-logo-button:focus-visible,.brand-logo-link:focus-visible{outline:2px solid #0b6b4b;outline-offset:4px;border-radius:4px}
+.brand-logo-link{display:inline-flex;align-items:center;line-height:0}
