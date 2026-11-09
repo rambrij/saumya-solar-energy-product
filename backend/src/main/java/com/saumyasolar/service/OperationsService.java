@@ -525,7 +525,10 @@ public class OperationsService {
     public List<InstallationTeam> teams(Principal p) {
         UUID t = tenant(p);
         permission(p, "INSTALLATION_VIEW");
-        return teams.findByTenantIdOrderByNameAsc(t).stream().filter(InstallationTeam::isActive).toList();
+        List<InstallationTeam> active = teams.findByTenantIdOrderByNameAsc(t).stream().filter(InstallationTeam::isActive).toList();
+        if (p.roles() != null && p.roles().stream().anyMatch(Set.of("SERVICE_ENGINEER", "TECHNICIAN", "INSTALLER")::contains))
+            return active.stream().filter(team -> team.getMemberIdsJson() != null && team.getMemberIdsJson().contains(p.userId().toString())).toList();
+        return active;
     }
     
     @Transactional
