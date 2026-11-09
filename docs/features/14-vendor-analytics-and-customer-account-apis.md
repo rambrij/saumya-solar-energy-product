@@ -66,4 +66,4 @@ Updates an address owned by the authenticated customer.
 
 Deletes an owned address. If the default address is deleted, the most recently created remaining address becomes default.
 
-Address validation failures return HTTP 400. A foreign or unknown address ID returns HTTP 404. Existing customer enquiries and orders APIs remain unchanged; address selection can be added to those flows after their current request DTOs and checkout behavior are reviewed.
+Address validation failures return HTTP 400. Flyway migrations V49 and V50 add the customer address table and optional enquiry address snapshot. A foreign or unknown address ID returns HTTP 404. The existing POST /customer/enquiries request accepts an optional addressId. The API verifies ownership against the authenticated customer's tenant/profile and stores an address snapshot on the enquiry. Existing requests without addressId remain compatible and fall back to the customer's existing profile address. Product-order and quotation-acceptance payloads currently have no delivery/site-address field; adding one requires a separate order snapshot/fulfilment decision.
