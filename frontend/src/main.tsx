@@ -158,6 +158,7 @@ function Crud({title,s,error,tabs,forms}:any){
  {tab==='operations'&&<OperationsPanel s={s} api={api} send={send} error={error}/>}
  {tab==='finance-service'&&<FinanceServicePanel s={s} api={api} send={send} error={error}/>}
  {tab==='settings'&&<SettingsForm s={s} error={error}/>}{tab==='subscription'&&<EnterpriseSaasPanel mode="vendor" s={s} error={error}/>}
+ {tab==='offline-sync'&&<OfflineSyncPanel session={s}/>}
  {createOpen&&tab==='packages'&&<PackageForm s={s} lookups={lookups} done={load} error={error}/>}
  {createOpen&&tab==='surveys'&&<SurveyForm s={s} lookups={lookups} done={load} error={error}/>}
  {createOpen&&tab==='quotations'&&s.user.accountType==='VENDOR'&&<QuoteForm s={s} lookups={lookups} done={load} error={error}/>}
