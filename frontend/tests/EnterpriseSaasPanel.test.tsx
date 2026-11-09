@@ -36,9 +36,7 @@ describe('Platform subscription administration',()=>{
    if(path.includes('/platform/tenants/search'))return ok([{id:'tenant-1',name:'Saumya Solar',slug:'saumya-solar',status:'ACTIVE'}]) as any;
    return ok([]) as any;
   });
-  render(<EnterpriseSaasPanel mode="platform" s={session} error={vi.fn()}/>);
-  await screen.findByText('Starter');
-  fireEvent.click(screen.getByRole('button',{name:'Tenant Subscriptions'}));
+  render(<EnterpriseSaasPanel mode="platform" section="assignments" s={session} error={vi.fn()}/>);
   fireEvent.change(screen.getByPlaceholderText('Type at least 2 characters…'),{target:{value:'sa'}});
   fireEvent.click(await screen.findByRole('button',{name:/Saumya Solar/}));
   expect(await screen.findByText('Assignment history')).toBeTruthy();
