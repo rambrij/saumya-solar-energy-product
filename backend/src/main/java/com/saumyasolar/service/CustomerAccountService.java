@@ -64,7 +64,7 @@ public class CustomerAccountService {
   if(wasDefault)addresses.findOwnedAddresses(actor.tenantId(),c.getId()).stream().findFirst().ifPresent(next->{next.setDefault(true);next.setUpdatedAt(Instant.now());addresses.save(next);});
  }
  private void clearDefault(UUID tenant,UUID customer){
-  addresses.findByTenantIdAndCustomerIdOrderByIsDefaultDescCreatedAtDesc(tenant,customer).stream().filter(CustomerAddress::isDefault).forEach(a->{a.setDefault(false);a.setUpdatedAt(Instant.now());addresses.save(a);});
+  addresses.findOwnedAddresses(tenant,customer).stream().filter(CustomerAddress::isDefault).forEach(a->{a.setDefault(false);a.setUpdatedAt(Instant.now());addresses.save(a);});
  }
  private void apply(CustomerAddress a,AddressInput x){
   a.setLabel(x.label().trim());a.setLine1(x.line1().trim());a.setLine2(trim(x.line2()));a.setCity(x.city().trim());
