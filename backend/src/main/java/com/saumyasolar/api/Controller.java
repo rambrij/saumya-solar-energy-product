@@ -203,9 +203,8 @@ public class Controller {
     @PostMapping("/auth/register")
     Session register(@Valid @RequestBody Register x, jakarta.servlet.http.HttpServletResponse response) {
         var u = lifecycle.register(x.storeSlug(), x.name(), x.email(), x.password());
-        String accessToken = jwt.issue(u);
-        String csrfToken = authCookies.issue(response, accessToken, lifecycle.newRefresh(u));
-        return new Session(null, csrfToken, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), Set.of("CUSTOMER"), Set.of()));
+        String csrfToken = authCookies.issue(response, lifecycle.newRefresh(u));
+        return new Session(jwt.issue(u), csrfToken, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), Set.of("CUSTOMER"), Set.of()));
     }
     
     @PostMapping("/auth/forgot-password")
