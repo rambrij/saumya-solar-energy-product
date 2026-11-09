@@ -746,6 +746,8 @@ public class EnterpriseSaasService {
         UUID tenant = null;
         if ("PLATFORM".equals(p.accountType())) platform(p, "AUDIT_VIEW");
         else tenant = vendor(p, "AUDIT_VIEW");
+        if (p.roles() != null && p.roles().contains("PLATFORM_SUPPORT"))
+            audit(p, null, "PLATFORM_SUPPORT_AUDIT_LOG_VIEWED", "AUDIT_EVENT_QUERY", UUID.randomUUID(), Map.of("from", from.toString(), "to", to.toString()));
         if (from == null || to == null || to.isBefore(from) || java.time.Duration.between(from, to).toDays() > 90)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Audit range must be valid and no longer than 90 days");
         return audits.search(tenant, from, to, actorId, trim(action), trim(entityType), trim(outcome), org.springframework.data.domain.PageRequest.of(0, 500));
