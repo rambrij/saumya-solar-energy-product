@@ -46,7 +46,7 @@ Implemented in this branch:
 | Frontend session expiry | SRS §11 and §15.1 | 401 caused local session removal and page reload | No refresh-token use by common JSON client | Added one refresh attempt and retry for shared JSON API calls | No frontend test |
 | Frontend 403/429 | SRS §15.3 | Generic API error handling | No consistent user feedback | Added permission-specific and rate-limit-specific messages in shared API helper | No frontend test |
 | Security audit events | SRS IAM-007; §15.6 | Audit event table/entity exists for business audit | Authentication events not wired | Not completed | Missing |
-| Browser token storage | SRS §15.1 | localStorage session | SRS prefers secure HttpOnly cookie where feasible | No cookie migration; requires coordinated CSRF/CORS/API design | Manual architecture decision required |
+| Browser token storage | SRS §15.1 and §18.3 | Access JWT is held in memory; refresh credential is stored in an HttpOnly Secure SameSite cookie; CSRF token is in sessionStorage | No raw access or refresh token is persisted in localStorage; new tabs obtain CSRF through GET /auth/csrf | Retained short-lived bearer access-token response for in-memory use; refresh token is removed from JSON and request body | AuthCookieServiceTest, authenticatedFetch tests and Release12 integration tests |
 
 ## 3. Existing capabilities reused
 
@@ -116,15 +116,16 @@ The existing authorization path is retained:
 - Existing service-level `requirePermission` and tenant-scoped repository lookups remain authoritative.
 - Existing `Release2SecurityTest` covers a vendor without catalog permission and a cross-tenant category reference.
 
-No permission grants were broadened. The SRS fine-grained permission catalogue (for example `PRODUCT_VIEW`, `LEAD_ASSIGN`, `SERVICE_RESOLVE`) differs from the current application catalogue (for example `CATALOG_VIEW`, `LEAD_MANAGE`, `SERVICE_MANAGE`). A safe migration requires a role-by-role mapping and should not be guessed during a rate-limit/lockout change.
+Fine-grained SRS permission codes are now the authorization source for the standard vendor role matrix. V55 removes deprecated broad grants from every tenant role, V56 removes platform-only permissions from tenant roles, new vendor administrators are provisioned without those codes, and custom roles are limited to the vendor permission allowlist. Sales and service/installation assigned-resource scopes use permission capabilities rather than hard-coded role-name checks where the SRS defines assignment permissions. Platform Support is a read-only, audited role.
 
 ### 4.5 Frontend behavior
 
 The shared `api()` helper now:
-- Reads the latest stored session before making a protected JSON request.
-- Attempts one refresh after a 401 if a refresh token exists.
-- Stores the rotated access and refresh token and retries the original request once.
-- Clears the session and reloads when refresh fails.
+- Reads the in-memory access session before making a protected request.
+- Uses the HttpOnly refresh cookie and CSRF double-submit token after a 401.
+- Stores only the rotated access JWT in memory; the browser receives the rotated refresh cookie through Set-Cookie.
+- Retries the original request once and clears the in-memory session when refresh fails.
+- Obtains the CSRF value from GET /auth/csrf when a new tab has no sessionStorage state.
 - Uses clear, non-sensitive messages for 403 and 429.
 
 Direct fetch calls used by some binary downloads/uploads and bespoke customer address flows do not all use the shared helper. Those flows need consolidation or equivalent refresh handling before the frontend session-expiry requirement can be marked complete.
@@ -475,6 +476,8 @@ The subsequent proxy-address parser hardening commit `681c3267cf9b1adeb00d834329
 - V52: authentication lockout and rate-limit persistence.
 - V53: refresh-token family/replacement linkage and SRS permission catalogue.
 - V54: removes legacy broad grants from predefined employee roles.
+- V55: removes deprecated broad grants from all tenant roles (including old custom roles) and creates the restricted PLATFORM_SUPPORT role with AUDIT_VIEW and TENANT_VIEW.
+- V56: removes PLATFORM_MANAGE, SUBSCRIPTION_MANAGE, TENANT_VIEW and TENANT_UPDATE from every tenant-owned role.
 - No manual SQL step is required; Flyway owns the migration sequence.
 
 ### 18.4 Security tests added or updated
@@ -482,7 +485,7 @@ The subsequent proxy-address parser hardening commit `681c3267cf9b1adeb00d834329
 - AuthCookieServiceTest: HttpOnly/Secure/SameSite attributes, CSRF double-submit validation and SameSite=None requiring Secure.
 - AuthenticationRateLimitCleanupTest: verifies expiry cleanup uses the configured two-day retention window.
 - AuthLifecycleServiceTest: custom role permission allowlist and tenant-scoped employee role assignment.
-- Release12TenantIntegrationTest: concurrent refresh replay/family revocation, missing-CSRF rejection, no refresh token in JSON, cross-tenant access across five resource families, sales-executive assigned-lead visibility/reassignment denial and platform-role escalation denial.
+- Release12TenantIntegrationTest: concurrent refresh replay/family revocation, missing-CSRF rejection, no refresh token in JSON, cross-tenant access across five resource families, custom sales/service assigned-resource isolation, platform-support read-only access/audit, complete seeded-role permission checks, legacy/platform grant denial and privilege-escalation audit persistence.
 - Existing authentication lockout, rate-limit, disabled-user/tenant, JWT, 401/403 and tenant tests retained.
 - Frontend authenticatedFetch tests cover cookie refresh/retry, parallel refresh coalescing, reload bootstrap and invalid-session cleanup.
 - Role navigation tests updated to SRS fine-grained permission codes.
@@ -505,7 +508,7 @@ Before enabling the cookie session flow in the deployed environment, verify:
 - AUTH_REFRESH_COOKIE_SECURE=true.
 - AUTH_REFRESH_COOKIE_SAME_SITE=None for cross-site frontend/API origins; use Lax or Strict where deployment is same-site. SameSite=None requires Secure.
 - AUTH_REFRESH_COOKIE_DOMAIN is set only when a shared parent domain is intentionally used; otherwise keep the cookie host-only.
-- TRUSTED_PROXY_IPS contains the exact immediate reverse-proxy IP addresses. The resolver intentionally ignores forwarded headers from untrusted peers. CIDR notation is not currently supported.
+- TRUSTED_PROXY_IPS contains only the immediate trusted reverse-proxy IP addresses or narrowly scoped CIDR networks. The resolver intentionally ignores forwarded headers from untrusted peers and rejects catch-all /0 networks.
 - HTTPS is enforced end to end and the proxy forwards the real client address only from trusted hops.
 
 The Render workspace selection has not been confirmed, so the deployed environment variables and actual proxy topology have not been inspected or modified. This is the only outstanding production-operations verification item recorded here.
@@ -520,5 +523,55 @@ Rollback must be coordinated: reverting the frontend while retaining cookie-only
 
 - Deployed CORS and TRUSTED_PROXY_IPS values are not yet verified because the Render workspace has not been selected.
 - SameSite=None cookies may be blocked by browser third-party-cookie policies when the frontend and API are on unrelated registrable domains; prefer same-site subdomains or a same-origin reverse proxy.
-- CIDR-based trusted proxy ranges and cross-tab browser refresh coordination are not implemented.
+- Cross-tab browser refresh coordination is not implemented; refresh single-flight currently coalesces requests within one browser tab. A simultaneous refresh from multiple tabs is treated as replay and revokes the token family.
 - External clients must adopt the cookie refresh contract before production rollout.
+
+
+---
+
+## 19. Phase 1 production-hardening addendum — 2026-11-09
+
+This addendum supersedes conflicting earlier statements in Sections 1–18 about localStorage token persistence, legacy permission grants, proxy CIDR support, missing assigned-scope tests and migration coverage.
+
+### 19.1 Final authorization reconciliation
+
+- SRS standard roles are reconciled in `DataSeeder.employeeRolePermissions()`.
+- `PLATFORM_SUPPORT` is a global, read-only role with only `TENANT_VIEW` and `AUDIT_VIEW`; tenant directory reads and audit-log reads are recorded as security audit events.
+- `TenantAdminService.authorizeRead` permits support reads; tenant mutation remains restricted to `PLATFORM_SUPER_ADMIN`.
+- V55 removes legacy broad permission grants from all tenant-owned roles, including custom roles.
+- V56 removes platform-only permissions from tenant-owned roles.
+- `DataSeeder` and `AuthLifecycleService` no longer grant legacy broad or platform-only permission codes when seeding/provisioning vendor administrators.
+- Fine-grained assignment permissions govern assigned-resource scope for sales leads/quotations/orders, surveys, service tickets and installations.
+- Custom sales roles without `LEAD_ASSIGN` see only assigned/linked records; custom service viewers without `SERVICE_ASSIGN` see only tickets assigned to their user.
+- Role-assignment API now returns the safe `UserView` DTO instead of serializing the JPA `AppUser` entity.
+- Blocked reserved-role and platform-permission escalation attempts are recorded through `AuthenticationAuditService` with `REQUIRES_NEW`, so the audit event survives the rejected request transaction rollback.
+
+### 19.2 Browser token storage and CSRF
+
+- The short-lived access JWT (default 900 seconds) is kept in application memory and sent as a Bearer token. It is not written to localStorage or sessionStorage.
+- The rotating refresh token is issued only as an HttpOnly, Secure, SameSite cookie scoped to `/api/v1/auth`; it is not returned in JSON and is not accepted from the browser request body.
+- The readable CSRF double-submit cookie is host-only even if a refresh-cookie parent domain is configured. Refresh and logout validate the cookie/header pair.
+- `GET /api/v1/auth/csrf` lets a new browser tab bootstrap the CSRF value from the API cookie; `authenticatedFetch.ts` then refreshes and keeps the access JWT in memory.
+- All identified authenticated direct upload/download calls use `authenticatedFetch`; public storefront calls remain unauthenticated.
+- Automated tests cover fresh-tab CSRF bootstrap, cookie refresh/retry, concurrent refresh within a tab, session cleanup and the absence of localStorage token persistence.
+
+### 19.3 Trusted proxy and rate-limit operations
+
+- `ClientAddressResolver` now supports exact IPv4/IPv6 addresses and CIDR networks in `TRUSTED_PROXY_IPS`.
+- It rejects malformed hostnames and catch-all `/0` networks, and traverses X-Forwarded-For only while the current hop is explicitly trusted.
+- Rate-limit bucket cleanup remains scheduled and bounded to two days.
+- `ClientAddressResolverTest` covers trusted CIDR matching and ignoring a peer outside the configured network.
+- The production Render ingress addresses/ranges and actual environment variable values have not been verified from the repository. Configure only the documented immediate proxy networks; do not trust all sources.
+
+### 19.4 Latest source validation
+
+Earlier successful validation at source commit `94d81a018011b0333d040d0bb4f1a9e7327f2b44` passed 123 backend tests, frontend tests/build, MySQL V1–V56 migration steps and Spring Boot/MySQL startup. Subsequent changes in this addendum (CIDR support, additional role/service isolation tests and support-access audit) require the latest branch workflow to complete before this report can claim final validation.
+
+### 19.5 Remaining production limitations
+
+1. The deployed Render `TRUSTED_PROXY_IPS`, `CORS_ORIGINS`, cookie attributes and HTTPS forwarding chain still require environment-level verification.
+2. Browser refresh coordination is single-flight per tab, not cross-tab. A simultaneous old-token refresh from a second tab is treated as replay and revokes the family; cross-tab coordination or a server-side idempotent rotation grace design needs a separate security review.
+3. Browser third-party-cookie restrictions can block SameSite=None cookies when frontend and API use unrelated registrable domains. Prefer same-site subdomains or a same-origin reverse proxy.
+4. External/mobile clients that previously supplied refresh tokens in JSON must migrate to the cookie contract or use a separately designed non-browser client authentication flow.
+
+**Completion decision:** Source implementation is substantially hardened, but do not mark Phase 1 production-ready until the latest CI run passes and the deployed proxy/CORS/cookie configuration is verified.
