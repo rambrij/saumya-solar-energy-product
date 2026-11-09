@@ -30,6 +30,8 @@ public class AuthLifecycleService {
     int maximumFailedLoginAttempts;
     @org.springframework.beans.factory.annotation.Value("${app.auth.lockout.duration-minutes:15}")
     long lockoutDurationMinutes;
+    @org.springframework.beans.factory.annotation.Value("${app.auth.refresh-token-ttl-days:7}")
+    long refreshTokenTtlDays;
     final RefreshTokenRepository refresh;
     final PasswordResetTokenRepository resets;
     final MfaChallengeRepository mfaChallenges;
@@ -105,7 +107,7 @@ public class AuthLifecycleService {
         x.setId(UUID.randomUUID());
         x.setUserId(u.getId());
         x.setToken(UUID.randomUUID() + "." + UUID.randomUUID());
-        x.setExpiresAt(Instant.now().plus(Duration.ofDays(7)));
+        x.setExpiresAt(Instant.now().plus(Duration.ofDays(Math.max(1, refreshTokenTtlDays))));
         refresh.save(x);
         return x.getToken();
     }
