@@ -22,6 +22,8 @@ management.endpoints.web.exposure.include: health,info
 app:
   jwt-secret: "${JWT_SECRET}"
   cors-origins: "${CORS_ORIGINS}"
+  security:
+    trusted-proxies: ${TRUSTED_PROXY_IPS:}
   payment:
     webhook-secret: "${PAYMENT_WEBHOOK_SECRET:}"
   service:
@@ -53,6 +55,7 @@ app:
       recovery-per-window: ${AUTH_RECOVERY_RATE_LIMIT:5}
       mfa-per-window: ${AUTH_MFA_RATE_LIMIT:10}
       window-seconds: ${AUTH_RATE_LIMIT_WINDOW_SECONDS:60}
+      cleanup-cron: ${AUTH_RATE_LIMIT_CLEANUP_CRON:0 17 3 * * *}
   mail:
     from: ${MAIL_FROM:no-reply@saumya.local}
   public-base-url: ${PUBLIC_BASE_URL:http://localhost:3000}
