@@ -17,6 +17,8 @@ import java.util.*;
 public class CatalogAdminService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private EnterpriseSaasService enterpriseSaas;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private SalesLeadRepository leads;
     private final ProductRepository products;
     private final ProductCategoryRepository categories;
     private final CustomerProfileRepository customers;
@@ -55,8 +57,14 @@ public class CatalogAdminService {
         return categories.findByIdAndTenantId(id, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Category not found"));
     }
     
-    private CustomerProfile customer(UUID id, UUID t) {
-        return customers.findByIdAndTenantId(id, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
+    private CustomerProfile customer(UUID id, UUID t, Principal p) {
+        CustomerProfile customer = customers.findByIdAndTenantId(id, t)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
+        if (p.roles() != null && p.roles().contains("SALES_EXECUTIVE")
+                && (leads == null || leads.findByTenantIdOrderByIdDesc(t).stream()
+                    .noneMatch(lead -> id.equals(lead.getCustomerId()) && p.userId().equals(lead.getAssignedUserId()))))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found");
+        return customer;
     }
     
     private void secureUrl(String value, String field) {
