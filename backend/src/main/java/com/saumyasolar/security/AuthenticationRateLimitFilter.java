@@ -25,19 +25,26 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
     private final int recoveryLimit;
     private final int mfaLimit;
     private final int windowSeconds;
+    private final ClientAddressResolver addressResolver;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public AuthenticationRateLimitFilter(
-            JdbcTemplate jdbc, ObjectMapper mapper,
+            JdbcTemplate jdbc, ObjectMapper mapper, ClientAddressResolver addressResolver,
             @Value("${app.auth.rate-limit.login-per-window:10}") int loginLimit,
             @Value("${app.auth.rate-limit.recovery-per-window:5}") int recoveryLimit,
             @Value("${app.auth.rate-limit.mfa-per-window:10}") int mfaLimit,
             @Value("${app.auth.rate-limit.window-seconds:60}") int windowSeconds) {
         this.jdbc = jdbc;
         this.mapper = mapper;
+        this.addressResolver = addressResolver;
         this.loginLimit = Math.max(1, loginLimit);
         this.recoveryLimit = Math.max(1, recoveryLimit);
         this.mfaLimit = Math.max(1, mfaLimit);
         this.windowSeconds = Math.max(1, windowSeconds);
+    }
+
+    AuthenticationRateLimitFilter(JdbcTemplate jdbc, ObjectMapper mapper, int loginLimit, int recoveryLimit, int mfaLimit, int windowSeconds) {
+        this(jdbc, mapper, new ClientAddressResolver(""), loginLimit, recoveryLimit, mfaLimit, windowSeconds);
     }
 
     @Override
@@ -57,7 +64,7 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
         int limit = path.endsWith("/login") || path.endsWith("/refresh") ? loginLimit
                 : path.endsWith("/mfa/verify") ? mfaLimit : recoveryLimit;
-        String address = request.getRemoteAddr() == null ? "unknown" : request.getRemoteAddr();
+        String address = addressResolver.resolve(request);
         String key = digest(path + "|" + address);
         Instant now = Instant.now();
         Instant windowStart = now.minusSeconds(windowSeconds);
