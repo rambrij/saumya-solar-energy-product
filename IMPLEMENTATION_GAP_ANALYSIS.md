@@ -60,7 +60,7 @@ The codebase is materially beyond a basic MVP: CRM, quotation, inventory, instal
 |---|---|---|---|---|---|---|---|---|---|
 | IAM-01 | Identity | Customer registration and login | IMPLEMENTED | AuthLifecycleService; Controller /auth/register,/auth/login | main.tsx register/login | app_user,customer_profile | CUSTOMER role; BCrypt; tenant activation | Controller.login/register; AuthLifecycleService; JwtService | Source path traced; runtime browser flow not executed |
 | IAM-02 | Identity | Platform Super Admin MFA by email code | IMPLEMENTED | Controller /auth/mfa/verify; AuthLifecycleService | main.tsx MFA challenge screen | mfa_challenge; notification_delivery | Platform account type; one-time hashed code; expiry/attempt checks | AuthLifecycleService.createMfaChallenge/verifyMfaChallenge; NotificationService.sendMfaCode | Mail delivery depends on SMTP configuration |
-| IAM-03 | Identity | JWT validation, refresh rotation, logout/revocation | IMPLEMENTED | JwtFilter; AuthLifecycleService | main.tsx session storage/logout | refresh_token; app_user.token_version | DB user/tenant/accountType/tokenVersion rechecked on each request | JwtService.issue/parse; JwtFilter.doFilterInternal; AuthLifecycleService.consumeRefresh/logout | Source trace; refresh token lifecycle tests present |
+| IAM-03 | Identity | JWT validation, refresh rotation, logout/revocation | PARTIALLY IMPLEMENTED | JwtFilter; AuthLifecycleService | main.tsx session storage/logout | refresh_token; app_user.token_version | DB user/tenant/accountType/tokenVersion rechecked on each request | JwtService.issue/parse; JwtFilter.doFilterInternal; AuthLifecycleService.rotateRefresh/consumeRefresh/logout; RefreshTokenRepository.findByTokenForUpdate | Atomic refresh-token row locking and replay revocation added; user-wide rather than token-family revocation, frontend token storage and runtime tests remain open |
 | IAM-04 | Identity | Password reset | IMPLEMENTED | AuthLifecycleService; Controller reset endpoints | main.tsx forgot/reset forms | password_reset_token | Single-use hashed token and expiry | NotificationService.sendPasswordReset; AuthLifecycleService | Requires reachable PUBLIC_BASE_URL and SMTP |
 | IAM-05 | Identity | Login throttling, account lockout and general API rate limits | NOT IMPLEMENTED | No rate-limit filter/service found in inspected security configuration | No throttle feedback or challenge outside MFA | No login-attempt/lockout persistence table in migrations reviewed | No general rate limiting; MFA challenge attempt limit is narrower | SecurityConfig; AuthLifecycleService | Critical hardening gap; MFA attempt counter does not protect password login |
 | IAM-06 | Authorization | Permission catalogue and server-side role/permission checks | IMPLEMENTED | AppService.requirePermission; EnterpriseSaasService.permission/platform/vendor; FinanceService; OperationsService | RoleNavigation.tsx filters by permission/role | permission; role; role_permission; user_role | JWT filter reloads roles and permissions from DB | JwtFilter.doFilterInternal; SecurityConfig @EnableMethodSecurity | Backend checks are authoritative; test coverage exists |
@@ -626,3 +626,107 @@ Maintain these in a separate product capability catalogue and ensure each featur
 ---
 
 **Final audit conclusion:** The repository contains a substantial connected SaaS implementation, not merely UI scaffolding. The most important remaining risks are not missing CRUD screens alone: they are authentication abuse controls, exhaustive tenant-isolation proof, reservation recovery, statutory finance decisions, missing CMS/in-app notifications, provider completion, operational recovery/observability and automated browser E2E. Treat the status counts as static traceability results for the IDs in this report; rerun the audit after CI and manual E2E evidence is available.
+
+
+---
+
+## Phase 1 Authentication and Security Update (2026-11-09)
+
+**Working branch:** `audit/implementation-gap-analysis`  
+**Implementation commit at report update:** see branch HEAD.  
+**Scope:** authentication rate limiting, password lockout, token lifecycle hardening, generic authentication errors, frontend refresh/error behavior and targeted tests.
+
+### Validation of original findings
+
+| Original gap | Validation against current source | Implementation result | Evidence |
+|---|---|---|---|
+| IAM-05 login throttling and account lockout absent | Confirmed: no general auth limiter or persisted password-failure counter existed in the baseline. MFA had its own challenge attempt limit only. | Partially implemented | `AuthenticationRateLimitFilter`; `AuthLifecycleService.authenticate`; V52 |
+| IAM-03 token lifecycle | Existing JWT validation, token-version revocation, refresh rotation and logout existed. Rotation lacked a locked refresh-token read; access-token TTL was hardcoded. | Enhanced; still partial against complete SRS | `JwtService`; `RefreshTokenRepository.findByTokenForUpdate`; `AuthLifecycleService.rotateRefresh` |
+| IAM-06 backend authorization | Existing service-level permission checks and DB-reloaded roles/permissions confirmed. | Existing capability retained; matrix alignment and exhaustive negative tests remain partial | `AppService.requirePermission`; `JwtFilter.doFilterInternal`; `SecurityConfig` |
+| TEN-02/TEN-03 tenant/customer boundaries | Existing identity-derived tenant and numerous tenant-scoped repository lookups confirmed; prior audit already classified exhaustive proof as partial. | No broad authorization rewrite; further endpoint-by-endpoint negative tests remain required | `JwtFilter.doFilterInternal`; `AppService`; `Release2SecurityTest` |
+
+### Changes made
+
+- Added persisted consecutive failed-login count, lockout expiry and last successful login timestamp to `app_user`.
+- Added transactional, pessimistically locked case-insensitive user lookup before password verification to serialize concurrent failure increments.
+- Added configurable lockout threshold and duration. Successful login and successful password reset clear the lockout state.
+- Added a MySQL-backed rate-limit bucket keyed by a SHA-256 digest of endpoint path and remote address. This is shared across application instances using the same database.
+- Applied rate limits to login, refresh, forgot-password, reset-password and MFA verification POST endpoints.
+- Added consistent HTTP 429 response with `Retry-After` and a non-sensitive response body.
+- Added a locked refresh-token lookup and a single transaction for consume-and-rotate. A revoked-token replay revokes all still-active refresh tokens for that user.
+- Made access-token seconds and refresh-token days configurable; the access-token default is now 900 seconds.
+- Sanitized 401 and 403 API exception details.
+- Added frontend access-token refresh on 401 for calls using the shared JSON API helper. The rotated refresh token is persisted and used for subsequent calls and logout. Added clearer 403 and 429 messages.
+- Added unit tests for login lockout, expiry recovery, disabled accounts and authentication rate-limit behavior.
+
+### Requirements traceability
+
+| Requirement | Source document and section | Current implementation / change | Gap remaining | Test coverage |
+|---|---|---|---|---|
+| Login rate limiting | Business requirements §18 Security; SRS §15.3 | DB-backed filter for `/auth/login` | Proxy address configuration and runtime verification | `AuthenticationRateLimitFilterTest` (added, not run) |
+| Refresh rate limiting | SRS §15.3; §13.2 Authentication APIs | Same filter for `/auth/refresh` | Same deployment/runtime verification | Filter test covers threshold mechanism, not each route |
+| Password-reset request/confirmation throttling | Business requirements §18; SRS §15.3 | Recovery limit for forgot/reset endpoints | Per-route policy and email-based abuse controls could be refined | Filter test covers threshold mechanism |
+| MFA verification throttling | SRS §9 and §15.1 | MFA-specific per-IP limit; existing per-challenge attempt limit retained | Concurrent challenge-attempt test and resend policy | Existing MFA logic; no new concurrent MFA test |
+| Failed password attempts and lockout | SRS IAM-006; SRS §15.1 | DB fields + transactional locked account lookup; configurable threshold/duration | No progressive backoff or dedicated audit event yet | `AuthLifecycleServiceTest` (added, not run) |
+| Counter reset on success/expiry | SRS IAM-006 | Successful login and expiry path reset count; password reset clears lockout | Runtime verification | `AuthLifecycleServiceTest` |
+| Disabled user/tenant on refresh | SRS §15.1; §8.2 | Existing `consumeRefresh` checks user enabled and active tenant | Dedicated automated cases not added | Existing source logic; additional integration tests needed |
+| Access-token expiry/revocation | SRS §15.1 | Configurable 15-minute default; JWT filter reloads DB user/tenant/roles and token version | HttpOnly cookie migration not performed | Existing tests/source; fresh runtime test not run |
+| Refresh rotation/replay | SRS IAM-005; SRS §20.7 | Locked row read, revoke-before-issue in one transaction; replay revokes remaining user sessions | Session-family identifier not modelled; current policy revokes all user sessions | No new concurrency/replay integration test executed |
+| Logout/session revocation | SRS IAM-001/IAM-005 | Existing logout revokes refresh sessions and increments token version | Logout remains user-wide, not one device only | Existing source; runtime test not run |
+| Backend permission boundaries | SRS §9.1–9.3, §15.2 | Existing backend permission checks preserved | Current permission catalogue is coarser/different from SRS catalogue; role matrix must be reconciled before changing production grants | Existing `Release2SecurityTest`; broader 401/403 tests remain |
+| Tenant isolation | Business requirements §13; SRS §8, §20.1 | Identity-derived tenant and existing tenant-scoped service checks retained | Complete guessed-ID negative tests across every resource are still needed | Existing cross-tenant category test only |
+| Frontend session expiry/429/403 | SRS §11, §15.3 | Shared API helper handles 401 refresh, invalid session, 403 and 429 | Several direct binary upload/download and bespoke fetch calls bypass shared helper; localStorage remains | No frontend test added |
+| Authentication security audit | SRS IAM-007; SRS §15.6 | Existing audit event infrastructure identified | Login success/failure/lockout events are not yet wired into audit persistence | Missing |
+
+### Existing capabilities reused
+
+- BCrypt work factor 12 from `SecurityConfig`.
+- Existing `JwtService`, `JwtFilter`, `Principal`, `token_version` and DB reload of permissions.
+- Existing `RefreshToken` entity/table and `RefreshTokenRepository`.
+- Existing `AuthLifecycleService` for reset, MFA, tenant-active and session lifecycle.
+- Existing Flyway migration mechanism; no manual schema changes required.
+- Existing shared frontend `api` helper and session shape.
+
+### Files created
+
+- `backend/src/main/java/com/saumyasolar/security/AuthenticationRateLimitFilter.java`
+- `backend/src/main/resources/db/migration/V52__authentication_lockout_and_rate_limit.sql`
+- `backend/src/test/java/com/saumyasolar/service/AuthLifecycleServiceTest.java`
+- `backend/src/test/java/com/saumyasolar/security/AuthenticationRateLimitFilterTest.java`
+- `PHASE_1_AUTHENTICATION_SECURITY_IMPLEMENTATION.md`
+
+### Files modified
+
+- `backend/src/main/java/com/saumyasolar/domain/AppUser.java`
+- `backend/src/main/java/com/saumyasolar/repo/AppUserRepository.java`
+- `backend/src/main/java/com/saumyasolar/repo/RefreshTokenRepository.java`
+- `backend/src/main/java/com/saumyasolar/security/JwtService.java`
+- `backend/src/main/java/com/saumyasolar/security/SecurityConfig.java`
+- `backend/src/main/java/com/saumyasolar/service/AuthLifecycleService.java`
+- `backend/src/main/java/com/saumyasolar/api/Controller.java`
+- `backend/src/main/java/com/saumyasolar/api/ApiExceptionHandler.java`
+- `backend/src/main/resources/application.yml`
+- `frontend/src/main.tsx`
+- `IMPLEMENTATION_GAP_ANALYSIS.md`
+
+### Validation status and limitations
+
+The GitHub repository connector was used to inspect and update the branch. It does not provide a local shell/build runner in this execution, and no CI check run was available for the latest commits. Therefore:
+- Maven compilation and backend tests: **not run**.
+- Frontend install, TypeScript build and Vitest: **not run**.
+- MySQL Flyway migration execution: **not run**.
+- Browser E2E, cross-tenant attack tests and load tests: **not run**.
+
+Do not interpret added tests as passing tests. The Phase 1 scope is **partially implemented, not complete** until the commands in the implementation report pass in CI or a local environment.
+
+### Additional residual risks
+
+1. The rate limiter uses `HttpServletRequest.getRemoteAddr()`. If deployed behind a reverse proxy/load balancer that presents a shared source address, configure the trusted ingress to supply a verified client address and implement a trusted-proxy-only resolver. Do not blindly trust client-supplied `X-Forwarded-For`.
+2. The rate-limit bucket table needs a scheduled retention/cleanup task; old buckets are not currently purged.
+3. Authentication success/failure/lockout audit events are not yet persisted.
+4. Existing JWTs remain stored in browser localStorage. A secure HttpOnly/Secure/SameSite cookie migration requires coordinated CSRF, CORS and frontend/backend contract work and was not silently introduced.
+5. Some direct binary API calls bypass the shared frontend refresh helper.
+6. Refresh replay currently revokes all active refresh sessions for the user, not a separately modelled token family.
+7. The SRS permission catalogue and current application permission catalogue differ materially. Do not automatically grant new fine-grained permissions without a reviewed migration and role-by-role access analysis.
+8. This implementation does not prove every protected endpoint returns the required 401/403 response under all role and tenant combinations.
+
