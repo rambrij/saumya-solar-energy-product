@@ -557,6 +557,89 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+
+    @Test
+    void customSalesRoleCannotReadUnassignedLeadsOrAssignOutsideItsScope() throws Exception {
+        var adminToken = accessToken("admin@saumya.local", "Admin@123");
+        mvc.perform(post("/api/v1/roles").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"CUSTOM_SALES_READ","permissions":["LEAD_VIEW","LEAD_UPDATE"]}
+                                """))
+                .andExpect(status().isOk());
+        var suffix = UUID.randomUUID().toString().replace("-", "");
+        var customEmail = "custom-sales-" + suffix + "@example.test";
+        var customPassword = "Custom-Sales-Password-2026";
+        var customUser = mvc.perform(post("/api/v1/users").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Custom Sales Reader","email":"%s","password":"%s","roleName":"CUSTOM_SALES_READ"}
+                                """.formatted(customEmail, customPassword)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var customUserId = json.readTree(customUser).get("id").asText();
+        var assignedEnquiry = mvc.perform(post("/api/v1/enquiries").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Custom Assigned","email":"assigned-%s@example.test","propertyType":"Residential"}
+                                """.formatted(suffix)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var assignedEnquiryId = json.readTree(assignedEnquiry).get("id").asText();
+        var assignedLead = mvc.perform(post("/api/v1/enquiries/" + assignedEnquiryId + "/convert")
+                        .header("Authorization", "Bearer " + adminToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"assignedUserId":"%s","priority":"MEDIUM"}
+                                """.formatted(customUserId)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var assignedLeadId = json.readTree(assignedLead).get("id").asText();
+        var otherEnquiry = mvc.perform(post("/api/v1/enquiries").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Custom Other","email":"other-%s@example.test","propertyType":"Residential"}
+                                """.formatted(suffix)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var otherEnquiryId = json.readTree(otherEnquiry).get("id").asText();
+        var otherLead = mvc.perform(post("/api/v1/enquiries/" + otherEnquiryId + "/convert")
+                        .header("Authorization", "Bearer " + adminToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"assignedUserId":"%s","priority":"MEDIUM"}
+                                """.formatted(users.findByEmailIgnoreCase("sales@saumya.local").orElseThrow().getId())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var otherLeadId = json.readTree(otherLead).get("id").asText();
+
+        var customToken = accessToken(customEmail, customPassword);
+        var visible = mvc.perform(get("/api/v1/leads").header("Authorization", "Bearer " + customToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(visible.contains(assignedLeadId));
+        assertFalse(visible.contains(otherLeadId));
+        mvc.perform(patch("/api/v1/leads/" + assignedLeadId).header("Authorization", "Bearer " + customToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"assignedUserId":"%s","stage":"CONTACTED"}
+                                """.formatted(users.findByEmailIgnoreCase("sales@saumya.local").orElseThrow().getId())))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/roles").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"CUSTOM_PLATFORM_ESCAPE","permissions":["PLATFORM_MANAGE"]}
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void vendorAdminAndCustomRolesNeverReceivePlatformOrLegacyBroadPermissions() {
+        var admin = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        var codes = admin.getRoles().stream().flatMap(role -> role.getPermissions().stream())
+                .map(com.saumyasolar.domain.Permission::getCode).collect(java.util.stream.Collectors.toSet());
+        assertFalse(codes.contains("PLATFORM_MANAGE"));
+        assertFalse(codes.contains("SUBSCRIPTION_MANAGE"));
+        assertFalse(codes.contains("TENANT_VIEW"));
+        assertFalse(codes.contains("TENANT_UPDATE"));
+        for (String legacy : java.util.List.of("CATALOG_MANAGE", "CATALOG_VIEW", "CUSTOMER_MANAGE",
+                "LEAD_MANAGE", "SURVEY_MANAGE", "QUOTATION_MANAGE", "INVENTORY_MANAGE",
+                "SERVICE_MANAGE", "FINANCE_MANAGE", "USER_MANAGE", "DISCOUNT_APPROVE"))
+            assertFalse(codes.contains(legacy), "Legacy broad permission must not be granted: " + legacy);
+    }
+
     @Test
     void vendorAdminCanCreateCategorizedProductAndConfigurablePackage() throws Exception {
         var token = accessToken("admin@saumya.local", "Admin@123");
