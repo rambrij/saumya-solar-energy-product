@@ -20,7 +20,7 @@ public class AuthenticationAuditService {
         this.addresses = addresses;
     }
 
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public void record(String action, UUID tenantId, UUID actorId, String outcome,
                        String safeReason, String entityId, HttpServletRequest request) {
         AuditEvent event = new AuditEvent();
