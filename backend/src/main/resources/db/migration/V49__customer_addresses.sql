@@ -17,5 +17,6 @@ CREATE TABLE customer_address (
  updated_at TIMESTAMP(6) NOT NULL,
  CONSTRAINT fk_customer_address_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(id),
  CONSTRAINT fk_customer_address_profile FOREIGN KEY (tenant_id,customer_id) REFERENCES customer_profile(tenant_id,id),
+ UNIQUE KEY uq_customer_address_tenant_id (tenant_id,id),
  INDEX ix_customer_address_owner_default (tenant_id,customer_id,is_default,created_at)
 );
