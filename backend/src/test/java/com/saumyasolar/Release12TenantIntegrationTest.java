@@ -166,6 +166,14 @@ class Release12TenantIntegrationTest {
         var token = accessToken(support.getEmail(), "Support-Password-2026");
         mvc.perform(get("/api/v1/platform/tenants").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
+        var from = Instant.now().minusSeconds(60);
+        var to = Instant.now().plusSeconds(60);
+        mvc.perform(get("/api/v1/audit-events").param("from", from.toString()).param("to", to.toString())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        assertTrue(auditEvents.findTop200ByCreatedAtBetweenOrderByCreatedAtDesc(from, to).stream()
+                .anyMatch(event -> "PLATFORM_SUPPORT_TENANT_DIRECTORY_VIEWED".equals(event.getAction())
+                        || "PLATFORM_SUPPORT_AUDIT_LOG_VIEWED".equals(event.getAction())));
         mvc.perform(post("/api/v1/tenants").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
