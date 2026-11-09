@@ -680,9 +680,12 @@ Example error:
 | GET/PATCH | `/vendor/profile`                       | Current vendor profile   |
 | GET/POST  | `/users`                                | List/invite tenant users |
 | GET/PATCH | `/users/{userId}`                       | View/update tenant user  |
-| POST      | `/users/{userId}/disable`               | Disable tenant user      |
-| GET/POST  | `/roles`                                | List/create roles        |
-| PATCH     | `/roles/{roleId}`                       | Update role permissions  |
+| PATCH     | `/users/{userId}/enabled`               | Activate/disable tenant user |
+| PATCH     | `/users/{userId}/role`                  | Assign a tenant role     |
+| GET       | `/permissions`                          | List assignable vendor permissions |
+| GET/POST  | `/roles`                                | List/create custom roles |
+| PATCH     | `/roles/{roleId}`                       | Update custom role permissions |
+| DELETE    | `/roles/{roleId}`                       | Delete an unused custom role |
 
 ### 13.4 Catalogue and package APIs
 
