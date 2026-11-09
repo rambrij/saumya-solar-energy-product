@@ -1,4 +1,5 @@
 import React, {useCallback, useEffect, useState} from 'react';
+import {authenticatedFetch,type AuthSession} from './authenticatedFetch';
 
 type Session = {accessToken:string; user:{id:string;tenantId?:string;accountType:string}};
 type Pending = {operationId:string;ownerUserId:string;ownerTenantId:string;type:string;resourceId:string;payload:string;clientCreatedAt:string;state:'PENDING'|'SYNCED'|'CONFLICT'|'REJECTED';lastError?:string};
@@ -32,7 +33,7 @@ export default function OfflineSyncPanel({session}:{session:Session}){
   if(!pending.length)return;
   setBusy(true);setMessage('');
   try{
-   const response=await fetch(API+'/api/v1/offline-sync/operations',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.accessToken},body:JSON.stringify({operations:pending.map(({operationId,type,resourceId,payload,clientCreatedAt})=>({operationId,type,resourceId,payload,clientCreatedAt}))})});
+   const response=await authenticatedFetch(API+'/api/v1/offline-sync/operations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({operations:pending.map(({operationId,type,resourceId,payload,clientCreatedAt})=>({operationId,type,resourceId,payload,clientCreatedAt}))})},session as AuthSession);
    const body=await response.json().catch(()=>[]);
    if(!response.ok)throw new Error(body.detail||body.message||'Synchronization failed ('+response.status+')');
    for(const result of body){ const existing=pending.find(x=>x.operationId===result.operationId); if(!existing)continue; if(result.status==='APPLIED'||result.status==='DUPLICATE')await removeRow(result.operationId); else if(result.status==='CONFLICT'||result.status==='REJECTED')await saveRow({...existing,state:result.status,lastError:String(result.message||result.reason||result.code||result.status)}); else await saveRow({...existing,state:'REJECTED',lastError:'Unrecognized synchronization result'}); }
