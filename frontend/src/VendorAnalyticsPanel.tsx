@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\\/+$/,'');
+const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
 type Props={token:string;onError:(message:string)=>void};
 export default function VendorAnalyticsPanel({token,onError}:Props){
  const [branches,setBranches]=useState<any[]>([]),[branchId,setBranchId]=useState(''),[metrics,setMetrics]=useState<any>(null),[loading,setLoading]=useState(true);
