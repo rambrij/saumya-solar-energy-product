@@ -735,6 +735,8 @@ public class AppService {
         vendor(p);
         requirePermission(p, "QUOTATION_CREATE");
         requireCustomer(x.customerId(), p.tenantId());
+        if (p.roles() != null && p.roles().contains("SALES_EXECUTIVE") && x.leadId() == null)
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sales executives may quote only against an assigned lead");
         if (x.leadId() != null) {
             SalesLead lead = requireLead(x.leadId(), p.tenantId());
             assertSalesLeadScope(lead, p);
