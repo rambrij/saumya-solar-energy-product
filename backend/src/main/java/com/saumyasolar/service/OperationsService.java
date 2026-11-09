@@ -102,7 +102,7 @@ public class OperationsService {
     }
     
     private void operationsManager(Principal p) {
-        if (p.roles() == null || p.roles().stream().noneMatch(r -> Set.of("VENDOR_ADMIN", "OPERATIONS_MANAGER").contains(r)))
+        if (p.roles() == null || p.roles().stream().noneMatch(r -> Set.of("VENDOR_ADMIN", "OPERATIONS_MANAGER", "SERVICE_MANAGER").contains(r)))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only Vendor Admin or Operations Manager can manage teams and checklist templates");
     }
     
@@ -744,7 +744,7 @@ public class OperationsService {
     
     private InstallationJob installation(UUID id, UUID t, Principal p) {
         InstallationJob j = installations.findByIdAndTenantId(id, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Installation not found"));
-        Set<String> elevated = Set.of("VENDOR_ADMIN", "OPERATIONS_MANAGER");
+        Set<String> elevated = Set.of("VENDOR_ADMIN", "OPERATIONS_MANAGER", "SERVICE_MANAGER");
         if (( p.roles() == null || p.roles().stream().noneMatch(elevated::contains) ) && !Objects.equals(j.getAssignedEngineerId(), p.userId()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         return j;
