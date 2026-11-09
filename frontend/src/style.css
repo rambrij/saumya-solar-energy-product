@@ -458,3 +458,22 @@ main:has(>.role-app){max-width:none;margin:0;padding:0}
 .customer-profile dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.customer-profile dl>div{padding:14px;background:#f6faf7;border:1px solid #e2ece5;border-radius:10px}.customer-profile dt{font-size:.78rem;color:#728078;margin-bottom:5px}.customer-profile dd{margin:0;font-weight:700;color:#214d38;overflow-wrap:anywhere}
 
 .public-account-dropdown a{display:block;padding:9px 10px;color:#254d38;text-decoration:none;font-size:.9rem;border-radius:7px}.public-account-dropdown a:hover,.public-account-dropdown button:hover{background:#f1f6f2}
+
+/* Shared original brand asset in platform workspace chrome. */
+.role-sidebar-brand{gap:10px}
+.role-sidebar-logo{display:block;width:142px;max-width:58%;height:42px;object-fit:contain;object-position:left center;flex:0 0 auto;filter:brightness(0) invert(1)}
+.role-sidebar-brand>span{min-width:0}
+.role-sidebar-brand>span b{display:none}
+.role-sidebar-brand>span small{margin:0;color:#c6ddce}
+.role-topbar-logo{display:block;width:132px;height:38px;object-fit:contain;object-position:left center;flex:0 0 auto}
+.role-topbar{gap:14px}
+.role-topbar-logo+.role-mobile-toggle{order:0}
+.role-topbar-logo{order:0}
+.role-breadcrumbs{order:1}
+.role-topbar-actions{order:2}
+.customer-address-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+.customer-address-grid .card{min-width:0}
+.customer-address-grid p{line-height:1.6;overflow-wrap:anywhere}
+.public-brand-logo{display:block;width:210px;max-width:100%;height:54px;object-fit:contain;object-position:left center}
+@media(max-width:900px){.role-sidebar-logo{width:150px}.role-topbar-logo{width:120px;height:34px}}
+@media(max-width:560px){.role-topbar-logo{width:102px;height:30px}.role-sidebar-logo{width:138px}}
