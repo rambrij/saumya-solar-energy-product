@@ -442,3 +442,83 @@ H2 integration-test support was also corrected:
 - The rate-limit bucket update now uses portable atomic UPDATE/INSERT-with-duplicate-retry SQL rather than MySQL-only `ON DUPLICATE KEY UPDATE`.
 
 The subsequent proxy-address parser hardening commit `681c3267cf9b1adeb00d83432955f6283054b8c6` was also fully validated by workflow run [42659414140](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42659414140): backend compile/tests passed (108 tests, 0 failures/errors), frontend component tests/build passed, MySQL migrations through V53 passed, and Spring Boot startup/health passed. The only commits after that validated source commit update these two documentation files; no source code changed after the passing run.
+
+
+---
+
+## 18. Production blocker closure update — 2026-11-09
+
+### 18.1 Status
+
+**Repository implementation: substantially complete.** The three code-level blockers previously called out have been addressed in this branch: SRS fine-grained authorization and custom roles, HttpOnly refresh-cookie sessions with CSRF protection, and expanded cross-tenant/replay/security verification.
+
+**Deployment-level reverse-proxy verification remains pending.** No production Render settings were changed and no deployment was triggered. The deployment workspace must be confirmed before reading or changing its configuration.
+
+### 18.2 Requirements traceability
+
+| Requirement | Source | Implementation and evidence | Status |
+|---|---|---|---|
+| Authentication event persistence | SRS IAM-007 | Existing append-only audit_event reused by AuthenticationAuditService; AuthLifecycleService records login success/failure/lockout, refresh rotation/replay, logout, password reset, MFA, role and account-state changes. | IMPLEMENTED |
+| Fine-grained role catalogue | SRS §9.1–9.3 | DataSeeder.employeeRolePermissions reconciled to standard SRS roles; core AppService, CatalogAdminService, OperationsService, FinanceService, SurveyLifecycleService, OfflineSyncService, PaymentGatewayCheckoutService, QuotationRevisionService, Phase2OperationsController, ServiceCommentController and WarrantyClaimAttachmentService use operation-specific permissions. | IMPLEMENTED IN CODE; regression verification required |
+| Existing employee grant cleanup | SRS §9.2 | V54__reconcile_employee_role_permissions.sql removes legacy broad permission grants from predefined employee roles. Vendor Admin retains vendor-level administration; platform permissions remain excluded from custom roles. | IMPLEMENTED; MySQL migration validation passed in run 42669708678 |
+| Custom role management and assignment | SRS IAM-004, §9.1 and §13.3 | GET /permissions, GET/POST /roles, PATCH/DELETE /roles/{roleId}, PATCH /users/{userId}/role; RoleManagementPanel; allowlist prevents platform and deprecated broad permissions; reserved roles, self-demotion, administrator reassignment and deletion of roles in use are blocked. | IMPLEMENTED |
+| Assigned-resource scope | SRS §9.3 | Sales Executives are restricted to assigned leads, linked enquiries/customers, quotations and orders; field engineers are scoped to assigned surveys, installations, service tickets, customers and teams. | IMPLEMENTED; see negative integration tests |
+| Refresh cookie and CSRF | SRS IAM-005 and §18.3 | AuthCookieService issues an HttpOnly, Secure, SameSite refresh cookie scoped to /api/v1/auth and a CSRF cookie/token. Refresh/logout require X-CSRF-Token; refresh credential is removed from the JSON response. | IMPLEMENTED |
+| Frontend token storage | SRS §18.3 | Access token is memory-only; refresh token is HttpOnly cookie; CSRF token is sessionStorage; old localStorage session key is removed at app startup. | IMPLEMENTED |
+| Automatic frontend refresh | SRS IAM-005 | authenticatedFetch centralizes cookie refresh, concurrency coalescing, retry, FormData/binary handling and session-expiry event handling. All authenticated direct upload/download paths use it; public requests remain unauthenticated. | IMPLEMENTED |
+| Proxy-aware rate limiting | SRS IAM-006 | ClientAddressResolver trusts forwarded IP only when immediate remote address is in TRUSTED_PROXY_IPS; rate-limit bucket cleanup is scheduled. CIDR ranges are not supported; exact IP allowlist is required. | CODE IMPLEMENTED; deployed proxy values pending |
+| Tenant boundary verification | SRS §9.3 | Release12TenantIntegrationTest covers cross-tenant order history, quotation revisions, invoice items, service requests and installation checklist access. | IMPLEMENTED AND TESTED |
+| Refresh replay verification | SRS IAM-005 | Database-backed concurrent refresh replay test verifies one rotation succeeds and replay revokes the entire token family. | IMPLEMENTED AND TESTED |
+
+### 18.3 Database changes
+
+- V52: authentication lockout and rate-limit persistence.
+- V53: refresh-token family/replacement linkage and SRS permission catalogue.
+- V54: removes legacy broad grants from predefined employee roles.
+- No manual SQL step is required; Flyway owns the migration sequence.
+
+### 18.4 Security tests added or updated
+
+- AuthCookieServiceTest: HttpOnly/Secure/SameSite attributes, CSRF double-submit validation and SameSite=None requiring Secure.
+- AuthenticationRateLimitCleanupTest: verifies expiry cleanup uses the configured two-day retention window.
+- AuthLifecycleServiceTest: custom role permission allowlist and tenant-scoped employee role assignment.
+- Release12TenantIntegrationTest: concurrent refresh replay/family revocation, missing-CSRF rejection, no refresh token in JSON, cross-tenant access across five resource families, sales-executive assigned-lead visibility/reassignment denial and platform-role escalation denial.
+- Existing authentication lockout, rate-limit, disabled-user/tenant, JWT, 401/403 and tenant tests retained.
+- Frontend authenticatedFetch tests cover cookie refresh/retry, parallel refresh coalescing, reload bootstrap and invalid-session cleanup.
+- Role navigation tests updated to SRS fine-grained permission codes.
+
+### 18.5 CI evidence
+
+Workflow run [42669708678](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42669708678) completed successfully for source commit c2b4ec806f97b1a500bfcedc60823bd7d6a8859d:
+- Backend compile/tests: 116 tests, 0 failures, 0 errors, 0 skipped.
+- Frontend typecheck/component tests/production build: PASS.
+- MySQL 8.4 Flyway migrations through V54: PASS.
+- Spring Boot package/startup/health check against MySQL 8.4 and Mailpit: PASS.
+
+A further CI run was triggered after adding the dedicated rate-limit cleanup test and documentation updates. Its result is the final validation gate; do not treat the earlier run as evidence for files committed afterward.
+
+### 18.6 Production environment requirements
+
+Before enabling the cookie session flow in the deployed environment, verify:
+
+- CORS_ORIGINS contains the exact browser application origin(s); do not use a wildcard with credentialed CORS.
+- AUTH_REFRESH_COOKIE_SECURE=true.
+- AUTH_REFRESH_COOKIE_SAME_SITE=None for cross-site frontend/API origins; use Lax or Strict where deployment is same-site. SameSite=None requires Secure.
+- AUTH_REFRESH_COOKIE_DOMAIN is set only when a shared parent domain is intentionally used; otherwise keep the cookie host-only.
+- TRUSTED_PROXY_IPS contains the exact immediate reverse-proxy IP addresses. The resolver intentionally ignores forwarded headers from untrusted peers. CIDR notation is not currently supported.
+- HTTPS is enforced end to end and the proxy forwards the real client address only from trusted hops.
+
+The Render workspace selection has not been confirmed, so the deployed environment variables and actual proxy topology have not been inspected or modified. This is the only outstanding production-operations verification item recorded here.
+
+### 18.7 API compatibility and rollback
+
+The browser refresh contract is intentionally changed to HttpOnly cookies: POST /auth/refresh and POST /auth/logout no longer accept a refresh token in the request body. The frontend client was updated in the same branch. Any external/mobile clients using the old body contract must be migrated before rollout.
+
+Rollback must be coordinated: reverting the frontend while retaining cookie-only backend endpoints, or reverting the backend while leaving cookie-only frontend calls, breaks browser sessions. The V54 migration is additive in effect only with respect to existing rows but removes deprecated broad role grants; do not manually re-add those grants during rollback. Revert application code and migration only through an approved Flyway recovery plan.
+
+### 18.8 Remaining limitations
+
+- Deployed CORS and TRUSTED_PROXY_IPS values are not yet verified because the Render workspace has not been selected.
+- SameSite=None cookies may be blocked by browser third-party-cookie policies when the frontend and API are on unrelated registrable domains; prefer same-site subdomains or a same-origin reverse proxy.
+- CIDR-based trusted proxy ranges and cross-tab browser refresh coordination are not implemented.
+- External clients must adopt the cookie refresh contract before production rollout.
