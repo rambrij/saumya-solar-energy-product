@@ -565,12 +565,12 @@ This addendum supersedes conflicting earlier statements in Sections 1–18 about
 
 ### 19.4 Latest source validation
 
-Earlier successful validation at source commit `94d81a018011b0333d040d0bb4f1a9e7327f2b44` passed 123 backend tests, frontend tests/build, MySQL V1–V56 migration steps and Spring Boot/MySQL startup. Subsequent changes in this addendum (CIDR support, additional role/service isolation tests and support-access audit) require the latest branch workflow to complete before this report can claim final validation.
+Source commit `8a079a8ff0641dd253f9b04ed470a837f24bf836` passed backend compilation and 127 backend tests (0 failures/errors/skips), frontend typecheck/component tests/production build, and Spring Boot startup/health against MySQL 8.4 and Mailpit in workflow run [42673236804](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42673236804). The MySQL migration job through V56 passed in workflow run [42672708442](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42672708442); migrations did not change between those source commits. Subsequent source change `b24bdfb` adds Web Locks cross-tab refresh serialization and its tests; the latest workflow for that change must pass before final completion.
 
 ### 19.5 Remaining production limitations
 
 1. The deployed Render `TRUSTED_PROXY_IPS`, `CORS_ORIGINS`, cookie attributes and HTTPS forwarding chain still require environment-level verification.
-2. Browser refresh coordination is single-flight per tab, not cross-tab. A simultaneous old-token refresh from a second tab is treated as replay and revokes the family; cross-tab coordination or a server-side idempotent rotation grace design needs a separate security review.
+2. Cross-tab refresh serialization uses Web Locks where supported. Browsers without Web Locks use per-tab coalescing only; either enforce a supported-browser policy or add a separately reviewed cross-tab fallback before supporting those clients.
 3. Browser third-party-cookie restrictions can block SameSite=None cookies when frontend and API use unrelated registrable domains. Prefer same-site subdomains or a same-origin reverse proxy.
 4. External/mobile clients that previously supplied refresh tokens in JSON must migrate to the cookie contract or use a separately designed non-browser client authentication flow.
 
