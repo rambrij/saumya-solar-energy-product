@@ -830,6 +830,7 @@ This addendum supersedes older Phase 1 gap statements in this file where they co
 
 ### Authorization and role matrix
 - Added restricted global `PLATFORM_SUPPORT` with only `TENANT_VIEW` and `AUDIT_VIEW`; tenant directory and audit-log reads are audited.
+- Retained existing `MANAGER`, `INSTALLER` and `TECHNICIAN` roles for backward compatibility; they are not standard SRS §9.1 roles, have limited grants, and remain assigned-resource scoped.
 - Platform tenant mutations remain restricted to `PLATFORM_SUPER_ADMIN`.
 - V55 removes deprecated broad grants from all tenant-owned roles, including pre-existing custom roles.
 - V56 removes platform-only grants from tenant-owned roles.
