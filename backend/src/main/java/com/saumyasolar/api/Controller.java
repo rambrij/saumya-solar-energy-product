@@ -140,6 +140,14 @@ public class Controller {
         );
     }
     
+    @GetMapping("/auth/csrf")
+    Map<String, String> csrf(jakarta.servlet.http.HttpServletRequest request) {
+        String token = authCookies.csrfToken(request);
+        if (token == null || token.isBlank())
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED, "Session is unavailable");
+        return Map.of("csrfToken", token);
+    }
+
     @PostMapping("/auth/refresh")
     Session refresh(jakarta.servlet.http.HttpServletRequest request, jakarta.servlet.http.HttpServletResponse response) {
         authCookies.requireCsrf(request);
