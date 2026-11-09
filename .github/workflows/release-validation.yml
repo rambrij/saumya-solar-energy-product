@@ -10,6 +10,7 @@ on:
       - feature/phase-3-Enterprise-SaaS
       - phase-1-commercial-mvp-remediation
       - feature/subscription-and-ui-enhancements
+      - audit/implementation-gap-analysis
   pull_request:
     branches:
       - main
@@ -278,6 +279,18 @@ jobs:
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V51__repair_vendor_admin_analytics_permissions.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role_permission rp JOIN role r ON r.id=rp.role_id JOIN permission p ON p.id=rp.permission_id WHERE r.name='VENDOR_ADMIN' AND r.tenant_id IS NOT NULL AND p.code IN ('REPORT_VIEW','BRANCH_MANAGE')" )" = "2"
+
+      - name: Apply V52 authentication lockout and rate limit
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V52__authentication_lockout_and_rate_limit.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='app_user' AND column_name IN ('failed_login_attempts','locked_until','last_login_at')")" = "3"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='auth_rate_limit_bucket'")" = "1"
+
+      - name: Apply V53 refresh token families and SRS permissions
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V53__refresh_token_families_and_srs_permissions.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='refresh_token' AND column_name IN ('family_id','replaced_by_token_id','created_at')")" = "3"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM permission WHERE code IN ('PRODUCT_VIEW','SERVICE_RESOLVE','CMS_PUBLISH','ROLE_ASSIGN')")" = "4"
 
   mysql-app-startup:
     name: Start Spring Boot against MySQL 8.4 and Mailpit
