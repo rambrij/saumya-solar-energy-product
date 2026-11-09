@@ -6,6 +6,12 @@ import com.saumyasolar.domain.AppUser;
 import com.saumyasolar.domain.Enquiry;
 import com.saumyasolar.domain.Product;
 import com.saumyasolar.domain.ProductCategory;
+import com.saumyasolar.domain.CustomerProfile;
+import com.saumyasolar.domain.CustomerOrder;
+import com.saumyasolar.domain.Quotation;
+import com.saumyasolar.domain.Invoice;
+import com.saumyasolar.domain.ServiceRequest;
+import com.saumyasolar.domain.InstallationJob;
 import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.AppUserRepository;
@@ -14,6 +20,10 @@ import com.saumyasolar.repo.ProductCategoryRepository;
 import com.saumyasolar.repo.ProductRepository;
 import com.saumyasolar.repo.CustomerOrderRepository;
 import com.saumyasolar.repo.OrderItemRepository;
+import com.saumyasolar.repo.QuotationRepository;
+import com.saumyasolar.repo.InvoiceRepository;
+import com.saumyasolar.repo.ServiceRequestRepository;
+import com.saumyasolar.repo.InstallationJobRepository;
 import com.saumyasolar.repo.TenantRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,6 +69,14 @@ class Release12TenantIntegrationTest {
     CustomerOrderRepository customerOrders;
     @Autowired
     OrderItemRepository orderItems;
+    @Autowired
+    QuotationRepository quotations;
+    @Autowired
+    InvoiceRepository invoices;
+    @Autowired
+    ServiceRequestRepository serviceRequests;
+    @Autowired
+    InstallationJobRepository installationJobs;
     
     UUID vendorTenantId;
     
@@ -326,6 +344,88 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
     
+    @Test
+    void vendorCannotReadAnotherTenantsOrdersQuotesInvoicesServiceOrInstallationRecords() throws Exception {
+        var foreignTenant = new Tenant();
+        foreignTenant.setId(UUID.randomUUID());
+        foreignTenant.setName("Foreign Vendor");
+        foreignTenant.setSlug("foreign-" + UUID.randomUUID().toString().replace("-", ""));
+        foreignTenant.setStatus("ACTIVE");
+        tenants.save(foreignTenant);
+
+        var customer = new CustomerProfile();
+        customer.setId(UUID.randomUUID());
+        customer.setTenantId(foreignTenant.getId());
+        customer.setName("Foreign Customer");
+        customer.setEmail("foreign-" + UUID.randomUUID() + "@example.test");
+        customerProfiles.save(customer);
+
+        var quote = new Quotation();
+        quote.setId(UUID.randomUUID());
+        quote.setTenantId(foreignTenant.getId());
+        quote.setQuoteGroupId(UUID.randomUUID());
+        quote.setQuotationNumber("FOREIGN-" + UUID.randomUUID().toString().substring(0, 8));
+        quote.setCustomerId(customer.getId());
+        quote.setStatus("DRAFT");
+        quote.setGrandTotal(BigDecimal.ZERO);
+        quote.setCreatedAt(Instant.now());
+        quotations.save(quote);
+
+        var order = new CustomerOrder();
+        order.setId(UUID.randomUUID());
+        order.setTenantId(foreignTenant.getId());
+        order.setQuotationId(quote.getId());
+        order.setCustomerId(customer.getId());
+        order.setOrderNumber("FOREIGN-ORDER-" + UUID.randomUUID().toString().substring(0, 8));
+        order.setStatus("PENDING");
+        order.setTotal(BigDecimal.ZERO);
+        order.setCreatedAt(Instant.now());
+        customerOrders.save(order);
+
+        var invoice = new Invoice();
+        invoice.setId(UUID.randomUUID());
+        invoice.setTenantId(foreignTenant.getId());
+        invoice.setOrderId(order.getId());
+        invoice.setInvoiceNumber("FOREIGN-INV-" + UUID.randomUUID().toString().substring(0, 8));
+        invoice.setStatus("DRAFT");
+        invoice.setCustomerName(customer.getName());
+        invoice.setGrandTotal(BigDecimal.ZERO);
+        invoice.setCreatedAt(Instant.now());
+        invoices.save(invoice);
+
+        var ticket = new ServiceRequest();
+        ticket.setId(UUID.randomUUID());
+        ticket.setTenantId(foreignTenant.getId());
+        ticket.setCustomerId(customer.getId());
+        ticket.setTicketNumber("FOREIGN-SVC-" + UUID.randomUUID().toString().substring(0, 8));
+        ticket.setCategory("GENERAL");
+        ticket.setStatus("OPEN");
+        ticket.setDescription("Foreign tenant test record");
+        ticket.setCreatedAt(Instant.now());
+        serviceRequests.save(ticket);
+
+        var installation = new InstallationJob();
+        installation.setId(UUID.randomUUID());
+        installation.setTenantId(foreignTenant.getId());
+        installation.setCustomerId(customer.getId());
+        installation.setOrderId(order.getId());
+        installation.setStatus("SCHEDULED");
+        installation.setScheduledAt(Instant.now());
+        installationJobs.save(installation);
+
+        var token = accessToken("admin@saumya.local", "Admin@123");
+        mvc.perform(get("/api/v1/orders/" + order.getId() + "/history").header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/quotations/" + quote.getId() + "/revisions").header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/invoices/" + invoice.getId() + "/items").header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/service-requests/" + ticket.getId()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/installations/" + installation.getId() + "/checklist").header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+    }
+
     @Test
     void vendorAdminCanCreateCategorizedProductAndConfigurablePackage() throws Exception {
         var token = accessToken("admin@saumya.local", "Admin@123");
