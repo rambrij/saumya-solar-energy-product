@@ -254,6 +254,15 @@ public class Controller {
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
         return lifecycle.updateCustomRole(actor.tenantId(), actor.userId(), roleId, x.permissions());
     }
+
+    @DeleteMapping("/roles/{roleId}")
+    void deleteCustomRole(@PathVariable UUID roleId, Authentication a) {
+        var actor = p(a);
+        if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
+                || actor.permissions() == null || !actor.permissions().contains("ROLE_UPDATE"))
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
+        lifecycle.deleteCustomRole(actor.tenantId(), actor.userId(), roleId);
+    }
     
     @Operation(
             summary = "Create customer enquiry",
