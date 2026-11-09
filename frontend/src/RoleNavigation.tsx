@@ -27,9 +27,9 @@ export function getRoleNavigation(role:'platform'|'vendor'|'customer',permission
 export function getNavigationKeys(role:'platform'|'vendor'|'customer',permissions:string[]=[]):string[]{
  return getRoleNavigation(role,permissions).flatMap(group=>group.items.map(item=>item.key));
 }
-type Props={role:'platform'|'vendor';active:string;onNavigate:(key:string)=>void;children:React.ReactNode;user:{name:string;accountType:string};onLogout:()=>void;planBadge?:string;breadcrumbs?:string[]};
-export default function RoleShell({role,active,onNavigate,children,user,onLogout,planBadge,breadcrumbs=[]}:Props){
- const groups=useMemo(()=>getRoleNavigation(role,role==='vendor'?((window as any).__rolePermissions||[]):[]),[role]);
+type Props={role:'platform'|'vendor'|'customer';active:string;onNavigate:(key:string)=>void;children:React.ReactNode;user:{name:string;accountType:string};onLogout:()=>void;planBadge?:string;breadcrumbs?:string[];permissions?:string[]};
+export default function RoleShell({role,active,onNavigate,children,user,onLogout,planBadge,breadcrumbs=[],permissions=[]}:Props){
+ const groups=useMemo(()=>getRoleNavigation(role,permissions),[role,permissions.join('|')]);
  const [mobileOpen,setMobileOpen]=useState(false);
  const [collapsed,setCollapsed]=useState<Record<string,boolean>>({});
  const activeGroup=groups.find(g=>g.items.some(i=>i.key===active))?.label;
@@ -38,7 +38,7 @@ export default function RoleShell({role,active,onNavigate,children,user,onLogout
  return <div className={'role-app role-'+role}>
   {mobileOpen&&<button type="button" className="role-drawer-scrim" aria-label="Close menu" onClick={()=>setMobileOpen(false)}/>}
   <aside className={'role-sidebar'+(mobileOpen?' is-open':'')} aria-label="Application navigation">
-   <div className="role-sidebar-brand"><span className="role-brand-mark">S</span><span><b>Saumya Solar</b><small>{role==='platform'?'Platform Console':'Vendor Workspace'}</small></span><button type="button" className="role-sidebar-close" aria-label="Close menu" onClick={()=>setMobileOpen(false)}>×</button></div>
+   <div className="role-sidebar-brand"><span className="role-brand-mark">S</span><span><b>Saumya Solar</b><small>{role==='platform'?'Platform Console':role==='customer'?'Customer Account':'Vendor Workspace'}</small></span><button type="button" className="role-sidebar-close" aria-label="Close menu" onClick={()=>setMobileOpen(false)}>×</button></div>
    <nav className="role-menu">{groups.map(group=><section className="role-menu-group" key={group.label}><button type="button" className="role-menu-group-title" aria-expanded={!(collapsed[group.label]??(group.label!==activeGroup))} onClick={()=>setCollapsed(v=>({...v,[group.label]:!(v[group.label]??(group.label!==activeGroup))}))}>{group.label}<span>{(collapsed[group.label]??(group.label!==activeGroup))?'＋':'−'}</span></button>{!(collapsed[group.label]??(group.label!==activeGroup))&&<div className="role-menu-items">{group.items.map(item=><button type="button" key={item.key} className={'role-menu-item'+(active===item.key?' active':'')} aria-current={active===item.key?'page':undefined} onClick={()=>select(item.key)}>{item.label}</button>)}</div>}</section>)}</nav>
    <div className="role-sidebar-footer"><span className="role-avatar">{(user.name||'U').slice(0,1).toUpperCase()}</span><span><b>{user.name}</b><small>{user.accountType.replaceAll('_',' ')}</small></span></div>
   </aside>
