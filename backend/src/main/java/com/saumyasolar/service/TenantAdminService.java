@@ -22,10 +22,12 @@ import java.util.UUID;
 public class TenantAdminService {
     private final TenantRepository tenants;
     private final AppUserRepository users;
+    private final AuthenticationAuditService authenticationAudit;
     
-    public TenantAdminService(TenantRepository tenants, AppUserRepository users) {
+    public TenantAdminService(TenantRepository tenants, AppUserRepository users, AuthenticationAuditService authenticationAudit) {
         this.tenants = tenants;
         this.users = users;
+        this.authenticationAudit = authenticationAudit;
     }
     
     private void authorizeRead(Principal p) {
@@ -33,6 +35,11 @@ public class TenantAdminService {
                 || p.roles().stream().noneMatch(java.util.Set.of("PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT")::contains)
                 || p.permissions() == null || !p.permissions().contains("TENANT_VIEW"))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform tenant read permission is required");
+        if (p.roles().contains("PLATFORM_SUPPORT")) {
+            var attributes = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+            var request = attributes instanceof org.springframework.web.context.request.ServletRequestAttributes servlet ? servlet.getRequest() : null;
+            authenticationAudit.record("PLATFORM_SUPPORT_TENANT_DIRECTORY_VIEWED", null, p.userId(), "SUCCESS", "READ_ONLY_TENANT_DIRECTORY", null, request);
+        }
     }
 
     private void authorize(Principal p) {
