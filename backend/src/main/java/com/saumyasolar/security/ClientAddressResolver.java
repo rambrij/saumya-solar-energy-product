@@ -64,7 +64,7 @@ public class ClientAddressResolver {
         try {
             byte[] address = InetAddress.getByName(normalized).getAddress();
             int prefix = parts.length == 1 ? address.length * 8 : Integer.parseInt(parts[1]);
-            if (prefix < 0 || prefix > address.length * 8) return null;
+            if (prefix < 1 || prefix > address.length * 8) return null;
             return new TrustedNetwork(address, prefix);
         } catch (Exception ignored) {
             return null;
