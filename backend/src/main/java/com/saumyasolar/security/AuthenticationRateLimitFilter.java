@@ -76,15 +76,31 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
         String key = digest(path + "|" + address);
         Instant now = Instant.now();
         Instant windowStart = now.minusSeconds(windowSeconds);
-        jdbc.update("""
-                INSERT INTO auth_rate_limit_bucket(bucket_key, window_started_at, request_count, updated_at)
-                VALUES (?, ?, 1, ?)
-                ON DUPLICATE KEY UPDATE
-                  request_count = IF(window_started_at <= ?, 1, request_count + 1),
-                  window_started_at = IF(window_started_at <= ?, VALUES(window_started_at), window_started_at),
-                  updated_at = VALUES(updated_at)
-                """, key, java.sql.Timestamp.from(now), java.sql.Timestamp.from(now),
-                java.sql.Timestamp.from(windowStart), java.sql.Timestamp.from(windowStart));
+        int updated = jdbc.update("""
+                UPDATE auth_rate_limit_bucket
+                SET request_count = CASE WHEN window_started_at <= ? THEN 1 ELSE request_count + 1 END,
+                    window_started_at = CASE WHEN window_started_at <= ? THEN ? ELSE window_started_at END,
+                    updated_at = ?
+                WHERE bucket_key = ?
+                """, java.sql.Timestamp.from(windowStart), java.sql.Timestamp.from(windowStart),
+                java.sql.Timestamp.from(now), java.sql.Timestamp.from(now), key);
+        if (updated == 0) {
+            try {
+                jdbc.update("""
+                        INSERT INTO auth_rate_limit_bucket(bucket_key, window_started_at, request_count, updated_at)
+                        VALUES (?, ?, 1, ?)
+                        """, key, java.sql.Timestamp.from(now), java.sql.Timestamp.from(now));
+            } catch (org.springframework.dao.DuplicateKeyException concurrentInsert) {
+                jdbc.update("""
+                        UPDATE auth_rate_limit_bucket
+                        SET request_count = CASE WHEN window_started_at <= ? THEN 1 ELSE request_count + 1 END,
+                            window_started_at = CASE WHEN window_started_at <= ? THEN ? ELSE window_started_at END,
+                            updated_at = ?
+                        WHERE bucket_key = ?
+                        """, java.sql.Timestamp.from(windowStart), java.sql.Timestamp.from(windowStart),
+                        java.sql.Timestamp.from(now), java.sql.Timestamp.from(now), key);
+            }
+        }
         Integer count = jdbc.queryForObject(
                 "SELECT request_count FROM auth_rate_limit_bucket WHERE bucket_key = ?",
                 Integer.class, key);
