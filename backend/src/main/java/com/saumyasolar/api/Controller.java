@@ -105,7 +105,7 @@ public class Controller {
     
     @PostMapping("/auth/login")
     Object login(@Valid @RequestBody Login x) {
-        var u = users.findByEmailIgnoreCase(x.email()).filter(v -> v.isEnabled() && lifecycle.tenantIsActive(v) && enc.matches(x.password(), v.getPasswordHash())).orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        var u = lifecycle.authenticate(x.email(), x.password());
         if (platformMfaEnabled && "PLATFORM".equals(u.getAccountType())) {
             return new MfaChallengeRequired(true, lifecycle.createMfaChallenge(u));
         }
@@ -135,14 +135,15 @@ public class Controller {
     
     @PostMapping("/auth/refresh")
     Session refresh(@Valid @RequestBody Refresh x) {
-        var u = lifecycle.consumeRefresh(x.refreshToken());
+        var rotation = lifecycle.rotateRefresh(x.refreshToken());
+        var u = rotation.user();
         var rs = new HashSet<String>();
         var ps = new HashSet<String>();
         u.getRoles().forEach(r -> {
             rs.add(r.getName());
             r.getPermissions().forEach(z -> ps.add(z.getCode()));
         });
-        return new Session(jwt.issue(u), lifecycle.newRefresh(u), new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
+        return new Session(jwt.issue(u), rotation.refreshToken(), new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
     }
     
     @PostMapping("/auth/logout")
