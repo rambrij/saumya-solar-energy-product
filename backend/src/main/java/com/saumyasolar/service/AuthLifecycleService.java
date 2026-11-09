@@ -406,6 +406,23 @@ public class AuthLifecycleService {
     }
 
     @Transactional
+    public AppUser assignEmployeeRole(UUID tenantId, UUID actorId, UUID employeeId, String roleName) {
+        if (tenantId == null || employeeId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        if (roleName == null || java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT", "CUSTOMER").contains(roleName))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This role cannot be assigned to a vendor employee");
+        AppUser employee = users.findById(employeeId)
+                .filter(user -> tenantId.equals(user.getTenantId()) && "VENDOR".equals(user.getAccountType()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
+        var role = roles.findByNameAndTenantId(roleName, tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role does not belong to this vendor"));
+        employee.getRoles().clear();
+        employee.getRoles().add(role);
+        AppUser saved = users.save(employee);
+        auditAuth("EMPLOYEE_ROLE_ASSIGNED", users.findById(actorId).orElse(null), "SUCCESS", "EMPLOYEE_ROLE_ASSIGNED_" + roleName, employeeId.toString());
+        return saved;
+    }
+
+    @Transactional
     public void deleteCustomRole(UUID tenantId, UUID actorId, UUID roleId) {
         if (tenantId == null || roleId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         var role = roles.findByIdAndTenantId(roleId, tenantId)
