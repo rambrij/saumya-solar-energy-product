@@ -466,6 +466,7 @@ public class AuthLifecycleService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email exists");
         var role = roles.findByNameAndTenantId(roleName, tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role is not configured for this vendor"));
+        assertVendorAssignableRole(role);
         var u = new AppUser();
         u.setId(UUID.randomUUID());
         u.setTenantId(tenantId);
