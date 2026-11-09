@@ -157,7 +157,7 @@ function Crud({title,s,error,tabs,forms}:any){
  {detailRecord&&<section className="card record-detail"><div className="editor-heading"><div><p className="eyebrow">RECORD DETAILS</p><h2>{detailRecord.name||detailRecord.quotationNumber||detailRecord.orderNumber||detailRecord.email||createLabel}</h2></div><button type="button" className="secondary" onClick={()=>setDetailRecord(null)}>Close</button></div><dl>{Object.entries(detailRecord).filter(([key])=>!['id','tenantId','vendorId'].includes(key)&&!/password|token|secret|credential/i.test(key)).map(([key,value]:any)=><div key={key}><dt>{titleCase(key)}</dt><dd>{value===null||value===undefined||value===''?'—':typeof value==='object'?JSON.stringify(value):String(value)}</dd></div>)}</dl></section>} {editing&&<RecordEditor record={editing} tab={tab} lookups={lookups} s={s} send={send} done={load} cancel={()=>setEditing(null)} error={error}/>}
  {tab==='operations'&&<OperationsPanel s={s} api={api} send={send} error={error}/>}
  {tab==='finance-service'&&<FinanceServicePanel s={s} api={api} send={send} error={error}/>}
- {tab==='settings'&&<SettingsForm s={s} error={error}/>}{tab==='subscription'&&<EnterpriseSaasPanel mode="vendor" s={s} error={error}/ >}
+ {tab==='settings'&&<SettingsForm s={s} error={error}/>}{tab==='subscription'&&<EnterpriseSaasPanel mode="vendor" s={s} error={error}/>}
  {createOpen&&tab==='packages'&&<PackageForm s={s} lookups={lookups} done={load} error={error}/>}
  {createOpen&&tab==='surveys'&&<SurveyForm s={s} lookups={lookups} done={load} error={error}/>}
  {createOpen&&tab==='quotations'&&s.user.accountType==='VENDOR'&&<QuoteForm s={s} lookups={lookups} done={load} error={error}/>}
