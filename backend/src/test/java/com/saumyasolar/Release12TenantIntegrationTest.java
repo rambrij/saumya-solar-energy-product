@@ -135,8 +135,8 @@ class Release12TenantIntegrationTest {
         var session = json.readTree(loginResponse);
         var accessToken = session.get("accessToken").asText();
         var csrfToken = session.get("csrfToken").asText();
-        var refreshCookie = loginResult.getResponse().getCookie("saumya_refresh");
-        var csrfCookie = loginResult.getResponse().getCookie("XSRF-TOKEN");
+        var refreshCookie = responseCookie(loginResult, "saumya_refresh");
+        var csrfCookie = responseCookie(loginResult, "XSRF-TOKEN");
         assertNotNull(refreshCookie);
         assertNotNull(csrfCookie);
         assertTrue(loginResult.getResponse().getHeaders("Set-Cookie").stream().anyMatch(v -> v.contains("HttpOnly")));
@@ -185,8 +185,8 @@ class Release12TenantIntegrationTest {
             assertTrue((firstStatus == 200 && secondStatus == 401) || (firstStatus == 401 && secondStatus == 200),
                     "Exactly one concurrent refresh can rotate the same token");
             var rotated = firstStatus == 200 ? firstResult : secondResult;
-            var rotatedCookie = rotated.getResponse().getCookie("saumya_refresh");
-            var rotatedCsrfCookie = rotated.getResponse().getCookie("XSRF-TOKEN");
+            var rotatedCookie = responseCookie(rotated, "saumya_refresh");
+            var rotatedCsrfCookie = responseCookie(rotated, "XSRF-TOKEN");
             var rotatedCsrf = json.readTree(rotated.getResponse().getContentAsString()).get("csrfToken").asText();
             assertNotNull(rotatedCookie);
             assertNotNull(rotatedCsrfCookie);
@@ -570,6 +570,14 @@ class Release12TenantIntegrationTest {
         mvc.perform(get("/api/v1/me")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/v1/me").header("Authorization", "Bearer not-a-valid-jwt"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    private jakarta.servlet.http.Cookie responseCookie(org.springframework.test.web.servlet.MvcResult result, String name) {
+        String header = result.getResponse().getHeaders("Set-Cookie").stream()
+                .filter(value -> value.startsWith(name + "=")).findFirst()
+                .orElseThrow(() -> new AssertionError("Missing " + name + " response cookie"));
+        String value = header.substring(name.length() + 1).split(";", 2)[0];
+        return new jakarta.servlet.http.Cookie(name, value);
     }
 
     private String accessToken(String email, String password) throws Exception {
