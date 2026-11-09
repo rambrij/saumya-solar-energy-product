@@ -547,7 +547,7 @@ public class OperationsService {
     public InstallationTeam archiveTeam(UUID id, Principal p) {
         UUID t = tenant(p);
         permission(p, "INSTALLATION_ASSIGN");
-        operationsManager(p);
+
         InstallationTeam team = teams.findByIdAndTenantId(id, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         boolean assigned = installations.findByTenantIdOrderByScheduledAtAsc(t).stream().anyMatch(j -> id.equals(j.getTeamId()) && Set.of("SCHEDULED", "IN_PROGRESS", "COMPLETED").contains(j.getStatus()));
         if (assigned)
@@ -571,7 +571,7 @@ public class OperationsService {
     public InstallationTeam createTeam(TeamInput x, Principal p) {
         UUID t = tenant(p);
         permission(p, "INSTALLATION_ASSIGN");
-        operationsManager(p);
+
         if (teams.findByTenantIdOrderByNameAsc(t).stream().anyMatch(v -> v.getName().equalsIgnoreCase(x.name())))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Team name already exists");
         validateTeamMembers(t, x.memberIds());
@@ -596,7 +596,7 @@ public class OperationsService {
     public InstallationChecklistTemplate createChecklistTemplate(ChecklistTemplateInput x, Principal p) {
         UUID t = tenant(p);
         permission(p, "INSTALLATION_UPDATE");
-        operationsManager(p);
+
         if (templates.findByTenantIdAndActiveTrueOrderByCodeAsc(t).stream().anyMatch(v -> v.getCode().equalsIgnoreCase(x.code())))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Checklist code already exists");
         InstallationChecklistTemplate v = new InstallationChecklistTemplate();
@@ -614,7 +614,7 @@ public class OperationsService {
     public InstallationChecklistTemplate updateChecklistTemplate(UUID id, ChecklistTemplateInput x, Principal p) {
         UUID t = tenant(p);
         permission(p, "INSTALLATION_UPDATE");
-        operationsManager(p);
+
         InstallationChecklistTemplate v = templates.findByIdAndTenantId(id, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         v.setTitle(x.title().trim());
         v.setMandatory(x.mandatory());
@@ -625,7 +625,7 @@ public class OperationsService {
     public InstallationChecklistTemplate archiveChecklistTemplate(UUID id, Principal p) {
         UUID t = tenant(p);
         permission(p, "INSTALLATION_UPDATE");
-        operationsManager(p);
+
         InstallationChecklistTemplate v = templates.findByIdAndTenantId(id, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         v.setActive(false);
         return templates.save(v);
@@ -644,7 +644,7 @@ public class OperationsService {
     public InstallationJob createInstallation(InstallationInput x, Principal p) {
         UUID t = tenant(p);
         permission(p, "INSTALLATION_SCHEDULE");
-        operationsManager(p);
+
         CustomerOrder o = order(x.orderId(), t);
         if (!x.scheduledAt().isAfter(Instant.now()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Installation schedule must be in the future");
