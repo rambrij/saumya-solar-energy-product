@@ -165,7 +165,7 @@ public class Controller {
     }
     
     @PatchMapping("/users/{userId}/role")
-    AppUser assignEmployeeRole(@PathVariable UUID userId, @Valid @RequestBody EmployeeRoleAssignment x, Authentication a) {
+    com.saumyasolar.domain.AppUser assignEmployeeRole(@PathVariable UUID userId, @Valid @RequestBody EmployeeRoleAssignment x, Authentication a) {
         var actor = p(a);
         if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
                 || actor.permissions() == null || !actor.permissions().contains("ROLE_ASSIGN"))
