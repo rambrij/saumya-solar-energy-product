@@ -19,13 +19,14 @@ import static org.mockito.Mockito.*;
 
 class AuthLifecycleServiceTest {
     private AppUserRepository users;
+    private RefreshTokenRepository refresh;
     private PasswordEncoder encoder;
     private AuthLifecycleService service;
     private AppUser user;
 
     @BeforeEach
     void setUp() {
-        RefreshTokenRepository refresh = mock(RefreshTokenRepository.class);
+        refresh = mock(RefreshTokenRepository.class);
         PasswordResetTokenRepository resets = mock(PasswordResetTokenRepository.class);
         MfaChallengeRepository mfa = mock(MfaChallengeRepository.class);
         users = mock(AppUserRepository.class);
@@ -86,4 +87,34 @@ class AuthLifecycleServiceTest {
                         () -> service.authenticate("admin@example.test", "correct")).getStatusCode());
         verify(encoder, never()).matches(anyString(), anyString());
     }
+    @Test
+    void replayOfRotatedRefreshTokenRevokesEveryTokenInItsFamily() {
+        UUID familyId = UUID.randomUUID();
+        var oldToken = new com.saumyasolar.domain.RefreshToken();
+        oldToken.setId(UUID.randomUUID());
+        oldToken.setUserId(user.getId());
+        oldToken.setFamilyId(familyId);
+        oldToken.setToken("old-refresh-token");
+        oldToken.setRevoked(true);
+        oldToken.setExpiresAt(Instant.now().plusSeconds(600));
+
+        var activeDescendant = new com.saumyasolar.domain.RefreshToken();
+        activeDescendant.setId(UUID.randomUUID());
+        activeDescendant.setUserId(user.getId());
+        activeDescendant.setFamilyId(familyId);
+        activeDescendant.setToken("active-descendant");
+        activeDescendant.setExpiresAt(Instant.now().plusSeconds(600));
+
+        when(refresh.findByTokenForUpdate("old-refresh-token")).thenReturn(Optional.of(oldToken));
+        when(refresh.findByFamilyIdForUpdate(familyId)).thenReturn(java.util.List.of(oldToken, activeDescendant));
+
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class,
+                () -> service.consumeRefresh("old-refresh-token"));
+
+        assertEquals(HttpStatus.UNAUTHORIZED, failure.getStatusCode());
+        assertTrue(oldToken.isRevoked());
+        assertTrue(activeDescendant.isRevoked());
+        verify(refresh).save(activeDescendant);
+    }
+
 }
