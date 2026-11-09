@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
+    boolean existsByTenantIdAndRoles_Id(UUID tenantId, UUID roleId);
     Optional<AppUser> findByEmailIgnoreCase(String email);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
