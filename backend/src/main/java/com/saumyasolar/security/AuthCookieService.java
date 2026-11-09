@@ -72,6 +72,10 @@ public class AuthCookieService {
         return null;
     }
 
+    public String csrfToken(HttpServletRequest request) {
+        return cookieValue(request, CSRF_COOKIE);
+    }
+
     public void requireCsrf(HttpServletRequest request) {
         String cookie = null;
         if (request.getCookies() != null) {
