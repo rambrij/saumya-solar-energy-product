@@ -178,7 +178,7 @@ public class OperationsService {
     @Transactional
     public InventoryTransaction reverseInventoryTransaction(UUID transactionId, InventoryReversalInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "INVENTORY_MANAGE");
+        permission(p, "INVENTORY_ADJUST");
         InventoryTransaction original = transactions.findByIdAndTenantId(transactionId, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Inventory transaction not found"));
         if ("COMPENSATION".equals(original.getType()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "A compensation entry cannot itself be reversed");
@@ -223,14 +223,14 @@ public class OperationsService {
     }
     
     public List<Warehouse> warehouses(Principal p) {
-        permission(p, "INVENTORY_MANAGE");
+        permission(p, "INVENTORY_VIEW");
         return enterpriseSaas.filterWarehouses(warehouses.findByTenantIdOrderByNameAsc(tenant(p)), p);
     }
     
     @Transactional
     public Warehouse createWarehouse(WarehouseInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "INVENTORY_MANAGE");
+        permission(p, "INVENTORY_ADJUST");
         enterpriseSaas.enforceWarehouseLimit(t);
         Warehouse w = new Warehouse();
         w.setId(UUID.randomUUID());
@@ -246,7 +246,7 @@ public class OperationsService {
     @Transactional
     public Warehouse updateWarehouse(UUID id, WarehouseInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "INVENTORY_MANAGE");
+        permission(p, "INVENTORY_ADJUST");
         Warehouse w = warehouse(id, t, p);
         if (warehouses.findByTenantIdOrderByNameAsc(t).stream().anyMatch(v -> !v.getId().equals(id) && v.getCode().equalsIgnoreCase(x.code())))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Warehouse code already exists");
@@ -259,7 +259,7 @@ public class OperationsService {
     @Transactional
     public Warehouse archiveWarehouse(UUID id, Principal p) {
         UUID t = tenant(p);
-        permission(p, "INVENTORY_MANAGE");
+        permission(p, "INVENTORY_ADJUST");
         Warehouse w = warehouse(id, t, p);
         boolean stock = balances.findByTenantIdOrderByWarehouseIdAscProductIdAsc(t).stream().anyMatch(b -> b.getWarehouseId().equals(id) && ( b.getOnHand().signum() > 0 || b.getReserved().signum() > 0 || b.getDamaged().signum() > 0 ));
         if (stock)
@@ -269,14 +269,14 @@ public class OperationsService {
     }
     
     public List<InventoryBalance> balances(Principal p) {
-        permission(p, "INVENTORY_MANAGE");
+        permission(p, "INVENTORY_VIEW");
         UUID t = tenant(p);
         Set<UUID> allowed = enterpriseSaas.filterWarehouses(warehouses.findByTenantIdOrderByNameAsc(t), p).stream().map(Warehouse::getId).collect(java.util.stream.Collectors.toSet());
         return balances.findByTenantIdOrderByWarehouseIdAscProductIdAsc(t).stream().filter(b -> allowed.contains(b.getWarehouseId())).toList();
     }
     
     public List<InventoryTransaction> ledger(Principal p) {
-        permission(p, "INVENTORY_MANAGE");
+        permission(p, "INVENTORY_VIEW");
         UUID t = tenant(p);
         Set<UUID> allowed = enterpriseSaas.filterWarehouses(warehouses.findByTenantIdOrderByNameAsc(t), p).stream().map(Warehouse::getId).collect(java.util.stream.Collectors.toSet());
         return transactions.findByTenantIdOrderByCreatedAtDesc(t).stream().filter(x -> allowed.contains(x.getWarehouseId())).toList();
@@ -285,7 +285,7 @@ public class OperationsService {
     @Transactional
     public InventoryBalance receive(ReceiptInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "INVENTORY_MANAGE");
+        permission(p, "INVENTORY_RECEIVE");
         warehouse(x.warehouseId(), t, p);
         product(x.productId(), t);
         warehouses.findForUpdate(x.warehouseId(), t).orElseThrow();
@@ -299,7 +299,7 @@ public class OperationsService {
     @Transactional
     public InventoryBalance returnStock(ReceiptInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "INVENTORY_MANAGE");
+        permission(p, "INVENTORY_RECEIVE");
         warehouse(x.warehouseId(), t, p);
         product(x.productId(), t);
         warehouses.findForUpdate(x.warehouseId(), t).orElseThrow();
@@ -313,7 +313,7 @@ public class OperationsService {
     @Transactional
     public InventoryBalance damage(DamageInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "INVENTORY_MANAGE");
+        permission(p, "INVENTORY_ADJUST");
         warehouse(x.warehouseId(), t, p);
         product(x.productId(), t);
         warehouses.findForUpdate(x.warehouseId(), t).orElseThrow();
@@ -329,7 +329,7 @@ public class OperationsService {
     @Transactional
     public InventoryBalance issue(IssueInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "INVENTORY_MANAGE");
+        permission(p, "INVENTORY_ADJUST");
         warehouse(x.warehouseId(), t, p);
         product(x.productId(), t);
         warehouses.findForUpdate(x.warehouseId(), t).orElseThrow();
@@ -344,7 +344,7 @@ public class OperationsService {
     
     public List<Map<String, Object>> lowStock(Principal p) {
         UUID t = tenant(p);
-        permission(p, "INVENTORY_MANAGE");
+        permission(p, "INVENTORY_VIEW");
         Set<UUID> allowed = enterpriseSaas.filterWarehouses(warehouses.findByTenantIdOrderByNameAsc(t), p).stream().map(Warehouse::getId).collect(java.util.stream.Collectors.toSet());
         Map<UUID, Product> byId = new HashMap<>();
         products.findByTenantIdOrderByIdDesc(t).forEach(v -> byId.put(v.getId(), v));
@@ -361,7 +361,7 @@ public class OperationsService {
     @Transactional
     public InventoryBalance adjust(AdjustmentInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "INVENTORY_MANAGE");
+        permission(p, "INVENTORY_ADJUST");
         warehouse(x.warehouseId(), t, p);
         product(x.productId(), t);
         warehouses.findForUpdate(x.warehouseId(), t).orElseThrow();
@@ -378,7 +378,7 @@ public class OperationsService {
     @Transactional
     public Map<String, Object> transfer(TransferInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "INVENTORY_MANAGE");
+        permission(p, "INVENTORY_TRANSFER");
         if (x.sourceWarehouseId().equals(x.targetWarehouseId()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose two different warehouses");
         warehouse(x.sourceWarehouseId(), t, p);
@@ -403,7 +403,7 @@ public class OperationsService {
     @Transactional
     public List<InventoryReservation> reserve(UUID orderId, ReservationInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "INVENTORY_MANAGE");
+        permission(p, "INVENTORY_RESERVE");
         CustomerOrder o = order(orderId, t);
         List<InventoryReservation> activeReservations = reservations.findByTenantIdAndOrderId(t, orderId).stream().filter(r -> "RESERVED".equals(r.getStatus())).toList();
         if (!activeReservations.isEmpty()) return activeReservations;
@@ -461,7 +461,7 @@ public class OperationsService {
     @Transactional
     public List<InventoryReservation> release(UUID orderId, String reason, Principal p) {
         UUID t = tenant(p);
-        permission(p, "INVENTORY_MANAGE");
+        permission(p, "INVENTORY_RESERVE");
         CustomerOrder o = order(orderId, t);
         List<InventoryReservation> rows = reservations.findByTenantIdAndOrderId(t, orderId).stream().filter(r -> "RESERVED".equals(r.getStatus())).toList();
         if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.CONFLICT, "No active reservations");
@@ -501,7 +501,7 @@ public class OperationsService {
     @Transactional
     public CustomerOrder transition(UUID id, OrderTransitionInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "ORDER_CREATE");
+        permission(p, "ORDER_UPDATE");
         CustomerOrder o = order(id, t);
         String old = o.getStatus(), next = x.status().toUpperCase(Locale.ROOT);
         Map<String, Set<String>> allowed = Map.of("CONFIRMED", Set.of("PAYMENT_PENDING", "PAID", "ON_HOLD", "CANCELLED"), "PAYMENT_PENDING", Set.of("PAYMENT_PARTIAL", "PAID", "ON_HOLD", "CANCELLED"), "PAYMENT_PARTIAL", Set.of("PAID", "ON_HOLD", "CANCELLED"), "PAID", Set.of("MATERIAL_RESERVED", "ON_HOLD", "CANCELLED"), "MATERIAL_RESERVED", Set.of("INSTALLATION_SCHEDULED", "CONFIRMED", "ON_HOLD", "CANCELLED"), "INSTALLATION_SCHEDULED", Set.of("INSTALLATION_IN_PROGRESS", "MATERIAL_RESERVED", "ON_HOLD", "CANCELLED"), "INSTALLATION_IN_PROGRESS", Set.of("INSTALLATION_SCHEDULED", "ON_HOLD"), "INSTALLED", Set.of("COMMISSIONED"), "COMMISSIONED", Set.of("CLOSED"));
@@ -517,21 +517,21 @@ public class OperationsService {
     
     public List<OrderStatusHistory> orderHistory(UUID id, Principal p) {
         UUID t = tenant(p);
-        permission(p, "ORDER_CREATE");
+        permission(p, "ORDER_VIEW");
         order(id, t);
         return orderHistory.findByTenantIdAndOrderIdOrderByCreatedAtAsc(t, id);
     }
     
     public List<InstallationTeam> teams(Principal p) {
         UUID t = tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "INSTALLATION_VIEW");
         return teams.findByTenantIdOrderByNameAsc(t).stream().filter(InstallationTeam::isActive).toList();
     }
     
     @Transactional
     public InstallationTeam updateTeam(UUID id, TeamInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "INSTALLATION_ASSIGN");
         operationsManager(p);
         InstallationTeam team = teams.findByIdAndTenantId(id, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         validateTeamMembers(t, x.memberIds());
@@ -543,7 +543,7 @@ public class OperationsService {
     @Transactional
     public InstallationTeam archiveTeam(UUID id, Principal p) {
         UUID t = tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "INSTALLATION_ASSIGN");
         operationsManager(p);
         InstallationTeam team = teams.findByIdAndTenantId(id, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         boolean assigned = installations.findByTenantIdOrderByScheduledAtAsc(t).stream().anyMatch(j -> id.equals(j.getTeamId()) && Set.of("SCHEDULED", "IN_PROGRESS", "COMPLETED").contains(j.getStatus()));
@@ -567,7 +567,7 @@ public class OperationsService {
     @Transactional
     public InstallationTeam createTeam(TeamInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "INSTALLATION_ASSIGN");
         operationsManager(p);
         if (teams.findByTenantIdOrderByNameAsc(t).stream().anyMatch(v -> v.getName().equalsIgnoreCase(x.name())))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Team name already exists");
@@ -585,14 +585,14 @@ public class OperationsService {
     
     public List<InstallationChecklistTemplate> checklistTemplates(Principal p) {
         UUID t = tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "INSTALLATION_VIEW");
         return templates.findByTenantIdAndActiveTrueOrderByCodeAsc(t);
     }
     
     @Transactional
     public InstallationChecklistTemplate createChecklistTemplate(ChecklistTemplateInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "INSTALLATION_UPDATE");
         operationsManager(p);
         if (templates.findByTenantIdAndActiveTrueOrderByCodeAsc(t).stream().anyMatch(v -> v.getCode().equalsIgnoreCase(x.code())))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Checklist code already exists");
@@ -610,7 +610,7 @@ public class OperationsService {
     @Transactional
     public InstallationChecklistTemplate updateChecklistTemplate(UUID id, ChecklistTemplateInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "INSTALLATION_UPDATE");
         operationsManager(p);
         InstallationChecklistTemplate v = templates.findByIdAndTenantId(id, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         v.setTitle(x.title().trim());
@@ -621,7 +621,7 @@ public class OperationsService {
     @Transactional
     public InstallationChecklistTemplate archiveChecklistTemplate(UUID id, Principal p) {
         UUID t = tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "INSTALLATION_UPDATE");
         operationsManager(p);
         InstallationChecklistTemplate v = templates.findByIdAndTenantId(id, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         v.setActive(false);
@@ -630,7 +630,7 @@ public class OperationsService {
     
     public List<InstallationJob> installations(Principal p) {
         UUID t = tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "INSTALLATION_VIEW");
         List<InstallationJob> all = installations.findByTenantIdOrderByScheduledAtAsc(t);
         if (p.roles() != null && p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "OPERATIONS_MANAGER", "SERVICE_MANAGER").contains(r)))
             return all;
@@ -640,7 +640,7 @@ public class OperationsService {
     @Transactional
     public InstallationJob createInstallation(InstallationInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "INSTALLATION_SCHEDULE");
         operationsManager(p);
         CustomerOrder o = order(x.orderId(), t);
         if (!x.scheduledAt().isAfter(Instant.now()))
@@ -749,7 +749,7 @@ public class OperationsService {
     
     public List<InstallationChecklistItem> checklist(UUID id, Principal p) {
         UUID t = tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "INSTALLATION_VIEW");
         installation(id, t, p);
         return checklist.findByTenantIdAndInstallationIdOrderByIdAsc(t, id);
     }
@@ -781,7 +781,7 @@ public class OperationsService {
     @Transactional
     public InstallationJob reschedule(UUID id, RescheduleInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "INSTALLATION_SCHEDULE");
         InstallationJob j = installation(id, t, p);
         if (!Set.of("SCHEDULED", "IN_PROGRESS").contains(j.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Installation cannot be rescheduled");
@@ -826,7 +826,7 @@ public class OperationsService {
     @Transactional
     public InstallationJob cancelInstallation(UUID id, String reason, Principal p) {
         UUID t = tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "INSTALLATION_UPDATE");
         InstallationJob j = installation(id, t, p);
         if (reason == null || reason.isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cancellation reason is required");
@@ -859,7 +859,7 @@ public class OperationsService {
     
     public List<InstallationScheduleHistory> scheduleHistory(UUID id, Principal p) {
         UUID t = tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "INSTALLATION_VIEW");
         installation(id, t, p);
         return scheduleHistory.findByTenantIdAndInstallationIdOrderByCreatedAtAsc(t, id);
     }
@@ -867,7 +867,7 @@ public class OperationsService {
     @Transactional
     public InstallationJob completeInstallation(UUID id, String reason, Principal p) {
         UUID t = tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "INSTALLATION_UPDATE");
         InstallationJob j = installation(id, t, p);
         if (!"IN_PROGRESS".equals(j.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Installation must be in progress");
@@ -902,7 +902,7 @@ public class OperationsService {
     @Transactional
     public InstallationJob commission(UUID id, CommissionInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "INSTALLATION_COMMISSION");
         InstallationJob j = installation(id, t, p);
         if (checklist.findByTenantIdAndInstallationIdOrderByIdAsc(t, id).stream().anyMatch(c -> c.isMandatory() && !c.isCompleted()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Complete all mandatory checklist items");
@@ -974,7 +974,7 @@ public class OperationsService {
     
     public List<Warranty> warranties(Principal p) {
         UUID t = tenant(p);
-        permission(p, "SURVEY_MANAGE");
+        permission(p, "SERVICE_VIEW");
         if (p.roles() == null || p.roles().stream().noneMatch(r -> Set.of("VENDOR_ADMIN", "OPERATIONS_MANAGER", "SERVICE_MANAGER").contains(r)))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         return warranties.findByTenantIdOrderByStartDateDesc(t);
@@ -1031,7 +1031,7 @@ public class OperationsService {
     @Transactional
     public CustomerOrder decideCustomerOrder(UUID id, OrderDecisionInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "ORDER_CREATE");
+        permission(p, "ORDER_UPDATE");
         CustomerOrder o = order(id, t);
         if (!"PENDING_VENDOR_ACCEPTANCE".equals(o.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only a pending customer order can be accepted or rejected");
