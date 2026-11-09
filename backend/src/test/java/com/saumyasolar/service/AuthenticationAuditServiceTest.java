@@ -12,6 +12,18 @@ import static org.mockito.Mockito.*;
 
 class AuthenticationAuditServiceTest {
     @Test
+    void recordJoinsTheCallingTransactionToAvoidSelfBlockingOnActorForeignKey() throws Exception {
+        var method = AuthenticationAuditService.class.getMethod(
+                "record", String.class, UUID.class, UUID.class, String.class,
+                String.class, String.class, HttpServletRequest.class);
+
+        var transaction = method.getAnnotation(jakarta.transaction.Transactional.class);
+
+        assertNotNull(transaction, "Authentication audit must participate in the caller transaction");
+        assertEquals(jakarta.transaction.Transactional.TxType.REQUIRED, transaction.value());
+    }
+
+    @Test
     void persistsSafeAuthenticationEventWithResolvedRequestMetadata() {
         AuditEventRepository repository = mock(AuditEventRepository.class);
         ClientAddressResolver resolver = mock(ClientAddressResolver.class);
