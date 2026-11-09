@@ -560,7 +560,7 @@ class Release12TenantIntegrationTest {
                         .content("""
                                 {"name":"Escalation Attempt","email":"%s","password":"StrongEscalationPassword-2026","roleName":"PLATFORM_SUPER_ADMIN"}
                                 """.formatted(email)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isForbidden());
         assertTrue(users.findByEmailIgnoreCase(email).isEmpty());
     }
 
