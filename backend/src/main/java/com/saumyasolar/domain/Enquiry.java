@@ -20,6 +20,11 @@ public class Enquiry {
     UUID tenantId;
     UUID branchId;
     UUID customerId;
+    UUID addressId;
+    @Column(name = "site_address", length = 500)
+    String siteAddress;
+    @Column(name = "city_pincode", length = 160)
+    String cityPincode;
     String name;
     String email;
     String phone;
