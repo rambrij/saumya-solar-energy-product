@@ -4,6 +4,7 @@ set -euo pipefail
 # Keep the signatures assembled from fragments so this scanner does not match itself.
 kafka='kaf''ka'
 rabbit='rabbit''mq'
+broker='brok''er'
 amqp='am''qp'
 jms='J''M''S'
 activemq='active''mq'
