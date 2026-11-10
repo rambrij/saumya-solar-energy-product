@@ -51,12 +51,6 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
         this(jdbc, mapper, addressResolver, loginLimit, recoveryLimit, mfaLimit, windowSeconds, jwtSecret);
     }
 
-    AuthenticationRateLimitFilter(JdbcTemplate jdbc, ObjectMapper mapper, int loginLimit,
-                                   int recoveryLimit, int mfaLimit, int windowSeconds) {
-        this(jdbc, mapper, new ClientAddressResolver(""), loginLimit, recoveryLimit,
-                mfaLimit, windowSeconds, "test-only-rate-limit-hmac-secret");
-    }
-
     AuthenticationRateLimitFilter(JdbcTemplate jdbc, ObjectMapper mapper, ClientAddressResolver resolver,
                                    int loginLimit, int recoveryLimit, int mfaLimit, int windowSeconds,
                                    String jwtSecret) {
