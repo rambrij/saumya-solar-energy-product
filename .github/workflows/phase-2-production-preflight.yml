@@ -1,0 +1,47 @@
+name: Phase 2 production tenant-integrity preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-preflight:
+    name: Read-only V57/V58 integrity preflight
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit/phase-2-implementation-gap-analysis
+      - name: Install MySQL client
+        run: sudo apt-get update && sudo apt-get install -y default-mysql-client
+      - name: Validate required production connection secrets
+        env:
+          DB_HOST: ${{ secrets.PROD_DB_HOST }}
+          DB_PORT: ${{ secrets.PROD_DB_PORT }}
+          DB_NAME: ${{ secrets.PROD_DB_NAME }}
+          DB_USER: ${{ secrets.PROD_DB_USER }}
+          DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for key in DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD; do
+            if [ -z "${!key:-}" ]; then
+              echo "::error::Missing required GitHub environment secret for ${key}"
+              exit 1
+            fi
+          done
+          echo "Production database connection configuration is present."
+      - name: Run V57/V58 data-integrity checks only (no migration DDL)
+        env:
+          MYSQL_HOST: ${{ secrets.PROD_DB_HOST }}
+          MYSQL_TCP_PORT: ${{ secrets.PROD_DB_PORT }}
+          MYSQL_DATABASE: ${{ secrets.PROD_DB_NAME }}
+          MYSQL_USER: ${{ secrets.PROD_DB_USER }}
+          MYSQL_PWD: ${{ secrets.PROD_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mysql --connect-timeout=15 --host="$MYSQL_HOST" --port="$MYSQL_TCP_PORT" --user="$MYSQL_USER" "$MYSQL_DATABASE" \
+            < backend/src/test/resources/tenant-isolation-production-preflight.sql
+          echo "V57/V58 production data-integrity preflight completed successfully."
