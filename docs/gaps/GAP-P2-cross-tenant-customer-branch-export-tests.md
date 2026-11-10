@@ -68,4 +68,4 @@
 
 ## Status
 
-**PARTIAL — selected negative coverage is extensive and present; exhaustive matrix remains open.** Existing integration tests cover multiple tenant/customer/branch/export/download paths, but every resource family and every exposed read/write/delete/export/download endpoint is not yet represented. Latest-head workflow 42821756695 passed backend (163 tests), frontend build and MySQL validation; the Spring Boot/browser Playwright job remains in progress.
+**PARTIAL — selected negative coverage is extensive and present; exhaustive matrix remains open.** Existing integration tests cover multiple tenant/customer/branch/export/download paths, but every resource family and every exposed read/write/delete/export/download endpoint is not yet represented. Workflow 42821756695 passed all four jobs: backend (163 tests), frontend production build, MySQL 8.4 migration/integrity validation and Spring Boot/Playwright tenant-filter tampering. The later reset-token change is under workflow 42822434704.
