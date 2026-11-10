@@ -58,7 +58,6 @@ class EndpointAuthenticationMatrixTest {
     @Autowired RoleRepository roles;
     @Autowired JwtService jwt;
     @Autowired PasswordEncoder passwordEncoder;
-    private UUID validTeamMemberId;
 
     private static final Pattern VARIABLE = Pattern.compile("\\{[^}]+}");
     private static final Set<String> PUBLIC_PREFIXES = Set.of(
@@ -164,7 +163,6 @@ class EndpointAuthenticationMatrixTest {
     @Test
     void authenticatedZeroPermissionVendorIsDeniedEveryProtectedMutationMapping() throws Exception {
         AppUser seededVendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
-        validTeamMemberId = createValidTeamMember(seededVendor.getTenantId());
         Role emptyRole = new Role();
         emptyRole.setId(UUID.randomUUID());
         emptyRole.setTenantId(seededVendor.getTenantId());
@@ -207,6 +205,13 @@ class EndpointAuthenticationMatrixTest {
                     MockHttpServletRequestBuilder builder = mutationRequest(method, path, handler, mapper);
                     builder.header("Authorization", "Bearer " + token);
                     int status = mvc.perform(builder).andReturn().getResponse().getStatus();
+                    try {
+                        UUID leakedTenant = com.saumyasolar.security.TenantExecutionContext.requireTenantId();
+                        failures.add(method + " " + pattern + " leaked tenant context " + leakedTenant
+                                + " after request completion");
+                    } catch (IllegalStateException expectedNoContext) {
+                        // Request-scoped tenant context must be cleared before the next request/test.
+                    }
                     checked.add(method + " " + pattern);
                     if (status == 403) forbiddenResponses++;
                     else if (status == 404) nonDisclosingNotFoundResponses++;
@@ -364,8 +369,8 @@ class EndpointAuthenticationMatrixTest {
                     "quantity", 1, "optionalItem", false));
         }
         if ("memberIds".equals(name)) {
-            return List.of(validTeamMemberId == null
-                    ? UUID.fromString("00000000-0000-4000-8000-000000000001") : validTeamMemberId);
+            // Request validation requires a non-empty UUID list; permission checks run before member lookup.
+            return List.of(UUID.fromString("00000000-0000-4000-8000-000000000001"));
         }
         if (Collection.class.isAssignableFrom(type)) {
             boolean requiredElements = hasAnnotation(annotations, "NotEmpty") || hasAnnotation(annotations, "NotNull");
@@ -401,21 +406,6 @@ class EndpointAuthenticationMatrixTest {
             }
         }
         return bean.isEmpty() ? null : bean;
-    }
-
-    private UUID createValidTeamMember(UUID tenantId) {
-        Role installer = roles.findByNameAndTenantId("INSTALLER", tenantId).orElseThrow(
-                () -> new IllegalStateException("DataSeeder must create the tenant INSTALLER role for this test fixture"));
-        AppUser user = new AppUser();
-        user.setId(UUID.randomUUID());
-        user.setTenantId(tenantId);
-        user.setName("Authorization matrix installer fixture");
-        user.setEmail("matrix-installer-" + UUID.randomUUID() + "@example.test");
-        user.setPasswordHash(passwordEncoder.encode("Matrix-Password-2026"));
-        user.setAccountType("VENDOR");
-        user.setEnabled(true);
-        user.getRoles().add(installer);
-        return users.saveAndFlush(user).getId();
     }
 
     private boolean hasAnnotation(Annotation[] annotations, String simpleName) {
