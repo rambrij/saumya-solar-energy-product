@@ -11,6 +11,9 @@
 - Subscription expiry now enumerates tenants and uses a tenant-qualified expiry query.
 - Warranty expiry/reminders now enumerate tenants and use tenant-qualified repository methods.
 - Integration sync discovery, atomic job claim and reload are tenant-qualified.
+- Added `TenantExecutionContext`, a ThreadLocal scope restored/cleared with try-with-resources. SLA processing additionally rejects a missing or mismatched tenant scope.
+- Added scheduler/context tests and MySQL SQL assertions that verify V57 rejects cross-tenant category, package and product references.
+- Fixed two pre-existing CI failures discovered at baseline: authentication audit events now use `REQUIRES_NEW`, and the responsive navigation test selects among duplicate mobile/desktop links.
 - Added Flyway V57 with fail-closed preflight checks and composite tenant foreign keys for:
   - `product(tenant_id, category_id)` → `product_category(tenant_id, id)`
   - `package_item(tenant_id, package_id)` → `solar_package(tenant_id, id)`
@@ -36,7 +39,7 @@ The latest base-branch CI observed before Phase 2 changes (commit `295e284900d7a
 - Frontend: 22 tests, 1 pre-existing failure (duplicate responsive navigation link queried with `getByRole`).
 - MySQL migration validation and Spring Boot startup: passed.
 
-A local clone/build was not possible because this execution environment could not resolve github.com. The Phase 2 branch's GitHub Actions workflow was triggered; its latest result must be checked before merge. Do not treat queued/in-progress CI as a pass.
+A local clone/build was not possible because this execution environment could not resolve github.com. The MySQL 8.4 migration job passed V57 and its catalogue cross-tenant rejection assertions on commit `8aa08480d7195da7095ea9054a11132eabbdff13`. A later full run on current branch head `e68287fd4641daf0853f01ed665fbc617111882b` includes the latest context and test changes and is still being verified. Do not treat queued/in-progress CI as a pass.
 
 ## Migration / rollback
 
