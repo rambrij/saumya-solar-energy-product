@@ -1,6 +1,7 @@
 -- Phase 2: enforce tenant ownership for core catalogue relationships.
 -- Preflight is deliberately fail-closed: do not add constraints over dirty legacy data.
 DROP PROCEDURE IF EXISTS assert_phase2_catalogue_tenant_integrity;
+DELIMITER $
 CREATE PROCEDURE assert_phase2_catalogue_tenant_integrity()
 BEGIN
     IF EXISTS (
@@ -30,7 +31,8 @@ BEGIN
     IF EXISTS (SELECT 1 FROM package_item WHERE tenant_id IS NULL) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='V57 blocked: package_item contains rows without tenant_id';
     END IF;
-END;
+END$
+DELIMITER ;
 CALL assert_phase2_catalogue_tenant_integrity();
 DROP PROCEDURE assert_phase2_catalogue_tenant_integrity;
 
