@@ -289,6 +289,12 @@ public class Phase2OperationsController {
     ) {
         Principal p = p(a);
         ops(p);
+        return operationsReportForTenant(p.tenantId(), from, to);
+    }
+
+    /** Internal tenant-scoped report projection shared by synchronous and asynchronous exports. */
+    public Map<String, Object> operationsReportForTenant(UUID t, LocalDate from, LocalDate to) {
+        if (t == null) throw new IllegalArgumentException("tenantId is required");
         if (from != null && to != null && to.isBefore(from))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "to must not precede from");
         UUID t = p.tenantId();
@@ -328,7 +334,7 @@ public class Phase2OperationsController {
         result.put("inventoryTransactions", stockRows.size());
         return result;
     }
-    
+
     @GetMapping(value = "/reports/operations/export.csv", produces = "text/csv")
     public ResponseEntity<byte[]> exportOperationsCsv(
             @RequestParam(required = false) LocalDate from,
