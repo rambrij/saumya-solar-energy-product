@@ -188,7 +188,7 @@ class WarrantyClaimAttachmentServiceTest {
 
     private Principal vendor(UUID tenant) {
         return new Principal(UUID.randomUUID(), tenant, "vendor@example.test", "VENDOR",
-                Set.of("VENDOR_ADMIN"), Set.of("SERVICE_UPDATE"), 0);
+                Set.of("VENDOR_ADMIN"), Set.of("SERVICE_UPDATE", "SERVICE_ASSIGN"), 0);
     }
 
     private Principal customer(UUID tenant, UUID user) {
