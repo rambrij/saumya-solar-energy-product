@@ -10,6 +10,9 @@ import com.saumyasolar.domain.SubscriptionPlan;
 import com.saumyasolar.domain.CustomerProfile;
 import com.saumyasolar.domain.AppUser;
 import com.saumyasolar.domain.CustomerOrder;
+import com.saumyasolar.domain.InstallationJob;
+import com.saumyasolar.domain.Product;
+import com.saumyasolar.domain.ProductCategory;
 import com.saumyasolar.repo.ServiceRequestRepository;
 import com.saumyasolar.repo.ServiceEventRepository;
 import com.saumyasolar.repo.WarrantyRepository;
@@ -18,6 +21,9 @@ import com.saumyasolar.repo.SubscriptionPlanRepository;
 import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.repo.AppUserRepository;
 import com.saumyasolar.repo.CustomerOrderRepository;
+import com.saumyasolar.repo.InstallationJobRepository;
+import com.saumyasolar.repo.ProductRepository;
+import com.saumyasolar.repo.ProductCategoryRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import com.saumyasolar.service.ServiceSlaScheduler;
 import com.saumyasolar.service.WarrantyExpiryScheduler;
@@ -61,6 +67,9 @@ class TenantSchedulerConcurrencyIntegrationTest {
     @Autowired AppUserRepository users;
     @Autowired CustomerOrderRepository orders;
     @Autowired PasswordEncoder passwordEncoder;
+    @Autowired InstallationJobRepository installations;
+    @Autowired ProductRepository products;
+    @Autowired ProductCategoryRepository categories;
 
     @DynamicPropertySource
     static void optionalMySqlTestDatabase(DynamicPropertyRegistry registry) {
@@ -186,8 +195,14 @@ class TenantSchedulerConcurrencyIntegrationTest {
         CustomerOrder expiredOrder = order(expiredTenant.getId(), expiredCustomer.getId());
         CustomerOrder validOrder = order(validTenant.getId(), validCustomer.getId());
         orders.saveAllAndFlush(List.of(expiredOrder, validOrder));
-        Warranty expired = warranty(expiredTenant.getId(), expiredCustomer.getId(), expiredOrder.getId(), java.time.LocalDate.now().minusDays(1));
-        Warranty valid = warranty(validTenant.getId(), validCustomer.getId(), validOrder.getId(), java.time.LocalDate.now().plusDays(90));
+        InstallationJob expiredInstallation = installation(expiredTenant.getId(), expiredCustomer.getId(), expiredOrder.getId());
+        InstallationJob validInstallation = installation(validTenant.getId(), validCustomer.getId(), validOrder.getId());
+        installations.saveAllAndFlush(List.of(expiredInstallation, validInstallation));
+        Product expiredProduct = product(expiredTenant.getId());
+        Product validProduct = product(validTenant.getId());
+        products.saveAllAndFlush(List.of(expiredProduct, validProduct));
+        Warranty expired = warranty(expiredTenant.getId(), expiredCustomer.getId(), expiredOrder.getId(), expiredInstallation.getId(), expiredProduct.getId(), java.time.LocalDate.now().minusDays(1));
+        Warranty valid = warranty(validTenant.getId(), validCustomer.getId(), validOrder.getId(), validInstallation.getId(), validProduct.getId(), java.time.LocalDate.now().plusDays(90));
         warranties.saveAllAndFlush(List.of(expired, valid));
 
         var pool = Executors.newFixedThreadPool(2);
@@ -241,6 +256,7 @@ class TenantSchedulerConcurrencyIntegrationTest {
         request.setPriority("HIGH");
         request.setDescription("Scheduler tenant-isolation test");
         request.setStatus("OPEN");
+        request.setWarrantyStatus("NOT_APPLICABLE");
         request.setResponseDueAt(responseDueAt);
         request.setResolutionDueAt(Instant.now().plusSeconds(7200));
         request.setPausedSeconds(0);
@@ -249,12 +265,14 @@ class TenantSchedulerConcurrencyIntegrationTest {
         return request;
     }
 
-    private Warranty warranty(UUID tenantId, UUID customerId, UUID orderId, java.time.LocalDate endDate) {
+    private Warranty warranty(UUID tenantId, UUID customerId, UUID orderId, UUID installationId, UUID productId, java.time.LocalDate endDate) {
         Warranty warranty = new Warranty();
         warranty.setId(UUID.randomUUID());
         warranty.setTenantId(tenantId);
         warranty.setCustomerId(customerId);
         warranty.setOrderId(orderId);
+        warranty.setInstallationId(installationId);
+        warranty.setProductId(productId);
         warranty.setStatus("ACTIVE");
         warranty.setStartDate(java.time.LocalDate.now().minusDays(30));
         warranty.setEndDate(endDate);
@@ -353,6 +371,58 @@ class TenantSchedulerConcurrencyIntegrationTest {
         customer.setEmail(user.getEmail());
         customer.setActive(true);
         return customer;
+    }
+
+    private InstallationJob installation(UUID tenantId, UUID customerId, UUID orderId) {
+        AppUser engineer = new AppUser();
+        engineer.setId(UUID.randomUUID());
+        engineer.setTenantId(tenantId);
+        engineer.setName("Scheduler technician");
+        engineer.setEmail("scheduler-tech-" + UUID.randomUUID() + "@example.test");
+        engineer.setPasswordHash(passwordEncoder.encode("Technician-Password-2026"));
+        engineer.setAccountType("VENDOR");
+        engineer.setEnabled(true);
+        engineer.setTokenVersion(0);
+        users.saveAndFlush(engineer);
+
+        InstallationJob installation = new InstallationJob();
+        installation.setId(UUID.randomUUID());
+        installation.setTenantId(tenantId);
+        installation.setOrderId(orderId);
+        installation.setCustomerId(customerId);
+        installation.setSiteAddress("Scheduler test site");
+        installation.setScheduledAt(Instant.now().minusSeconds(3600));
+        installation.setAssignedEngineerId(engineer.getId());
+        installation.setStatus("COMPLETED");
+        installation.setCreatedAt(Instant.now());
+        return installation;
+    }
+
+    private Product product(UUID tenantId) {
+        ProductCategory category = new ProductCategory();
+        category.setId(UUID.randomUUID());
+        category.setTenantId(tenantId);
+        category.setName("Scheduler category " + UUID.randomUUID());
+        category.setDescription("Tenant-scoped scheduler test");
+        category.setActive(true);
+        categories.saveAndFlush(category);
+
+        Product product = new Product();
+        product.setId(UUID.randomUUID());
+        product.setTenantId(tenantId);
+        product.setCategoryId(category.getId());
+        product.setSku("SCHED-" + UUID.randomUUID().toString().substring(0, 8));
+        product.setName("Scheduler product");
+        product.setPurchasePrice(java.math.BigDecimal.ZERO);
+        product.setDiscountPercent(java.math.BigDecimal.ZERO);
+        product.setWarrantyYears(1);
+        product.setReorderLevel(java.math.BigDecimal.ZERO);
+        product.setUnitOfMeasure("PCS");
+        product.setPrice(java.math.BigDecimal.ZERO);
+        product.setTaxPercent(java.math.BigDecimal.ZERO);
+        product.setActive(true);
+        product.setAttributesJson("{}");
+        return product;
     }
 
     private CustomerOrder order(UUID tenantId, UUID customerId) {
