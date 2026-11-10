@@ -3,6 +3,8 @@ package com.saumyasolar;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.saumyasolar.domain.AppUser;
+import com.saumyasolar.domain.Branch;
+import com.saumyasolar.domain.CustomerAddress;
 import com.saumyasolar.domain.Enquiry;
 import com.saumyasolar.domain.Product;
 import com.saumyasolar.domain.ProductCategory;
@@ -13,6 +15,8 @@ import com.saumyasolar.domain.Invoice;
 import com.saumyasolar.domain.ServiceRequest;
 import com.saumyasolar.domain.InstallationJob;
 import com.saumyasolar.repo.CustomerProfileRepository;
+import com.saumyasolar.repo.CustomerAddressRepository;
+import com.saumyasolar.repo.BranchRepository;
 import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.AppUserRepository;
 import com.saumyasolar.repo.RoleRepository;
@@ -74,6 +78,10 @@ class Release12TenantIntegrationTest {
     EnquiryRepository enquiries;
     @Autowired
     CustomerProfileRepository customerProfiles;
+    @Autowired
+    CustomerAddressRepository customerAddresses;
+    @Autowired
+    BranchRepository branches;
     @Autowired
     CustomerOrderRepository customerOrders;
     @Autowired
@@ -983,6 +991,138 @@ class Release12TenantIntegrationTest {
                 .orElseThrow(() -> new AssertionError("Missing " + name + " response cookie"));
         String value = header.substring(name.length() + 1).split(";", 2)[0];
         return new jakarta.servlet.http.Cookie(name, value);
+    }
+
+
+    @Test
+    void customerAddressEndpointsEnforceAuthenticatedCustomerOwnershipAndIgnoreTamperedOwnerIds() throws Exception {
+        var customerA = createCustomer(vendorTenantId, "address-owner-a");
+        var customerB = createCustomer(vendorTenantId, "address-owner-b");
+        var foreignTenant = newTenant();
+        var customerC = createCustomer(foreignTenant.getId(), "address-owner-c");
+        var addressB = createAddress(customerB.profile().getId(), vendorTenantId);
+        var addressC = createAddress(customerC.profile().getId(), foreignTenant.getId());
+
+        var token = accessToken(customerA.user().getEmail(), "Customer-Password-2026");
+        var listed = mvc.perform(get("/api/v1/customer/addresses").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(listed.contains(addressB.getId().toString()));
+        assertFalse(listed.contains(addressC.getId().toString()));
+
+        mvc.perform(get("/api/v1/customer/addresses/" + addressB.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/customer/addresses/" + addressC.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                                "/api/v1/customer/addresses/" + addressB.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(addressBody()))
+                .andExpect(status().isNotFound());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                                "/api/v1/customer/addresses/" + addressC.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+
+        var created = mvc.perform(post("/api/v1/customer/addresses")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"label":"Tampered","line1":"1 Test Road","city":"Raipur","state":"Chhattisgarh","pincode":"492001","tenantId":"%s","customerId":"%s"}
+                                """.formatted(foreignTenant.getId(), customerC.profile().getId())))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        var createdJson = json.readTree(created);
+        assertEquals(vendorTenantId.toString(), createdJson.get("tenantId").asText());
+        assertEquals(customerA.profile().getId().toString(), createdJson.get("customerId").asText());
+    }
+
+    @Test
+    void vendorBranchEndpointsCannotReadOrMutateAnotherTenantsBranch() throws Exception {
+        var foreignTenant = newTenant();
+        Branch foreignBranch = new Branch();
+        foreignBranch.setId(UUID.randomUUID());
+        foreignBranch.setTenantId(foreignTenant.getId());
+        foreignBranch.setCode("FOREIGN-" + UUID.randomUUID().toString().substring(0, 8));
+        foreignBranch.setName("Foreign branch");
+        foreignBranch.setActive(true);
+        foreignBranch.setCreatedAt(Instant.now());
+        foreignBranch.setUpdatedAt(Instant.now());
+        branches.save(foreignBranch);
+
+        var token = accessToken("admin@saumya.local", "Admin@123");
+        mvc.perform(get("/api/v1/branches/" + foreignBranch.getId() + "/users")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                                "/api/v1/branches/" + foreignBranch.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"TAMPERED","name":"Attempted foreign update"}
+                                """))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/branches/" + foreignBranch.getId() + "/deactivate")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/branches/" + foreignBranch.getId() + "/users")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"userId":"%s"}
+                                """.formatted(users.findByEmailIgnoreCase("sales@saumya.local").orElseThrow().getId())))
+                .andExpect(status().isNotFound());
+    }
+
+    private CustomerFixture createCustomer(UUID tenantId, String prefix) {
+        String password = "Customer-Password-2026";
+        AppUser user = new AppUser();
+        user.setId(UUID.randomUUID());
+        user.setTenantId(tenantId);
+        user.setName(prefix);
+        user.setEmail(prefix + "-" + UUID.randomUUID() + "@example.test");
+        user.setPasswordHash(passwordEncoder.encode(password));
+        user.setAccountType("CUSTOMER");
+        user.setEnabled(true);
+        user.getRoles().add(roles.findByNameAndTenantIdIsNull("CUSTOMER").orElseThrow());
+        users.save(user);
+
+        CustomerProfile profile = new CustomerProfile();
+        profile.setId(UUID.randomUUID());
+        profile.setTenantId(tenantId);
+        profile.setUserId(user.getId());
+        profile.setName(prefix);
+        profile.setEmail(user.getEmail());
+        profile.setActive(true);
+        customerProfiles.save(profile);
+        return new CustomerFixture(user, profile);
+    }
+
+    private CustomerAddress createAddress(UUID customerId, UUID tenantId) {
+        CustomerAddress address = new CustomerAddress();
+        address.setId(UUID.randomUUID());
+        address.setTenantId(tenantId);
+        address.setCustomerId(customerId);
+        address.setLabel("Home");
+        address.setLine1("1 Test Road");
+        address.setCity("Raipur");
+        address.setState("Chhattisgarh");
+        address.setPincode("492001");
+        address.setCountry("India");
+        address.setDefault(true);
+        address.setCreatedAt(Instant.now());
+        address.setUpdatedAt(Instant.now());
+        return customerAddresses.save(address);
+    }
+
+    private String addressBody() {
+        return """
+                {"label":"Updated","line1":"2 Test Road","city":"Raipur","state":"Chhattisgarh","pincode":"492001"}
+                """;
+    }
+
+    private record CustomerFixture(AppUser user, CustomerProfile profile) {
     }
 
     private String accessToken(String email, String password) throws Exception {
