@@ -854,11 +854,20 @@ public class FinanceService {
         return t;
     }
     
+    static List<ServiceVisit> visibleServiceVisits(List<ServiceVisit> rows, Principal p) {
+        if ("CUSTOMER".equals(p.accountType())
+                || p.permissions() != null && p.permissions().contains("SERVICE_ASSIGN")) {
+            return rows;
+        }
+        return rows.stream().filter(visit -> Objects.equals(visit.getEngineerId(), p.userId())).toList();
+    }
+
     public List<ServiceVisit> serviceVisits(UUID id, Principal p) {
         ServiceRequest t = ticket(id, p.tenantId());
         ensureTicketAccess(t, p);
         if (!"CUSTOMER".equals(p.accountType())) permission(p, "SERVICE_VIEW");
-        return visits.findByTenantIdAndServiceRequestIdOrderByScheduledAtAsc(p.tenantId(), id);
+        List<ServiceVisit> rows = visits.findByTenantIdAndServiceRequestIdOrderByScheduledAtAsc(p.tenantId(), id);
+        return visibleServiceVisits(rows, p);
     }
     
     public List<ServiceEvent> serviceHistory(UUID id, Principal p) {
