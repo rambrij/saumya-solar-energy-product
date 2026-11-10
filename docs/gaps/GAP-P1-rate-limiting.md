@@ -39,12 +39,13 @@ The inspected filter does not establish application-level throttling for public 
 
 ## Implementation plan
 
-1. Confirm the exact endpoint inventory and distinguish routes protected by application filters from routes protected by a verified WAF/API gateway.
-2. Add an account-key bucket using a server-side HMAC/hash of a normalized identifier. Do not log or persist the raw identifier.
-3. Keep endpoint, IP and account limits independently configurable; define precedence and retry behavior.
-4. Add rate-limit coverage to public enquiry/export/webhook handlers only where those routes exist and are in scope; otherwise record the verified gateway control.
-5. Keep the existing migration additive. If a new bucket dimension or index is needed, add a new Flyway migration after confirming the actual latest version; never edit V52.
-6. Extend the cleanup query and metrics to cover all bucket dimensions without exposing identifiers.
+1. **Implemented in commit `1a79b56244af6aa23bd58f15f835766574eae908`:** account bucket added for login, forgot-password and reset-password requests. The identifier is normalized in memory and keyed with HMAC-SHA-256 derived from the configured JWT secret; only the 64-character digest is stored in the existing `auth_rate_limit_bucket` table.
+2. **Implemented:** the existing IP + endpoint bucket remains independent; account + endpoint is an additional bucket. Both use the configured route-specific limit and window.
+3. **Implemented:** request JSON is buffered with a 16 KiB maximum and replayed to Spring MVC; malformed JSON receives only IP throttling and continues to normal MVC validation; oversized bodies are rejected with a generic 400.
+4. **No migration required:** existing V52 bucket schema accepts both opaque 64-character hashes; no applied migration was edited.
+5. **Open:** confirm exact route inventory and distinguish application-protected routes from ingress/WAF-protected public enquiry, export and webhook routes.
+6. **Open:** assess distributed/concurrent bucket semantics with MySQL integration tests and add gateway policy evidence where applicable.
+7. **Open:** review whether refresh and MFA routes need a separate principal/challenge dimension; current refresh and MFA remain IP + endpoint throttled because they do not carry a stable user identifier in a trustworthy request field.
 
 ## Test plan
 
@@ -64,4 +65,11 @@ The inspected filter does not establish application-level throttling for public 
 
 ## Status
 
-**Open** — implementation exists for endpoint + IP and per-account failed-login lockout, but independent account throttling and full SRS endpoint coverage are not demonstrated. No code changes were made in this audit pass.
+**Implemented / Pending Verification (partial gap closure).**
+
+- Account + endpoint throttling is implemented for login, forgot-password and reset-password, reusing V52 and the existing filter.
+- IP + endpoint throttling remains in place for all five existing authentication routes.
+- Focused unit tests were added for the additional bucket, request-body replay, raw identifier non-persistence and oversized-body rejection.
+- The GitHub Actions full validation workflow was triggered for commit `1a79b56244af6aa23bd58f15f835766574eae908`; at report update time its run was still in progress. Do not mark this requirement MET until the backend job passes.
+- Public enquiry/export/webhook ingress policy and production gateway evidence remain Open.
+- No applied migration was changed and no schema migration was needed.
