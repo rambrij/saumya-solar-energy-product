@@ -66,8 +66,14 @@ class EndpointAuthenticationMatrixTest {
                 }
             }
         }
-        assertTrue(checked.size() >= 200,
+        assertTrue(checked.size() >= 220,
                 "The controller mapping inventory unexpectedly shrank: only checked " + checked.size());
+        assertTrue(checked.contains("POST /api/v1/exports"),
+                "Export creation must be included in the authentication matrix");
+        assertTrue(checked.contains("GET /api/v1/exports/{exportId}"),
+                "Export status must be included in the authentication matrix");
+        assertTrue(checked.contains("GET /api/v1/exports/{exportId}/download"),
+                "Export download must be included in the authentication matrix");
         assertTrue(failures.isEmpty(), "Unauthenticated endpoint exposure:\\n" + String.join("\\n", failures));
     }
 
