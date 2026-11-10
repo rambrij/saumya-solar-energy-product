@@ -8,23 +8,21 @@
 
 ## 1. Executive summary
 
-This is a source-level validation of the requested Phase 1 and Phase 2 scope. It is not a production security certification. The current branch already contains substantial authentication and tenant-isolation implementation. The audit found remaining incomplete coverage and at least two areas that could not be exhaustively verified from the accessible source evidence.
-
-No application code, migrations, or tests were changed in this audit pass. The changes in this commit set are audit artifacts only. This was deliberate: the available GitHub repository integration permits branch file inspection and commits, but does not provide a local checkout, shell, Maven/Node execution, database, or browser runtime. Implementing security changes without the ability to compile, execute migrations, and run the negative tests would be unsafe. Consequently, no gap is represented as fixed or verified.
+This is a source-level validation and remediation pass, not a production security certification. Application code and tests have been changed on the requested branch, and CI is being used for backend/frontend/MySQL verification. Existing implementation was extended rather than duplicated. No production database, production ingress/WAF configuration, or live penetration test was accessed.
 
 ### Status totals
 
-The status-before column means the state found at the start of this audit on the requested branch. The status-after column means the state after this audit's documentation-only changes. MET requires both implementation evidence and passing test evidence. PARTIAL means a material implementation exists but the full requirement or its test evidence is incomplete. UNVERIFIABLE means the audit could not establish the condition from the available source evidence.
+The status-before column means the state found at the start of the audit/remediation pass. The status-after column reflects the code and tests committed in this remediation pass. MET requires complete implementation and passing latest-head automated test evidence. PARTIAL means meaningful implementation exists but the full requirement or its latest-head proof remains incomplete. UNVERIFIABLE means the audit could not establish the condition from available source evidence.
 
 | Status | Before | After |
 |---|---:|---:|
 | MET | 0 | 0 |
-| PARTIAL | 16 | 16 |
+| PARTIAL | 16 | 18 |
 | NOT MET | 0 | 0 |
-| UNVERIFIABLE | 2 | 2 |
+| UNVERIFIABLE | 2 | 0 |
 | **Total** | **18** | **18** |
 
-No NOT MET designation is used where an implementation exists but is incomplete; those are PARTIAL. The absence of MET does not mean the platform has no controls. It reflects the strict requirement that each complete requirement be covered by a passing test, which could not be freshly established for the latest branch head in this environment.
+No NOT MET designation is used where an implementation exists but is incomplete; those are PARTIAL. The two initially UNVERIFIABLE database findings were upgraded to PARTIAL after directly inspecting V57/V58 and their preflight SQL. No item is MET because the newest remediation commit's CI run is still in progress; a previous branch head did pass all four release-validation jobs (workflow 42818724332).
 
 ## 2. Requirement extraction and traceability matrix
 
@@ -32,25 +30,57 @@ The IDs below are audit IDs created for this report. They are not claimed to be 
 
 | Requirement ID | Source document and section | One-line requirement | Code evidence | Test evidence | Before | After |
 |---|---|---|---|---|---|---|
-| P1-AUTH-001 | Business requirements §18 Security; SRS §15.3 | Apply abuse throttling by endpoint and client source, with account/user controls for authentication and recovery flows. | `AuthenticationRateLimitFilter.shouldNotFilter/doFilterInternal/accountIdentifier/incrementAndGet`; `ClientAddressResolver.resolve`; `AuthLifecycleService.authenticate`; V52 `auth_rate_limit_bucket`. Since commit `1a79b562`, login/forgot-password/reset-password also use a separate HMAC-derived account + endpoint bucket; refresh/MFA remain IP + endpoint only. | `AuthenticationRateLimitFilterTest`; `AuthLifecycleServiceTest`; no demonstrated per-account limiter test or coverage for all SRS-listed public enquiry/export/webhook routes. | PARTIAL | PARTIAL |
+| P1-AUTH-001 | Business requirements §18 Security; SRS §15.3 | Apply abuse throttling by endpoint and client source, with account/user controls for authentication and recovery flows. | `AuthenticationRateLimitFilter.limitFor/shouldNotFilter/doFilterInternal/accountIdentifier/incrementAndGet`; `ClientAddressResolver.resolve`; `AuthLifecycleService.authenticate`; V52 `auth_rate_limit_bucket`. Commits `1a79b562` and `0d2a741d` add HMAC-derived account + endpoint buckets for login/recovery and independent configurable IP + endpoint buckets for public enquiry, export and payment webhooks. | `AuthenticationRateLimitFilterTest` includes account/IP bucket, body replay, raw identifier non-persistence, oversize body, public enquiry, export and webhook cases; `AuthLifecycleServiceTest` covers persisted lockout and expiry. Latest-head run 42820915064 pending. | PARTIAL | PARTIAL |
 | P1-AUTH-002 | SRS §10.1 IAM-006; §15.1; Business requirements §18 Security | Persist failed password attempts, apply temporary lockout, and define safe expiry/reset behavior. | `AppUser.failedLoginAttempts/lockedUntil`; `AuthLifecycleService.authenticate`; V52. | `AuthLifecycleServiceTest.repeatedFailuresLockAccountAndReturnGenericUnauthorized`; `successfulLoginAfterLockoutExpiryResetsCounter`. Latest-head pass not established here. | PARTIAL | PARTIAL |
 | P1-AUTH-003 | SRS §10.1 IAM-005; §13.2; §15.1; §20.7 | Rotate refresh tokens, revoke sessions, detect replay, and revoke the affected token family. | `AuthLifecycleService.rotateRefresh/consumeRefresh/logout`; `RefreshTokenRepository.findByTokenForUpdate/findByFamilyIdForUpdate`; `JwtFilter.doFilterInternal`; V53 family fields as described by the branch gap analysis. | `AuthLifecycleServiceTest` includes refresh-family replay coverage; no current-branch DB-backed concurrent refresh-replay pass was established. | PARTIAL | PARTIAL |
 | P1-AUTH-004 | SRS §13.2 Browser session contract; §15.1; §15.3 | Keep access tokens in memory, issue refresh tokens in HttpOnly/Secure/SameSite cookies, and protect cookie-authenticated actions with CSRF validation. | `AuthCookieService.issue/requireCsrf/clear`; `Controller.login/refresh/logout/csrf`; `frontend/src/authenticatedFetch.ts` `rotateSession`; `main.tsx` session bootstrap. | `authenticatedFetch.ts` has no standalone proof here of all browser cookie/CSRF edge cases; React E2E exists but latest-head completion was not confirmed. | PARTIAL | PARTIAL |
-| P1-AUTH-005 | Business requirements §12; SRS §9.1–9.3; §20.2 | Enforce the documented role-to-permission matrix, prevent platform privilege escalation, and support vendor-scoped custom roles. | `JwtFilter.doFilterInternal` reloads DB roles/permissions; `AppService.requirePermission`; `AuthLifecycleService.createCustomRole`; `Controller.createVendorEmployee/assignEmployeeRole`; V53 permission catalogue/grants as described in branch notes. Legacy broad permission checks remain in services; no complete custom-role API/editor path was established. | `Release12TenantIntegrationTest` includes platform-role escalation coverage; no complete role × endpoint 401/403 matrix. | PARTIAL | PARTIAL |
+| P1-AUTH-005 | Business requirements §12; SRS §9.1–9.3; §20.2 | Enforce the documented role-to-permission matrix, prevent platform privilege escalation, and support vendor-scoped custom roles. | `JwtFilter.doFilterInternal`; `AppService.requirePermission`; `OperationsService.permission`; `FinanceService.permission`; `AuthLifecycleService.createCustomRole/updateCustomRole/deleteCustomRole/assignEmployeeRole`; `Controller.java` lines 250–288; `frontend/src/RoleManagementPanel.tsx`; V53 permission catalogue. Custom-role CRUD/UI exists; the remaining issue is exhaustive action-to-permission mapping and legacy broad-check reconciliation. | `Release2SecurityTest` covers missing permission and assigned-sales scope; `AuthLifecycleServiceTest` covers custom role allowlist, cross-tenant role update/delete and tenant-scoped employee lookup; `EndpointAuthenticationMatrixTest` covers unauthenticated handler inventory. Full authenticated role × endpoint matrix remains incomplete. | PARTIAL | PARTIAL |
 | P1-AUTH-006 | SRS §13.1; §15.2; §20.2 | Deny unauthenticated and unauthorized requests consistently, returning 401 for missing/invalid identity and 403 for authenticated but forbidden actions. | `SecurityConfig.chain`; `JwtFilter.doFilterInternal`; service-level permission guards. | `EndpointAuthenticationMatrixTest.everyNonPublicHttpHandlerRequiresAuthentication` checks unauthenticated mappings, not all authenticated role/resource combinations. | PARTIAL | PARTIAL |
 | P1-AUTH-007 | SRS §10.1 IAM-007; §15.6 | Persist authentication, reset, MFA, role-change and account-disable security events with safe actor/tenant context. | `AuthenticationAuditService.record`; `AuthLifecycleService.auditAuth`; existing append-only `audit_event` storage. | `AuthenticationAuditServiceTest` and auth lifecycle tests are referenced by branch gap notes; latest-head pass not confirmed here. | PARTIAL | PARTIAL |
 | P1-AUTH-008 | SRS §11; §13.2; §15.3 | Show safe rate-limit and session-expiry feedback in the frontend without leaking account existence or sensitive state. | `frontend/src/main.tsx` handles generic login errors and 429; `authenticatedFetch.ts` dispatches `saumya:session-expired`; API helper maps 403/429. Account lockout intentionally returns generic 401; no distinct 423 flow was established. | Frontend auth/refresh tests are referenced by branch notes; no 423 lockout UX test. | PARTIAL | PARTIAL |
-| P2-TEN-001 | Business requirements §13; SRS §8.1 and §14.2 | Every tenant-owned entity/table must carry a non-null tenant identifier; global reference data must be explicitly classified. | Tenant IDs are present across many domain entities and repository methods; the full migration/entity inventory was not exhaustively enumerated in this pass. | `Release12TenantIntegrationTest` and migration validation suites cover selected entities, not every table. | UNVERIFIABLE | UNVERIFIABLE |
+| P2-TEN-001 | Business requirements §13; SRS §8.1 and §14.2 | Every tenant-owned entity/table must carry a non-null tenant identifier; global reference data must be explicitly classified. | Tenant IDs are present across many domain entities; V57/V58 and `tenant-isolation-production-preflight.sql` cover selected catalogue, sales, operational, finance, service, evidence and identity relationships. Full entity/table inventory and NOT NULL audit remain incomplete. | `Release12TenantIntegrationTest` and migration validation suites cover selected entities, not every table. | UNVERIFIABLE | UNVERIFIABLE |
 | P2-TEN-002 | Business requirements §13; SRS §6 and §8.2 | Derive tenant identity from the authenticated principal/server-side trusted resolution, never from a caller-supplied tenant ID. | `JwtFilter.doFilterInternal` reloads user and compares tenant/account type/token version; `Principal`; `TenantExecutionContext`; `AppService` tenant guards. | `Release12TenantIntegrationTest`; `tenant-filter-isolation.spec.ts` and `tenant-react-ui.spec.ts` exist; latest full run not established. | PARTIAL | PARTIAL |
 | P2-TEN-003 | SRS §8.3 and §15.2 | Tenant-scope every repository read/write/bulk operation; resource lookups must verify tenant ownership rather than trust a bare identifier. | Tenant-qualified methods exist, e.g. `IntegrationSyncJobRepository.findByIdAndTenantId`, `WarrantyClaimAttachmentRepository.findByIdAndTenantIdAndClaimId`, and service accessors. Not every repository/service call site was reviewed. | `Release12TenantIntegrationTest` covers selected cross-tenant resources; no exhaustive repository inventory test was established. | PARTIAL | PARTIAL |
-| P2-TEN-004 | SRS §8.3 and §14.3 | Add composite tenant-aware foreign keys and tenant-scoped unique constraints where relationships are tenant-owned. | Existing branch notes describe V37/V43 composite tenant/branch constraints and later V57/V58 tenant-integrity work. The corresponding latest migration paths and full FK inventory could not be independently located/verified in this inspection. | Branch notes describe MySQL 8.4 migration and integrity preflight jobs; latest-head result and full constraint inventory not confirmed. | UNVERIFIABLE | UNVERIFIABLE |
-| P2-TEN-005 | Business requirements §3 and §13; SRS §8.4 and §20.6 | Customers must access only their own quotations, orders, invoices, payments, installations, warranties, tickets and documents within the tenant. | `CustomerAccountService`; `FinanceService.ensureTicketAccess`; `WarrantyClaimAttachmentService.download`; customer-qualified repository methods. | `Release12TenantIntegrationTest` includes customer/claim/attachment checks; all customer resource families are not covered. | PARTIAL | PARTIAL |
-| P2-TEN-006 | Business requirements §12–13 and §20 roadmap; SRS §10.14 and §11.3 | Enforce branch/assignment scope server-side for branch-bearing operational records and branch-filtered reports. | `EnterpriseSaasService.filterBranchRecords`; `FinanceService.listInvoices/listTickets`; `OperationsService.installations/warehouses/balances/ledger`; `BranchAnalyticsController/Service`. | `Release12TenantIntegrationTest` branch tests cover multiple record families; NULL-branch visibility remains an unresolved policy. | PARTIAL | PARTIAL |
-| P2-TEN-007 | SRS §8.3–8.4; §10.14 RPT-004/RPT-006; §13.7–13.8; §15.4 | Export and file download operations must apply the same tenant, customer and permission checks as transactional reads. | `Phase2OperationsController` CSV/XLSX/PDF export paths; `WarrantyClaimAttachmentService.download`; private attachment services/controllers. | `Release12TenantIntegrationTest.operationsCsvXlsxAndPdfExportsContainOnlyAuthenticatedTenantAggregates`; warranty attachment foreign-tenant/customer/parent tests. Not all download/export families covered. | PARTIAL | PARTIAL |
-| P2-TEN-008 | SRS §8.3 and §18 | Scheduled and asynchronous work must carry validated tenant context, isolate tenant data, be idempotent and clear context after execution. | `TenantExecutionContext.open/requireTenantId`; `ServiceSlaScheduler.evaluate`; `WarrantyExpiryScheduler.evaluateWarrantyExpiry`; `SubscriptionExpiryScheduler.expireSubscriptions`; `IntegrationSyncJobRepository.claimIfDue`. | `TenantSchedulerConcurrencyIntegrationTest` covers integration claims and subscription/SLA/warranty scheduler cases; not every async job/provider path. | PARTIAL | PARTIAL |
+| P2-TEN-004 | SRS §8.3 and §14.3 | Add composite tenant-aware foreign keys and tenant-scoped unique constraints where relationships are tenant-owned. | `V57__tenant_aware_catalogue_foreign_keys.sql` adds tenant-aware product/category/package_item constraints. `V58__operational_tenant_composite_foreign_keys.sql` adds composite keys and FKs across sales, orders, inventory, installation, warranty, finance, service, private evidence, offline sync, branch, approval, audit and notification relationships. V58 preflight is fail-closed. | Workflow 42818724332 passed MySQL 8.4 migration/integrity validation. Full schema inventory and production-data preflight remain open. | UNVERIFIABLE | UNVERIFIABLE |
+| P2-TEN-005 | Business requirements §3 and §13; SRS §8.4 and §20.6 | Customers must access only their own quotations, orders, invoices, payments, installations, warranties, tickets and documents within the tenant. | `CustomerAccountService`; `FinanceService.ensureTicketAccess`; `WarrantyClaimAttachmentService.download`; customer-qualified repository methods. | `Release12TenantIntegrationTest` includes foreign customer address, claim, attachment, invoice PDF and other customer-owned resource checks; all customer resource families are not covered. | PARTIAL | PARTIAL |
+| P2-TEN-006 | Business requirements §12–13 and §20 roadmap; SRS §10.14 and §11.3 | Enforce branch/assignment scope server-side for branch-bearing operational records and branch-filtered reports. | `EnterpriseSaasService.filterBranchRecords`; `FinanceService.listInvoices/listTickets`; `OperationsService.installations/warehouses/balances/ledger`; `BranchAnalyticsController/Service`. | `Release12TenantIntegrationTest.branchAssignedMemberListsOnlyAssignedBranchEnquiriesLeadsSurveysQuotationsAndOrders` covers CRM, invoice, service, installation and inventory lists; NULL-branch visibility remains an unresolved policy. | PARTIAL | PARTIAL |
+| P2-TEN-007 | SRS §8.3–8.4; §10.14 RPT-004/RPT-006; §13.7–13.8; §15.4 | Export and file download operations must apply the same tenant, customer and permission checks as transactional reads. | `Phase2OperationsController` CSV/XLSX/PDF export paths; `WarrantyClaimAttachmentService.download`; private attachment services/controllers. | `Release12TenantIntegrationTest` covers operations CSV/XLSX/PDF tenant aggregates, invoice PDF, foreign warranty claim and attachment parent/customer/tenant access. Not all download/export families covered. | PARTIAL | PARTIAL |
+| P2-TEN-008 | SRS §8.3 and §18 | Scheduled and asynchronous work must carry validated tenant context, isolate tenant data, be idempotent and clear context after execution. | `TenantExecutionContext.open/requireTenantId`; `IntegrationSyncScheduler.dispatch`; `ServiceSlaScheduler.evaluate`; `WarrantyExpiryScheduler.evaluateWarrantyExpiry`; `SubscriptionExpiryScheduler.expireSubscriptions`; `IntegrationSyncJobRepository.claimIfDue`. Identified schedulers use try-with-resources; async worker inventory remains incomplete. | `TenantSchedulerConcurrencyIntegrationTest` covers integration claims and subscription/SLA/warranty scheduler cases. Async notification/export/worker inventory and exception/thread-reuse tests remain open. | PARTIAL | PARTIAL |
 | P2-TEN-009 | SRS §8.4; §20.1; §20.4; §20.6; Business requirements §13 | Negative tests must prove foreign-tenant/customer read, write and export/download denial, and test delete only where a delete operation is actually specified/exposed. | `Release12TenantIntegrationTest`; `EndpointAuthenticationMatrixTest`; resource-specific tenant-scoped services and repositories. | Existing integration tests cover selected CRUD/export/download paths; no generated full endpoint × verb × identity matrix was demonstrated. | PARTIAL | PARTIAL |
 | P2-TEN-010 | Business requirements §13; SRS §6 and §15.2 | Frontend filters, selectors and hidden menu items must never act as authorization; the backend remains authoritative. | `JwtFilter`, controller/service permission guards; frontend navigation and query filters are presentation only. | `frontend/e2e/tenant-filter-isolation.spec.ts`; `frontend/e2e/tenant-react-ui.spec.ts` (two-tenant React workflow is still marked partial in branch notes). | PARTIAL | PARTIAL |
 
+## 3. Remediation update — 2026-11-10
+
+### Application changes committed on the requested branch
+
+- `1a79b56244af6aa23bd58f15f835766574eae908`: account-aware HMAC login/recovery throttling, bounded body replay, focused tests.
+- `8be6f0d78bd19b3a5629524e0556255fd7505bdf`: tenant-qualified employee repository lookup; custom employee role assignment now uses the tenant-qualified method.
+- `1f5ce498369a2781fff439dcc12bb99f1e48e978`: tenant-qualified engineer and installation/service visit lookups; same-tenant integration user lookup.
+- `0d2a741d3c6a50aa44668954868a4591084432c2`: configurable IP + endpoint rate limits for public enquiry, export and payment webhook endpoints.
+- `f3cb1d3051c12b7ea37f1246de50c0d53994ce9c`: unit tests for public enquiry, export and webhook throttling.
+- `5f20f0a613d8599c9f91d4f0e7debd743f711aad`: custom role cross-tenant update/delete and tenant-qualified employee lookup tests.
+- `bbd10cce0efb86c839925b59eaae7e87e348b735`: assigned-sales scope enforced for quotation revision reads.
+- `5ccba941c0e7c54c40b038807cc3cb17f73a5e74`: negative test for another employee's quotation revision access.
+
+No Flyway migration was needed or changed for these code fixes. V57/V58 were inspected and retained unchanged.
+
+### CI verification
+
+- Previous full release-validation run `42818724332` on commit `211773834f9f2e8e9b3bf2fbe83e6442400b249c` passed all four jobs: backend compile/tests, Flyway MySQL 8.4 validation, Spring Boot startup/health and frontend typecheck/production build.
+- Latest-head run `42820915064` for commit `5ccba941c0e7c54c40b038807cc3cb17f73a5e74` is in progress at this report update. Frontend build has passed; backend, MySQL migration validation and Spring Boot/browser security job are still running.
+- Therefore all updated requirements remain PARTIAL until the latest run passes and the remaining coverage gaps are closed. No MET claim is made.
+
+### Updated status totals
+
+| Status | Before remediation | After current changes |
+|---|---:|---:|
+| MET | 0 | 0 |
+| PARTIAL | 16 | 18 |
+| NOT MET | 0 | 0 |
+| UNVERIFIABLE | 2 | 0 |
+| **Total** | **18** | **18** |
+
+The two UNVERIFIABLE items (tenant-table inventory and composite FK inventory) are now PARTIAL because V57/V58 and the integrity preflight were directly inspected. This does not mean all tenant tables/relationships are proven complete.
 ## 3. Conflict log
 
 | Conflict ID | Doc A statement | Doc B statement | Rule applied | Decision |
@@ -84,7 +114,7 @@ No statement from README was used in this comparison.
 9. Retention period for authentication audit events and rate-limit buckets beyond the existing two-day bucket cleanup.
 10. Whether platform support impersonation will be introduced; SRS §10.15 AUD-005 defines controls only if it is introduced.
 
-## 6. Implementation update after initial audit
+## 7. Historical implementation update (superseded)
 
 **Latest implementation commit:** `1a79b56244af6aa23bd58f15f835766574eae908`  
 **Documentation update:** `201474727f2b9302dc0c571b3d4c9adefbab7a0f`
@@ -106,7 +136,7 @@ GitHub Actions workflow `release-validation.yml` was automatically triggered by 
 - Public enquiry, export and webhook rate-limit policy (application filter versus upstream gateway/WAF) remains open.
 - No full backend/frontend/MySQL/browser suite result is claimed from this pass.
 
-## 7. Remaining risks and recommended next steps
+## 8. Remaining risks and recommended next steps
 
 ### High priority
 
@@ -132,9 +162,9 @@ GitHub Actions workflow `release-validation.yml` was automatically triggered by 
 - No production database or production preflight was accessed in this audit.
 - One application implementation change and focused tests were committed: account-aware login/recovery throttling. No schema change was needed. This change remains pending CI verification.
 
-## 8. Gap documents
+## 9. Gap documents
 
-The following gap files are tracked. P1 rate limiting is **Implemented / Pending Verification** for the account bucket; the remaining gap scope is Open. Other gap files remain Open:
+The following gap files are tracked. P1 rate limiting, role/permission enforcement, session feedback, tenant FK coverage, cross-tenant/customer/branch coverage and background job scoping are PARTIAL with remediation notes; remaining items are Open:
 
 - `docs/gaps/GAP-P1-rate-limiting.md`
 - `docs/gaps/GAP-P1-role-permission-matrix.md`
@@ -143,7 +173,7 @@ The following gap files are tracked. P1 rate limiting is **Implemented / Pending
 - `docs/gaps/GAP-P2-cross-tenant-customer-branch-export-tests.md`
 - `docs/gaps/GAP-P2-background-job-scoping.md`
 
-## 9. Audit conclusion
+## 10. Audit conclusion
 
 **Phase 1: NOT MET.** Core controls exist, but rate-limit dimensions and coverage, least-privilege role enforcement, exhaustive negative tests, and frontend lockout/session behavior are not fully verified.
 
