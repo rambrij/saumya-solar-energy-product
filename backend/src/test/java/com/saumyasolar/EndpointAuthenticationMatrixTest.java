@@ -155,8 +155,17 @@ class EndpointAuthenticationMatrixTest {
         vendor.setEnabled(true);
         vendor.getRoles().add(allGrants);
         // The HTTP security chain intentionally protects tenant administration routes
-        // with the VENDOR_ADMIN role in addition to fine-grained permission checks.
-        vendor.getRoles().add(roles.findByNameAndTenantIdIsNull("VENDOR_ADMIN").orElseThrow());
+        // with the tenant-scoped VENDOR_ADMIN role in addition to fine-grained grants.
+        AppUser seededVendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        Role vendorAdminTemplate = seededVendor.getRoles().stream()
+                .filter(role -> "VENDOR_ADMIN".equals(role.getName())).findFirst().orElseThrow();
+        Role matrixVendorAdmin = new Role();
+        matrixVendorAdmin.setId(UUID.randomUUID());
+        matrixVendorAdmin.setTenantId(matrixTenant.getId());
+        matrixVendorAdmin.setName("VENDOR_ADMIN");
+        matrixVendorAdmin.getPermissions().addAll(vendorAdminTemplate.getPermissions());
+        roles.saveAndFlush(matrixVendorAdmin);
+        vendor.getRoles().add(matrixVendorAdmin);
         users.saveAndFlush(vendor);
 
         AppUser platform = users.findByEmailIgnoreCase("platform@saumya.local").orElseThrow();
