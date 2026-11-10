@@ -87,3 +87,11 @@ Still open: full customer resource family matrix, all branch CRUD/assignment ope
 - Replaced role-name gates in service comments, offline service comments, survey review/reassignment and warranty evidence access with the corresponding fine-grained permissions. Assigned-service visibility remains constrained unless the principal has SERVICE_ASSIGN.
 - Existing customer negative tests still cover addresses, orders, invoices, service tickets, warranty claims and claim evidence; existing exports cover operations CSV/XLSX/PDF and invoice PDF. This is not yet every customer resource family, every branch mutation, every report/export, or every attachment family.
 - No claim is made that all export and file-download paths have been exhausted. The endpoint inventory remains the checklist and must be closed against every exposed download/attachment route.
+
+
+### Customer payment receipt and attachment upload authorization — 2026-11-10
+
+- Customer payment receipt reads now rely on invoice/customer ownership rather than requiring the vendor-only PAYMENT_VIEW permission after ownership has been verified. A foreign customer's payment remains hidden with 404.
+- Added a same-tenant customer quotation-list negative case and payment receipt owner/foreign-owner assertions to the customer integration test.
+- Service evidence upload requires SERVICE_UPDATE for vendor users and the existing tenant/assigned-ticket guard; a read-only service viewer cannot upload.
+- The complete customer matrix remains open for all other resource families and each exposed export/download route. Existing PDF/XLSX/CSV and attachment tests are selected evidence, not proof that every binary route is covered.
