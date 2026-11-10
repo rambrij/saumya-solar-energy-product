@@ -160,7 +160,7 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
         try {
             JsonNode root = mapper.readTree(body);
             if (root == null || !root.isObject()) return null;
-            for (String field : new String[]{"email", "username", "login"}) {
+            for (String field : new String[]{"email", "username", "login", "token"}) {
                 JsonNode value = root.get(field);
                 if (value != null && value.isTextual() && !value.asText().isBlank()) {
                     return value.asText();
