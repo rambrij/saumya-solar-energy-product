@@ -96,7 +96,7 @@ class EndpointAuthenticationMatrixTest {
                 }
             }
         }
-        assertTrue(checked.size() >= 200,
+        assertTrue(checked.size() >= 207,
                 "The controller mapping inventory unexpectedly shrank: only checked " + checked.size());
         assertTrue(checked.contains("POST /api/v1/exports"),
                 "Export creation must be included in the authentication matrix");
@@ -158,7 +158,7 @@ class EndpointAuthenticationMatrixTest {
                 }
             }
         }
-        assertTrue(checked.size() >= 70,
+        assertTrue(checked.size() >= 83,
                 "The authenticated read matrix unexpectedly shrank: only checked " + checked.size());
         assertTrue(failures.isEmpty(),
                 "Least-privilege authenticated reads were exposed:\\n" + String.join("\\n", failures));
@@ -228,7 +228,7 @@ class EndpointAuthenticationMatrixTest {
                 }
             }
         }
-        assertTrue(checked.size() >= 100,
+        assertTrue(checked.size() >= 115,
                 "The authenticated mutation matrix unexpectedly shrank: only checked " + checked.size());
         assertTrue(forbiddenResponses >= 50,
                 "The zero-permission mutation sweep did not reach enough explicit permission gates: 403="
