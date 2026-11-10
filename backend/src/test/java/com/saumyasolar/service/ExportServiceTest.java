@@ -5,6 +5,8 @@ import com.saumyasolar.domain.ExportJob;
 import com.saumyasolar.repo.ExportJobRepository;
 import com.saumyasolar.security.Principal;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -61,36 +63,43 @@ class ExportServiceTest {
         verifyNoInteractions(jobs, events);
     }
 
-    @Test
-    void processingCreatesPrivateFileAndCompletesJob() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"CSV", "XLSX", "PDF"})
+    void processingCreatesPrivateFileAndCompletesJobForEverySupportedFormat(String format) throws Exception {
         UUID tenant = UUID.randomUUID();
         ExportJob job = new ExportJob();
         job.setId(UUID.randomUUID()); job.setTenantId(tenant); job.setRequestedBy(UUID.randomUUID());
-        job.setReportType("OPERATIONS"); job.setFormat("CSV"); job.setStatus("PROCESSING");
+        job.setReportType("OPERATIONS"); job.setFormat(format); job.setStatus("PROCESSING");
         when(jobs.claim(eq(job.getId()), eq(tenant), any(java.time.Instant.class), any(java.time.Instant.class))).thenReturn(1);
         when(jobs.findByIdAndTenantId(job.getId(), tenant)).thenReturn(Optional.of(job));
         when(reports.operationsReportForTenant(eq(tenant), nullable(LocalDate.class), nullable(LocalDate.class))).thenReturn(Map.of("orders", 3, "amount", new BigDecimal("10.00")));
         when(storage.putReplacing(any(), eq("exports"), eq(tenant), anyString(), any(), anyString()))
-                .thenReturn(tenant + "/exports/" + job.getId() + ".csv");
+                .thenAnswer(invocation -> tenant + "/exports/" + job.getId() + "." + format.toLowerCase(java.util.Locale.ROOT));
         when(jobs.save(any(ExportJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         service().process(job.getId(), tenant);
 
         assertEquals("COMPLETED", job.getStatus());
         assertNotNull(job.getStorageKey());
-        assertEquals("text/csv; charset=UTF-8", job.getContentType());
+        String expectedContentType = switch (format) {
+            case "CSV" -> "text/csv; charset=UTF-8";
+            case "XLSX" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            case "PDF" -> "application/pdf";
+            default -> throw new IllegalStateException(format);
+        };
+        assertEquals(expectedContentType, job.getContentType());
         assertTrue(job.getFileSize() > 0);
         assertNotNull(job.getExpiresAt());
         verify(storage).putReplacing(any(), eq("exports"), eq(tenant), anyString(), any(), anyString());
         verify(jobs).save(job);
 
-        byte[] privateCsv = "id,total\n1,10.00\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] privateFile = ("private " + format + " export").getBytes(java.nio.charset.StandardCharsets.UTF_8);
         when(jobs.findByIdAndTenantIdAndRequestedBy(job.getId(), tenant, job.getRequestedBy()))
                 .thenReturn(Optional.of(job));
-        when(storage.get(any(), eq(job.getStorageKey()))).thenReturn(privateCsv);
+        when(storage.get(any(), eq(job.getStorageKey()))).thenReturn(privateFile);
         ExportService.Download ownerDownload = service().download(
                 job.getId(), principal(tenant, job.getRequestedBy(), Set.of("REPORT_EXPORT")));
-        assertArrayEquals(privateCsv, ownerDownload.bytes());
+        assertArrayEquals(privateFile, ownerDownload.bytes());
         verify(storage).get(any(), eq(job.getStorageKey()));
     }
 
