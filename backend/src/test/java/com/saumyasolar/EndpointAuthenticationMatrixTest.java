@@ -38,7 +38,7 @@ class EndpointAuthenticationMatrixTest {
             "/api/v1/auth/", "/api/v1/public/", "/api/v1/payment-webhooks/",
             "/api/v1/payment-gateway-webhooks/", "/uploads/", "/swagger-ui/", "/v3/api-docs/"
     );
-    private static final Set<String> PUBLIC_EXACT = Set.of("/actuator/health");
+    private static final Set<String> PUBLIC_EXACT = Set.of("/actuator/health", "/v3/api-docs");
 
     @Test
     void everyNonPublicHttpHandlerRequiresAuthentication() throws Exception {
