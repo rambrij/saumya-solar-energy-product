@@ -140,4 +140,18 @@ class ExportServiceTest {
                 com.saumyasolar.security.TenantExecutionContext::requireTenantId);
     }
 
+
+    @Test
+    void downloadCannotBeClaimedByAnotherUserOrTenant() {
+        UUID tenant = UUID.randomUUID(), owner = UUID.randomUUID(), otherUser = UUID.randomUUID();
+        UUID exportId = UUID.randomUUID();
+        Principal attacker = principal(tenant, otherUser, Set.of("REPORT_EXPORT"));
+        when(jobs.findByIdAndTenantIdAndRequestedBy(exportId, tenant, otherUser)).thenReturn(Optional.empty());
+
+        assertThrows(ResponseStatusException.class, () -> service().download(exportId, attacker));
+
+        verify(jobs).findByIdAndTenantIdAndRequestedBy(exportId, tenant, otherUser);
+        verifyNoInteractions(storage);
+    }
+
 }
