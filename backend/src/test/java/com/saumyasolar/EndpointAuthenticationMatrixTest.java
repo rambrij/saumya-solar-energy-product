@@ -151,10 +151,10 @@ class EndpointAuthenticationMatrixTest {
         AppUser platform = users.findByEmailIgnoreCase("platform@saumya.local").orElseThrow();
         AppUser customer = users.findByEmailIgnoreCase("customer@saumya.local").orElseThrow();
 
-        // Quotation revision is the one mutation whose service deliberately loads the
-        // existing parent before returning a domain result. Supply a real tenant-owned
-        // parent so the positive permission probe tests the authorization path, not a
-        // synthetic missing-ID Optional.get failure.
+        var customerProfile = customers.findByTenantIdAndUserId(seededVendor.getTenantId(), customer.getId())
+                .orElseThrow(() -> new AssertionError("Seeded customer profile is required for positive route fixtures"));
+
+        // Quotation revision and customer decision routes require real tenant-owned parents.
         Quotation revisionFixture = new Quotation();
         revisionFixture.setId(UUID.randomUUID());
         revisionFixture.setTenantId(seededVendor.getTenantId());
@@ -162,6 +162,8 @@ class EndpointAuthenticationMatrixTest {
         revisionFixture.setQuotationNumber("MATRIX-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10));
         revisionFixture.setRevision(1);
         revisionFixture.setStatus("SENT");
+        revisionFixture.setCustomerId(customerProfile.getId());
+        revisionFixture.setValidUntil(LocalDate.now().plusDays(30));
         revisionFixture.setSubtotal(BigDecimal.ONE);
         revisionFixture.setDiscountPercent(BigDecimal.ZERO);
         revisionFixture.setDiscountAmount(BigDecimal.ZERO);
@@ -172,8 +174,6 @@ class EndpointAuthenticationMatrixTest {
         quotations.saveAndFlush(revisionFixture);
         revisionFixtureId = revisionFixture.getId();
 
-        var customerProfile = customers.findByTenantIdAndUserId(seededVendor.getTenantId(), customer.getId())
-                .orElseThrow(() -> new AssertionError("Seeded customer profile is required for the order-conversion fixture"));
         Quotation acceptedQuotationFixture = new Quotation();
         acceptedQuotationFixture.setId(UUID.randomUUID());
         acceptedQuotationFixture.setTenantId(seededVendor.getTenantId());
@@ -260,7 +260,8 @@ class EndpointAuthenticationMatrixTest {
 
     private String applicableAccountType(String pattern) {
         if (pattern.startsWith("/api/v1/platform/") || pattern.equals("/api/v1/tenants")) return "PLATFORM";
-        if (pattern.startsWith("/api/v1/customer/")) return "CUSTOMER";
+        if (pattern.startsWith("/api/v1/customer/")
+                || pattern.contains("/quotations/{id}/{action:")) return "CUSTOMER";
         return "VENDOR";
     }
 
@@ -271,8 +272,12 @@ class EndpointAuthenticationMatrixTest {
         if ("VENDOR".equals(accountType) && pattern.startsWith("/api/v1/{type:")) {
             path = path.replaceFirst("^/api/v1/tenants$", "/api/v1/users");
         }
-        if ("VENDOR".equals(accountType) && pattern.contains("/quotations/") && pattern.contains("/revisions")) {
+        if (pattern.contains("/quotations/") && pattern.contains("/revisions")) {
             path = path.replace("00000000-0000-4000-8000-000000000001", revisionFixtureId.toString());
+        }
+        if ("CUSTOMER".equals(accountType) && pattern.contains("/quotations/{id}/{action:")) {
+            path = path.replace("00000000-0000-4000-8000-000000000001", revisionFixtureId.toString())
+                    .replace("/approve", "/accept");
         }
         if ("VENDOR".equals(accountType) && pattern.contains("/quotations/") && pattern.contains("/convert-to-order")) {
             path = path.replace("00000000-0000-4000-8000-000000000001", acceptedQuotationFixtureId.toString());
