@@ -1435,3 +1435,17 @@ This pass added traceability and gap documentation only. **No implementation ite
 - Production preflight against production data was not executed. The earlier CI fixture preflight is not production sign-off.
 
 No statuses in the earlier tables were upgraded because no implementation/test item was closed and verified during this documentation-only pass.
+
+
+### Remediation update — 2026-11-10
+
+**Application change committed:** `1a79b56244af6aa23bd58f15f835766574eae908`  
+**Rate-limit gap documentation:** `201474727f2b9302dc0c571b3d4c9adefbab7a0f`  
+**Validation report update:** `4966625d83268ad039b46c065093eb7d59e071c2`
+
+- Extended `AuthenticationRateLimitFilter` with a separate account + endpoint bucket for login, forgot-password and reset-password. The identifier is normalized and HMAC-SHA-256 keyed using the configured JWT secret; the raw identifier is not stored.
+- Retained independent IP + endpoint throttling and the existing V52 persistence table. No Flyway migration was necessary or changed.
+- Added bounded JSON-body buffering/replay (16 KiB cap) so Spring MVC still receives the original login/recovery payload.
+- Added unit tests for the second bucket, request-body replay, identifier non-persistence and oversized-body rejection.
+- Status: **Implemented / Pending Verification**. The full release-validation workflow was triggered on this commit (run ID `42818434724`) and was still in progress at the time of this addendum. Do not mark P1-AUTH-001 MET until backend CI passes and public enquiry/export/webhook ingress policies are evidenced.
+- This is a partial remediation; all other Phase 1/2 gaps remain as previously recorded. No other requirement status is upgraded.
