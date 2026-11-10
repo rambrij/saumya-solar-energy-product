@@ -297,7 +297,7 @@ public class Phase2OperationsController {
         return operationsReportForTenant(p.tenantId(), from, to);
     }
 
-    /** Internal tenant-scoped report projection shared by synchronous and asynchronous exports. */
+    /** Tenant-scoped report projection shared by the JSON report endpoint and asynchronous export jobs. */
     public Map<String, Object> operationsReportForTenant(UUID t, LocalDate from, LocalDate to) {
         if (t == null) throw new IllegalArgumentException("tenantId is required");
         if (from != null && to != null && to.isBefore(from))
