@@ -83,6 +83,15 @@ class ExportServiceTest {
         assertNotNull(job.getExpiresAt());
         verify(storage).putReplacing(any(), eq("exports"), eq(tenant), anyString(), any(), anyString());
         verify(jobs).save(job);
+
+        byte[] privateCsv = "id,total\\n1,10.00\\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        when(jobs.findByIdAndTenantIdAndRequestedBy(job.getId(), tenant, job.getRequestedBy()))
+                .thenReturn(Optional.of(job));
+        when(storage.get(any(), eq(job.getStorageKey()))).thenReturn(privateCsv);
+        ExportService.Download ownerDownload = service().download(
+                job.getId(), principal(tenant, job.getRequestedBy(), Set.of("REPORT_EXPORT")));
+        assertArrayEquals(privateCsv, ownerDownload.bytes());
+        verify(storage).get(any(), eq(job.getStorageKey()));
     }
 
     @Test
