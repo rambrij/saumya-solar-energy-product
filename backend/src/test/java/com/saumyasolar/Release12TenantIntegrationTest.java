@@ -176,7 +176,22 @@ class Release12TenantIntegrationTest {
                         .content(tenantBody))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var tenantId = json.readTree(tenantResponse).get("id").asText();
-        
+
+        var tenantCsv = mvc.perform(get("/api/v1/platform/tenants/export")
+                        .header("Authorization", "Bearer " + platformToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(tenantCsv.contains("vendor-" + suffix));
+        byte[] tenantXlsx = mvc.perform(get("/api/v1/platform/tenants/export.xlsx")
+                        .header("Authorization", "Bearer " + platformToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertTrue(tenantXlsx.length > 4);
+        assertEquals('P', tenantXlsx[0]);
+        assertEquals('K', tenantXlsx[1]);
+        byte[] tenantPdf = mvc.perform(get("/api/v1/platform/tenants/export.pdf")
+                        .header("Authorization", "Bearer " + platformToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertTrue(new String(tenantPdf, 0, 5, java.nio.charset.StandardCharsets.US_ASCII).startsWith("%PDF-"));
+
         var vendorToken = accessToken(adminEmail, adminPassword);
         var rolesResponse = mvc.perform(get("/api/v1/roles").header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
