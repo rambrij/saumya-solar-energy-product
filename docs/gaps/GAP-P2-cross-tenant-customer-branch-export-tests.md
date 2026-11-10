@@ -102,3 +102,5 @@ Still open: full customer resource family matrix, all branch CRUD/assignment ope
 - ServiceAttachmentServiceTest now verifies that a read-only assigned engineer with SERVICE_VIEW can download evidence after the ticket scope guard succeeds, and an unassigned engineer is denied before attachment repository/storage access.
 - The service upload test covers SERVICE_UPDATE enforcement; FinanceService's assigned-ticket guard and visit filtering are separately covered by FinanceServiceAssignedVisitScopeTest.
 - Foreign-tenant HTTP attachment access remains covered by Release12TenantIntegrationTest. A same-tenant cross-customer HTTP download/list test is still required before this route family can be marked exhaustive.
+
+- Latest CI run 42845389769 passed all four jobs and 188 backend tests, including branch lifecycle, customer payment receipt and same-tenant cross-customer service evidence tests.
