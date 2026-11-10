@@ -67,6 +67,8 @@ import com.saumyasolar.repo.WarrantyClaimRepository;
 import com.saumyasolar.repo.TenantRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -1368,14 +1370,15 @@ class Release12TenantIntegrationTest {
         assertFalse(pdfText.contains("987654"));
     }
 
-    @Test
+    @ParameterizedTest
+    @ValueSource(strings = {"CSV", "XLSX", "PDF"})
     @Transactional
-    void asynchronousExportStatusAndDownloadAreRestrictedToTheRequestingPrincipal() throws Exception {
+    void asynchronousExportStatusAndDownloadAreRestrictedToTheRequestingPrincipalForEveryFormat(String format) throws Exception {
         String ownerToken = accessToken("admin@saumya.local", "Admin@123");
         String created = mvc.perform(post("/api/v1/exports")
                         .header("Authorization", "Bearer " + ownerToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reportType\":\"OPERATIONS\",\"format\":\"CSV\"}"))
+                        .content("{\"reportType\":\"OPERATIONS\",\"format\":\"" + format + "\"}"))
                 .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
         String exportId = json.readTree(created).get("id").asText();
 
