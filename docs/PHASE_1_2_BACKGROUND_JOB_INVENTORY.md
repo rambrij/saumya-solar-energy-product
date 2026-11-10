@@ -47,16 +47,16 @@ This inventory is a partial, evidence-based list, not a claim that no other asyn
 ## Repository-wide scanner added — 2026-11-10
 
 - Added scripts/audit/scan-async-workers.sh to scan backend Java source for @Scheduled, @Async, executor declarations/submissions, CompletableFuture, application event listeners/producers, messaging/queue consumer annotations and startup runners. It also scans backend resource and GitHub workflow configuration for scheduler/worker declarations.
-- release-validation.yml runs the scanner on every push to this audit branch and uploads its output as a 30-day artifact. The current source review identifies six scheduled methods/classes: AuthenticationRateLimitCleanup, IntegrationSyncScheduler, NotificationService.retryFailedDeliveries, ServiceSlaScheduler, SubscriptionExpiryScheduler and WarrantyExpiryScheduler.
+- release-validation.yml runs the scanner on every push to this audit branch and uploads its output as a 30-day artifact. The current source review identifies at least seven scheduled methods/classes: AuthenticationRateLimitCleanup, ExportService.recoverAndExpire, IntegrationSyncScheduler, NotificationService.retryFailedDeliveries, ServiceSlaScheduler, SubscriptionExpiryScheduler and WarrantyExpiryScheduler. It also identifies two @Async application listeners (ExportEventListener and BusinessNotificationEventListener) using the bounded applicationEventExecutor.
 - A checked-in scanner and uploaded artifact improve reproducibility but do not themselves prove that every hit is tenant-safe. The artifact must be reviewed and each discovered boundary added to the table above. Queue consumers, event listeners and framework-managed async boundaries remain unverified until that scan output is reviewed.
 
 
 ## Repository scan findings — CI run 42843505138
 
-The checked-in scanner executed across backend/src/main/java and the resource/workflow configuration:
+The checked-in scanner is configured to execute across backend/src/main/java and the resource/workflow configuration. The next successful CI artifact is required to confirm the full hit count and review every boundary:
 
 - Scheduled triggers found: exactly the six rows already listed above.
-- No @Async methods, executor declarations/submissions, CompletableFuture, ForkJoinPool or explicit new Thread use found in backend Java source.
+- The current Java source includes @Async application listeners and a bounded ThreadPoolTaskExecutor in ApplicationEventConfiguration. These listeners explicitly open TenantExecutionContext and delegate to tenant-qualified processing/claim paths. CI scan output remains the authoritative full-repository inventory.
 - No application event listeners/producers or Kafka/Rabbit/JMS listener/template consumers found in backend Java source. The scan output has no false-positive business-method submit entries after the pattern refinement.
 - Startup runners found: DataSeeder.seedData (guarded by app.seed.enabled, default false) and PlatformAdminBootstrap.bootstrapPlatformAdmin (guarded by app.bootstrap.platform-admin.enabled, default false). These are startup initialization paths, not background workers; their data-seeding and credential policy must be audited separately against the no-production-bootstrap-user rule.
 - The initial scanner version used ripgrep, which is not installed on the runner; that scan artifact was invalid. The scanner was changed to portable grep. The corrected CI scan at 42841931283 is the first usable result. A follow-up pattern refinement removes false positives for ordinary business methods named submit.
