@@ -16,7 +16,8 @@ import java.util.UUID;
 public class NotificationDelivery {
     @Id
     UUID id;
-    @Column(nullable = false)
+    // Platform password-reset/MFA messages may be global; business notifications require a tenant.
+    @Column(nullable = true)
     UUID tenantId;
     UUID userId;
     @Column(nullable = false, length = 60)
