@@ -69,7 +69,7 @@ class NotificationServiceTest {
         record.setChannel("EMAIL");
         record.setRecipient("customer@example.test");
         record.setSubject("Retry test");
-        record.setMessageBody("Retry body");
+        record.setMessageBody(tenantId.toString());
         record.setStatus("FAILED");
         record.setAttemptCount(1);
         record.setNextAttemptAt(Instant.now().minusSeconds(5));
@@ -115,8 +115,8 @@ class NotificationServiceTest {
         when(repository.claimFailedDelivery(any(), any(), any())).thenReturn(1);
         when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
         doAnswer(invocation -> {
-            NotificationDelivery delivery = invocation.getArgument(0);
-            assertEquals(delivery.getTenantId(), com.saumyasolar.security.TenantExecutionContext.requireTenantId());
+            SimpleMailMessage message = invocation.getArgument(0);
+            assertEquals(message.getText(), com.saumyasolar.security.TenantExecutionContext.requireTenantId().toString());
             return null;
         }).when(sender).send(any(SimpleMailMessage.class));
 
