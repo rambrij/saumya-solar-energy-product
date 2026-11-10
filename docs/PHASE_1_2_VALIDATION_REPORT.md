@@ -32,7 +32,7 @@ The IDs below are audit IDs created for this report. They are not claimed to be 
 
 | Requirement ID | Source document and section | One-line requirement | Code evidence | Test evidence | Before | After |
 |---|---|---|---|---|---|---|
-| P1-AUTH-001 | Business requirements §18 Security; SRS §15.3 | Apply abuse throttling by endpoint and client source, with account/user controls for authentication and recovery flows. | `AuthenticationRateLimitFilter.shouldNotFilter/doFilterInternal`; `ClientAddressResolver.resolve`; `AuthLifecycleService.authenticate`; V52 `auth_rate_limit_bucket`. Filter key is endpoint + resolved IP; account lockout is separate. | `AuthenticationRateLimitFilterTest`; `AuthLifecycleServiceTest`; no demonstrated per-account limiter test or coverage for all SRS-listed public enquiry/export/webhook routes. | PARTIAL | PARTIAL |
+| P1-AUTH-001 | Business requirements §18 Security; SRS §15.3 | Apply abuse throttling by endpoint and client source, with account/user controls for authentication and recovery flows. | `AuthenticationRateLimitFilter.shouldNotFilter/doFilterInternal/accountIdentifier/incrementAndGet`; `ClientAddressResolver.resolve`; `AuthLifecycleService.authenticate`; V52 `auth_rate_limit_bucket`. Since commit `1a79b562`, login/forgot-password/reset-password also use a separate HMAC-derived account + endpoint bucket; refresh/MFA remain IP + endpoint only. | `AuthenticationRateLimitFilterTest`; `AuthLifecycleServiceTest`; no demonstrated per-account limiter test or coverage for all SRS-listed public enquiry/export/webhook routes. | PARTIAL | PARTIAL |
 | P1-AUTH-002 | SRS §10.1 IAM-006; §15.1; Business requirements §18 Security | Persist failed password attempts, apply temporary lockout, and define safe expiry/reset behavior. | `AppUser.failedLoginAttempts/lockedUntil`; `AuthLifecycleService.authenticate`; V52. | `AuthLifecycleServiceTest.repeatedFailuresLockAccountAndReturnGenericUnauthorized`; `successfulLoginAfterLockoutExpiryResetsCounter`. Latest-head pass not established here. | PARTIAL | PARTIAL |
 | P1-AUTH-003 | SRS §10.1 IAM-005; §13.2; §15.1; §20.7 | Rotate refresh tokens, revoke sessions, detect replay, and revoke the affected token family. | `AuthLifecycleService.rotateRefresh/consumeRefresh/logout`; `RefreshTokenRepository.findByTokenForUpdate/findByFamilyIdForUpdate`; `JwtFilter.doFilterInternal`; V53 family fields as described by the branch gap analysis. | `AuthLifecycleServiceTest` includes refresh-family replay coverage; no current-branch DB-backed concurrent refresh-replay pass was established. | PARTIAL | PARTIAL |
 | P1-AUTH-004 | SRS §13.2 Browser session contract; §15.1; §15.3 | Keep access tokens in memory, issue refresh tokens in HttpOnly/Secure/SameSite cookies, and protect cookie-authenticated actions with CSRF validation. | `AuthCookieService.issue/requireCsrf/clear`; `Controller.login/refresh/logout/csrf`; `frontend/src/authenticatedFetch.ts` `rotateSession`; `main.tsx` session bootstrap. | `authenticatedFetch.ts` has no standalone proof here of all browser cookie/CSRF edge cases; React E2E exists but latest-head completion was not confirmed. | PARTIAL | PARTIAL |
@@ -84,7 +84,29 @@ No statement from README was used in this comparison.
 9. Retention period for authentication audit events and rate-limit buckets beyond the existing two-day bucket cleanup.
 10. Whether platform support impersonation will be introduced; SRS §10.15 AUD-005 defines controls only if it is introduced.
 
-## 6. Remaining risks and recommended next steps
+## 6. Implementation update after initial audit
+
+**Latest implementation commit:** `1a79b56244af6aa23bd58f15f835766574eae908`  
+**Documentation update:** `201474727f2b9302dc0c571b3d4c9adefbab7a0f`
+
+### Implemented (pending CI verification)
+
+- Added a second, independent rate-limit bucket for normalized account identifiers on login, forgot-password and reset-password.
+- Account bucket identifiers are HMAC-SHA-256 digests derived from the configured JWT secret; raw email/username values are not persisted.
+- Existing endpoint + trusted-client-IP bucket remains independent.
+- Authentication JSON request bodies are bounded to 16 KiB and replayed to Spring MVC so the controller can still deserialize the request.
+- Added unit tests for account/IP bucket invocation, request body replay, raw identifier non-persistence and oversized body rejection.
+- Reused V52's existing table. No schema migration was required; no applied migration was edited.
+
+### Verification state
+
+GitHub Actions workflow `release-validation.yml` was automatically triggered by the implementation commit (run ID `42818434724`). At the time of this report update, the workflow was still **in progress**. Therefore:
+- P1-AUTH-001 remains **PARTIAL** (not MET) until the backend tests pass and the remaining ingress-route policy is established.
+- The report's original before/after requirement totals remain unchanged: code implementation alone is not passing-test evidence.
+- Public enquiry, export and webhook rate-limit policy (application filter versus upstream gateway/WAF) remains open.
+- No full backend/frontend/MySQL/browser suite result is claimed from this pass.
+
+## 7. Remaining risks and recommended next steps
 
 ### High priority
 
@@ -105,14 +127,14 @@ No statement from README was used in this comparison.
 
 ### Verification blockers
 
-- No local Maven build, frontend test/build, MySQL migration run or browser E2E was executed in this audit pass.
+- The GitHub Actions workflow was triggered on the account-throttling commit, but it had not completed at the time of this report update. No passing result is claimed yet.
 - The branch notes include earlier CI evidence (including a 154-test backend run, frontend typecheck/build and MySQL migration validation) but do not establish a complete passing run for the latest branch head at the time of this audit.
 - No production database or production preflight was accessed in this audit.
-- No code or schema changes were made, so there are no implementation fixes to claim.
+- One application implementation change and focused tests were committed: account-aware login/recovery throttling. No schema change was needed. This change remains pending CI verification.
 
-## 7. Gap documents
+## 8. Gap documents
 
-The following gap files are added with status Open:
+The following gap files are tracked. P1 rate limiting is **Implemented / Pending Verification** for the account bucket; the remaining gap scope is Open. Other gap files remain Open:
 
 - `docs/gaps/GAP-P1-rate-limiting.md`
 - `docs/gaps/GAP-P1-role-permission-matrix.md`
@@ -121,7 +143,7 @@ The following gap files are added with status Open:
 - `docs/gaps/GAP-P2-cross-tenant-customer-branch-export-tests.md`
 - `docs/gaps/GAP-P2-background-job-scoping.md`
 
-## 8. Audit conclusion
+## 9. Audit conclusion
 
 **Phase 1: NOT MET.** Core controls exist, but rate-limit dimensions and coverage, least-privilege role enforcement, exhaustive negative tests, and frontend lockout/session behavior are not fully verified.
 
