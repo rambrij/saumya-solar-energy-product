@@ -76,3 +76,13 @@ CI update (2026-11-10): workflow 42821756695 passed all four jobs, including 163
 
 
 CI verification (2026-11-10): workflow `42828454430` passed 171 backend tests and the MySQL scheduler concurrency job. Notification retry tenant context, atomic tenant-qualified retry claim, duplicate-claim skip, nested exception and thread-reuse cleanup tests all passed. Full executor/export/queue worker discovery and multi-instance provider delivery/retry failure tests remain open.
+
+
+### Tenant-first notification retry inventory correction — 2026-11-10
+
+- The repository-wide scan (CI run 42843505138) found six @Scheduled entry points and no @Async annotations, explicit executor/thread pools, CompletableFuture, application event listeners/producers or Kafka/Rabbit/JMS consumers in backend Java source.
+- Review found NotificationService.retryFailedDeliveries was globally loading the first 50 FAILED delivery entities before opening each tenant context. It now first reads only distinct tenant IDs, opens TenantExecutionContext for each tenant, and then loads that tenant's due delivery payloads using a tenant-qualified repository query. The atomic tenant-qualified claim remains.
+- NotificationServiceTest now verifies context isolation across multiple tenants and context cleanup after retry; existing tests cover concurrent claim loss.
+- The other scheduled tasks remain: authentication rate-limit cleanup (global table), subscription expiry, service SLA evaluation, warranty expiry and integration sync dispatch. The four tenant schedulers iterate tenant IDs and open/close TenantExecutionContext per tenant. Integration sync uses tenant-qualified atomic claims; subscription/warranty/SLA operations use tenant-qualified repositories.
+- Startup runners DataSeeder and PlatformAdminBootstrap are separately identified and gated off by default; their user-seeding policy remains an application-bootstrap governance concern, not an asynchronous worker.
+- The scanner artifact must be retained/reviewed after each source change. External queues/services and runtime dynamically registered tasks cannot be inferred from this repository scan.
