@@ -2,7 +2,7 @@
 
 **Repository:** `rambrij/saumya-solar-energy-product`  
 **Only target branch:** `cleanup/code-cleanup`  
-**Phase:** 0 — analysis only  
+**Phase:** 0–4 — implementation and verification  
 **Inspected baseline:** `d4acfa8edb8e6828299f6a8abcbe3e9e46178afe`  
 **Authority:** `saumya-solar-energy-solution-requirements.md` (business behavior), then `saumya-solar-production-ready-srs-hld.md` (technical design); `IMPLEMENTATION_GAP_ANALYSIS.md` is evidence/context only. `README.md` is not a validation source.
 
@@ -142,7 +142,7 @@ Any later API, event, persisted-data or configuration contract change must be li
 | Inventory GitHub workflows | PASS — two workflow files identified. |
 | Inspect local compose, Maven POM, runtime application configuration and primary controllers | PASS — inspected. |
 | Phase 0 source/config/SQL removals | NONE — no deletion was performed. |
-| Build/tests/schema-dump comparison/app startup | NOT RUN — Phase 0 is documentation-only; no source changes have been made. |
+| Build/tests/schema-dump comparison/app startup | NOT RUN at the initial Phase 0 documentation-only checkpoint; subsequent implementation and verification evidence is recorded below. |
 
 ### Phase 0 commands / evidence
 
@@ -155,25 +155,27 @@ Any later API, event, persisted-data or configuration contract change must be li
 
 ### Phase 1–4 verification evidence
 
-**Full verification run:** GitHub Actions run `42878871625` — `success`  
-**Schema-equivalence run:** GitHub Actions run `42877702249` — `success`  
-**Resolved Maven dependency scan:** GitHub Actions run `42878871625` — `success`
+**Full verification run:** GitHub Actions run `42887291224` — `success`  
+**Schema-equivalence run:** GitHub Actions run `42887291224` — `success`  
+**Resolved Maven dependency scan:** GitHub Actions run `42887291224` — `success`
 
 | Area | Command / check | Result |
 |---|---|---|
 | Whole-repository external messaging scan | `bash scripts/audit/scan-external-messaging.sh` | PASS — all repository text files scanned, including README for banned infrastructure terms only; README was not used as a requirements or feature-validation source. |
-| Resolved Maven dependency graph | `mvn --batch-mode --no-transfer-progress dependency:tree -Dscope=test -DoutputType=text` (invoked by the scan script) | PASS — no matching external messaging libraries in the resolved graph (run 42878871625). |
+| Resolved Maven dependency graph | `mvn --batch-mode --no-transfer-progress dependency:tree -Dscope=test -DoutputType=text` (invoked by the scan script) | PASS — no matching external messaging libraries in the resolved graph (run 42887291224). |
 | Async execution inventory | `bash scripts/audit/scan-async-workers.sh | tee async-worker-inventory.txt` | PASS — artifact uploaded. |
 | Legacy authorization inventory | `bash scripts/audit/scan-legacy-authz.sh | tee legacy-authz-inventory.txt` | PASS — artifact uploaded. |
 | Permission catalogue drift | `python3 scripts/audit/check-permission-catalogue.py backend | tee permission-catalogue-drift.txt` | PASS. |
-| Backend build and full test suite | `cd backend && mvn --batch-mode --no-transfer-progress clean verify` | PASS — run 42878871625. |
-| Frontend tests and production build | `cd frontend && npm install && npm test && npm run build` | PASS — run 42878871625. |
-| MySQL migration equivalence | Historical V1–V63 from Git commit `467dc8278e13902a39c51d1c9d8d8e588db98f57` applied to a fresh MySQL 8.4 schema; baseline applied to a second fresh schema; schema-only `mysqldump` outputs compared with `diff -u`. | PASS — empty schema diff; artifact `cleanup-schema-equivalence`; run 42877702249. |
+| Backend build and full test suite | `cd backend && mvn --batch-mode --no-transfer-progress clean verify` | PASS — 200 tests, 0 failures, 0 errors (run 42887291224). |
+| Frontend tests and production build | `cd frontend && npm install && npm test && npm run build` | PASS — 22 tests across 6 files; production build passed (run 42887291224). |
+| MySQL migration equivalence | Historical V1–V63 from Git commit `467dc8278e13902a39c51d1c9d8d8e588db98f57` applied to a fresh MySQL 8.4 schema; baseline applied to a second fresh schema; schema-only `mysqldump` outputs compared with `diff -u`. | PASS — empty schema diff; artifact `cleanup-schema-equivalence`; run 42887291224. The baseline contains 74 inline table definitions and zero `ALTER TABLE` / standalone index statements. |
 | Exactly one Flyway migration | Recursive Git tree inspection of `backend/src/main/resources/db/migration/` | PASS — only `V1__baseline.sql`. |
-| MySQL scheduler concurrency | `mvn --batch-mode --no-transfer-progress -Dtest=TenantSchedulerConcurrencyIntegrationTest test` | PASS — 4 tests, 0 failures, 0 errors. |
-| Fresh database application startup | `java -jar target/platform-2.0.0.jar`; poll `curl --fail --silent http://127.0.0.1:8080/actuator/health` | PASS — Flyway applied the single V1 baseline; Hibernate schema validation passed; health returned UP. |
+| MySQL scheduler concurrency | `mvn --batch-mode --no-transfer-progress -Dtest=TenantSchedulerConcurrencyIntegrationTest test` | PASS — 4 tests, 0 failures, 0 errors (run 42887291224). |
+| Fresh database application startup | `java -jar target/platform-2.0.0.jar`; poll `curl --fail --silent http://127.0.0.1:8080/actuator/health` | PASS — Flyway applied the single V1 baseline; Hibernate schema validation passed; health returned UP (run 42887291224). |
 | Tenant integrity preflight | `mysql ... solar < backend/src/test/resources/tenant-isolation-production-preflight.sql` | PASS — V57/V58 tenant integrity preflight. |
-| Browser tenant isolation | `cd frontend && npm run test:e2e` | PASS — browser-level tenant filter tampering tests. |
+| Browser tenant isolation | `cd frontend && npm run test:e2e` | PASS — 3 browser tests passed (run 42887291224). |
 | CI branch restrictions | Inspect both workflow files for trigger and checkout refs | PASS — only `cleanup/code-cleanup` appears as a branch target/ref. |
+| Fresh-start script syntax | `bash -n scripts/dev/fresh-start.sh` | PASS — run 42887291224. |
+| Inline baseline structure | CI static check: one V1 file, 74 `CREATE TABLE`, no `ALTER TABLE` or standalone `CREATE INDEX` | PASS — run 42887291224. |
 
 **Remaining scope note:** no unproven dead-code or orphan-file removals were made. The traceability and removal inventories must continue to be used for any further deletion; documented CMS/blog gaps and export-family/filter parity remain open questions, not cleanup candidates.
