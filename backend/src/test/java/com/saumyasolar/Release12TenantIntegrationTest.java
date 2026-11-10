@@ -1281,8 +1281,8 @@ class Release12TenantIntegrationTest {
         byte[] pdf = mvc.perform(get("/api/v1/reports/operations/export.pdf")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
-        String pdfText = com.lowagie.text.pdf.parser.PdfTextExtractor
-                .getTextFromPage(1, new com.lowagie.text.pdf.PdfReader(pdf));
+        String pdfText = new com.lowagie.text.pdf.parser.PdfTextExtractor(
+                new com.lowagie.text.pdf.PdfReader(pdf)).getTextFromPage(1, true);
         assertTrue(pdfText.contains("orders"));
         assertTrue(pdfText.contains(String.valueOf(expectedOrders)));
         assertFalse(pdfText.contains("987654"));
