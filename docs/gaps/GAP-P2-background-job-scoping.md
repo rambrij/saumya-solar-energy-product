@@ -73,3 +73,6 @@ Latest-head verification update (2026-11-10): workflow 42821756695 passed backen
 
 
 CI update (2026-11-10): workflow 42821756695 passed all four jobs, including 163 backend tests, frontend build, MySQL migration/integrity validation and Playwright tenant-filter tampering. Reset-token throttling code/tests are being verified in workflow 42822434704.
+
+
+CI verification (2026-11-10): workflow `42828454430` passed 171 backend tests and the MySQL scheduler concurrency job. Notification retry tenant context, atomic tenant-qualified retry claim, duplicate-claim skip, nested exception and thread-reuse cleanup tests all passed. Full executor/export/queue worker discovery and multi-instance provider delivery/retry failure tests remain open.
