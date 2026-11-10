@@ -33,6 +33,8 @@ public class ExportService {
     private final PrivateObjectStorageService storage;
     private final Path root;
     private final long retentionHours;
+    @Value("\u0024{app.exports.processing-lease-seconds:1800}")
+    private long processingLeaseSeconds = 1800;
 
     public ExportService(ExportJobRepository jobs, ApplicationEventPublisher events, Phase2OperationsController reports,
             PrivateObjectStorageService storage, @Value("\u0024{app.exports.location:./data/private-exports}") String location,
@@ -73,7 +75,7 @@ public class ExportService {
 
     public void process(UUID id, UUID tenantId) {
         Instant now=Instant.now();
-        if (jobs.claim(id,tenantId,now,now.minusSeconds(300))!=1) return;
+        if (jobs.claim(id,tenantId,now,now.minusSeconds(Math.max(60,processingLeaseSeconds)))!=1) return;
         ExportJob job=jobs.findByIdAndTenantId(id,tenantId).orElse(null);
         if (job==null || !"PROCESSING".equals(job.getStatus())) return;
         String key=null;
@@ -101,7 +103,7 @@ public class ExportService {
     }
     private String cell(Object value) {
         String s=value==null?"":String.valueOf(value);
-        if (s.matches("^[\\s]*[=+@].*")) s="'"+s;
+        if (!(value instanceof Number) && s.matches("^[\\s]*[=+\\-@].*")) s="'"+s;
         if (s.contains(",") || s.contains("\\\"") || s.contains("\\n") || s.contains("\\r")) return "\\\""+s.replace("\\\"","\\\"\\\"")+"\\\"";
         return s;
     }
@@ -139,7 +141,7 @@ public class ExportService {
 
     @Scheduled(fixedDelayString="\u0024{app.exports.recovery-interval-ms:60000}")
     public void recoverAndExpire() {
-        Instant now=Instant.now(),stale=now.minusSeconds(300);
+        Instant now=Instant.now(),stale=now.minusSeconds(Math.max(60,processingLeaseSeconds));
         for(UUID tenant:jobs.findDistinctTenantIdsForRecovery(stale))
             for(ExportJob job:jobs.findRecoverableByTenant(tenant,stale,org.springframework.data.domain.PageRequest.of(0,50))) publishAfterCommit(job.getId(),tenant);
         for(ExportJob job:jobs.findTop100ByStatusAndExpiresAtBeforeOrderByExpiresAtAsc("COMPLETED",now)) {

@@ -37,6 +37,7 @@ app:
     location: ${EXPORT_DIR:./data/private-exports}
     retention-hours: ${EXPORT_RETENTION_HOURS:24}
     recovery-interval-ms: ${EXPORT_RECOVERY_INTERVAL_MS:60000}
+    processing-lease-seconds: ${EXPORT_PROCESSING_LEASE_SECONDS:1800}
   storage:
     location: ${UPLOAD_DIR:./data/uploads}
     public-base-url: ${PUBLIC_BASE_URL:}
