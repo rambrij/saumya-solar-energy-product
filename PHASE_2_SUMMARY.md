@@ -56,3 +56,29 @@ Flyway Community does not automatically reverse applied versioned migrations. Ro
 1. Should remaining global/platform identity relationships and non-tenant resource references be brought into Phase 2.1, or are the 89 V58 tenant-owned links the accepted DB scope?
 2. Should branch-unassigned legacy records remain visible to all branch memberships, as current behavior permits?
 3. Production database preflight has not been run. Who will approve the remediation window if V58 detects legacy tenant mismatches?
+
+
+## Production approval continuation — 2026-11-10
+
+### Additional changes committed
+
+- Added warranty-claim attachment service tests for foreign-tenant claim ID guessing, cross-customer claim access, attachment-ID/parent-claim mismatch, and successful authorized download.
+- Added warranty claim lifecycle integration coverage: customer A cannot list or create claims against customer B/another tenant's warranty; vendor A cannot list or approve a foreign-tenant claim.
+- Added operations export integration tests for CSV, XLSX and PDF. The test creates a foreign-tenant high-value order and verifies authenticated tenant order aggregates and generated export contents exclude it. XLSX is parsed with Apache POI; PDF text is extracted with OpenPDF.
+- Added branch filter tests for assigned branch, other branch, tenant mismatch, vendor-admin bypass and the existing null-branch legacy visibility behavior.
+- Added H2 database-backed integration tests: concurrent queue workers race for one integration sync job (exactly one claim succeeds); cross-tenant claim attempts fail; subscription expiry updates expired rows only within each owning tenant.
+- Added Playwright/Chromium browser-origin tests that forge tenant/customer/branch query filters against seven list endpoints and assert that returned rows remain scoped to the authenticated principal.
+- Added a manual, protected production preflight workflow and a SQL script that executes V57/V58 integrity checks only. It does not apply FK/index DDL or alter business data.
+
+### Still outstanding
+
+- Full CRUD negative tests for every resource family and every supported HTTP verb are not complete. The controller inventory contains 222 mappings; newly added tests cover selected high-risk routes, not every route.
+- Warranty attachment upload/download still needs a controller-level multipart test with a real private storage directory and actual HTTP response headers.
+- Branch filtering needs endpoint-level integration tests for each branch-bearing resource family, not only service-level filter tests.
+- Browser tests currently exercise real browser-origin API requests, not the complete React filter/dropdown/route UX with a second tenant's seeded resources. Add full UI interaction and 403/404 behavior coverage.
+- Database-backed concurrency tests use H2; run queue claim and scheduler concurrency scenarios on MySQL 8.4. SLA and warranty expiry database-backed multi-tenant tests remain.
+- Production preflight is not executed. Configure the protected GitHub production environment with PROD_DB_HOST, PROD_DB_PORT, PROD_DB_NAME, PROD_DB_USER, and PROD_DB_PASSWORD, then manually run .github/workflows/phase-2-production-preflight.yml. The workflow executes the preflight procedures only, not the V57/V58 constraints.
+
+### CI and production decision
+
+Intermediate CI runs caught an OpenPDF text extractor compile error; the test was updated to use the OpenPDF instance API. The final verification status must be taken from GitHub Actions for the latest branch HEAD, not an earlier successful commit. Until the final backend/frontend/MySQL/Playwright jobs pass and the protected production preflight reports PASS, this branch is **not approved for production**.
