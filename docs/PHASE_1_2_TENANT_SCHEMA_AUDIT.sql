@@ -9,8 +9,14 @@ SET SESSION group_concat_max_len = 1048576;
 SELECT
     t.TABLE_NAME,
     CASE
-      WHEN t.TABLE_NAME IN ('tenant', 'subscription_plan', 'permission') THEN 'PLATFORM_GLOBAL_REVIEWED_CANDIDATE'
-      WHEN t.TABLE_NAME IN ('app_user', 'role') THEN 'MIXED_PLATFORM_AND_TENANT_REVIEW_REQUIRED'
+      WHEN t.TABLE_NAME IN ('tenant', 'subscription_plan', 'permission', 'auth_rate_limit_bucket', 'payment_webhook_event')
+        THEN 'PLATFORM_GLOBAL_CANDIDATE_OWNER_CONFIRMATION'
+      WHEN t.TABLE_NAME IN ('app_user', 'role', 'audit_event')
+        THEN 'MIXED_PLATFORM_AND_TENANT_REVIEW_REQUIRED'
+      WHEN t.TABLE_NAME IN ('mfa_challenge', 'password_reset_token', 'refresh_token')
+        THEN 'USER_SCOPED_VIA_APP_USER_REVIEW_REQUIRED'
+      WHEN t.TABLE_NAME IN ('role_permission', 'user_role')
+        THEN 'JOIN_TABLE_SCOPE_INHERITED_FROM_PARENT_REVIEW_REQUIRED'
       WHEN c.COLUMN_NAME IS NULL THEN 'UNCLASSIFIED_NO_TENANT_COLUMN'
       ELSE 'TENANT_SCOPED_CANDIDATE_REQUIRES_OWNER_CONFIRMATION'
     END AS ownership_classification,
