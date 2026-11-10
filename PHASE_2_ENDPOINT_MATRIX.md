@@ -258,7 +258,7 @@
 
 ## Authenticated least-privilege role × verb regression checks
 
-The current integration suite includes an authenticated cross-module role matrix in Release12TenantIntegrationTest.fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation and a dynamic least-privilege GET sweep in EndpointAuthenticationMatrixTest.authenticatedLeastPrivilegeVendorCannotReadProtectedEndpointMappings. It now covers both allowed reads and denied writes:
+The current integration suite includes an authenticated cross-module role matrix in Release12TenantIntegrationTest.fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation and a dynamic least-privilege GET sweep in EndpointAuthenticationMatrixTest.authenticatedLeastPrivilegeVendorCannotReadProtectedEndpointMappings. The GET sweep checks all non-public GET mappings with a persisted VENDOR principal that has an empty permission role; its explicit self-service/system-read allowlist is /api/v1/me, /api/v1/subscription, /api/v1/subscription-plans, /api/v1/subscription/usage, /api/v1/subscription/storage, /api/v1/payment-gateways/availability, /api/v1/offline-sync/operations and /v3/api-docs.yaml. It now covers both allowed reads and denied writes:
 
 | Role fixture | Allowed read | Denied cross-module read | Denied write / command |
 |---|---|---|---|
