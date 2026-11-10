@@ -1408,3 +1408,30 @@ The production preflight script reads tenant-integrity relationships and fails c
 - Run 42793775946 reports backend 154 tests / 0 failures / 0 errors, frontend typecheck/build PASS and MySQL migration validation PASS. Its MySQL application/browser job had not completed at report update.
 - Run 42793418195 completed the V57/V58 integrity preflight against the migrated MySQL CI database successfully, with the routine-cleanup EXIT trap in place. This is CI fixture data, not production.
 - The API filter-tampering browser test has passed. The React two-tenant UI browser test remains Partial: Chromium previously showed that the form did not issue the expected login request. The test now uses native form requestSubmit, clears fixture cookies/session storage before UI login and forces Vite's same-origin API proxy. Await a successful latest-head Playwright job before upgrading its status.
+
+
+---
+
+## Phase 1/2 validation addendum (2026-11-10)
+
+**Validated branch:** `audit/phase-2-implementation-gap-analysis`  
+**Companion report:** `docs/PHASE_1_2_VALIDATION_REPORT.md`  
+**Gap records:** `docs/gaps/GAP-P1-rate-limiting.md`, `GAP-P1-role-permission-matrix.md`, `GAP-P1-session-lockout-feedback.md`, `GAP-P2-composite-tenant-fks.md`, `GAP-P2-cross-tenant-customer-branch-export-tests.md`, and `GAP-P2-background-job-scoping.md`.
+
+This pass added traceability and gap documentation only. **No implementation item is marked closed, Implemented, or Verified by this addendum.** No application code, migration, or test source was modified.
+
+### Corrections confirmed against current branch source
+
+- Historical text saying browser access and refresh tokens remain in localStorage is stale: current `frontend/src/main.tsx` clears the legacy session key; `authenticatedFetch.ts` keeps the access session in memory and the CSRF value in sessionStorage; `AuthCookieService` issues the refresh cookie HttpOnly.
+- Historical text saying trusted proxy support is exact-IP-only is stale: current `ClientAddressResolver` parses CIDR prefixes.
+- Browser E2E is no longer wholly absent: `frontend/e2e/tenant-filter-isolation.spec.ts` and `frontend/e2e/tenant-react-ui.spec.ts` exist. The latter remains partial pending latest-head browser evidence.
+- A custom-role service implementation exists in `AuthLifecycleService.createCustomRole`; a complete controller/UI workflow and full least-privilege endpoint enforcement remain unproven.
+
+### Current audit status
+
+- Phase 1 remains **PARTIAL / not approved**: endpoint + IP rate limiting and account lockout exist, but a separate account rate-limit dimension, full SRS route coverage, complete role matrix enforcement and exhaustive 401/403 tests are not proven.
+- Phase 2 remains **PARTIAL / not approved**: identity-derived tenant scope, branch filtering, tenant-aware exports/downloads and several scoped schedulers exist, but full table/FK inventory and exhaustive tenant/customer/branch CRUD/export/download negative coverage are not proven.
+- CI/test status for the latest branch head was not executed in this pass. Historical CI run references above are not evidence of the current head passing.
+- Production preflight against production data was not executed. The earlier CI fixture preflight is not production sign-off.
+
+No statuses in the earlier tables were upgraded because no implementation/test item was closed and verified during this documentation-only pass.
