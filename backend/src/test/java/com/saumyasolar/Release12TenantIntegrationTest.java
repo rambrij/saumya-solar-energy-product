@@ -1645,7 +1645,6 @@ class Release12TenantIntegrationTest {
         mvc.perform(get("/api/v1/payments/" + payment.getId() + "/receipt.pdf")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
-        var customerBToken = accessToken(customerB.user().getEmail(), "Customer-Password-2026");
         mvc.perform(get("/api/v1/payments/" + payment.getId() + "/receipt.pdf")
                         .header("Authorization", "Bearer " + customerBToken))
                 .andExpect(status().isOk())
