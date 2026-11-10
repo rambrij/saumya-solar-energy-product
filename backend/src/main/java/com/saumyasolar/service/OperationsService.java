@@ -635,9 +635,9 @@ public class OperationsService {
         UUID t = tenant(p);
         permission(p, "INSTALLATION_VIEW");
         List<InstallationJob> all = installations.findByTenantIdOrderByScheduledAtAsc(t);
-        if (p.permissions() != null && p.permissions().contains("INSTALLATION_ASSIGN"))
-            return all;
-        return all.stream().filter(j -> p.userId().equals(j.getAssignedEngineerId())).toList();
+        List<InstallationJob> visible = p.permissions() != null && p.permissions().contains("INSTALLATION_ASSIGN")
+                ? all : all.stream().filter(j -> p.userId().equals(j.getAssignedEngineerId())).toList();
+        return enterpriseSaas.filterBranchRecords(visible, InstallationJob::getBranchId, p);
     }
     
     @Transactional
