@@ -1,69 +1,94 @@
--- Read-only tenant schema audit for Saumya Solar Energy.
--- Run against the target MySQL 8.4 database using a read-only account.
--- This script does not modify application data or schema.
+-- READ-ONLY tenant schema inventory and NOT NULL evidence for MySQL 8.4.
+-- Run against the exact production or production-like database with a SELECT-only account.
+-- This script reads INFORMATION_SCHEMA and tenant_id values only; it performs no DDL/DML.
+-- It deliberately reports candidate classifications instead of assuming every table is tenant-owned.
 
--- 1) Every table and whether tenant_id exists, its nullability, and current NULL count.
+SET SESSION group_concat_max_len = 1048576;
+
+-- A. Every base table: tenant_id presence, nullability and an explicit review classification.
 SELECT
     t.TABLE_NAME,
-    CASE WHEN c.COLUMN_NAME IS NULL THEN 'MISSING_TENANT_ID'
-         ELSE CONCAT('tenant_id ', c.IS_NULLABLE, ' NULLABLE') END AS tenant_column_status,
-    CASE WHEN c.COLUMN_NAME IS NULL THEN NULL
-         ELSE (SELECT COUNT(*) FROM information_schema.COLUMNS c2
-               WHERE c2.TABLE_SCHEMA = DATABASE()
-                 AND c2.TABLE_NAME = t.TABLE_NAME
-                 AND c2.COLUMN_NAME = 'tenant_id') END AS tenant_column_present
+    CASE
+      WHEN t.TABLE_NAME IN ('tenant', 'subscription_plan', 'permission') THEN 'PLATFORM_GLOBAL_REVIEWED_CANDIDATE'
+      WHEN t.TABLE_NAME IN ('app_user', 'role') THEN 'MIXED_PLATFORM_AND_TENANT_REVIEW_REQUIRED'
+      WHEN c.COLUMN_NAME IS NULL THEN 'UNCLASSIFIED_NO_TENANT_COLUMN'
+      ELSE 'TENANT_SCOPED_CANDIDATE_REQUIRES_OWNER_CONFIRMATION'
+    END AS ownership_classification,
+    CASE WHEN c.COLUMN_NAME IS NULL THEN 'MISSING'
+         ELSE CONCAT(c.IS_NULLABLE, ' / ', c.COLUMN_TYPE) END AS tenant_id_definition,
+    t.TABLE_ROWS AS estimated_rows
 FROM information_schema.TABLES t
 LEFT JOIN information_schema.COLUMNS c
-  ON c.TABLE_SCHEMA = t.TABLE_SCHEMA
- AND c.TABLE_NAME = t.TABLE_NAME
- AND c.COLUMN_NAME = 'tenant_id'
-WHERE t.TABLE_SCHEMA = DATABASE()
-  AND t.TABLE_TYPE = 'BASE TABLE'
-  AND t.TABLE_NAME NOT IN ('flyway_schema_history')
-ORDER BY tenant_column_status, t.TABLE_NAME;
+  ON c.TABLE_SCHEMA=t.TABLE_SCHEMA AND c.TABLE_NAME=t.TABLE_NAME AND c.COLUMN_NAME='tenant_id'
+WHERE t.TABLE_SCHEMA=DATABASE() AND t.TABLE_TYPE='BASE TABLE'
+  AND t.TABLE_NAME <> 'flyway_schema_history'
+ORDER BY ownership_classification, t.TABLE_NAME;
 
--- 2) NULL tenant rows in tables that expose tenant_id.
--- The dynamic SQL is intentionally emitted for operator review rather than executed
--- automatically, so the report is safe on production and can be reviewed before counts.
-SELECT CONCAT(
-    'SELECT ', QUOTE(TABLE_NAME), ' AS table_name, COUNT(*) AS null_tenant_rows FROM `',
-    REPLACE(TABLE_NAME, '`', '``'),
-    '` WHERE tenant_id IS NULL HAVING COUNT(*) > 0;'
-) AS read_only_null_check_sql
-FROM information_schema.COLUMNS
-WHERE TABLE_SCHEMA = DATABASE()
-  AND COLUMN_NAME = 'tenant_id'
-ORDER BY TABLE_NAME;
+-- B. Execute exact COUNT(*) / COUNT(tenant_id IS NULL) for every base table exposing tenant_id.
+-- Counts are exact; the generated statement is bounded by group_concat_max_len above.
+SET @tenant_count_sql = (
+  SELECT GROUP_CONCAT(
+    CONCAT(
+      'SELECT ', QUOTE(c.TABLE_NAME), ' AS table_name, COUNT(*) AS total_rows, ',
+      'COALESCE(SUM(tenant_id IS NULL),0) AS null_tenant_rows, ',
+      QUOTE(c.IS_NULLABLE), ' AS column_is_nullable FROM `',
+      REPLACE(c.TABLE_NAME, '`', '``'), '`'
+    ) SEPARATOR ' UNION ALL '
+  )
+  FROM information_schema.COLUMNS c
+  JOIN information_schema.TABLES t
+    ON t.TABLE_SCHEMA=c.TABLE_SCHEMA AND t.TABLE_NAME=c.TABLE_NAME
+  WHERE c.TABLE_SCHEMA=DATABASE() AND c.COLUMN_NAME='tenant_id'
+    AND t.TABLE_TYPE='BASE TABLE' AND c.TABLE_NAME <> 'flyway_schema_history'
+);
+SET @tenant_count_sql = COALESCE(
+  @tenant_count_sql,
+  'SELECT CAST(NULL AS CHAR) table_name, 0 total_rows, 0 null_tenant_rows, CAST(NULL AS CHAR) column_is_nullable WHERE 1=0'
+);
+PREPARE tenant_count_stmt FROM @tenant_count_sql;
+EXECUTE tenant_count_stmt;
+DEALLOCATE PREPARE tenant_count_stmt;
 
--- 3) Foreign-key inventory. Review tenant-owned relationships where the FK does not
--- include tenant_id on both child and referenced parent columns.
+-- C. Foreign-key inventory. A tenant-owned child/parent relationship should normally
+-- carry tenant_id on both sides of the composite FK. Review all exceptions.
 SELECT
     k.TABLE_NAME AS child_table,
     k.CONSTRAINT_NAME,
     GROUP_CONCAT(k.COLUMN_NAME ORDER BY k.ORDINAL_POSITION) AS child_columns,
     k.REFERENCED_TABLE_NAME AS parent_table,
     GROUP_CONCAT(k.REFERENCED_COLUMN_NAME ORDER BY k.ORDINAL_POSITION) AS parent_columns,
-    SUM(k.COLUMN_NAME = 'tenant_id') AS child_tenant_columns,
-    SUM(k.REFERENCED_COLUMN_NAME = 'tenant_id') AS parent_tenant_columns
+    SUM(k.COLUMN_NAME='tenant_id') AS child_tenant_columns,
+    SUM(k.REFERENCED_COLUMN_NAME='tenant_id') AS parent_tenant_columns
 FROM information_schema.KEY_COLUMN_USAGE k
-WHERE k.TABLE_SCHEMA = DATABASE()
-  AND k.REFERENCED_TABLE_NAME IS NOT NULL
+WHERE k.TABLE_SCHEMA=DATABASE() AND k.REFERENCED_TABLE_NAME IS NOT NULL
 GROUP BY k.TABLE_NAME, k.CONSTRAINT_NAME, k.REFERENCED_TABLE_NAME
 ORDER BY child_table, k.CONSTRAINT_NAME;
 
--- 4) Unique-index inventory. Tenant-owned natural keys should normally include tenant_id.
-SELECT
-    s.TABLE_NAME,
-    s.INDEX_NAME,
-    GROUP_CONCAT(s.COLUMN_NAME ORDER BY s.SEQ_IN_INDEX) AS index_columns,
-    s.NON_UNIQUE
+-- D. Unique-index inventory. Tenant-owned natural keys should normally include tenant_id.
+SELECT s.TABLE_NAME, s.INDEX_NAME,
+       GROUP_CONCAT(s.COLUMN_NAME ORDER BY s.SEQ_IN_INDEX) AS index_columns,
+       s.NON_UNIQUE
 FROM information_schema.STATISTICS s
-WHERE s.TABLE_SCHEMA = DATABASE()
+WHERE s.TABLE_SCHEMA=DATABASE()
 GROUP BY s.TABLE_NAME, s.INDEX_NAME, s.NON_UNIQUE
 ORDER BY s.TABLE_NAME, s.INDEX_NAME;
 
--- Operator decision required:
--- classify platform/global tables (for example tenant, subscription_plan, permission,
--- and shared/global role catalogue rows) separately from tenant-owned rows before
--- enforcing NOT NULL. Role/app_user can intentionally contain platform/global rows;
--- do not bulk alter their tenant_id without applying the SRS identity model.
+-- E. Machine-readable release gate summary for tenant_id column nullability.
+SELECT
+    COUNT(*) AS tables_with_tenant_id,
+    SUM(IS_NULLABLE='NO') AS tenant_id_columns_declared_not_null,
+    SUM(IS_NULLABLE='YES') AS tenant_id_columns_still_nullable
+FROM information_schema.COLUMNS c
+JOIN information_schema.TABLES t
+  ON t.TABLE_SCHEMA=c.TABLE_SCHEMA AND t.TABLE_NAME=c.TABLE_NAME
+WHERE c.TABLE_SCHEMA=DATABASE() AND c.COLUMN_NAME='tenant_id'
+  AND t.TABLE_TYPE='BASE TABLE' AND c.TABLE_NAME <> 'flyway_schema_history';
+
+-- Interpretation:
+-- 1) A candidate tenant table passes the schema gate only when IS_NULLABLE='NO' AND null_tenant_rows=0.
+-- 2) app_user and role are mixed-scope and require row-level classification; do not bulk alter.
+-- 3) A table with no tenant_id is not automatically global. It remains UNCLASSIFIED until its owner
+--    proves platform-global scope or a safe tenant relationship/column is added.
+-- 4) Compare actual base tables, FK and unique indexes with JPA entities, migrations and the SRS.
+-- 5) This SQL does not prove production cleanliness until it has been run against production and its
+--    complete result set has been reviewed, archived and signed by the DBA/data owner.
