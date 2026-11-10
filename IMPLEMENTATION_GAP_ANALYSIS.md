@@ -1,11 +1,11 @@
 # Saumya Solar Energy Solution - Implementation Gap Analysis
 
 **Audit baseline:** `main` at `347c5cde2739bd117958521424e1d8a208847014`  
-**Audit branch:** `audit/implementation-gap-analysis`  
+**Audit branch:** `audit/phase-2-implementation-gap-analysis`  
 **Repository:** `rambrij/saumya-solar-energy-product`  
 **Primary business source:** `saumya-solar-energy-solution-requirements.md`  
 **Technical source:** `saumya-solar-production-ready-srs-hld.md`  
-**Review date:** 2026-11-09
+**Review date:** 2026-11-10
 
 ## Audit method, evidence standard and limitations
 
@@ -1460,8 +1460,8 @@ No statuses in the earlier tables were upgraded because no implementation/test i
 
 - **P1 authentication throttling:** HMAC-derived account + endpoint buckets for login/password recovery; IP + endpoint buckets for login/refresh/recovery/MFA; configurable IP + endpoint buckets for public enquiries, exports and payment webhooks; bounded authentication request-body replay; focused unit tests. Commits `1a79b562`, `0d2a741d`, `f3cb1d30`.
 - **P1 fine-grained/custom roles:** corrected historical finding: custom-role create/update/delete APIs and `RoleManagementPanel.tsx` already exist. Added tests for cross-tenant custom-role update/delete and tenant-scoped employee role assignment. The exhaustive action-to-permission map and authenticated role matrix remain open. Commit `5f20f0a6`.
-- **P1 assigned-resource scope:** quotation revision reads now enforce the same assigned-sales scope as quotation details/actions; added negative test for another employee's quotation revisions. Commits `bbd10cce`, `5ccba941`.
-- **P2 tenant-qualified lookups:** employee, engineer, integration user, installation and service-visit lookups now use tenant-qualified repository methods instead of bare-ID lookup followed by in-memory tenant comparison. Commits `8be6f0d7`, `1f5ce498`.
+- **P1 assigned-resource scope:** quotation revision reads and revision creation now enforce the shared assigned-sales scope guard before exposing or mutating a quotation; negative tests cover both read and revision actions. Service visit completion uses the tenant-qualified visit repository lookup. Commits `bbd10cce`, `5ccba941`, `cb47fc3e`, `409165ea`.
+- **P2 tenant-qualified lookups:** employee, engineer, integration user, installation, service visit and survey employee reassignment lookups now use tenant-qualified repository methods instead of bare-ID lookup followed by in-memory tenant comparison. Commits `8be6f0d7`, `1f5ce498`, `cb47fc3e`.
 - **P2 composite FK inventory:** V57/V58 were directly inspected. V57 covers product/category/package-item tenant relationships; V58 covers a broad set of sales, order, inventory, installation, warranty, finance, service, evidence, offline-sync, branch, approval, audit and notification relationships. MySQL 8.4 migration/integrity validation passed on workflow `42818724332`. Full table/column NOT NULL and FK inventory remains open.
 - **P2 customer/branch/export/download tests:** existing `Release12TenantIntegrationTest` already covers selected foreign tenant/customer/branch, operations CSV/XLSX/PDF, invoice PDF and private attachment paths. This is meaningful existing coverage, not proof of every endpoint/verb/resource family.
 - **P2 scheduled jobs:** `IntegrationSyncScheduler`, `ServiceSlaScheduler`, `WarrantyExpiryScheduler` and `SubscriptionExpiryScheduler` use `TenantExecutionContext` in try-with-resources. Full `@Async`/executor/export/notification worker inventory and exception/thread-reuse context cleanup tests remain open.
@@ -1470,7 +1470,8 @@ No statuses in the earlier tables were upgraded because no implementation/test i
 
 - Prior complete release-validation workflow `42818724332` passed backend compile/tests, MySQL 8.4 migration validation, Spring Boot startup/health and frontend typecheck/production build.
 - Workflow `42820915064` for commit `5ccba941` completed with backend test failures: one outdated 429 response assertion and one test still stubbing the bare-ID employee lookup after the repository call was made tenant-qualified. Frontend build, MySQL migration validation and Spring Boot/browser checks passed.
-- Both test mismatches were corrected in commit `cab55e6f84245131f8de7252774c9ebd4cfb6c16`. New full validation workflow `42821337890` for the corrected branch head is queued. No latest-head pass is claimed until it completes.
+- Both test mismatches were corrected in commit `cab55e6f84245131f8de7252774c9ebd4cfb6c16`; its backend suite passed (162 tests), frontend build passed, and Flyway validation passed. Spring Boot health and browser Playwright steps were still in progress at the last check.
+- Newer code commits `cb47fc3e` and `409165ea` add assigned quotation revision mutation enforcement, tenant-scoped service-visit/survey lookups and a dedicated negative test. Workflow `42821756695` for the test commit is in progress (frontend and Flyway passed; backend and Spring Boot/browser checks pending). No latest-head full pass is claimed until it completes.
 - Do not change any remaining PARTIAL item to MET until the newest workflow passes and the listed residual coverage is complete.
 
 ### Status corrections
