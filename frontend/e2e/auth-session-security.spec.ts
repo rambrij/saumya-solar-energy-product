@@ -9,7 +9,7 @@ test('browser auth uses HttpOnly refresh cookie and enforces CSRF, rotation and 
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'admin@saumya.local', password: 'Admin@123' }),
+      body: JSON.stringify({ email: 'sales@saumya.local', password: 'Sales@123' }),
     });
     if (!response.ok) throw new Error('Test vendor login failed: ' + response.status);
     return response.json();
