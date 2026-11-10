@@ -515,7 +515,9 @@ public class Controller {
     
     @GetMapping(value = "/quotations/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
     byte[] pdf(@PathVariable UUID id, Authentication a) throws Exception {
-        var q = ( (List<Quotation>) s.list("quotations", p(a)) ).stream().filter(x -> x.getId().equals(id)).findFirst().orElseThrow();
+        var q = ( (List<Quotation>) s.list("quotations", p(a)) ).stream().filter(x -> x.getId().equals(id)).findFirst()
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "Quotation not found"));
         try (var out = new ByteArrayOutputStream()) {
             var d = new Document();
             PdfWriter.getInstance(d, out);
