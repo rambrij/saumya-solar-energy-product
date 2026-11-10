@@ -75,3 +75,10 @@ docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql now executes an exact COUNT(*) / SUM(tena
 This is now executable evidence collection, not yet the requested proof: it must run against the actual production schema and its complete result set must be reviewed. Every table still needs an owner-approved TENANT_OWNED / PLATFORM_GLOBAL / MIXED decision. A tenant-owned table passes only when the column is declared NOT NULL and the exact NULL count is zero. Production data remains unexamined in this session.
 
 - CI run 42844217653 passed the V60 migration and tenant integrity preflight on disposable MySQL 8.4; the schema inventory artifact was emitted. This confirms migration compatibility and clean test data, not production data cleanliness.
+
+
+### Post-V60 CI schema proof — run 42843505138
+
+The MySQL 8.4 schema audit artifact after V60 reports exactly three nullable tenant_id columns: app_user, role and audit_event. These are the three mixed-scope tables; all nine formerly nullable tenant-owned columns now report IS_NULLABLE=NO. Every tenant_id-bearing table in the disposable CI schema reports null_tenant_rows=0. The mixed role table has three NULL-tenant rows corresponding to global role definitions; the production preflight explicitly permits only PLATFORM_SUPER_ADMIN, PLATFORM_SUPPORT and the shared CUSTOMER role to be global. CI run 42844217653 also passed the mixed-scope preflight checks.
+
+This closes the schema-level tenant_id NOT NULL proof for the current checked-in schema in disposable MySQL 8.4. It does not prove production row cleanliness or approve the global/mixed classification; those remain subject to the protected production preflight and data-owner sign-off.
