@@ -403,11 +403,31 @@ jobs:
       - name: Install Chromium
         working-directory: frontend
         run: npx playwright install --with-deps chromium
+      - name: Start React frontend for browser security tests
+        working-directory: frontend
+        run: |
+          npm run dev -- --host 0.0.0.0 > /tmp/saumya-frontend.log 2>&1 &
+          echo $! > /tmp/saumya-frontend.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:5173/ > /dev/null; then
+              echo "React frontend started for browser security tests."
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/saumya-frontend.log
+          exit 1
       - name: Run browser-level tenant filter tampering tests
         working-directory: frontend
         env:
-          E2E_API_BASE_URL: http://127.0.0.1:8080
+          E2E_BASE_URL: http://localhost:5173
         run: npm run test:e2e
+      - name: Stop React frontend
+        if: always()
+        run: |
+          if [ -f /tmp/saumya-frontend.pid ]; then
+            kill "$(cat /tmp/saumya-frontend.pid)" || true
+          fi
       - name: Stop Spring Boot
         if: always()
         run: |
