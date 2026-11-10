@@ -118,7 +118,7 @@ public class Phase2OperationsController {
         ops(p);
         List<Map<String, Object>> out = new ArrayList<>();
         for (EngineerProfile e : engineers.findByTenantIdAndActiveTrueOrderByCreatedAtDesc(p.tenantId())) {
-            AppUser u = users.findById(e.getUserId()).filter(x -> p.tenantId().equals(x.getTenantId()) && x.isEnabled()).orElse(null);
+            AppUser u = users.findByIdAndTenantId(e.getUserId(), p.tenantId()).filter(AppUser::isEnabled).orElse(null);
             if (u == null) continue;
             long active = installations.findByTenantIdOrderByScheduledAtAsc(p.tenantId()).stream().filter(j -> e.getUserId().equals(j.getAssignedEngineerId()) && Set.of("SCHEDULED", "IN_PROGRESS").contains(j.getStatus())).count();
             Map<String, Object> row = new LinkedHashMap<>();
@@ -144,7 +144,7 @@ public class Phase2OperationsController {
     public EngineerProfile saveEngineer(@Valid @RequestBody EngineerInput x, Authentication a) {
         Principal p = p(a);
         ops(p);
-        AppUser u = users.findById(x.userId()).filter(v -> p.tenantId().equals(v.getTenantId()) && v.isEnabled() && v.getRoles().stream().anyMatch(r -> Set.of("SERVICE_ENGINEER", "TECHNICIAN", "INSTALLER", "OPERATIONS_MANAGER").contains(r.getName()))).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "User must be an enabled same-tenant engineer or installer"));
+        AppUser u = users.findByIdAndTenantId(x.userId(), p.tenantId()).filter(v -> v.isEnabled() && v.getRoles().stream().anyMatch(r -> Set.of("SERVICE_ENGINEER", "TECHNICIAN", "INSTALLER", "OPERATIONS_MANAGER").contains(r.getName()))).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "User must be an enabled same-tenant engineer or installer"));
         var from = parseTime(x.availableFrom());
         var until = parseTime(x.availableUntil());
         if (( from == null ) != ( until == null ) || from != null && !until.isAfter(from))
@@ -221,7 +221,7 @@ public class Phase2OperationsController {
     public WarrantyClaim createClaim(@Valid @RequestBody ClaimInput x, Authentication a) {
         Principal p = p(a);
         CustomerProfile c = customer(p);
-        Warranty w = warranties.findById(x.warrantyId()).filter(v -> p.tenantId().equals(v.getTenantId()) && c.getId().equals(v.getCustomerId()) && "ACTIVE".equals(v.getStatus()) && !LocalDate.now().isBefore(v.getStartDate()) && !LocalDate.now().isAfter(v.getEndDate())).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Active warranty not found"));
+        Warranty w = warranties.findByIdAndTenantId(x.warrantyId(), p.tenantId()).filter(v -> c.getId().equals(v.getCustomerId()) && "ACTIVE".equals(v.getStatus()) && !LocalDate.now().isBefore(v.getStartDate()) && !LocalDate.now().isAfter(v.getEndDate())).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Active warranty not found"));
         WarrantyClaim claim = new WarrantyClaim();
         claim.setId(UUID.randomUUID());
         claim.setTenantId(p.tenantId());
