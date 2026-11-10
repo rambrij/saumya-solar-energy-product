@@ -200,6 +200,7 @@ public class NotificationService {
         for (NotificationDelivery record : deliveries.findTop50ByStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc("FAILED", Instant.now())) {
             if (record.getAttemptCount() >= 5 || record.getTenantId() == null) continue;
             try (var scope = com.saumyasolar.security.TenantExecutionContext.open(record.getTenantId())) {
+                if (deliveries.claimFailedDelivery(record.getId(), record.getTenantId(), Instant.now()) != 1) continue;
                 retryFailedDelivery(record);
             }
         }
@@ -207,7 +208,6 @@ public class NotificationService {
 
     private void retryFailedDelivery(NotificationDelivery record) {
         record.setStatus("PENDING");
-        deliveries.save(record);
         try {
             if ("EMAIL".equals(record.getChannel())) {
                 SimpleMailMessage message = new SimpleMailMessage();
