@@ -43,6 +43,10 @@ test('React vendor workspace stays isolated when switching between two tenant ac
     });
     if (!productResponse.ok) throw new Error('Product fixture creation failed: ' + productResponse.status);
     const product = await productResponse.json();
+    await fetch('/api/v1/auth/logout', {
+      method: 'POST', credentials: 'include',
+      headers: { Authorization: 'Bearer ' + vendor.accessToken, 'X-CSRF-Token': vendor.csrfToken },
+    });
     return { tenantId: tenant.id, productId: product.id, productNameB };
   }, { emailB, passwordB, suffix, productNameB });
 
