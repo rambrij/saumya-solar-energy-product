@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 
 import java.time.LocalDate;
 import java.util.Set;
+import java.util.UUID;
 
 /** Daily tenant-scoped warranty expiry transitions and opt-in customer alerts. */
 @Component
