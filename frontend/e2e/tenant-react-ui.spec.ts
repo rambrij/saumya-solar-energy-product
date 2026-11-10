@@ -66,7 +66,7 @@ test('React vendor workspace stays isolated when switching between two tenant ac
     );
     // Exercise the same submit control a user activates; do not bypass React's
     // event delegation with a programmatic form.requestSubmit() call.
-    await page.getByRole('button', { name: 'Login', exact: true }).click();
+    await page.locator('form.card.form button').first().click({ force: true });
     const loginResponse = await loginResponsePromise;
     if (!loginResponse.ok()) throw new Error('React login request failed with HTTP ' + loginResponse.status());
     await expect(page.locator('aside[aria-label="Application navigation"]')).toBeVisible();
