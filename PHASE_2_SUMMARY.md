@@ -128,3 +128,11 @@ Intermediate CI runs caught an OpenPDF text extractor compile error; the test wa
 ### Current decision
 
 The new branch filters, controller-level warranty attachment test, MySQL scheduler suite and two-tenant browser test have been added. Do not approve production until the latest-head CI run is fully green, the endpoint-specific CRUD matrix is closed or formally accepted, and production V57/V58 preflight has two PASS markers plus recorded DBA/data-owner approval.
+
+
+### Latest CI status and browser test diagnosis
+
+- Run **42793775946**: backend **154 tests, 0 failures/errors**; frontend typecheck/build and MySQL V1–V58 migration validation passed. Its MySQL application/browser job was still running when this note was written.
+- The MySQL 8.4 job has successfully executed the SLA, warranty, integration and subscription scheduler tests, and the V57/V58 preflight against the migrated CI database in earlier completed runs.
+- The API-origin Playwright filter-tampering test passes. The new React UI test exposed that the sign-in form submission did not produce the expected login response in Chromium. It has been changed to use the form's native `requestSubmit()`, resets stale cookies/CSRF state between fixture setup and UI login, and forces the Vite API base to same-origin proxy mode. The run for this latest browser change is pending; do not mark the React UI test passed until its Actions job succeeds.
+- Run **42793418195**: the updated V57/V58 CI preflight, including the failure-cleanup trap for its named stored procedures, completed successfully against the MySQL CI database. This is not a production database execution.
