@@ -58,6 +58,7 @@ class EndpointAuthenticationMatrixTest {
     @Autowired RoleRepository roles;
     @Autowired JwtService jwt;
     @Autowired PasswordEncoder passwordEncoder;
+    private UUID validTeamMemberId;
 
     private static final Pattern VARIABLE = Pattern.compile("\\{[^}]+}");
     private static final Set<String> PUBLIC_PREFIXES = Set.of(
@@ -107,6 +108,7 @@ class EndpointAuthenticationMatrixTest {
     @Test
     void authenticatedLeastPrivilegeVendorCannotReadProtectedEndpointMappings() throws Exception {
         AppUser seededVendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        validTeamMemberId = createValidTeamMember(seededVendor.getTenantId());
         Role emptyRole = new Role();
         emptyRole.setId(UUID.randomUUID());
         emptyRole.setTenantId(seededVendor.getTenantId());
@@ -343,7 +345,11 @@ class EndpointAuthenticationMatrixTest {
         if (type == byte[].class) return new byte[] {1};
         if (type.isArray()) return new Object[] {sampleValue(type.getComponentType(), null, name, new Annotation[0])};
         if (Map.class.isAssignableFrom(type)) {
-            if (name.toLowerCase(java.util.Locale.ROOT).contains("reopen")) return Map.of("reopenDays", 7);
+            if (genericType instanceof ParameterizedType parameterized
+                    && parameterized.getActualTypeArguments().length == 2
+                    && parameterized.getActualTypeArguments()[1] == Integer.class) {
+                return Map.of("reopenDays", 7);
+            }
             return Map.of("reason", "Authorization matrix probe");
         }
         if ("items".equals(name)) {
@@ -351,16 +357,8 @@ class EndpointAuthenticationMatrixTest {
                     "quantity", 1, "optionalItem", false));
         }
         if ("memberIds".equals(name)) {
-            UUID validMember = users.findByEmailIgnoreCase("engineer@saumya.local")
-                    .or(() -> users.findByEmailIgnoreCase("technician@saumya.local"))
-                    .or(() -> users.findByEmailIgnoreCase("installer@saumya.local"))
-                    .map(AppUser::getId)
-                    .orElseGet(() -> users.findByTenantId(users.findByEmailIgnoreCase("admin@saumya.local")
-                            .orElseThrow().getTenantId()).stream()
-                            .filter(user -> user.getRoles().stream().anyMatch(role -> Set.of(
-                                    "SERVICE_ENGINEER", "INSTALLER", "TECHNICIAN", "OPERATIONS_MANAGER").contains(role.getName())))
-                            .map(AppUser::getId).findFirst().orElse(UUID.fromString("00000000-0000-4000-8000-000000000001")));
-            return List.of(validMember);
+            return List.of(validTeamMemberId == null
+                    ? UUID.fromString("00000000-0000-4000-8000-000000000001") : validTeamMemberId);
         }
         if (Collection.class.isAssignableFrom(type)) {
             boolean requiredElements = hasAnnotation(annotations, "NotEmpty") || hasAnnotation(annotations, "NotNull");
@@ -396,6 +394,25 @@ class EndpointAuthenticationMatrixTest {
             }
         }
         return bean.isEmpty() ? null : bean;
+    }
+
+    private UUID createValidTeamMember(UUID tenantId) {
+        Role installer = new Role();
+        installer.setId(UUID.randomUUID());
+        installer.setTenantId(tenantId);
+        installer.setName("INSTALLER");
+        roles.saveAndFlush(installer);
+
+        AppUser user = new AppUser();
+        user.setId(UUID.randomUUID());
+        user.setTenantId(tenantId);
+        user.setName("Authorization matrix installer fixture");
+        user.setEmail("matrix-installer-" + UUID.randomUUID() + "@example.test");
+        user.setPasswordHash(passwordEncoder.encode("Matrix-Password-2026"));
+        user.setAccountType("VENDOR");
+        user.setEnabled(true);
+        user.getRoles().add(installer);
+        return users.saveAndFlush(user).getId();
     }
 
     private boolean hasAnnotation(Annotation[] annotations, String simpleName) {
