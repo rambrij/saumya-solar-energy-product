@@ -197,11 +197,16 @@ public class NotificationService {
     
     @Scheduled(fixedDelayString = "${app.messaging.retry-interval-ms:60000}")
     public void retryFailedDeliveries() {
-        for (NotificationDelivery record : deliveries.findTop50ByStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc("FAILED", Instant.now())) {
-            if (record.getAttemptCount() >= 5 || record.getTenantId() == null) continue;
-            try (var scope = com.saumyasolar.security.TenantExecutionContext.open(record.getTenantId())) {
-                if (deliveries.claimFailedDelivery(record.getId(), record.getTenantId(), Instant.now()) != 1) continue;
-                retryFailedDelivery(record);
+        Instant now = Instant.now();
+        for (UUID tenantId : deliveries.findDistinctTenantIdsForRetry("FAILED", now)) {
+            try (var scope = com.saumyasolar.security.TenantExecutionContext.open(tenantId)) {
+                List<NotificationDelivery> batch = deliveries
+                        .findTop50ByTenantIdAndStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(tenantId, "FAILED", now);
+                for (NotificationDelivery record : batch) {
+                    if (record.getAttemptCount() >= 5) continue;
+                    if (deliveries.claimFailedDelivery(record.getId(), tenantId, Instant.now()) != 1) continue;
+                    retryFailedDelivery(record);
+                }
             }
         }
     }
