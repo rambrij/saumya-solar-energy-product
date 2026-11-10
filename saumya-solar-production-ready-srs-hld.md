@@ -988,7 +988,7 @@ Security events must include:
 - Expose liveness, readiness and dependency health endpoints through Spring Boot Actuator with restricted detail.
 - Capture metrics for request latency, error rate, JVM, database pool, jobs, notifications and business workflows.
 - Use distributed tracing for external calls and asynchronous processing where supported.
-- Alerts should cover elevated 5xx errors, login abuse, database saturation, provider failure, queue backlog and backup
+- Alerts should cover elevated 5xx errors, login abuse, database saturation, provider failure, pending background-job backlog and backup
   failure.
 
 ### 16.6 Accessibility and usability

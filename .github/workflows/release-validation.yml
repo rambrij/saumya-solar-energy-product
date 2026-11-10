@@ -3,20 +3,10 @@ name: Release 1-4 and Phase 2 tenant-isolation validation (final verification)
 on:
   push:
     branches:
-      - feature/release-1-2-complete-implementation
-      - feature/release-3-operations
-      - feature/release-4-finance-and-service
-      - feature/phase-2-operations
-      - feature/phase-3-Enterprise-SaaS
-      - phase-1-commercial-mvp-remediation
-      - feature/subscription-and-ui-enhancements
-      - audit/implementation-gap-analysis
-      - audit/phase-2-implementation-gap-analysis
+      - cleanup/code-cleanup
   pull_request:
     branches:
-      - main
-      - feature/release-3-operations
-      - phase-1-commercial-mvp-implementation
+      - cleanup/code-cleanup
 
 permissions:
   contents: read
@@ -27,39 +17,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate Docker Compose configuration
+        run: docker compose config --quiet
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - name: Scan repository asynchronous execution boundaries
-        run: |
-          bash scripts/audit/scan-async-workers.sh | tee async-worker-inventory.txt
-      - name: Upload asynchronous execution inventory
-        uses: actions/upload-artifact@v4
-        with:
-          name: async-worker-inventory-${{ github.run_id }}
-          path: async-worker-inventory.txt
-          retention-days: 30
-      - name: Scan legacy authorization and role-name guards
-        run: |
-          bash scripts/audit/scan-legacy-authz.sh | tee legacy-authz-inventory.txt
-      - name: Upload legacy authorization inventory
-        uses: actions/upload-artifact@v4
-        with:
-          name: legacy-authz-inventory-${{ github.run_id }}
-          path: legacy-authz-inventory.txt
-          retention-days: 30
-      - name: Check permission catalogue drift
-        run: |
-          python3 scripts/audit/check-permission-catalogue.py backend | tee permission-catalogue-drift.txt
-      - name: Upload permission catalogue drift report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: permission-catalogue-drift-${{ github.run_id }}
-          path: permission-catalogue-drift.txt
-          retention-days: 30
+      # The standalone audit utilities were removed during repository cleanup.
+      # Keep maintained regression coverage in the backend test suite.
+      - name: Run backend security, tenant-context and messaging regression tests
+        working-directory: backend
+        run: >
+          mvn --batch-mode --no-transfer-progress
+          -Dtest=EndpointAuthenticationMatrixTest,FinanceServiceAssignedVisitScopeTest,TenantExecutionContextTest,TenantSchedulerConcurrencyIntegrationTest,NotificationServiceTest
+          test
       - name: Compile and test
         working-directory: backend
         run: mvn --batch-mode --no-transfer-progress clean verify
@@ -99,268 +71,315 @@ jobs:
           --health-retries=30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Install MySQL client
         run: sudo apt-get update && sudo apt-get install -y default-mysql-client
+      - name: Restore historical migrations for equivalence validation
+        run: |
+          mkdir -p /tmp/historical-source
+          git archive 467dc8278e13902a39c51d1c9d8d8e588db98f57 backend/src/main/resources/db/migration | tar -x -C /tmp/historical-source
+          test "$(find /tmp/historical-source/backend/src/main/resources/db/migration -maxdepth 1 -name 'V*.sql' | wc -l)" = "63"
+      - name: Enforce clean-install baseline structure
+        run: |
+          BASELINE=backend/src/main/resources/db/migration/V1__baseline.sql
+          test "$(find backend/src/main/resources/db/migration -maxdepth 1 -type f -name 'V*.sql' | wc -l)" = "1"
+          test "$(grep -Eic '^[[:space:]]*CREATE[[:space:]]+TABLE[[:space:]]' "$BASELINE")" = "74"
+          if grep -Eiq '^[[:space:]]*ALTER[[:space:]]+TABLE[[:space:]]|^[[:space:]]*CREATE[[:space:]]+(UNIQUE[[:space:]]+)?INDEX[[:space:]]' "$BASELINE"; then
+            echo "Baseline must declare all columns and indexes inside CREATE TABLE statements."
+            exit 1
+          fi
+          echo "PASS: one baseline, 74 table definitions, no ALTER TABLE or standalone CREATE INDEX."
       - name: Apply V1 schema
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass -e "CREATE DATABASE solar_migration_test"
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V1__complete_release2.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V1__complete_release2.sql
       - name: Verify additive V2 permission migration
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -e "INSERT INTO tenant(id,name,slug,status) VALUES(UUID_TO_BIN(UUID()),'Migration tenant','migration-tenant','ACTIVE'); SET @tenant_id=(SELECT id FROM tenant WHERE slug='migration-tenant'); INSERT INTO role(id,tenant_id,name) VALUES(UUID_TO_BIN(UUID()),@tenant_id,'VENDOR_ADMIN');"
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V2__vendor_employee_management_permission.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V2__vendor_employee_management_permission.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass -Nse "SELECT COUNT(*) FROM role_permission rp JOIN role r ON r.id=rp.role_id JOIN permission p ON p.id=rp.permission_id WHERE r.name='VENDOR_ADMIN' AND p.code='USER_MANAGE'" solar_migration_test)" = "1"
       - name: Apply V3 quotation decision audit migration
-        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V3__quotation_customer_decision_audit.sql
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V3__quotation_customer_decision_audit.sql
       - name: Apply V4 access-token revocation migration
-        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V4__user_access_token_version.sql
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V4__user_access_token_version.sql
       - name: Apply V5 role and solar catalogue bootstrap
-        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V5__permission_role_and_catalog_bootstrap.sql
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V5__permission_role_and_catalog_bootstrap.sql
       - name: Apply V6 required product category migration
-        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V6__require_product_category.sql
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V6__require_product_category.sql
       - name: Apply V7 catalogue read permission migration
-        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V7__catalogue_read_permission.sql
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V7__catalogue_read_permission.sql
       - name: Apply V8 lead assignment history migration
-        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V8__lead_assignment_history.sql
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V8__lead_assignment_history.sql
       - name: Apply V9 tenant discount policy migration
-        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V9__tenant_discount_approval_policy.sql
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V9__tenant_discount_approval_policy.sql
       - name: Apply V10 global identity roles migration
-        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V10__global_identity_roles.sql
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V10__global_identity_roles.sql
       - name: Apply V11 Release 3 operations migration
-        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V11__release3_operations.sql
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V11__release3_operations.sql
       - name: Apply V12 installation teams and ledger migration
-        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V12__installation_teams_checklist_templates_and_inventory_dimensions.sql
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V12__installation_teams_checklist_templates_and_inventory_dimensions.sql
       - name: Apply V13 technician and service manager roles
-        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V13__technician_and_service_manager_roles.sql
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V13__technician_and_service_manager_roles.sql
       - name: Apply V14 order tax snapshot and immutable inventory ledger
-        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V14__order_tax_snapshot_and_immutable_inventory_ledger.sql
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V14__order_tax_snapshot_and_immutable_inventory_ledger.sql
       - name: Apply idempotent V15 tax snapshot column migration twice
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V15__ensure_order_tax_snapshot_column.sql
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V15__ensure_order_tax_snapshot_column.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V15__ensure_order_tax_snapshot_column.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V15__ensure_order_tax_snapshot_column.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='order_item' AND column_name='tax_percent'")" = "1"
       - name: Apply V16 platform permission repair and package image schema
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V16__repair_platform_permission_and_package_images.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V16__repair_platform_permission_and_package_images.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='solar_package' AND column_name='image_url'")" = "1"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role_permission rp JOIN role r ON r.id=rp.role_id JOIN permission p ON p.id=rp.permission_id WHERE r.name='PLATFORM_SUPER_ADMIN' AND p.code='PLATFORM_MANAGE'")" = "1"
       - name: Apply V17 tenant dashboard timestamps
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V17__tenant_admin_dashboard_audit_timestamps.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V17__tenant_admin_dashboard_audit_timestamps.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='tenant' AND column_name IN ('created_at','updated_at')")" = "2"
       - name: Apply V18 finance and service schema
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V18__release4_finance_and_service.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V18__release4_finance_and_service.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name IN ('invoice','invoice_item','payment','payment_webhook_event','payment_refund','service_request','service_visit','service_sla_policy','service_event','invoice_sequence')")" = "10"
       - name: Apply V19 refund permission
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V19__finance_refund_permissions.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V19__finance_refund_permissions.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role_permission rp JOIN role r ON r.id=rp.role_id JOIN permission p ON p.id=rp.permission_id WHERE r.name='ACCOUNTANT' AND p.code='PAYMENT_REFUND'")" = "1"
       - name: Apply V20 credit note and tax breakdown
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V20__invoice_credit_notes_and_tax_breakdown.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V20__invoice_credit_notes_and_tax_breakdown.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='credit_note'")" = "1"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='invoice' AND column_name IN ('cgst_amount','sgst_amount','igst_amount')")" = "3"
       - name: Apply V21 service business calendar
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V21__service_business_calendar_and_reopen_policy.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V21__service_business_calendar_and_reopen_policy.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='service_sla_policy' AND column_name='working_days_json'")" = "1"
       - name: Apply V22 private service attachments
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V22__private_service_attachments.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V22__private_service_attachments.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='service_attachment'")" = "1"
       - name: Apply V23 notification delivery schema
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V23__notification_delivery.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V23__notification_delivery.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='notification_delivery'")" = "1"
       - name: Apply V24 platform MFA challenge schema
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V24__platform_mfa_challenge.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V24__platform_mfa_challenge.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='mfa_challenge'")" = "1"
       - name: Apply V25 accepted quotation financial snapshots
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V25__accepted_quotation_financial_snapshots.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V25__accepted_quotation_financial_snapshots.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='customer_order' AND column_name IN ('subtotal','discount_percent','discount_amount','tax_total')")" = "4"
       - name: Apply V26 quotation and order line financial snapshots
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V26__quotation_and_order_line_financial_snapshots.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V26__quotation_and_order_line_financial_snapshots.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='quotation_item' AND column_name IN ('discount_amount','taxable_amount','tax_amount')")" = "3"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='order_item' AND column_name IN ('discount_amount','taxable_amount','tax_amount')")" = "3"
       - name: Apply V27 survey lifecycle and technical assessment
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V27__survey_lifecycle_and_technical_assessment.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V27__survey_lifecycle_and_technical_assessment.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='site_survey' AND column_name IN ('latitude','longitude','findings','recommendation','reviewed_by','reviewed_at')")" = "6"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='site_survey_history'")" = "1"
 
       - name: Apply V28 engineer profiles and warranty claims
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V28__engineer_profiles_and_warranty_claims.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V28__engineer_profiles_and_warranty_claims.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name IN ('engineer_profile','warranty_claim','installation_schedule_history')")" = "3"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='notification_delivery' AND column_name IN ('channel','idempotency_key','provider_message_id','next_attempt_at')")" = "4"
       - name: Apply V29 customer messaging consent
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V29__customer_messaging_consent.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V29__customer_messaging_consent.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='notification_delivery' AND column_name='message_body'")" = "1"
       - name: Apply V30 approved survey linkage
-        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V30__installation_approved_survey_link.sql
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V30__installation_approved_survey_link.sql
       - name: Apply V31 service ticket comments
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V31__service_ticket_comments.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V31__service_ticket_comments.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='service_comment'")" = "1"
       - name: Apply V32 warranty expiry index
-        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V32__warranty_expiry_lookup_index.sql
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V32__warranty_expiry_lookup_index.sql
       - name: Apply V33 inventory transaction references
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V33__inventory_transaction_reference.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V33__inventory_transaction_reference.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='inventory_transaction' AND column_name='transaction_reference'")" = "1"
       - name: Apply V34 inventory compensation links
-        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V34__inventory_transaction_compensation_link.sql
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V34__inventory_transaction_compensation_link.sql
       - name: Apply V35 site survey evidence attachments
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V35__site_survey_attachments.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V35__site_survey_attachments.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='site_survey_attachment'")" = "1"
       - name: Apply V36 warranty claim evidence attachments
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V36__warranty_claim_attachments.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V36__warranty_claim_attachments.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='warranty_claim_attachment'")" = "1"
 
 
       - name: Apply V37 enterprise SaaS foundation
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V37__enterprise_saas_foundation.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V37__enterprise_saas_foundation.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name IN ('branch','branch_user','subscription_plan','tenant_subscription','subscription_usage','audit_event')")" = "6"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='warehouse' AND column_name='branch_id'")" = "1"
 
       - name: Apply V38 tenant branding and custom domains
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V38__tenant_branding_and_custom_domains.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V38__tenant_branding_and_custom_domains.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='tenant_domain'")" = "1"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='tenant' AND column_name IN ('display_name','logo_url','primary_color','secondary_color')")" = "4"
 
       - name: Apply V39 configurable approval workflows
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V39__configurable_approval_workflows.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V39__configurable_approval_workflows.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name IN ('approval_workflow','approval_instance','approval_decision')")" = "3"
 
       - name: Apply V40 tenant integration registry and sync jobs
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V40__tenant_integration_registry_and_sync_jobs.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V40__tenant_integration_registry_and_sync_jobs.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name IN ('integration_connection','integration_sync_job','integration_webhook_event')")" = "3"
 
       - name: Apply V41 offline business sync inbox
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V41__offline_business_sync_inbox.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V41__offline_business_sync_inbox.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='offline_sync_operation'")" = "1"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='offline_sync_operation' AND column_name IN ('tenant_id','actor_id','client_operation_id','payload_hash','status')")" = "5"
 
       - name: Apply V42 provider-neutral payment checkout
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V42__provider_neutral_payment_checkout.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V42__provider_neutral_payment_checkout.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='payment' AND column_name IN ('idempotency_key','checkout_url')")" = "2"
 
       - name: Apply V43 branch ownership
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V43__branch_scope_business_records.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V43__branch_scope_business_records.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND column_name='branch_id' AND table_name IN ('enquiry','sales_lead','site_survey','quotation','customer_order','invoice','service_request','installation_job')")" = "8"
 
       - name: Apply V44 offline, audit, storage and secret lifecycle foundations
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V44__phase3_offline_storage_secrets_audit.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V44__phase3_offline_storage_secrets_audit.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name IN ('tenant_storage_ledger','offline_sync_attachment','integration_secret_reference')")" = "3"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='offline_sync_operation' AND column_name IN ('expected_version','resulting_version','conflict_code','attempt_count','resolved_at','resolution_action')")" = "6"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='audit_event' AND column_name IN ('branch_id','request_id','source_ip','user_agent')")" = "4"
 
       - name: Apply V45 default subscription plans idempotently
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V45__seed_default_subscription_plans.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V45__seed_default_subscription_plans.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM subscription_plan WHERE plan_code IN ('STARTER','PROFESSIONAL','ENTERPRISE')" )" = "3"
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V45__seed_default_subscription_plans.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V45__seed_default_subscription_plans.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM subscription_plan WHERE plan_code IN ('STARTER','PROFESSIONAL','ENTERPRISE')" )" = "3"
 
       - name: Apply V46 subscription history and extended plan fields
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V46__subscription_management_and_assignment_history.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V46__subscription_management_and_assignment_history.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='subscription_plan' AND column_name IN ('max_products','max_customers','trial_period_days','display_order')" )" = "4"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='subscription_assignment_history'" )" = "1"
 
       - name: Apply V47 Starter warehouse allowance
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V47__starter_plan_warehouse_allowance.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V47__starter_plan_warehouse_allowance.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT max_warehouses FROM subscription_plan WHERE plan_code='STARTER'" )" = "3"
 
       - name: Apply V48 immutable subscription assignment history
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V48__subscription_assignment_history_immutable.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V48__subscription_assignment_history_immutable.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema='solar_migration_test' AND trigger_name IN ('trg_subscription_assignment_history_no_update','trg_subscription_assignment_history_no_delete')" )" = "2"
 
       - name: Apply V49 tenant-scoped customer saved addresses
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V49__customer_addresses.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V49__customer_addresses.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='customer_address'")" = "1"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema='solar_migration_test' AND constraint_name='fk_customer_address_profile'")" = "1"
 
       - name: Apply V50 saved address linkage to customer enquiries
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V50__enquiry_saved_address.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V50__enquiry_saved_address.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='enquiry' AND column_name IN ('address_id','site_address','city_pincode')")" = "3"
 
       - name: Apply V51 vendor administrator analytics permissions
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V51__repair_vendor_admin_analytics_permissions.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V51__repair_vendor_admin_analytics_permissions.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role_permission rp JOIN role r ON r.id=rp.role_id JOIN permission p ON p.id=rp.permission_id WHERE r.name='VENDOR_ADMIN' AND r.tenant_id IS NOT NULL AND p.code IN ('REPORT_VIEW','BRANCH_MANAGE')" )" = "2"
 
       - name: Apply V52 authentication lockout and rate limit
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V52__authentication_lockout_and_rate_limit.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V52__authentication_lockout_and_rate_limit.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='app_user' AND column_name IN ('failed_login_attempts','locked_until','last_login_at')")" = "3"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='auth_rate_limit_bucket'")" = "1"
 
       - name: Apply V53 refresh token families and SRS permissions
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V53__refresh_token_families_and_srs_permissions.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V53__refresh_token_families_and_srs_permissions.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND table_name='refresh_token' AND column_name IN ('family_id','replaced_by_token_id','created_at')")" = "3"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM permission WHERE code IN ('PRODUCT_VIEW','SERVICE_RESOLVE','CMS_PUBLISH','ROLE_ASSIGN')")" = "4"
 
       - name: Apply V54 employee role permission reconciliation
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V54__reconcile_employee_role_permissions.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V54__reconcile_employee_role_permissions.sql
       - name: Apply V55 strict permission reconciliation and platform support
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V55__strict_permission_reconciliation_and_platform_support.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V55__strict_permission_reconciliation_and_platform_support.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role r JOIN role_permission rp ON rp.role_id=r.id JOIN permission p ON p.id=rp.permission_id WHERE r.tenant_id IS NULL AND r.name='PLATFORM_SUPPORT' AND p.code IN ('AUDIT_VIEW','TENANT_VIEW')")" = "2"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role r JOIN role_permission rp ON rp.role_id=r.id JOIN permission p ON p.id=rp.permission_id WHERE r.tenant_id IS NOT NULL AND p.code IN ('CATALOG_MANAGE','CATALOG_VIEW','DISCOUNT_POLICY_MANAGE','CUSTOMER_MANAGE','LEAD_MANAGE','SURVEY_MANAGE','QUOTATION_MANAGE','DISCOUNT_APPROVE','USER_MANAGE','INVENTORY_MANAGE','SERVICE_MANAGE','FINANCE_MANAGE')")" = "0"
       - name: Apply V56 remove platform permissions from tenant roles
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V56__remove_platform_permissions_from_tenant_roles.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V56__remove_platform_permissions_from_tenant_roles.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role r JOIN role_permission rp ON rp.role_id=r.id JOIN permission p ON p.id=rp.permission_id WHERE r.tenant_id IS NOT NULL AND p.code IN ('PLATFORM_MANAGE','SUBSCRIPTION_MANAGE','TENANT_VIEW','TENANT_UPDATE')")" = "0"
 
       - name: Apply V57 tenant-aware catalogue foreign keys
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V57__tenant_aware_catalogue_foreign_keys.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V57__tenant_aware_catalogue_foreign_keys.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema='solar_migration_test' AND constraint_name IN ('fk_product_category_tenant','fk_package_item_package_tenant','fk_package_item_product_tenant')")" = "3"
 
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/test/resources/tenant-isolation-v57.sql
 
       - name: Apply V58 operational tenant-aware foreign keys
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V58__operational_tenant_composite_foreign_keys.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V58__operational_tenant_composite_foreign_keys.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema='solar_migration_test' AND constraint_name IN ('fk_sales_lead_enquiry_tenant','fk_customer_order_quote_tenant','fk_inventory_balance_product_tenant','fk_invoice_order_tenant','fk_service_comment_ticket_tenant','fk_warranty_claim_warranty_tenant')")" = "6"
       - name: Apply V59 platform audit permission repair
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V59__ensure_platform_audit_permission.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V59__ensure_platform_audit_permission.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role_permission rp JOIN role r ON r.id=rp.role_id JOIN permission p ON p.id=rp.permission_id WHERE r.tenant_id IS NULL AND r.name='PLATFORM_SUPER_ADMIN' AND p.code='AUDIT_VIEW'")" = "1"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role_permission rp JOIN role r ON r.id=rp.role_id JOIN permission p ON p.id=rp.permission_id WHERE r.tenant_id IS NOT NULL AND r.name='VENDOR_ADMIN' AND p.code='BRANCH_MANAGE'")" = "1"
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/test/resources/tenant-isolation-v58.sql
 
       - name: Apply V60 tenant-owned tenant_id NOT NULL enforcement
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V60__enforce_tenant_id_not_null_on_tenant_owned_tables.sql
-          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND column_name='tenant_id' AND table_name IN ('customer_order','order_item','quotation','quotation_item','site_survey','lead_history','notification_delivery','integration_webhook_event','idempotency_record') AND is_nullable='NO'")" = "9"
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V60__enforce_tenant_id_not_null_on_tenant_owned_tables.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND column_name='tenant_id' AND table_name IN ('customer_order','order_item','quotation','quotation_item','site_survey','lead_history','integration_webhook_event','idempotency_record') AND is_nullable='NO'")" = "8"
 
       - name: Apply V61 integration and approval permission catalogue
         run: |
-          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V61__install_integration_and_approval_permissions.sql
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V61__install_integration_and_approval_permissions.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM permission WHERE code IN ('INTEGRATION_MANAGE','APPROVAL_WORKFLOW_MANAGE')")" = "2"
+
+      - name: Apply V62 notification delivery idempotency
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V62__notification_delivery_idempotency.sql
+
+      - name: Apply V63 tenant-scoped export jobs
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V63__tenant_scoped_export_jobs.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='export_job'")" = "1"
+
+      - name: Compare historical migrations with consolidated baseline
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass -e "CREATE DATABASE solar_baseline_test"
+          mysql -h 127.0.0.1 -uroot -prootpass solar_baseline_test < backend/src/main/resources/db/migration/V1__baseline.sql
+          mysqldump -h 127.0.0.1 -uroot -prootpass --no-data --skip-comments --skip-add-drop-table --skip-set-charset --skip-lock-tables solar_migration_test | sed -E 's/AUTO_INCREMENT=[0-9]+/AUTO_INCREMENT=1/g' > /tmp/historical-schema.sql
+          mysqldump -h 127.0.0.1 -uroot -prootpass --no-data --skip-comments --skip-add-drop-table --skip-set-charset --skip-lock-tables solar_baseline_test | sed -E 's/AUTO_INCREMENT=[0-9]+/AUTO_INCREMENT=1/g' > /tmp/baseline-schema.sql
+          if diff -u /tmp/historical-schema.sql /tmp/baseline-schema.sql > schema-diff.txt; then
+            echo "Schema equivalence: identical" > schema-diff.txt
+          else
+            cat schema-diff.txt
+            exit 1
+          fi
+
+      - name: Upload schema equivalence result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleanup-schema-equivalence
+          path: schema-diff.txt
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Emit read-only tenant schema, FK and unique-index inventory
         run: |

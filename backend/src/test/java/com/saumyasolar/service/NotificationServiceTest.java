@@ -1,13 +1,19 @@
 package com.saumyasolar.service;
 
 import com.saumyasolar.domain.NotificationDelivery;
+import com.saumyasolar.domain.CustomerProfile;
+import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.repo.NotificationDeliveryRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.UUID;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.time.Instant;
 
 import org.mockito.ArgumentCaptor;
@@ -18,6 +24,121 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class NotificationServiceTest {
+
+    @Test
+    void persistsPendingNotificationBeforePublishingItsEvent() {
+        JavaMailSender sender = mock(JavaMailSender.class);
+        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        java.util.concurrent.atomic.AtomicReference<NotificationDelivery> persisted =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> {
+            NotificationDelivery record = invocation.getArgument(0);
+            persisted.set(record);
+            return record;
+        });
+        when(repository.findById(any())).thenAnswer(invocation -> java.util.Optional.ofNullable(persisted.get()));
+        NotificationService service = new NotificationService(
+                sender, repository, null, "no-reply@example.test", "http://localhost:3000",
+                "", "", "", "", publisher
+        );
+        UUID tenantId = UUID.randomUUID();
+        boolean accepted = service.sendBusinessNotification(
+                UUID.randomUUID(), tenantId, "QUOTATION_SENT",
+                "customer@example.test", "Your quotation", "Quotation details"
+        );
+        assertTrue(accepted);
+        ArgumentCaptor<NotificationDelivery> saved = ArgumentCaptor.forClass(NotificationDelivery.class);
+        verify(repository).save(saved.capture());
+        assertEquals("PENDING", saved.getValue().getStatus());
+        assertEquals(tenantId, saved.getValue().getTenantId());
+        verify(publisher).publishEvent(any(BusinessNotificationRequestedEvent.class));
+        verifyNoInteractions(sender);
+    }
+
+    @Test
+    void scheduledRecoveryProcessesPersistedPendingNotificationAfterRestart() {
+        JavaMailSender sender = mock(JavaMailSender.class);
+        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        UUID tenantId = UUID.randomUUID();
+        NotificationDelivery record = new NotificationDelivery();
+        record.setId(UUID.randomUUID());
+        record.setTenantId(tenantId);
+        record.setUserId(UUID.randomUUID());
+        record.setChannel("EMAIL");
+        record.setRecipient("customer@example.test");
+        record.setSubject("Recovered notification");
+        record.setMessageBody("Persisted before event publication");
+        record.setStatus("PENDING");
+        record.setAttemptCount(0);
+        record.setCreatedAt(Instant.now().minusSeconds(120));
+        when(repository.findDistinctTenantIdsForPending(any())).thenReturn(java.util.List.of(tenantId));
+        when(repository.findTop50ByTenantIdAndStatusAndCreatedAtBeforeOrderByCreatedAtAsc(eq(tenantId), eq("PENDING"), any()))
+                .thenReturn(java.util.List.of(record));
+        when(repository.claimPendingDelivery(eq(record.getId()), eq(tenantId), any(), any())).thenReturn(1);
+        when(repository.findByIdAndTenantId(record.getId(), tenantId)).thenReturn(java.util.Optional.of(record));
+        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doAnswer(invocation -> {
+            assertEquals(tenantId, com.saumyasolar.security.TenantExecutionContext.requireTenantId());
+            return null;
+        }).when(sender).send(any(SimpleMailMessage.class));
+
+        NotificationService service = new NotificationService(
+                sender, repository, null, "no-reply@example.test", "http://localhost:3000",
+                "", "", "", "", publisher
+        );
+        service.retryFailedDeliveries();
+
+        verify(sender).send(any(SimpleMailMessage.class));
+        assertEquals("DELIVERED", record.getStatus());
+        assertNotNull(record.getSentAt());
+        verify(repository).claimPendingDelivery(eq(record.getId()), eq(tenantId), any(), any());
+        assertThrows(IllegalStateException.class,
+                com.saumyasolar.security.TenantExecutionContext::requireTenantId);
+    }
+
+
+    @Test
+    void queuedWhatsappNotificationUsesARealLineBreak() {
+        JavaMailSender sender = mock(JavaMailSender.class);
+        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
+        CustomerProfileRepository customers = mock(CustomerProfileRepository.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        CustomerProfile customer = new CustomerProfile();
+        customer.setTenantId(tenantId);
+        customer.setUserId(userId);
+        customer.setPhone("+919876543210");
+        customer.setWhatsappConsent(true);
+        Map<UUID, NotificationDelivery> persisted = new HashMap<>();
+        when(customers.findByTenantIdAndUserId(tenantId, userId)).thenReturn(Optional.of(customer));
+        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> {
+            NotificationDelivery record = invocation.getArgument(0);
+            persisted.put(record.getId(), record);
+            return record;
+        });
+        when(repository.findById(any())).thenAnswer(invocation ->
+                Optional.ofNullable(persisted.get(invocation.getArgument(0))));
+        NotificationService service = new NotificationService(
+                sender, repository, customers, "no-reply@example.test", "http://localhost:3000",
+                "account", "token", "", "whatsapp:+15550000000", publisher
+        );
+
+        assertTrue(service.sendBusinessNotification(
+                userId, tenantId, "QUOTATION_SENT", "customer@example.test",
+                "Your quotation", "Quotation details"
+        ));
+
+        NotificationDelivery whatsapp = persisted.values().stream()
+                .filter(record -> "WHATSAPP".equals(record.getChannel()))
+                .findFirst().orElseThrow();
+        assertEquals("Your quotation\nQuotation details", whatsapp.getMessageBody());
+        verify(publisher, times(2)).publishEvent(any(BusinessNotificationRequestedEvent.class));
+        verifyNoInteractions(sender);
+    }
+
     @Test
     void sendsAndRecordsPasswordResetEmail() {
         JavaMailSender sender = mock(JavaMailSender.class);

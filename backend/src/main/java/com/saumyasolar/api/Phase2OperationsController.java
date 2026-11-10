@@ -7,9 +7,6 @@ import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -85,6 +82,14 @@ public class Phase2OperationsController {
     private void ops(Principal p) {
         tenant(p);
         permission(p, "INSTALLATION_ASSIGN");
+    }
+
+    private void reportView(Principal p) {
+        tenant(p);
+        if (p.permissions() == null
+                || (!p.permissions().contains("REPORT_VIEW") && !p.permissions().contains("REPORT_EXPORT"))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing permission: REPORT_VIEW");
+        }
     }
     
     public record EngineerInput(
@@ -288,10 +293,15 @@ public class Phase2OperationsController {
             Authentication a
     ) {
         Principal p = p(a);
-        ops(p);
+        reportView(p);
+        return operationsReportForTenant(p.tenantId(), from, to);
+    }
+
+    /** Tenant-scoped report projection shared by the JSON report endpoint and asynchronous export jobs. */
+    public Map<String, Object> operationsReportForTenant(UUID t, LocalDate from, LocalDate to) {
+        if (t == null) throw new IllegalArgumentException("tenantId is required");
         if (from != null && to != null && to.isBefore(from))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "to must not precede from");
-        UUID t = p.tenantId();
         Instant start = from == null ? Instant.EPOCH : from.atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
         Instant end = to == null ? Instant.now() : to.plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
         var orderRows = orders.findByTenantIdOrderByIdDesc(t).stream().filter(x -> x.getCreatedAt() != null && !x.getCreatedAt().isBefore(start) && x.getCreatedAt().isBefore(end)).toList();
@@ -328,78 +338,5 @@ public class Phase2OperationsController {
         result.put("inventoryTransactions", stockRows.size());
         return result;
     }
-    
-    @GetMapping(value = "/reports/operations/export.csv", produces = "text/csv")
-    public ResponseEntity<byte[]> exportOperationsCsv(
-            @RequestParam(required = false) LocalDate from,
-            @RequestParam(required = false) LocalDate to,
-            Authentication a
-    ) {
-        Map<String, Object> report = operationsReport(from, to, a);
-        StringBuilder csv = new StringBuilder("Metric,Value\n");
-        report.forEach((key, value) -> csv.append(key).append(',').append(value == null ? "" : value).append('\n'));
-        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=operations-report.csv").contentType(MediaType.parseMediaType("text/csv; charset=UTF-8")).body(csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
-    }
-    
-    @GetMapping(
-            value = "/reports/operations/export.xlsx",
-            produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-    public ResponseEntity<byte[]> exportOperationsExcel(
-            @RequestParam(required = false) LocalDate from,
-            @RequestParam(required = false) LocalDate to,
-            Authentication a
-    ) {
-        Map<String, Object> report = operationsReport(from, to, a);
-        try (
-                java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-                org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook()
-        ) {
-            var sheet = workbook.createSheet("Operations");
-            var header = sheet.createRow(0);
-            header.createCell(0).setCellValue("Metric");
-            header.createCell(1).setCellValue("Value");
-            int row = 1;
-            for (var entry : report.entrySet()) {
-                var cells = sheet.createRow(row++);
-                cells.createCell(0).setCellValue(entry.getKey());
-                cells.createCell(1).setCellValue(entry.getValue() == null ? "" : String.valueOf(entry.getValue()));
-            }
-            sheet.setColumnWidth(0, 24 * 256);
-            sheet.setColumnWidth(1, 32 * 256);
-            workbook.write(out);
-            return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=operations-report.xlsx").contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")).body(out.toByteArray());
-        } catch (java.io.IOException ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to generate Excel report", ex);
-        }
-    }
-    
-    @GetMapping(value = "/reports/operations/export.pdf", produces = "application/pdf")
-    public ResponseEntity<byte[]> exportOperationsPdf(
-            @RequestParam(required = false) LocalDate from,
-            @RequestParam(required = false) LocalDate to,
-            Authentication a
-    ) {
-        Map<String, Object> report = operationsReport(from, to, a);
-        try (java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
-            com.lowagie.text.Document document = new com.lowagie.text.Document();
-            com.lowagie.text.pdf.PdfWriter.getInstance(document, out);
-            document.open();
-            document.add(new com.lowagie.text.Paragraph("Soumya Solar — Operations Report"));
-            document.add(new com.lowagie.text.Paragraph("Period: " + ( from == null ? "Beginning" : from ) + " to " + ( to == null ? "Today" : to )));
-            com.lowagie.text.pdf.PdfPTable table = new com.lowagie.text.pdf.PdfPTable(2);
-            table.setWidthPercentage(100);
-            table.addCell("Metric");
-            table.addCell("Value");
-            for (var entry : report.entrySet()) {
-                table.addCell(entry.getKey());
-                table.addCell(entry.getValue() == null ? "" : String.valueOf(entry.getValue()));
-            }
-            document.add(table);
-            document.close();
-            return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=operations-report.pdf").contentType(MediaType.APPLICATION_PDF).body(out.toByteArray());
-        } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to generate PDF report", ex);
-        }
-    }
+
 }
