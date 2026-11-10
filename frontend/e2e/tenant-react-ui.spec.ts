@@ -51,7 +51,7 @@ test('React vendor workspace stays isolated when switching between two tenant ac
     await page.locator('button.public-login-link').click({ force: true });
     await page.getByPlaceholder('Email').fill(email);
     await page.getByPlaceholder('Password').fill(password);
-    await page.getByRole('button', { name: 'Login', exact: true }).last().click();
+    await page.locator('form.card.form button').first().click({ force: true });
     await expect(page.getByRole('navigation', { name: 'Application navigation' })).toBeVisible();
     await page.getByRole('button', { name: 'Catalog', exact: true }).click();
     await page.getByRole('button', { name: 'Products', exact: true }).click();
