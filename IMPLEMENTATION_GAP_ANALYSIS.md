@@ -1459,12 +1459,12 @@ No statuses in the earlier tables were upgraded because no implementation/test i
 ### Items extended in this pass
 
 - **P1 authentication throttling:** HMAC-derived account + endpoint buckets for login/forgot-password; opaque reset-token + endpoint bucket for reset-password; IP + endpoint buckets for login/refresh/recovery/MFA; configurable IP + endpoint buckets for public enquiries, exports and payment webhooks; bounded authentication request-body replay; focused unit tests. Commits `1a79b562`, `0d2a741d`, `f3cb1d30`, `3caa723d`, `ddd117ae`.
-- **P1 fine-grained/custom roles:** corrected historical finding: custom-role create/update/delete APIs and `RoleManagementPanel.tsx` already exist. Added tests for cross-tenant custom-role update/delete and tenant-scoped employee role assignment. The exhaustive action-to-permission map and authenticated role matrix remain open. Commit `5f20f0a6`.
+- **P1 fine-grained/custom roles:** corrected historical finding: custom-role create/update/delete APIs and `RoleManagementPanel.tsx` already exist. Removed role-name-only authorization gates from installation-assignment and SLA control paths so explicit SRS permissions govern access; added a custom-role INSTALLATION_ASSIGN controller test. Added tests for cross-tenant custom-role update/delete and tenant-scoped employee role assignment. The exhaustive action-to-permission map and authenticated role matrix remain open. Commits `5f20f0a6`, `128f1fc5`, `2c429418`, `6c29c6fb`.
 - **P1 assigned-resource scope:** quotation revision reads and revision creation now enforce the shared assigned-sales scope guard before exposing or mutating a quotation; negative tests cover both read and revision actions. Service visit completion uses the tenant-qualified visit repository lookup. Commits `bbd10cce`, `5ccba941`, `cb47fc3e`, `409165ea`.
-- **P2 tenant-qualified lookups:** employee, engineer, integration user, installation, service visit and survey employee reassignment lookups now use tenant-qualified repository methods instead of bare-ID lookup followed by in-memory tenant comparison. Commits `8be6f0d7`, `1f5ce498`, `cb47fc3e`.
-- **P2 composite FK inventory:** V57/V58 were directly inspected. V57 covers product/category/package-item tenant relationships; V58 covers a broad set of sales, order, inventory, installation, warranty, finance, service, evidence, offline-sync, branch, approval, audit and notification relationships. MySQL 8.4 migration/integrity validation passed on workflow `42818724332`. Full table/column NOT NULL and FK inventory remains open.
-- **P2 customer/branch/export/download tests:** existing `Release12TenantIntegrationTest` already covers selected foreign tenant/customer/branch, operations CSV/XLSX/PDF, invoice PDF and private attachment paths. This is meaningful existing coverage, not proof of every endpoint/verb/resource family.
-- **P2 scheduled jobs:** `IntegrationSyncScheduler`, `ServiceSlaScheduler`, `WarrantyExpiryScheduler` and `SubscriptionExpiryScheduler` use `TenantExecutionContext` in try-with-resources. Full `@Async`/executor/export/notification worker inventory and exception/thread-reuse context cleanup tests remain open.
+- **P2 tenant-qualified lookups:** employee, engineer, integration user, installation, service visit, survey employee reassignment and Phase2OperationsController engineer/warranty resource lookups use tenant-qualified repository methods. Commits `8be6f0d7`, `1f5ce498`, `cb47fc3e`, `102adc61`, `3e2d6d57`.
+- **P2 composite FK inventory:** V57/V58 were directly inspected. V57 covers product/category/package-item tenant relationships; V58 covers a broad set of sales, order, inventory, installation, warranty, finance, service, evidence, offline-sync, branch, approval, audit and notification relationships. MySQL 8.4 migration/integrity validation passed on prior CI runs. Added `docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql` and `docs/PHASE_1_2_TENANT_SCHEMA_INVENTORY.md`; actual production-like schema execution and full table/column NOT NULL/FK proof remain open.
+- **P2 customer/branch/export/download tests:** existing `Release12TenantIntegrationTest` covers selected foreign tenant/customer/branch, operations CSV/XLSX/PDF, invoice PDF and private attachment paths. Added same-tenant cross-customer warranty claim denial. This is meaningful existing coverage, not proof of every endpoint/verb/resource family.
+- **P2 scheduled jobs:** `IntegrationSyncScheduler`, `ServiceSlaScheduler`, `WarrantyExpiryScheduler` and `SubscriptionExpiryScheduler` use `TenantExecutionContext` in try-with-resources. `NotificationService.retryFailedDeliveries` now establishes a tenant scope for each tenant-owned delivery; tests cover exception/nested-scope/thread-reuse cleanup and notification retry context. Full executor/export worker inventory and atomic duplicate notification retry claims remain open.
 
 ### Verification state
 
@@ -1482,3 +1482,17 @@ No statuses in the earlier tables were upgraded because no implementation/test i
 - Assigned-sales scope is extended to quotation revision reads; customer/branch/service export/download matrix remains incomplete.
 
 CI update (2026-11-10): workflow 42821756695 passed all four jobs, including 163 backend tests, frontend build, MySQL migration/integrity validation and Playwright tenant-filter tampering. Reset-token throttling code/tests are being verified in workflow 42822434704.
+
+
+### Latest follow-up commits — 2026-11-10
+
+- `102adc61`, `3e2d6d57`: Phase2OperationsController engineer and customer warranty reads now use tenant-qualified repository lookups; warranty repository method added.
+- `597ebb3f`, `7d65478e`: nested exception and pooled-thread tenant context cleanup tests.
+- `128f1fc5`, `2c429418`: permission-first custom-role behavior for installation assignment and service SLA operations.
+- `a8837dc4`: service engineers with SERVICE_VIEW see warranties only for their assigned installations; INSTALLATION_ASSIGN remains the tenant-wide grant.
+- `6c29c6fb`: custom-role INSTALLATION_ASSIGN test.
+- `f11581a3`, `df73efd3`, `ed0780af`: notification retry establishes tenant context and has a context cleanup test.
+- `ea118cd0`: same-tenant cross-customer warranty claim creation denial.
+- `ed714646`, `9ada09fa`, `9763e0d7`: schema audit SQL and inventory documents.
+
+Latest-head CI: workflow `42826862684` is running for commit `7d65478e`. Earlier runs failed because the warranty repository method was missing and the JUnit Future assertion was ambiguous; both defects have been fixed. Do not count the earlier failures as passing test evidence.
