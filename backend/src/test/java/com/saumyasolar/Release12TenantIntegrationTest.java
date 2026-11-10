@@ -6,6 +6,11 @@ import com.saumyasolar.domain.AppUser;
 import com.saumyasolar.domain.Branch;
 import com.saumyasolar.domain.CustomerAddress;
 import com.saumyasolar.domain.SiteSurvey;
+import com.saumyasolar.domain.Warehouse;
+import com.saumyasolar.domain.InventoryBalance;
+import com.saumyasolar.domain.InventoryTransaction;
+import com.saumyasolar.domain.ProductCategory;
+import com.saumyasolar.domain.Product;
 import com.saumyasolar.domain.SalesLead;
 import com.saumyasolar.domain.SolarPackage;
 import com.saumyasolar.domain.Enquiry;
@@ -31,6 +36,11 @@ import com.saumyasolar.repo.BranchMembershipRepository;
 import com.saumyasolar.repo.PermissionRepository;
 import com.saumyasolar.repo.EnquiryRepository;
 import com.saumyasolar.repo.SalesLeadRepository;
+import com.saumyasolar.repo.WarehouseRepository;
+import com.saumyasolar.repo.InventoryBalanceRepository;
+import com.saumyasolar.repo.InventoryTransactionRepository;
+import com.saumyasolar.repo.ProductCategoryRepository;
+import com.saumyasolar.repo.ProductRepository;
 import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.repo.CustomerAddressRepository;
 import com.saumyasolar.repo.BranchRepository;
@@ -135,6 +145,11 @@ class Release12TenantIntegrationTest {
     @Autowired PermissionRepository permissions;
     @Autowired EnquiryRepository enquiryRecords;
     @Autowired SalesLeadRepository salesLeadRecords;
+    @Autowired WarehouseRepository warehouseRecords;
+    @Autowired InventoryBalanceRepository inventoryBalances;
+    @Autowired InventoryTransactionRepository inventoryTransactions;
+    @Autowired ProductCategoryRepository productCategories;
+    @Autowired ProductRepository productRecords;
     
     UUID vendorTenantId;
     
@@ -1746,7 +1761,7 @@ class Release12TenantIntegrationTest {
         role.setId(UUID.randomUUID());
         role.setTenantId(vendorTenantId);
         role.setName("BRANCH_SCOPE_TEST_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10));
-        for (String code : List.of("LEAD_VIEW", "SURVEY_VIEW", "QUOTATION_VIEW", "ORDER_VIEW", "BRANCH_MANAGE", "INVOICE_VIEW", "SERVICE_VIEW", "SERVICE_ASSIGN", "INSTALLATION_VIEW", "INSTALLATION_ASSIGN")) {
+        for (String code : List.of("LEAD_VIEW", "SURVEY_VIEW", "QUOTATION_VIEW", "ORDER_VIEW", "BRANCH_MANAGE", "INVOICE_VIEW", "SERVICE_VIEW", "SERVICE_ASSIGN", "INSTALLATION_VIEW", "INSTALLATION_ASSIGN", "INVENTORY_VIEW")) {
             Permission permission = permissions.findByCode(code).orElseThrow();
             role.getPermissions().add(permission);
         }
@@ -1828,6 +1843,44 @@ class Release12TenantIntegrationTest {
         mvc.perform(get("/api/v1/branches/" + branchB.getId() + "/analytics")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
+
+        ProductCategory stockCategory = new ProductCategory();
+        stockCategory.setId(UUID.randomUUID());
+        stockCategory.setTenantId(vendorTenantId);
+        stockCategory.setName("Branch inventory category " + UUID.randomUUID());
+        stockCategory.setActive(true);
+        productCategories.saveAndFlush(stockCategory);
+        Product stockProduct = new Product();
+        stockProduct.setId(UUID.randomUUID());
+        stockProduct.setTenantId(vendorTenantId);
+        stockProduct.setCategoryId(stockCategory.getId());
+        stockProduct.setSku("BR-STOCK-" + UUID.randomUUID().toString().substring(0, 8));
+        stockProduct.setName("Branch stock product");
+        stockProduct.setPrice(BigDecimal.ZERO);
+        stockProduct.setPurchasePrice(BigDecimal.ZERO);
+        stockProduct.setDiscountPercent(BigDecimal.ZERO);
+        stockProduct.setTaxPercent(BigDecimal.ZERO);
+        stockProduct.setReorderLevel(BigDecimal.ZERO);
+        stockProduct.setWarrantyYears(1);
+        stockProduct.setUnitOfMeasure("PCS");
+        stockProduct.setActive(true);
+        productRecords.saveAndFlush(stockProduct);
+
+        Warehouse warehouseA = branchWarehouse(vendorTenantId, branchA.getId(), "A");
+        Warehouse warehouseB = branchWarehouse(vendorTenantId, branchB.getId(), "B");
+        warehouseRecords.saveAllAndFlush(List.of(warehouseA, warehouseB));
+        InventoryBalance balanceA = branchBalance(vendorTenantId, warehouseA.getId(), stockProduct.getId());
+        InventoryBalance balanceB = branchBalance(vendorTenantId, warehouseB.getId(), stockProduct.getId());
+        inventoryBalances.saveAllAndFlush(List.of(balanceA, balanceB));
+        InventoryTransaction movementA = branchMovement(vendorTenantId, warehouseA.getId(), stockProduct.getId(), member.getId());
+        InventoryTransaction movementB = branchMovement(vendorTenantId, warehouseB.getId(), stockProduct.getId(), member.getId());
+        inventoryTransactions.saveAllAndFlush(List.of(movementA, movementB));
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/warehouses").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), warehouseA.getId(), warehouseB.getId());
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/inventory/balances").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), balanceA.getId(), balanceB.getId());
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/inventory/transactions").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), movementA.getId(), movementB.getId());
     }
 
     private Branch branch(UUID tenantId, String code) {
@@ -1917,6 +1970,46 @@ class Release12TenantIntegrationTest {
         row.setTotal(BigDecimal.ZERO);
         row.setCreatedAt(Instant.now());
         return row;
+    }
+
+    private Warehouse branchWarehouse(UUID tenantId, UUID branchId, String suffix) {
+        Warehouse warehouse = new Warehouse();
+        warehouse.setId(UUID.randomUUID());
+        warehouse.setTenantId(tenantId);
+        warehouse.setBranchId(branchId);
+        warehouse.setCode("BR-WH-" + suffix + "-" + UUID.randomUUID().toString().substring(0, 6));
+        warehouse.setName("Branch warehouse " + suffix);
+        warehouse.setActive(true);
+        warehouse.setCreatedAt(Instant.now());
+        return warehouse;
+    }
+
+    private InventoryBalance branchBalance(UUID tenantId, UUID warehouseId, UUID productId) {
+        InventoryBalance balance = new InventoryBalance();
+        balance.setId(UUID.randomUUID());
+        balance.setTenantId(tenantId);
+        balance.setWarehouseId(warehouseId);
+        balance.setProductId(productId);
+        balance.setOnHand(BigDecimal.TEN);
+        balance.setReserved(BigDecimal.ZERO);
+        balance.setDamaged(BigDecimal.ZERO);
+        return balance;
+    }
+
+    private InventoryTransaction branchMovement(UUID tenantId, UUID warehouseId, UUID productId, UUID actorId) {
+        InventoryTransaction movement = new InventoryTransaction();
+        movement.setId(UUID.randomUUID());
+        movement.setTenantId(tenantId);
+        movement.setWarehouseId(warehouseId);
+        movement.setProductId(productId);
+        movement.setType("RECEIPT");
+        movement.setQuantityDelta(BigDecimal.TEN);
+        movement.setReservedDelta(BigDecimal.ZERO);
+        movement.setDamagedDelta(BigDecimal.ZERO);
+        movement.setReason("Branch isolation integration fixture");
+        movement.setActorId(actorId);
+        movement.setCreatedAt(Instant.now());
+        return movement;
     }
 
     private Invoice branchInvoice(UUID tenantId, UUID branchId, UUID orderId, UUID actorId) {
