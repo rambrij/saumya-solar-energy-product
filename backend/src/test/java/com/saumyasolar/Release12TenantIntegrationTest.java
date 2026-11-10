@@ -875,26 +875,6 @@ class Release12TenantIntegrationTest {
     @Transactional
     void customerCanRequestSurveyReceiveQuotationAcceptAndConvertExactlyOneOrder() throws Exception {
         var vendorToken = accessToken("admin@saumya.local", "Admin@123");
-        var vendorUser = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
-        var vendorRoles = vendorUser.getRoles().stream().map(Role::getName).collect(java.util.stream.Collectors.toSet());
-        var vendorPermissions = vendorUser.getRoles().stream().flatMap(role -> role.getPermissions().stream())
-                .map(Permission::getCode).collect(java.util.stream.Collectors.toSet());
-        var vendorPrincipal = new com.saumyasolar.security.Principal(
-                vendorUser.getId(), vendorTenantId, vendorUser.getEmail(), "VENDOR",
-                vendorRoles, vendorPermissions, vendorUser.getTokenVersion());
-        byte[] surveyEvidenceBytes = "%PDF-1.4 survey evidence".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
-        MockMultipartFile ownSurveyEvidence = new MockMultipartFile(
-                "file", "own-survey.pdf", "application/pdf", surveyEvidenceBytes);
-        var ownSurveyAttachment = surveyAttachments.upload(ownSurvey.getId(), ownSurveyEvidence, vendorPrincipal);
-        mvc.perform(get("/api/v1/surveys/" + ownSurvey.getId() + "/attachments")
-                        .header("Authorization", "Bearer " + vendorToken))
-                .andExpect(status().isOk())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].id")
-                        .value(ownSurveyAttachment.getId().toString()));
-        mvc.perform(get("/api/v1/surveys/" + ownSurvey.getId() + "/attachments/" + ownSurveyAttachment.getId())
-                        .header("Authorization", "Bearer " + vendorToken))
-                .andExpect(status().isOk())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(surveyEvidenceBytes));
         var customerEmail = "journey-" + UUID.randomUUID() + "@example.test";
         var registration = mvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1851,6 +1831,26 @@ class Release12TenantIntegrationTest {
         surveys.save(foreignSurvey);
 
         var vendorToken = accessToken("admin@saumya.local", "Admin@123");
+        var vendorUser = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        var vendorRoles = vendorUser.getRoles().stream().map(Role::getName).collect(java.util.stream.Collectors.toSet());
+        var vendorPermissions = vendorUser.getRoles().stream().flatMap(role -> role.getPermissions().stream())
+                .map(Permission::getCode).collect(java.util.stream.Collectors.toSet());
+        var vendorPrincipal = new com.saumyasolar.security.Principal(
+                vendorUser.getId(), vendorTenantId, vendorUser.getEmail(), "VENDOR",
+                vendorRoles, vendorPermissions, vendorUser.getTokenVersion());
+        byte[] surveyEvidenceBytes = "%PDF-1.4 survey evidence".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        MockMultipartFile ownSurveyEvidence = new MockMultipartFile(
+                "file", "own-survey.pdf", "application/pdf", surveyEvidenceBytes);
+        var ownSurveyAttachment = surveyAttachments.upload(ownSurvey.getId(), ownSurveyEvidence, vendorPrincipal);
+        mvc.perform(get("/api/v1/surveys/" + ownSurvey.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].id")
+                        .value(ownSurveyAttachment.getId().toString()));
+        mvc.perform(get("/api/v1/surveys/" + ownSurvey.getId() + "/attachments/" + ownSurveyAttachment.getId())
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(surveyEvidenceBytes));
         var reportBefore = mvc.perform(get("/api/v1/reports/operations")
                         .header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
