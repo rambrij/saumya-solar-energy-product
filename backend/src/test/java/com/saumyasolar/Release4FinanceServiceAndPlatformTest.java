@@ -224,24 +224,43 @@ class Release4FinanceServiceAndPlatformTest {
         mvc.perform(get("/api/v1/reports/operations").header("Authorization", "Bearer " + admin))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.orders").isNumber())
                 .andExpect(jsonPath("$.paymentsReceived").isNumber());
-        byte[] csv = mvc.perform(get("/api/v1/reports/operations/export.csv").header("Authorization", "Bearer " + admin))
-                .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith("text/csv"))
-                .andReturn().getResponse().getContentAsByteArray();
+        byte[] csv = exportFile(admin, "CSV");
         assertTrue(new String(csv, StandardCharsets.UTF_8).startsWith("Metric,Value"));
-        byte[] excel = mvc.perform(get("/api/v1/reports/operations/export.xlsx").header("Authorization", "Bearer " + admin))
-                .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                .andReturn().getResponse().getContentAsByteArray();
+        byte[] excel = exportFile(admin, "XLSX");
         assertTrue(excel.length > 100);
         assertEquals('P', excel[0]);
         assertEquals('K', excel[1], "XLSX must be a valid ZIP-based workbook");
-        byte[] pdf = mvc.perform(get("/api/v1/reports/operations/export.pdf").header("Authorization", "Bearer " + admin))
-                .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PDF))
-                .andReturn().getResponse().getContentAsByteArray();
+        byte[] pdf = exportFile(admin, "PDF");
         assertTrue(new String(pdf, 0, Math.min(5, pdf.length), StandardCharsets.US_ASCII).startsWith("%PDF-"));
         mvc.perform(get("/api/v1/reports/operations").header("Authorization", "Bearer " + admin)
                 .param("from", "2026-12-31").param("to", "2026-01-01")).andExpect(status().isBadRequest());
         String customer = token("customer@saumya.local", "Customer@123");
         mvc.perform(get("/api/v1/reports/operations").header("Authorization", "Bearer " + customer))
                 .andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/exports")
+                        .header("Authorization", "Bearer " + customer).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("reportType", "OPERATIONS", "format", "CSV"))))
+                .andExpect(status().isForbidden());
+    }
+
+    private byte[] exportFile(String token, String format) throws Exception {
+        String created = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/exports")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("reportType", "OPERATIONS", "format", format))))
+                .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
+        String exportId = json.readTree(created).get("id").asText();
+        for (int attempt = 0; attempt < 100; attempt++) {
+            String statusBody = mvc.perform(get("/api/v1/exports/" + exportId).header("Authorization", "Bearer " + token))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            var job = json.readTree(statusBody);
+            String state = job.path("status").asText();
+            if ("FAILED".equals(state)) throw new AssertionError("Export failed: " + job.path("error").asText());
+            if ("COMPLETED".equals(state)) {
+                return mvc.perform(get("/api/v1/exports/" + exportId + "/download").header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+            }
+            Thread.sleep(50);
+        }
+        throw new AssertionError("Timed out waiting for asynchronous " + format + " export");
     }
 }
