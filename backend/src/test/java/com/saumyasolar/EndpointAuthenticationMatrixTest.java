@@ -237,8 +237,9 @@ class EndpointAuthenticationMatrixTest {
                     if (method == org.springframework.web.bind.annotation.RequestMethod.OPTIONS
                             || method == org.springframework.web.bind.annotation.RequestMethod.HEAD) continue;
                     MockHttpServletRequestBuilder builder = mutationRequest(method, path, handler, mapper);
-                    int response = mvc.perform(builder.header("Authorization", token))
-                            .andReturn().getResponse().getStatus();
+                    var probeResult = mvc.perform(builder.header("Authorization", token)).andReturn();
+                    int response = probeResult.getResponse().getStatus();
+                    String responseBody = probeResult.getResponse().getContentAsString();
                     checked.add(method + " " + pattern + " [" + accountType + "]");
                     // A missing synthetic resource (404), invalid-but-authorized sample (400/422),
                     // or valid business conflict (409/410) is acceptable here: the objective is
@@ -247,7 +248,7 @@ class EndpointAuthenticationMatrixTest {
                     // covered by the fixture-backed tests in Release12TenantIntegrationTest.
                     if (response == 401 || response == 403 || response >= 500) {
                         failures.add(method + " " + pattern + " [" + accountType + "] returned "
-                                + response + " for the all-grants actor");
+                                + response + " for the all-grants actor; response=" + responseBody);
                     }
                 }
             }
@@ -259,8 +260,10 @@ class EndpointAuthenticationMatrixTest {
     }
 
     private String applicableAccountType(String pattern) {
-        if (pattern.startsWith("/api/v1/platform/") || pattern.equals("/api/v1/tenants")) return "PLATFORM";
+        if (pattern.startsWith("/api/v1/platform/") || pattern.equals("/api/v1/tenants")
+                || pattern.startsWith("/api/v1/tenants/")) return "PLATFORM";
         if (pattern.startsWith("/api/v1/customer/")
+                || pattern.equals("/api/v1/service-requests/{id}/confirm")
                 || pattern.contains("/quotations/{id}/{action:")) return "CUSTOMER";
         return "VENDOR";
     }
