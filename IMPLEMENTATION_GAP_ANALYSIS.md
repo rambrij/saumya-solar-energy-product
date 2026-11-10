@@ -1469,7 +1469,8 @@ No statuses in the earlier tables were upgraded because no implementation/test i
 ### Verification state
 
 - Prior complete release-validation workflow `42818724332` passed backend compile/tests, MySQL 8.4 migration validation, Spring Boot startup/health and frontend typecheck/production build.
-- Latest-head workflow `42820915064` (commit `5ccba941`) was still running at the time of this addendum. Frontend build had passed; backend tests, MySQL migration validation and Spring Boot/browser checks were pending. No latest-head pass is claimed.
+- Workflow `42820915064` for commit `5ccba941` completed with backend test failures: one outdated 429 response assertion and one test still stubbing the bare-ID employee lookup after the repository call was made tenant-qualified. Frontend build, MySQL migration validation and Spring Boot/browser checks passed.
+- Both test mismatches were corrected in commit `cab55e6f84245131f8de7252774c9ebd4cfb6c16`. New full validation workflow `42821337890` for the corrected branch head is queued. No latest-head pass is claimed until it completes.
 - Do not change any remaining PARTIAL item to MET until the newest workflow passes and the listed residual coverage is complete.
 
 ### Status corrections
