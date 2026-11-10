@@ -258,7 +258,7 @@
 
 ## Authenticated least-privilege role × verb regression checks
 
-The current integration suite includes an authenticated cross-module role matrix in Release12TenantIntegrationTest.fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation. It now covers both allowed reads and denied writes:
+The current integration suite includes an authenticated cross-module role matrix in Release12TenantIntegrationTest.fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation and a dynamic least-privilege GET sweep in EndpointAuthenticationMatrixTest.authenticatedLeastPrivilegeVendorCannotReadProtectedEndpointMappings. It now covers both allowed reads and denied writes:
 
 | Role fixture | Allowed read | Denied cross-module read | Denied write / command |
 |---|---|---|---|
@@ -266,7 +266,7 @@ The current integration suite includes an authenticated cross-module role matrix
 | Accountant (invoice/payment view + refund only) | GET invoices and payments | GET inventory balances and service requests | POST invoice; POST payment; POST export; GET export status |
 | Service Engineer (service view/update/resolve) | GET service requests | GET invoices, payments and inventory balances | POST service request; POST export; GET export status |
 
-The export status/download service tests additionally verify that a different requesting user cannot obtain another user's export and that private storage is not accessed after an ownership denial. These are representative least-privilege role/verb checks; they do not close every route-specific row in the full matrix.
+The export status/download service tests additionally verify that a different requesting user cannot obtain another user's export and that private storage is not accessed after an ownership denial. These are representative least-privilege role/verb checks; the GET sweep exercises every non-public GET mapping with an authenticated vendor that has no permissions. They do not close every route-specific positive/negative row in the full matrix. CI run 42905191168 is pending for the new GET sweep.
 
 ## Additional current-branch export-job routes
 
