@@ -12,6 +12,7 @@ import com.saumyasolar.repo.QuotationRepository;
 import com.saumyasolar.repo.EnquiryRepository;
 import com.saumyasolar.repo.SalesLeadRepository;
 import com.saumyasolar.repo.CustomerProfileRepository;
+import com.saumyasolar.repo.TenantRepository;
 import com.saumyasolar.security.JwtService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.mock.web.MockMultipartFile;
@@ -72,6 +73,7 @@ class EndpointAuthenticationMatrixTest {
     @Autowired EnquiryRepository enquiries;
     @Autowired SalesLeadRepository leads;
     @Autowired CustomerProfileRepository customers;
+    @Autowired TenantRepository tenants;
     private UUID revisionFixtureId;
     private UUID acceptedQuotationFixtureId;
     private UUID enquiryFixtureId;
@@ -129,17 +131,23 @@ class EndpointAuthenticationMatrixTest {
     @Test
     @Transactional
     void applicableAccountWithAllCataloguedGrantsPassesEveryProtectedRoutePermissionGate() throws Exception {
-        AppUser seededVendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        com.saumyasolar.domain.Tenant matrixTenant = new com.saumyasolar.domain.Tenant();
+        matrixTenant.setId(UUID.randomUUID());
+        matrixTenant.setName("Endpoint matrix tenant");
+        matrixTenant.setSlug("endpoint-matrix-" + UUID.randomUUID().toString().replace("-", ""));
+        matrixTenant.setStatus("ACTIVE");
+        tenants.saveAndFlush(matrixTenant);
+
         Role allGrants = new Role();
         allGrants.setId(UUID.randomUUID());
-        allGrants.setTenantId(seededVendor.getTenantId());
+        allGrants.setTenantId(matrixTenant.getId());
         allGrants.setName("ENDPOINT_MATRIX_ALL_GRANTS_" + UUID.randomUUID().toString().replace("-", ""));
         allGrants.getPermissions().addAll(permissions.findAll());
         roles.saveAndFlush(allGrants);
 
         AppUser vendor = new AppUser();
         vendor.setId(UUID.randomUUID());
-        vendor.setTenantId(seededVendor.getTenantId());
+        vendor.setTenantId(matrixTenant.getId());
         vendor.setName("Endpoint matrix all-grants vendor");
         vendor.setEmail("endpoint-all-grants-" + UUID.randomUUID() + "@example.test");
         vendor.setPasswordHash(passwordEncoder.encode("Endpoint-Matrix-Password-2026"));
@@ -149,15 +157,30 @@ class EndpointAuthenticationMatrixTest {
         users.saveAndFlush(vendor);
 
         AppUser platform = users.findByEmailIgnoreCase("platform@saumya.local").orElseThrow();
-        AppUser customer = users.findByEmailIgnoreCase("customer@saumya.local").orElseThrow();
+        AppUser customer = new AppUser();
+        customer.setId(UUID.randomUUID());
+        customer.setTenantId(matrixTenant.getId());
+        customer.setName("Endpoint matrix customer");
+        customer.setEmail("endpoint-matrix-customer-" + UUID.randomUUID() + "@example.test");
+        customer.setPasswordHash(passwordEncoder.encode("Endpoint-Matrix-Password-2026"));
+        customer.setAccountType("CUSTOMER");
+        customer.setEnabled(true);
+        customer.getRoles().add(roles.findByNameAndTenantIdIsNull("CUSTOMER").orElseThrow());
+        users.saveAndFlush(customer);
 
-        var customerProfile = customers.findByTenantIdAndUserId(seededVendor.getTenantId(), customer.getId())
-                .orElseThrow(() -> new AssertionError("Seeded customer profile is required for positive route fixtures"));
+        com.saumyasolar.domain.CustomerProfile customerProfile = new com.saumyasolar.domain.CustomerProfile();
+        customerProfile.setId(UUID.randomUUID());
+        customerProfile.setTenantId(matrixTenant.getId());
+        customerProfile.setUserId(customer.getId());
+        customerProfile.setName(customer.getName());
+        customerProfile.setEmail(customer.getEmail());
+        customerProfile.setActive(true);
+        customers.saveAndFlush(customerProfile);
 
         // Quotation revision and customer decision routes require real tenant-owned parents.
         Quotation revisionFixture = new Quotation();
         revisionFixture.setId(UUID.randomUUID());
-        revisionFixture.setTenantId(seededVendor.getTenantId());
+        revisionFixture.setTenantId(matrixTenant.getId());
         revisionFixture.setQuoteGroupId(UUID.randomUUID());
         revisionFixture.setQuotationNumber("MATRIX-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10));
         revisionFixture.setRevision(1);
@@ -176,7 +199,7 @@ class EndpointAuthenticationMatrixTest {
 
         Quotation acceptedQuotationFixture = new Quotation();
         acceptedQuotationFixture.setId(UUID.randomUUID());
-        acceptedQuotationFixture.setTenantId(seededVendor.getTenantId());
+        acceptedQuotationFixture.setTenantId(matrixTenant.getId());
         acceptedQuotationFixture.setQuoteGroupId(UUID.randomUUID());
         acceptedQuotationFixture.setQuotationNumber("MATRIX-ACCEPTED-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8));
         acceptedQuotationFixture.setRevision(1);
@@ -194,7 +217,7 @@ class EndpointAuthenticationMatrixTest {
 
         Enquiry enquiryFixture = new Enquiry();
         enquiryFixture.setId(UUID.randomUUID());
-        enquiryFixture.setTenantId(seededVendor.getTenantId());
+        enquiryFixture.setTenantId(matrixTenant.getId());
         enquiryFixture.setName("Endpoint matrix enquiry");
         enquiryFixture.setEmail("matrix-enquiry-" + UUID.randomUUID() + "@example.test");
         enquiryFixture.setPhone("9000000000");
@@ -206,7 +229,7 @@ class EndpointAuthenticationMatrixTest {
 
         SalesLead leadFixture = new SalesLead();
         leadFixture.setId(UUID.randomUUID());
-        leadFixture.setTenantId(seededVendor.getTenantId());
+        leadFixture.setTenantId(matrixTenant.getId());
         leadFixture.setEnquiryId(enquiryFixture.getId());
         leadFixture.setStage("NEW");
         leadFixture.setPriority("MEDIUM");
