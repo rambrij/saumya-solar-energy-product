@@ -49,7 +49,7 @@ class TenantExecutionContextTest {
             assertEquals(nextTenant, next.get());
             var after = executor.submit(() -> assertThrows(
                     IllegalStateException.class, TenantExecutionContext::requireTenantId));
-            assertDoesNotThrow(after::get);
+            assertDoesNotThrow(() -> { after.get(); });
         } finally {
             executor.shutdownNow();
         }
