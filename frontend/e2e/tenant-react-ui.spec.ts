@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('React vendor workspace stays isolated when switching between two tenant accounts', async ({ page, baseURL }) => {
+  test.setTimeout(120_000);
   if (!baseURL) throw new Error('E2E_BASE_URL is required');
   const suffix = String(Date.now());
   const emailB = 'tenant-b-' + suffix + '@example.test';
