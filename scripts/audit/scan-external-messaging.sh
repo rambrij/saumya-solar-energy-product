@@ -35,7 +35,6 @@ pattern="(${kafka}|${rabbit}|${broker}|${amqp}|${jms}|${activemq}|${artemis}|${p
 
 set +e
 matches=$(grep -RInI -E "$pattern" . \
-  --exclude=README.md \
   --exclude=scan-external-messaging.sh \
   --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=target \
   --exclude-dir=build --exclude-dir=dist --exclude-dir=.next)
@@ -52,4 +51,4 @@ if [[ $status -ne 1 ]]; then
   exit "$status"
 fi
 
-echo "PASS: no external messaging technology references found (README.md excluded)."
+echo "PASS: no external messaging technology references found (all repository text files scanned)."
