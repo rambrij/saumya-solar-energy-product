@@ -1282,7 +1282,7 @@ class Release12TenantIntegrationTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         String pdfText = com.lowagie.text.pdf.parser.PdfTextExtractor
-                .getTextFromPage(new com.lowagie.text.pdf.PdfReader(pdf), 1);
+                .getTextFromPage(1, new com.lowagie.text.pdf.PdfReader(pdf));
         assertTrue(pdfText.contains("orders"));
         assertTrue(pdfText.contains(String.valueOf(expectedOrders)));
         assertFalse(pdfText.contains("987654"));
