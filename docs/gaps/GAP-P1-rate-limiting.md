@@ -13,7 +13,7 @@
 
 ## Current state and evidence
 
-- `backend/src/main/java/com/saumyasolar/security/AuthenticationRateLimitFilter.java` — `shouldNotFilter` limits its filter scope to POST `/api/v1/auth/login`, `/auth/refresh`, `/auth/forgot-password`, `/auth/reset-password` and `/auth/mfa/verify`.
+- `backend/src/main/java/com/saumyasolar/security/AuthenticationRateLimitFilter.java` — `shouldNotFilter` now selects auth endpoints plus public enquiry POST, export GET/POST, and payment webhook POST routes through `limitFor`.
 - `AuthenticationRateLimitFilter.doFilterInternal` hashes `path + "|" + resolvedAddress`. The rate-limit bucket is endpoint + resolved client IP; there is no independent normalized account/user bucket in this filter.
 - `AuthLifecycleService.authenticate` and V52 persist failed attempts and lockout per known account. This is a separate lockout mechanism, not a general per-account rate limiter for all applicable routes.
 - `ClientAddressResolver.resolve` trusts forwarded addresses only through configured trusted networks; `parseNetwork` supports CIDR prefixes.
@@ -21,7 +21,7 @@
 - `backend/src/main/resources/db/migration/V52__authentication_lockout_and_rate_limit.sql` creates the bucket table.
 - Tests referenced by the branch include `AuthenticationRateLimitFilterTest`, `ClientAddressResolverTest` and `AuthLifecycleServiceTest`. Latest-head execution was not established in this audit.
 
-The inspected filter does not establish application-level throttling for public enquiry, export or webhook routes. An upstream WAF/API gateway may provide it, but no production configuration was available to verify that.
+Application-level route buckets have now been added for `/api/v1/public/{storeSlug}/enquiries`, GET export routes and POST `/api/v1/exports`, `/api/v1/payment-webhooks/**` and `/api/v1/payment-gateway-webhooks/**`. They use separate configurable per-IP endpoint buckets. Production ingress/WAF configuration still needs verification.
 
 ## Expected state
 
@@ -43,9 +43,9 @@ The inspected filter does not establish application-level throttling for public 
 2. **Implemented:** the existing IP + endpoint bucket remains independent; account + endpoint is an additional bucket. Both use the configured route-specific limit and window.
 3. **Implemented:** request JSON is buffered with a 16 KiB maximum and replayed to Spring MVC; malformed JSON receives only IP throttling and continues to normal MVC validation; oversized bodies are rejected with a generic 400.
 4. **No migration required:** existing V52 bucket schema accepts both opaque 64-character hashes; no applied migration was edited.
-5. **Open:** confirm exact route inventory and distinguish application-protected routes from ingress/WAF-protected public enquiry, export and webhook routes.
-6. **Open:** assess distributed/concurrent bucket semantics with MySQL integration tests and add gateway policy evidence where applicable.
-7. **Open:** review whether refresh and MFA routes need a separate principal/challenge dimension; current refresh and MFA remain IP + endpoint throttled because they do not carry a stable user identifier in a trustworthy request field.
+5. **Implemented in commit `0d2a741d3c6a50aa44668954868a4591084432c2`:** independent configurable IP + endpoint buckets added for public enquiry, export and payment webhook endpoints. Config keys: `app.auth.rate-limit.public-enquiry-per-window`, `export-per-window`, `webhook-per-window`.
+6. **Tests added in commit `f3cb1d3051c12b7ea37f1246de50c0d53994ce9c`:** public enquiry, export and webhook rate-limit unit tests. Latest-head workflow is pending.
+7. **Open:** prove distributed/concurrent semantics on MySQL, verify route inventory and production gateway configuration, and decide whether refresh/MFA need a trustworthy account/challenge bucket. Refresh and MFA currently use IP + endpoint throttling.
 
 ## Test plan
 
@@ -65,11 +65,11 @@ The inspected filter does not establish application-level throttling for public 
 
 ## Status
 
-**Implemented / Pending Verification (partial gap closure).**
+**Implemented / Pending Verification (expanded partial closure).**
 
 - Account + endpoint throttling is implemented for login, forgot-password and reset-password, reusing V52 and the existing filter.
 - IP + endpoint throttling remains in place for all five existing authentication routes.
 - Focused unit tests were added for the additional bucket, request-body replay, raw identifier non-persistence and oversized-body rejection.
 - The GitHub Actions full validation workflow was triggered for commit `1a79b56244af6aa23bd58f15f835766574eae908`; at report update time its run was still in progress. Do not mark this requirement MET until the backend job passes.
-- Public enquiry/export/webhook ingress policy and production gateway evidence remain Open.
+- Application rate limits now also cover public enquiry/export/webhook routes; production ingress/WAF configuration and distributed concurrency verification remain Open.
 - No applied migration was changed and no schema migration was needed.
