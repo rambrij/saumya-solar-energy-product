@@ -929,6 +929,7 @@ public class AppService {
         } else {
             vendor(p);
             requirePermission(p, "QUOTATION_VIEW");
+            assertSalesQuotationScope(quotation, p);
         }
         return quotes.findByQuoteGroupIdAndTenantIdOrderByRevisionAsc(quotation.getQuoteGroupId(), p.tenantId());
     }
