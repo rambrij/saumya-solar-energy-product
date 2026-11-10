@@ -34,15 +34,16 @@ The backend domain model includes the following tenant/business areas. The entit
 
 ## 4. CI schema-audit findings and V60 remediation
 
-The read-only schema audit artifact from CI run 42842355967 (fresh disposable MySQL 8.4 schema, before V60) enumerated 73 base tables: 63 have tenant_id and 10 do not. The 10 without tenant_id comprise five platform-global candidates, three user-scoped security tables linked through app_user, and two join tables whose scope is inherited from their parent rows.
+The read-only schema audit artifact from CI run 42842355967 (fresh disposable MySQL 8.4 schema, before V60) enumerated 74 base tables: 64 have tenant_id and 10 do not. The 10 without tenant_id comprise five platform-global candidates, three user-scoped security tables linked through app_user, and two join tables whose scope is inherited from their parent rows.
 
 The exact 12 tenant_id columns declared nullable in that CI schema were:
-- Mixed-scope: app_user, role, audit_event. These three nullable columns are intentional mixed platform/tenant data; audit_event is nullable to support platform events.
-- Tenant-owned: customer_order, idempotency_record, integration_webhook_event, lead_history, notification_delivery, order_item, quotation, quotation_item, site_survey.
+- Mixed-scope: app_user, role, audit_event, notification_delivery. These three nullable columns are intentional mixed platform/tenant data; audit_event is nullable to support platform events.
+- Tenant-owned: customer_order, idempotency_record, integration_webhook_event, lead_history, order_item, quotation, quotation_item, site_survey.
 
-All nine tenant-owned tables had zero NULL tenant_id rows in that disposable CI dataset, but the schema still allowed NULL. V60 now changes these nine columns to NOT NULL and the corresponding JPA entities declare @Column(nullable=false). The migration fails closed if any NULL remains; it performs no backfill or guessed tenant assignment.
+All eight tenant-owned tables had zero NULL tenant_id rows in that disposable CI dataset, but the schema still allowed NULL. V60 changes these eight columns to NOT NULL and the corresponding JPA entities declare @Column(nullable=false). The migration fails closed if any NULL remains; it performs no backfill or guessed tenant assignment.
 
 Mixed-scope tables remain nullable by design:
+- notification_delivery: platform password-reset/MFA messages for global platform users may have NULL tenant_id; business notifications must carry a tenant_id and the recipient user must belong to that tenant.
 - app_user: platform users have no tenant; vendor/customer users must be tenant-bound.
 - role: PLATFORM_SUPER_ADMIN, PLATFORM_SUPPORT and the shared CUSTOMER role are global; vendor roles must be tenant-bound.
 - audit_event: platform audit events may have no tenant; tenant audit events are tenant-bound.
@@ -52,7 +53,7 @@ Tables without tenant_id are classified as:
 - USER_SCOPED via app_user: mfa_challenge, password_reset_token, refresh_token.
 - JOIN_TABLE scope inherited from parents: role_permission and user_role.
 
-These classifications are grounded in current schema/entity usage but still require data-owner approval. The production preflight now rejects NULL tenant_id in the nine tenant-owned tables and rejects app_user/role rows whose tenant_id does not match their platform-vs-tenant identity classification (including the global CUSTOMER role). It must be executed against production before V60 rollout.
+These classifications are grounded in current schema/entity usage but still require data-owner approval. The production preflight now rejects NULL tenant_id in the eight tenant-owned tables and rejects app_user/role/notification_delivery rows whose tenant_id does not match their platform-vs-tenant identity classification (including the global CUSTOMER role). It must be executed against production before V60 rollout.
 
 ## 5. Remaining schema proof and release gates
 
@@ -79,7 +80,7 @@ This is now executable evidence collection, not yet the requested proof: it must
 
 ### Post-V60 CI schema proof — run 42843505138
 
-The MySQL 8.4 schema audit artifact after V60 reports exactly three nullable tenant_id columns: app_user, role and audit_event. These are the three mixed-scope tables; all nine formerly nullable tenant-owned columns now report IS_NULLABLE=NO. Every tenant_id-bearing table in the disposable CI schema reports null_tenant_rows=0. The mixed role table has three NULL-tenant rows corresponding to global role definitions; the production preflight explicitly permits only PLATFORM_SUPER_ADMIN, PLATFORM_SUPPORT and the shared CUSTOMER role to be global. CI run 42844217653 also passed the mixed-scope preflight checks.
+The MySQL 8.4 schema audit artifact after V60 reports exactly three nullable tenant_id columns: app_user, role and audit_event. These are the three mixed-scope tables; all eight formerly nullable tenant-owned columns now report IS_NULLABLE=NO; notification_delivery remains nullable by design for global platform authentication notifications. Every tenant-owned table in the disposable CI schema reports null_tenant_rows=0. Mixed-scope tables may contain documented NULL-tenant rows corresponding to global platform principals, roles, audit events and authentication notifications; the production preflight explicitly permits only PLATFORM_SUPER_ADMIN, PLATFORM_SUPPORT and the shared CUSTOMER role to be global. CI run 42844217653 also passed the mixed-scope preflight checks.
 
 This closes the schema-level tenant_id NOT NULL proof for the current checked-in schema in disposable MySQL 8.4. It does not prove production row cleanliness or approve the global/mixed classification; those remain subject to the protected production preflight and data-owner sign-off.
 
