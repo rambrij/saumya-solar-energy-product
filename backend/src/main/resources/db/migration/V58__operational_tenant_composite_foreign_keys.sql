@@ -106,6 +106,9 @@ BEGIN
        OR EXISTS (SELECT 1 FROM offline_sync_attachment c LEFT JOIN offline_sync_operation p ON p.tenant_id=c.tenant_id AND p.id=c.operation_id WHERE p.id IS NULL)
        OR EXISTS (SELECT 1 FROM integration_secret_reference c LEFT JOIN integration_connection p ON p.tenant_id=c.tenant_id AND p.id=c.integration_connection_id WHERE p.id IS NULL)
        OR EXISTS (SELECT 1 FROM branch_user c LEFT JOIN app_user p ON p.tenant_id=c.tenant_id AND p.id=c.user_id WHERE p.id IS NULL)
+       OR EXISTS (SELECT 1 FROM engineer_profile c LEFT JOIN app_user p ON p.tenant_id=c.tenant_id AND p.id=c.user_id WHERE p.id IS NULL)
+       OR EXISTS (SELECT 1 FROM approval_instance c LEFT JOIN app_user p ON p.tenant_id=c.tenant_id AND p.id=c.requested_by WHERE p.id IS NULL)
+       OR EXISTS (SELECT 1 FROM approval_decision c LEFT JOIN app_user p ON p.tenant_id=c.tenant_id AND p.id=c.actor_id WHERE p.id IS NULL)
        OR EXISTS (SELECT 1 FROM audit_event c LEFT JOIN branch p ON p.tenant_id=c.tenant_id AND p.id=c.branch_id WHERE c.branch_id IS NOT NULL AND p.id IS NULL)
        OR EXISTS (SELECT 1 FROM notification_delivery c LEFT JOIN app_user p ON p.tenant_id=c.tenant_id AND p.id=c.user_id WHERE c.tenant_id IS NOT NULL AND c.user_id IS NOT NULL AND p.id IS NULL)
        OR EXISTS (SELECT 1 FROM notification_delivery c JOIN app_user u ON u.id=c.user_id WHERE c.tenant_id IS NULL AND u.tenant_id IS NOT NULL) THEN
@@ -254,6 +257,12 @@ ALTER TABLE integration_secret_reference
     ADD CONSTRAINT fk_secret_reference_connection_tenant FOREIGN KEY (tenant_id,integration_connection_id) REFERENCES integration_connection(tenant_id,id);
 ALTER TABLE branch_user
     ADD CONSTRAINT fk_branch_user_user_tenant FOREIGN KEY (tenant_id,user_id) REFERENCES app_user(tenant_id,id);
+ALTER TABLE engineer_profile
+    ADD CONSTRAINT fk_engineer_profile_user_tenant FOREIGN KEY (tenant_id,user_id) REFERENCES app_user(tenant_id,id);
+ALTER TABLE approval_instance
+    ADD CONSTRAINT fk_approval_instance_requester_tenant FOREIGN KEY (tenant_id,requested_by) REFERENCES app_user(tenant_id,id);
+ALTER TABLE approval_decision
+    ADD CONSTRAINT fk_approval_decision_actor_tenant FOREIGN KEY (tenant_id,actor_id) REFERENCES app_user(tenant_id,id);
 ALTER TABLE audit_event
     ADD CONSTRAINT fk_audit_event_branch_tenant FOREIGN KEY (tenant_id,branch_id) REFERENCES branch(tenant_id,id);
 ALTER TABLE notification_delivery
@@ -268,5 +277,7 @@ CREATE INDEX ix_service_request_tenant_customer ON service_request(tenant_id,cus
 CREATE INDEX ix_warranty_claim_tenant_customer ON warranty_claim(tenant_id,customer_id);
 
 -- Rollback is a new forward migration only; never edit V58 after it has been applied.
--- To roll back manually, drop fk_*_tenant constraints added above, then uq_*_tenant_id
+-- To roll back manually, drop all fk_*_tenant constraints added above (including
+-- fk_engineer_profile_user_tenant, fk_approval_instance_requester_tenant and
+-- fk_approval_decision_actor_tenant), then uq_*_tenant_id
 -- unique indexes. Do not drop pre-existing single-column or V37/V43/V49/V57 constraints.
