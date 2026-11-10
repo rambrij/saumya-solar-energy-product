@@ -54,7 +54,7 @@ The checked-in scanner executed across backend/src/main/java and the resource/wo
 
 - Scheduled triggers found: exactly the six rows already listed above.
 - No @Async methods, executor declarations/submissions, CompletableFuture, ForkJoinPool or explicit new Thread use found in backend Java source.
-- Spring application event listeners/producers now handle persisted notification and export jobs. No separate external messaging clients, listener templates or broker integrations are used.
+- Spring application event listeners/producers now handle persisted notification and export jobs. No separate messaging clients, listener templates or external messaging integrations are used.
 - Startup runners found: DataSeeder.seedData (guarded by app.seed.enabled, default false) and PlatformAdminBootstrap.bootstrapPlatformAdmin (guarded by app.bootstrap.platform-admin.enabled, default false). These are startup initialization paths, not background workers; their data-seeding and credential policy must be audited separately against the no-production-bootstrap-user rule.
 - The initial scanner version used ripgrep, which is not installed on the runner; that scan artifact was invalid. The scanner was changed to portable grep. The corrected CI scan at 42841931283 is the first usable result. A follow-up pattern refinement removes false positives for ordinary business methods named submit.
 
