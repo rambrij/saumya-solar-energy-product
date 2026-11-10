@@ -37,7 +37,7 @@ The backend domain model includes the following tenant/business areas. The entit
 The read-only schema audit artifact from CI run 42842355967 (fresh disposable MySQL 8.4 schema, before V60) enumerated 74 base tables: 64 have tenant_id and 10 do not. The 10 without tenant_id comprise five platform-global candidates, three user-scoped security tables linked through app_user, and two join tables whose scope is inherited from their parent rows.
 
 The exact 12 tenant_id columns declared nullable in that CI schema were:
-- Mixed-scope: app_user, role, audit_event, notification_delivery. These three nullable columns are intentional mixed platform/tenant data; audit_event is nullable to support platform events.
+- Mixed-scope: app_user, role, audit_event, notification_delivery. These four nullable columns are intentional mixed platform/tenant data; audit_event supports platform events and notification_delivery supports platform authentication messages.
 - Tenant-owned: customer_order, idempotency_record, integration_webhook_event, lead_history, order_item, quotation, quotation_item, site_survey.
 
 All eight tenant-owned tables had zero NULL tenant_id rows in that disposable CI dataset, but the schema still allowed NULL. V60 changes these eight columns to NOT NULL and the corresponding JPA entities declare @Column(nullable=false). The migration fails closed if any NULL remains; it performs no backfill or guessed tenant assignment.
@@ -66,7 +66,7 @@ These classifications are grounded in current schema/entity usage but still requ
 
 ## 6. Status
 
-**PARTIAL — Critical.** V57/V58 implement broad composite-FK protection. V60 now enforces NOT NULL for the nine tenant-owned columns that the CI schema inventory found nullable. The disposable MySQL schema audit is complete and exact counts are archived, but production classification, production NULL counts, complete FK/unique-index review and production data preflight remain outstanding. Do not mark P2-TEN-001/P2-TEN-004 MET until production evidence and data-owner/DBA sign-off exist.
+**PARTIAL — Critical.** V57/V58 implement broad composite-FK protection. V60 now enforces NOT NULL for the eight tenant-owned columns that the CI schema inventory found nullable. The disposable MySQL schema audit is complete and exact counts are archived, but production classification, production NULL counts, complete FK/unique-index review and production data preflight remain outstanding. Do not mark P2-TEN-001/P2-TEN-004 MET until production evidence and data-owner/DBA sign-off exist.
 
 
 ## 7. Executable metadata and row-count audit update — 2026-11-10
@@ -80,7 +80,7 @@ This is now executable evidence collection, not yet the requested proof: it must
 
 ### Post-V60 CI schema proof — run 42843505138
 
-The MySQL 8.4 schema audit artifact after V60 reports exactly three nullable tenant_id columns: app_user, role and audit_event. These are the three mixed-scope tables; all eight formerly nullable tenant-owned columns now report IS_NULLABLE=NO; notification_delivery remains nullable by design for global platform authentication notifications. Every tenant-owned table in the disposable CI schema reports null_tenant_rows=0. Mixed-scope tables may contain documented NULL-tenant rows corresponding to global platform principals, roles, audit events and authentication notifications; the production preflight explicitly permits only PLATFORM_SUPER_ADMIN, PLATFORM_SUPPORT and the shared CUSTOMER role to be global. CI run 42844217653 also passed the mixed-scope preflight checks.
+The MySQL 8.4 schema audit artifact after V60 reports nullable tenant_id columns on four mixed-scope tables: app_user, role, audit_event and notification_delivery; all eight formerly nullable tenant-owned columns now report IS_NULLABLE=NO; notification_delivery remains nullable by design for global platform authentication notifications. Every tenant-owned table in the disposable CI schema reports null_tenant_rows=0. Mixed-scope tables may contain documented NULL-tenant rows corresponding to global platform principals, roles, audit events and authentication notifications; the production preflight explicitly permits only PLATFORM_SUPER_ADMIN, PLATFORM_SUPPORT and the shared CUSTOMER role to be global. CI run 42844217653 also passed the mixed-scope preflight checks.
 
 This closes the schema-level tenant_id NOT NULL proof for the current checked-in schema in disposable MySQL 8.4. It does not prove production row cleanliness or approve the global/mixed classification; those remain subject to the protected production preflight and data-owner sign-off.
 
