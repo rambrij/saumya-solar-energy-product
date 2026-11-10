@@ -12,6 +12,12 @@ Run the V57/V58 tenant-integrity preflight against the production MySQL database
 - It does not repair rows automatically.
 - Do not run V57/V58 migrations after a failed preflight.
 
+## Disposable CI preflight (no production credentials)
+
+The branch's .github/workflows/release-validation.yml already provisions an isolated MySQL 8.4 service for CI. It applies migrations V1-V58, starts the application against a separate disposable MySQL database, then executes the same backend/src/test/resources/tenant-isolation-production-preflight.sql checks. The test service uses the intentionally dummy CI-only credentials root / rootpass; the database is created fresh for the workflow and destroyed with the runner. The CI job also uses a test-only JWT secret and test fixtures. These values must never be copied into a production environment.
+
+Use the CI run to validate SQL syntax, migration compatibility and the preflight's behavior against a clean schema. It cannot establish that production legacy rows are clean, because the disposable schema has no production data. A separate production preflight and DBA/release-owner sign-off remain mandatory before V57/V58 rollout.
+
 ## Execution prerequisites
 
 1. Confirm a current production backup and an approved change window.
