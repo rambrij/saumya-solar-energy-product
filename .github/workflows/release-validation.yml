@@ -415,6 +415,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Start React frontend for browser security tests
         working-directory: frontend
+        env:
+          VITE_API_BASE_URL: ''
         run: |
           npm run dev -- --host 0.0.0.0 > /tmp/saumya-frontend.log 2>&1 &
           echo $! > /tmp/saumya-frontend.pid
