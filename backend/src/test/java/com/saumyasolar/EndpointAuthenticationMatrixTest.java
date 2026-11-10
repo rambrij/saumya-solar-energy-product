@@ -260,8 +260,19 @@ class EndpointAuthenticationMatrixTest {
                 }
                 continue;
             }
-            if (parameter.hasParameterAnnotation(org.springframework.web.bind.annotation.RequestHeader.class)
-                    || parameter.hasParameterAnnotation(org.springframework.web.bind.annotation.PathVariable.class)) continue;
+            var requestHeader = parameter.getParameterAnnotation(org.springframework.web.bind.annotation.RequestHeader.class);
+            if (requestHeader != null) {
+                if (requestHeader.required() && requestHeader.defaultValue().equals(
+                        org.springframework.web.bind.annotation.ValueConstants.DEFAULT_NONE)) {
+                    String name = !requestHeader.name().isBlank() ? requestHeader.name()
+                            : !requestHeader.value().isBlank() ? requestHeader.value()
+                            : (parameter.getParameterName() == null ? "X-Matrix-Probe" : parameter.getParameterName());
+                    builder.header(name, name.equalsIgnoreCase("Idempotency-Key")
+                            ? "authorization-matrix-" + UUID.randomUUID() : sampleString(name, parameter.getParameterAnnotations()));
+                }
+                continue;
+            }
+            if (parameter.hasParameterAnnotation(org.springframework.web.bind.annotation.PathVariable.class)) continue;
             var requestParam = parameter.getParameterAnnotation(org.springframework.web.bind.annotation.RequestParam.class);
             if (requestParam != null) {
                 if (!requestParam.required() || !requestParam.defaultValue().equals(
@@ -330,9 +341,13 @@ class EndpointAuthenticationMatrixTest {
         if (type.isEnum()) return type.getEnumConstants()[0];
         if (type == byte[].class) return new byte[] {1};
         if (type.isArray()) return new Object[] {sampleValue(type.getComponentType(), null, name, new Annotation[0])};
-        if (Map.class.isAssignableFrom(type)) return Map.of();
+        if (Map.class.isAssignableFrom(type)) return Map.of("reason", "Authorization matrix probe");
         if (Collection.class.isAssignableFrom(type)) {
-            if (!hasAnnotation(annotations, "NotEmpty")) return List.of();
+            boolean requiredElements = hasAnnotation(annotations, "NotEmpty") || hasAnnotation(annotations, "NotNull");
+            for (Annotation annotation : annotations) {
+                if (annotation instanceof jakarta.validation.constraints.Size size && size.min() > 0) requiredElements = true;
+            }
+            if (!requiredElements) return List.of();
             Type elementType = genericType instanceof ParameterizedType parameterized
                     ? parameterized.getActualTypeArguments()[0] : Object.class;
             Class<?> elementClass = elementType instanceof Class<?> cls ? cls : Object.class;
@@ -347,7 +362,20 @@ class EndpointAuthenticationMatrixTest {
             return values;
         }
         if (type == Object.class) return Map.of();
-        return null;
+        Map<String, Object> bean = new LinkedHashMap<>();
+        for (Class<?> current = type; current != null && current != Object.class; current = current.getSuperclass()) {
+            for (var field : current.getDeclaredFields()) {
+                if (java.lang.reflect.Modifier.isStatic(field.getModifiers()) || field.isSynthetic()) continue;
+                try {
+                    field.setAccessible(true);
+                    bean.putIfAbsent(field.getName(), sampleValue(field.getType(), field.getGenericType(),
+                            field.getName(), field.getAnnotations()));
+                } catch (RuntimeException ignored) {
+                    // A DTO field that cannot be reflected remains absent; validation will expose the gap.
+                }
+            }
+        }
+        return bean.isEmpty() ? null : bean;
     }
 
     private boolean hasAnnotation(Annotation[] annotations, String simpleName) {
@@ -380,6 +408,8 @@ class EndpointAuthenticationMatrixTest {
                 if (expression.contains("\\d") || expression.contains("[0-9]")) return "9000000000";
             }
         }
+        if (key.contains("color")) return "#112233";
+        if (key.contains("visibility")) return "CUSTOMER";
         if (key.contains("email")) return "matrix@example.test";
         if (key.contains("password")) return "Matrix-Password-2026";
         if (key.contains("phone")) return "9000000000";
