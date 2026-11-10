@@ -1553,3 +1553,5 @@ These changes are deliberately not classified as full closure. The full 222-rout
 - CI metadata inspection found nine tenant-owned tenant_id columns still nullable in the disposable MySQL schema; V60 now enforces NOT NULL for those nine and the entity mappings declare non-null.
 - The production preflight now checks those NULL cases and validates platform-vs-tenant classification for app_user, role and audit_event. The separate SELECT-only schema audit inventories every base table, FK, unique index and tenant_id null count.
 - This is schema-level implementation, not production-data proof. The production workflow still requires protected database secrets, a DBA-approved execution identity, and archived output reviewed by the data owner.
+
+- V60 migration and disposable-database preflight verification passed in CI run 42844217653 (MySQL 8.4 migration, Spring Boot preflight, frontend build, and 184 backend tests with zero failures). The production preflight remains unexecuted.
