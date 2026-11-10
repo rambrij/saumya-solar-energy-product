@@ -102,6 +102,16 @@ jobs:
           mkdir -p /tmp/historical-source
           git archive 467dc8278e13902a39c51d1c9d8d8e588db98f57 backend/src/main/resources/db/migration | tar -x -C /tmp/historical-source
           test "$(find /tmp/historical-source/backend/src/main/resources/db/migration -maxdepth 1 -name 'V*.sql' | wc -l)" = "63"
+      - name: Enforce clean-install baseline structure
+        run: |
+          BASELINE=backend/src/main/resources/db/migration/V1__baseline.sql
+          test "$(find backend/src/main/resources/db/migration -maxdepth 1 -type f -name 'V*.sql' | wc -l)" = "1"
+          test "$(grep -Eic '^[[:space:]]*CREATE[[:space:]]+TABLE[[:space:]]' "$BASELINE")" = "74"
+          if grep -Eiq '^[[:space:]]*ALTER[[:space:]]+TABLE[[:space:]]|^[[:space:]]*CREATE[[:space:]]+(UNIQUE[[:space:]]+)?INDEX[[:space:]]' "$BASELINE"; then
+            echo "Baseline must declare all columns and indexes inside CREATE TABLE statements."
+            exit 1
+          fi
+          echo "PASS: one baseline, 74 table definitions, no ALTER TABLE or standalone CREATE INDEX."
       - name: Apply V1 schema
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass -e "CREATE DATABASE solar_migration_test"

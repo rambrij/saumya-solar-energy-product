@@ -27,3 +27,18 @@ The baseline retains all historical schema and seed effects, including the notif
 ## Allowed differences
 
 None. No schema differences are approved.
+
+
+## Inline clean-install DDL refinement
+
+Commit `764d7524acb2d3249afd1d3e5c19c046a34b77b2` changes the single baseline from migration-style DDL into final-state table definitions. Static inspection confirms:
+
+- 74 `CREATE TABLE` statements.
+- Zero `ALTER TABLE` statements.
+- Zero standalone `CREATE INDEX` / `CREATE UNIQUE INDEX` statements.
+- All table definitions are ordered by foreign-key dependency (no dependency cycles).
+- Columns and all indexes/constraints are declared inside their respective table definitions.
+- The baseline contains no temporary migration-time validation procedures or dynamic conditional column DDL.
+
+The historical V1–V63 schema comparison is rerun by CI against two independent empty MySQL 8.4 databases after this refinement. The new run must pass before this document's equivalence status is considered current. The comparison is schema-only; it does not export, copy, back up, or restore application data.
+
