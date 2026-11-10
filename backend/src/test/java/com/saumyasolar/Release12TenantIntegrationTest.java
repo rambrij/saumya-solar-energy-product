@@ -1110,7 +1110,7 @@ class Release12TenantIntegrationTest {
                                 "/api/v1/customer/addresses/" + addressB.getId())
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
-        assertEquals("Home", customerAddresses.findByIdAndTenantId(addressB.getId(), vendorTenantId)
+        assertEquals("Home", customerAddresses.findById(addressB.getId())
                 .orElseThrow().getLabel(), "A failed cross-customer delete must not mutate the target address");
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
                                 "/api/v1/customer/addresses/" + addressC.getId())
