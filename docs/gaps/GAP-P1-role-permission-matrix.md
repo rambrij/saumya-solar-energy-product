@@ -109,7 +109,7 @@ Still open: inventory every Controller/secondary-controller mapping and service 
 - One role-name check remains in FinanceService.saveServiceReopenPolicy because this is a tenant-wide policy setting with no dedicated SRS permission code. It is intentionally admin-only pending product approval for a new dedicated permission; it is not silently treated as migrated.
 
 
-### Repository-wide legacy authorization scan review — CI run 42842491454
+### Repository-wide legacy authorization scan review — CI run 42843505138
 
 The portable grep inventory scanned backend/src/main/java. The only references to coarse legacy permission codes are:
 - AuthLifecycleService custom-role allowlist: the legacy codes are explicitly excluded so a custom role cannot reintroduce broad permissions.
