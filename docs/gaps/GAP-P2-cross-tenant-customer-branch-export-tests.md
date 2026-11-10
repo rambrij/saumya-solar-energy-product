@@ -21,7 +21,7 @@
 - `EnterpriseSaasService.filterBranchRecords` is reused by CRM and operational list paths. Branch-specific integration tests cover multiple resource families.
 - `Phase2OperationsController` export paths delegate to tenant-scoped report logic. Warranty attachment download uses tenant + parent claim + attachment ID scoping.
 - `EndpointAuthenticationMatrixTest` enumerates unauthenticated mappings; it does not prove authenticated role/customer/branch access.
-- `Release12TenantIntegrationTest` covers selected cross-tenant, customer, branch, CSV/XLSX/PDF export and attachment cases. The branch gap notes identify the browser UI test as partial and the complete endpoint × verb matrix as incomplete.
+- `Release12TenantIntegrationTest` contains selected cross-tenant tests for customer addresses, generic resource lists, operations CSV/XLSX/PDF exports, invoice PDF, foreign warranty claims, private attachment downloads, branch membership lists and branch-scoped CRM/finance/operations resources. The browser `tenant-filter-isolation.spec.ts` forges tenant/customer/branch filters on the product/customer/enquiry/lead/survey/quotation/order list APIs. This is meaningful coverage, but not a complete endpoint × verb × identity matrix.
 - Branch-unassigned `branch_id IS NULL` rows are currently included for branch members in the shared filter. The product rule for those legacy rows is not explicit.
 - No claim is made that every resource has a DELETE API. Financial/ledger entities may be intentionally immutable.
 
@@ -68,4 +68,4 @@
 
 ## Status
 
-**Open** — strong service-layer and selected integration coverage exists, but exhaustive endpoint/customer/branch/export/download proof is incomplete.
+**PARTIAL — selected negative coverage is extensive and present; exhaustive matrix remains open.** Existing integration tests cover multiple tenant/customer/branch/export/download paths, but every resource family and every exposed read/write/delete/export/download endpoint is not yet represented. Latest-head CI is pending.
