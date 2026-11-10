@@ -34,10 +34,10 @@ The backend domain model includes the following tenant/business areas. The entit
 
 ## 4. CI schema-audit findings and V60 remediation
 
-The read-only schema audit artifact from CI run 42842355967 (fresh disposable MySQL 8.4 schema, before V60) enumerated 70 base tables. It identified 57 tables with a tenant_id column and 7 base tables without one, excluding the tenant registry/global reference tables in the classification output.
+The read-only schema audit artifact from CI run 42842355967 (fresh disposable MySQL 8.4 schema, before V60) enumerated 73 base tables: 63 have tenant_id and 10 do not. The 10 without tenant_id comprise five platform-global candidates, three user-scoped security tables linked through app_user, and two join tables whose scope is inherited from their parent rows.
 
 The exact 12 tenant_id columns declared nullable in that CI schema were:
-- Mixed-scope: app_user, role, audit_event.
+- Mixed-scope: app_user, role, audit_event. These three nullable columns are intentional mixed platform/tenant data; audit_event is nullable to support platform events.
 - Tenant-owned: customer_order, idempotency_record, integration_webhook_event, lead_history, notification_delivery, order_item, quotation, quotation_item, site_survey.
 
 All nine tenant-owned tables had zero NULL tenant_id rows in that disposable CI dataset, but the schema still allowed NULL. V60 now changes these nine columns to NOT NULL and the corresponding JPA entities declare @Column(nullable=false). The migration fails closed if any NULL remains; it performs no backfill or guessed tenant assignment.
@@ -68,8 +68,8 @@ These classifications are grounded in current schema/entity usage but still requ
 **PARTIAL — Critical.** V57/V58 implement broad composite-FK protection. V60 now enforces NOT NULL for the nine tenant-owned columns that the CI schema inventory found nullable. The disposable MySQL schema audit is complete and exact counts are archived, but production classification, production NULL counts, complete FK/unique-index review and production data preflight remain outstanding. Do not mark P2-TEN-001/P2-TEN-004 MET until production evidence and data-owner/DBA sign-off exist.
 
 
-## 6. Executable metadata and row-count audit update — 2026-11-10
+## 7. Executable metadata and row-count audit update — 2026-11-10
 
-docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql now executes an exact COUNT(*) / SUM(tenant_id IS NULL) query for every base table exposing tenant_id, reports the declared nullability, inventories every FK and unique index, and flags tables with no tenant column. It explicitly labels app_user and role as mixed-scope candidates and does not silently classify all other tables as tenant-owned or global.
+docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql now executes an exact COUNT(*) / SUM(tenant_id IS NULL) query for every base table exposing tenant_id, reports the declared nullability, inventories every FK and unique index, and flags tables with no tenant column. It explicitly labels app_user, role and audit_event as mixed-scope candidates and does not silently classify all other tables as tenant-owned or global.
 
 This is now executable evidence collection, not yet the requested proof: it must run against the actual production schema and its complete result set must be reviewed. Every table still needs an owner-approved TENANT_OWNED / PLATFORM_GLOBAL / MIXED decision. A tenant-owned table passes only when the column is declared NOT NULL and the exact NULL count is zero. Production data remains unexamined in this session.
