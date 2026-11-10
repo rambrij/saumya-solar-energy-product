@@ -246,7 +246,7 @@ The codebase is materially beyond a basic MVP: CRM, quotation, inventory, instal
 - **Working portions:** SLA due calculation and scheduled evaluation.
 - **Missing portions:** README states automated SLA email/SMS/push escalation and provider-specific delivery policy remain future work.
 - **Evidence:** `FinanceService.java`; `ServiceSlaScheduler.java`; `FinanceServicePanel.tsx`; README Known Release 4 limitations.
-- **Required changes:** Escalation policy, notification events, retry/dead-letter monitoring and tests.
+- **Required changes:** Escalation policy, notification events, persisted retry/failure-state monitoring and tests.
 - **Priority:** Medium.
 
 ### GST and finance compliance
@@ -286,7 +286,7 @@ The codebase is materially beyond a basic MVP: CRM, quotation, inventory, instal
 - **Working portions:** Business event delivery paths and opt-in controls.
 - **Missing portions:** No in-app inbox, durable queue/outbox, provider delivery webhooks, and some provider-specific delivery policies remain unimplemented. Email uses synchronous `SimpleMailMessage` rather than an asynchronous event pipeline.
 - **Evidence:** `NotificationService.java`; `NotificationDelivery.java`; `CustomerAccountController.java`; V23/V29; README notification limitations.
-- **Required changes:** Add outbox/queue, delivery state machine, in-app channel, templates/preferences, dead-letter handling and channel-specific tests.
+- **Required changes:** Retain persisted notification_delivery records, complete the delivery state machine, add the in-app channel and templates/preferences, and test persisted failure/retry handling per channel.
 - **Priority:** Medium.
 
 ### Audit trail
@@ -341,7 +341,7 @@ Expected behavior and actual code appear aligned for this capability; the README
 5. Select and implement a real payment provider; add settlement reconciliation and provider refund execution.
 6. Close GST statutory rule decisions and implement approved invoice fields/numbering.
 7. Add SLA escalation policies and channel delivery.
-8. Add a durable notification/integration outbox or queue with retry/dead-letter semantics.
+8. Use persisted notification-delivery and integration-job records with retry state, atomic claims and operator retry; do not introduce separate messaging infrastructure.
 9. Complete audit event coverage for business mutations.
 10. Add backend pagination for unbounded list endpoints.
 11. Add database-backed backup/restore automation and operational runbooks.
@@ -465,7 +465,7 @@ Expected behavior and actual code appear aligned for this capability; the README
 - CMS and in-app notification tests (features absent).
 - Reservation expiry/reconciliation and crash-recovery tests.
 - Real provider checkout, settlement reconciliation and provider refund tests.
-- Notification outbox retry/dead-letter/provider webhook tests.
+- Notification persisted-delivery retry/provider webhook tests.
 - Full audit event coverage and append-only behavior tests across all modules.
 - Backup restore and RPO/RTO rehearsal tests.
 - Performance/load tests for high-volume lists, reports and analytics.
@@ -598,7 +598,7 @@ Maintain these in a separate product capability catalogue and ensure each featur
 
 ### Phase 6 — Notifications and integrations
 
-- **Features:** durable outbox/queue, dead-letter handling, SLA escalation, provider-specific adapters and webhooks.
+- **Features:** persisted notification and integration job state, retry monitoring, SLA escalation, provider-specific adapters and webhooks.
 - **Backend impact:** NotificationService, integration scheduler and provider adapters.
 - **Frontend impact:** notification preferences and delivery status.
 - **Database impact:** outbox, inbox, retry and provider event state.
@@ -1334,7 +1334,7 @@ The following implementation/test work was added after the initial post-V58 matr
 | XLSX operations export tenant scoping and content | SRS §8.2, §20.4 | Implemented in controller path; content test added, CI pending | `Phase2OperationsController.java:350-380`; same integration test; Apache POI workbook assertions | Verify generated workbook values against authenticated tenant aggregates; add other XLSX export families if present |
 | PDF operations export tenant scoping and content | SRS §8.2, §20.4 | Implemented in controller path; content test added, CI pending | `Phase2OperationsController.java:383-410`; same integration test; OpenPDF text extraction | Verify generated PDF values against authenticated tenant aggregates; add other PDF/download families if present |
 | Branch-assigned record filtering (branch A vs branch B) | SRS §8.2, §20.4 | Partial; filter implementation already existed, tests added | `backend/src/main/java/com/saumyasolar/service/EnterpriseSaasService.java: branch filterBranchRecords`; `backend/src/test/java/com/saumyasolar/EnterpriseSaasServiceTest.java` | Add endpoint integration coverage for each branch-bearing record family; define branch-unassigned visibility explicitly |
-| Concurrent integration queue claims across tenants | SRS §8.2, §20.1, NFR concurrency | Implemented at atomic claim query level; DB integration test added, CI pending | `backend/src/main/java/com/saumyasolar/repo/IntegrationSyncJobRepository.java:claimIfDue`; `TenantSchedulerConcurrencyIntegrationTest.concurrentWorkersCanClaimOnlyOneTimeAndOnlyWithinTheOwningTenant` | Run under MySQL 8.4 in CI as well as H2; test real adapter execution, retry and dead-letter behavior |
+| Concurrent integration-job claims across tenants | SRS §8.2, §20.1, NFR concurrency | Implemented at atomic claim query level; DB integration test added, CI pending | `backend/src/main/java/com/saumyasolar/repo/IntegrationSyncJobRepository.java:claimIfDue`; `TenantSchedulerConcurrencyIntegrationTest.concurrentWorkersCanClaimOnlyOneTimeAndOnlyWithinTheOwningTenant` | Run under MySQL 8.4 in CI as well as H2; test real adapter execution, retry and persisted failure-state behavior |
 | Database-backed subscription expiry tenant isolation | SRS subscription lifecycle; §20.1 | Implemented at scheduler query level; DB integration test added, CI pending | `backend/src/main/java/com/saumyasolar/service/SubscriptionExpiryScheduler.java`; `TenantSchedulerConcurrencyIntegrationTest.expirySchedulerProcessesOnlyExpiredRowsForTheirOwningTenants` | Add concurrent duplicate scheduler invocation and SLA/warranty expiry database integration cases |
 | Browser-level forged filter tests | SRS §11, §15, §20.4 | Partial; Chromium API-origin browser test added, CI pending | `frontend/e2e/tenant-filter-isolation.spec.ts`; `frontend/playwright.config.ts`; `.github/workflows/release-validation.yml` | Extend from browser-origin API requests to authenticated UI filter/dropdown/route interactions with real foreign-tenant fixtures and verify graceful 403/404 handling |
 | Full create/update/delete coverage across all resource families | Business req §13; SRS §20.4 | Partial | `Release12TenantIntegrationTest`; `WarrantyClaimServiceTest`; existing release integration suites | Build a generated endpoint/verb matrix from all controller mappings; add per-family negative create/read/list/update/delete tests and explicitly mark unsupported delete operations |
