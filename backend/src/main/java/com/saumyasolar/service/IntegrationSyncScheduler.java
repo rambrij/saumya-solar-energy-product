@@ -4,6 +4,7 @@ import com.saumyasolar.domain.*;
 import com.saumyasolar.repo.*;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import com.saumyasolar.security.TenantExecutionContext;
 
 import java.time.Instant;
 import java.util.*;
@@ -39,12 +40,14 @@ public class IntegrationSyncScheduler {
     public void dispatch() {
         Instant now = Instant.now(), staleBefore = now.minusSeconds(600);
         for (com.saumyasolar.domain.Tenant tenant : tenants.findAll()) {
-            List<IntegrationSyncJob> batch = new ArrayList<>(jobs.findTop50ByTenantIdAndStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(tenant.getId(), List.of("QUEUED", "RETRY"), now));
-            batch.addAll(jobs.findTop50ByTenantIdAndStatusAndUpdatedAtLessThanEqualOrderByUpdatedAtAsc(tenant.getId(), "PROCESSING", staleBefore));
+            try (var scope = TenantExecutionContext.open(tenant.getId())) {
+            UUID tenantId = TenantExecutionContext.requireTenantId();
+            List<IntegrationSyncJob> batch = new ArrayList<>(jobs.findTop50ByTenantIdAndStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(tenantId, List.of("QUEUED", "RETRY"), now));
+            batch.addAll(jobs.findTop50ByTenantIdAndStatusAndUpdatedAtLessThanEqualOrderByUpdatedAtAsc(tenantId, "PROCESSING", staleBefore));
             for (IntegrationSyncJob candidate : batch) {
             Instant claimedAt = Instant.now();
-            if (jobs.claimIfDue(candidate.getId(), tenant.getId(), claimedAt, staleBefore) != 1) continue;
-            IntegrationSyncJob job = jobs.findByIdAndTenantId(candidate.getId(), tenant.getId()).orElse(null);
+            if (jobs.claimIfDue(candidate.getId(), tenantId, claimedAt, staleBefore) != 1) continue;
+            IntegrationSyncJob job = jobs.findByIdAndTenantId(candidate.getId(), tenantId).orElse(null);
             if (job == null) continue;
             Optional<IntegrationConnection> c = connections.findByIdAndTenantId(job.getConnectionId(), job.getTenantId());
             if (c.isEmpty() || !"ACTIVE".equals(c.get().getStatus())) {
@@ -127,6 +130,7 @@ public class IntegrationSyncScheduler {
             }
             job.setUpdatedAt(Instant.now());
             jobs.save(job);
+            }
             }
         }
     }
