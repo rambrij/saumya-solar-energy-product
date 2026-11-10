@@ -1,6 +1,8 @@
 package com.saumyasolar.service;
 
 import com.saumyasolar.domain.NotificationDelivery;
+import com.saumyasolar.domain.CustomerProfile;
+import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.repo.NotificationDeliveryRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.mail.MailSendException;
@@ -9,6 +11,9 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.UUID;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.time.Instant;
 
 import org.mockito.ArgumentCaptor;
@@ -91,6 +96,47 @@ class NotificationServiceTest {
         verify(repository).claimPendingDelivery(eq(record.getId()), eq(tenantId), any(), any());
         assertThrows(IllegalStateException.class,
                 com.saumyasolar.security.TenantExecutionContext::requireTenantId);
+    }
+
+
+    @Test
+    void queuedWhatsappNotificationUsesARealLineBreak() {
+        JavaMailSender sender = mock(JavaMailSender.class);
+        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
+        CustomerProfileRepository customers = mock(CustomerProfileRepository.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        CustomerProfile customer = new CustomerProfile();
+        customer.setTenantId(tenantId);
+        customer.setUserId(userId);
+        customer.setPhone("+919876543210");
+        customer.setWhatsappConsent(true);
+        Map<UUID, NotificationDelivery> persisted = new HashMap<>();
+        when(customers.findByTenantIdAndUserId(tenantId, userId)).thenReturn(Optional.of(customer));
+        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> {
+            NotificationDelivery record = invocation.getArgument(0);
+            persisted.put(record.getId(), record);
+            return record;
+        });
+        when(repository.findById(any())).thenAnswer(invocation ->
+                Optional.ofNullable(persisted.get(invocation.getArgument(0))));
+        NotificationService service = new NotificationService(
+                sender, repository, customers, "no-reply@example.test", "http://localhost:3000",
+                "account", "token", "", "whatsapp:+15550000000", publisher
+        );
+
+        assertTrue(service.sendBusinessNotification(
+                userId, tenantId, "QUOTATION_SENT", "customer@example.test",
+                "Your quotation", "Quotation details"
+        ));
+
+        NotificationDelivery whatsapp = persisted.values().stream()
+                .filter(record -> "WHATSAPP".equals(record.getChannel()))
+                .findFirst().orElseThrow();
+        assertEquals("Your quotation\nQuotation details", whatsapp.getMessageBody());
+        verify(publisher, times(2)).publishEvent(any(BusinessNotificationRequestedEvent.class));
+        verifyNoInteractions(sender);
     }
 
     @Test

@@ -164,7 +164,7 @@ public class NotificationService {
         }
         if (customer.isWhatsappConsent() && !whatsappFrom.isBlank()) {
             String to = "whatsapp:" + customer.getPhone();
-            String message = (subject == null ? eventType : subject) + "\\n" + body;
+            String message = (subject == null ? eventType : subject) + "\n" + body;
             UUID id = queueDelivery(userId, tenantId, eventType, "WHATSAPP", to, eventType, message);
             if (id != null) queuedIds.add(id);
         }
