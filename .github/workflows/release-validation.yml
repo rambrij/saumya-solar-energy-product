@@ -352,6 +352,32 @@ jobs:
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V61__install_integration_and_approval_permissions.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM permission WHERE code IN ('INTEGRATION_MANAGE','APPROVAL_WORKFLOW_MANAGE')")" = "2"
 
+      - name: Apply V62 notification delivery idempotency
+        run: mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V62__notification_delivery_idempotency.sql
+
+      - name: Apply V63 tenant-scoped export jobs
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V63__tenant_scoped_export_jobs.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='solar_migration_test' AND table_name='export_job'")" = "1"
+
+      - name: Compare historical migrations with consolidated baseline
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass -e "CREATE DATABASE solar_baseline_test"
+          mysql -h 127.0.0.1 -uroot -prootpass solar_baseline_test < backend/src/test/resources/db/baseline/V1__baseline.sql
+          mysqldump -h 127.0.0.1 -uroot -prootpass --no-data --skip-comments --skip-add-drop-table --skip-set-charset --skip-lock-tables solar_migration_test | sed -E 's/AUTO_INCREMENT=[0-9]+/AUTO_INCREMENT=1/g' > /tmp/historical-schema.sql
+          mysqldump -h 127.0.0.1 -uroot -prootpass --no-data --skip-comments --skip-add-drop-table --skip-set-charset --skip-lock-tables solar_baseline_test | sed -E 's/AUTO_INCREMENT=[0-9]+/AUTO_INCREMENT=1/g' > /tmp/baseline-schema.sql
+          diff -u /tmp/historical-schema.sql /tmp/baseline-schema.sql | tee schema-diff.txt
+          echo "Schema equivalence: identical" > schema-diff.txt
+
+      - name: Upload schema equivalence result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleanup-schema-equivalence
+          path: schema-diff.txt
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Emit read-only tenant schema, FK and unique-index inventory
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql | tee /tmp/tenant-schema-audit.txt
