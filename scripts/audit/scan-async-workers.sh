@@ -20,7 +20,7 @@ echo "# Root: $ROOT"
 echo "# Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo
 scan_java "Scheduled triggers" '@Scheduled'
-scan_java "Async annotations and executor declarations/submissions" '@Async|ExecutorService|ScheduledExecutorService|ThreadPoolTaskExecutor|TaskExecutor|TaskScheduler|CompletableFuture|ForkJoinPool|new Thread\(|\.submit\(|\.execute\('
+scan_java "Async annotations and executor declarations/submissions" '@Async|ExecutorService|ScheduledExecutorService|ThreadPoolTaskExecutor|TaskExecutor|TaskScheduler|CompletableFuture|ForkJoinPool|new Thread\(|(executor|taskExecutor|threadPool|pool)\.(submit|execute)\('
 scan_java "Application event producers and listeners" '@EventListener|@TransactionalEventListener|ApplicationEventPublisher|publishEvent\('
 scan_java "Messaging and queue consumers/producers" '@KafkaListener|@RabbitListener|@JmsListener|KafkaTemplate|RabbitTemplate|JmsTemplate|MessageListener|Queue|Topic'
 scan_java "Startup runners" 'CommandLineRunner|ApplicationRunner'
