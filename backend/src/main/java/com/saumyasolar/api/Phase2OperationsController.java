@@ -82,15 +82,9 @@ public class Phase2OperationsController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing permission: " + code);
     }
     
-    private boolean hasRole(Principal p, String... roles) {
-        return p.roles() != null && p.roles().stream().anyMatch(Set.of(roles)::contains);
-    }
-    
     private void ops(Principal p) {
         tenant(p);
         permission(p, "INSTALLATION_ASSIGN");
-        if (!hasRole(p, "VENDOR_ADMIN", "OPERATIONS_MANAGER", "SERVICE_MANAGER"))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
     }
     
     public record EngineerInput(
