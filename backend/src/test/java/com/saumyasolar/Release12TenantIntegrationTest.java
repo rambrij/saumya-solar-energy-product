@@ -1733,6 +1733,45 @@ class Release12TenantIntegrationTest {
         WarrantyClaimAttachment stored = warrantyClaimAttachments.findByIdAndTenantIdAndClaimId(
                 attachmentId, vendorTenantId, claimA.getId()).orElseThrow();
         assertTrue(stored.getStorageKey().startsWith(vendorTenantId + "/warranty-claims/"));
+
+        // Customer HTTP access is restricted to the customer's own claim, even
+        // when the caller knows another customer's claim and attachment UUIDs.
+        String customerAToken = accessToken(customerA.user().getEmail(), "Customer-Password-2026");
+        String customerBToken = accessToken(customerB.user().getEmail(), "Customer-Password-2026");
+        mvc.perform(get("/api/v1/warranty-claims/" + claimA.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(attachmentId.toString()));
+        mvc.perform(get("/api/v1/warranty-claims/" + claimA.getId() + "/attachments/" + attachmentId)
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(pdf));
+        mvc.perform(post("/api/v1/warranty-claims/" + claimB.getId() + "/attachments")
+                        .file(evidence)
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/warranty-claims/" + claimB.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/warranty-claims/" + claimA.getId() + "/attachments/" + attachmentId)
+                        .header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isNotFound());
+
+        // Vendor access must not permit an upload to a foreign tenant's claim.
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/warranty-claims/" + foreignClaim.getId() + "/attachments")
+                        .file(evidence)
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+
+        // Reject unsupported media types at the HTTP boundary before storage.
+        MockMultipartFile unsupported = new MockMultipartFile(
+                "file", "claim-evidence.txt", "text/plain", "not evidence".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/warranty-claims/" + claimA.getId() + "/attachments")
+                        .file(unsupported)
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isBadRequest());
     }
 
     private WarrantyClaim warrantyClaim(UUID tenantId, UUID customerId, UUID warrantyId) {
