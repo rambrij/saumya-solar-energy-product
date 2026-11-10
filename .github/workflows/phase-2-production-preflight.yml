@@ -42,6 +42,11 @@ jobs:
           MYSQL_PWD: ${{ secrets.PROD_DB_PASSWORD }}
         run: |
           set -euo pipefail
+          cleanup_preflight_routines() {
+            mysql --connect-timeout=15 --host="$MYSQL_HOST" --port="$MYSQL_TCP_PORT" --user="$MYSQL_USER" "$MYSQL_DATABASE" \
+              -e "DROP PROCEDURE IF EXISTS assert_phase2_catalogue_tenant_integrity; DROP PROCEDURE IF EXISTS assert_phase2_operational_tenant_integrity;" || true
+          }
+          trap cleanup_preflight_routines EXIT
           set +e
           mysql --connect-timeout=15 --host="$MYSQL_HOST" --port="$MYSQL_TCP_PORT" --user="$MYSQL_USER" "$MYSQL_DATABASE" \
             < backend/src/test/resources/tenant-isolation-production-preflight.sql 2>&1 | tee phase2-production-preflight-output.txt
