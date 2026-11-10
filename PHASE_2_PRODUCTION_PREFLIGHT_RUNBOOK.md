@@ -2,21 +2,21 @@
 
 ## Purpose
 
-Run the V57/V58 tenant-integrity preflight against the production MySQL database before any migration rollout. The SQL checks legacy tenant-owned relationships for orphaned and cross-tenant references. It fails closed on the first detected violation.
+Run the V57/V58 relationship-integrity and V60 tenant_id NOT NULL preflight against the production MySQL database before applying the tenant-integrity migrations. V60 tightens nine tenant-owned tables only after this preflight proves there are no NULL tenant IDs. The SQL checks legacy tenant-owned relationships for orphaned and cross-tenant references. It fails closed on the first detected violation.
 
 ## Important safety properties
 
-- The V57/V58 integrity script does not INSERT, UPDATE or DELETE business rows. It creates and drops two named stored procedures to express fail-fast checks. Its execution identity therefore needs CREATE ROUTINE and DROP ROUTINE privileges in addition to SELECT access. Both production and CI workflows install an EXIT cleanup trap so the named procedures are removed even when a SIGNAL aborts the SQL script. Review that temporary DDL privilege with the DBA before execution.
+- The V57/V58/V60 integrity script does not INSERT, UPDATE or DELETE business rows. It creates and drops two named stored procedures to express fail-fast checks. Its execution identity therefore needs CREATE ROUTINE and DROP ROUTINE privileges in addition to SELECT access. Both production and CI workflows install an EXIT cleanup trap so the named procedures are removed even when a SIGNAL aborts the SQL script. Review that temporary DDL privilege with the DBA before execution.
 - The separate docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql script uses INFORMATION_SCHEMA, SELECT and prepared SELECT statements only. It runs with a distinct SELECT-only account and returns exact tenant_id NULL counts, nullability, FK inventory, unique-index inventory and tables without tenant_id.
-- It does not apply V57/V58 indexes, foreign keys or constraints.
+- It does not apply V57/V58 indexes, foreign keys or V60 NOT NULL constraints.
 - It does not repair rows automatically.
-- Do not run V57/V58 migrations after a failed preflight.
+- Do not run V57/V58/V60 migrations after a failed preflight.
 
 ## Disposable CI preflight (no production credentials)
 
 The branch's .github/workflows/release-validation.yml already provisions an isolated MySQL 8.4 service for CI. It applies migrations V1-V58, starts the application against a separate disposable MySQL database, then executes the same backend/src/test/resources/tenant-isolation-production-preflight.sql checks. The test service uses the intentionally dummy CI-only credentials root / rootpass; the database is created fresh for the workflow and destroyed with the runner. The CI job also uses a test-only JWT secret and test fixtures. These values must never be copied into a production environment.
 
-Use the CI run to validate SQL syntax, migration compatibility and the preflight's behavior against a clean schema. It cannot establish that production legacy rows are clean, because the disposable schema has no production data. A separate production preflight and DBA/release-owner sign-off remain mandatory before V57/V58 rollout.
+Use the CI run to validate SQL syntax, migration compatibility and the preflight's behavior against a clean schema. It cannot establish that production legacy rows are clean, because the disposable schema has no production data. A separate production preflight and DBA/release-owner sign-off remain mandatory before V57/V58/V60 rollout.
 
 ## Development-credential CI smoke preflight
 
@@ -39,6 +39,7 @@ For this repository's non-production validation, `.github/workflows/release-vali
 4. Require both output markers:
    - `V57 catalogue tenant-integrity preflight: PASS`
    - `V58 operational tenant-integrity preflight: PASS`
+   - `V60 tenant-owned tenant_id NOT NULL preflight: PASS`
 5. Review the tenant-schema-audit-output.txt result in full. Every base table must be classified as TENANT_OWNED, PLATFORM_GLOBAL or MIXED by the data owner. Every TENANT_OWNED table must show tenant_id IS_NULLABLE=NO and null_tenant_rows=0. Every table without tenant_id and every mixed-scope table must have a documented owner-approved rationale and tenant relationship. Reconcile every FK and unique index.
 6. Record the run URL, run ID, database/schema identifier, execution timestamp, operator, reviewer approval and archived audit artifact in the change ticket. Do not record credentials.
 
@@ -49,8 +50,8 @@ For this repository's non-production validation, `.github/workflows/release-vali
 - Have the data owner and DBA identify affected row IDs using a separately reviewed SELECT diagnostic scoped by tenant. Do not export personal/customer data into the CI log.
 - Prepare a tenant-aware repair script with before/after counts, expected row IDs, transaction/backup plan, and rollback procedure.
 - Obtain data-owner and DBA approval before executing any repair DML.
-- Re-run the unchanged preflight after repair. Both PASS markers are required.
-- Obtain explicit production change approval before applying V57/V58 migrations.
+- Re-run the unchanged preflight after repair. All three PASS markers are required.
+- Obtain explicit production change approval before applying V57/V58/V60 migrations.
 
 ## Current execution record
 
