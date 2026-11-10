@@ -46,9 +46,9 @@ class WarrantyExpirySchedulerTest {
         CustomerProfileRepository customers = mock(CustomerProfileRepository.class);
         NotificationService notifications = mock(NotificationService.class);
         TenantRepository tenants = mock(TenantRepository.class);
+        UUID tenant = UUID.randomUUID(), customerId = UUID.randomUUID(), user = UUID.randomUUID();
         Tenant tenantEntity = new Tenant(); tenantEntity.setId(tenant);
         when(tenants.findAll()).thenReturn(List.of(tenantEntity));
-        UUID tenant = UUID.randomUUID(), customerId = UUID.randomUUID(), user = UUID.randomUUID();
         Warranty w = new Warranty();
         w.setId(UUID.randomUUID());
         w.setTenantId(tenant);
