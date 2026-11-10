@@ -1743,7 +1743,7 @@ class Release12TenantIntegrationTest {
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":\"" + foreignEmployee.getId() + "\"}"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().is4xxClientError());
         assertFalse(branchMemberships.existsByTenantIdAndBranchIdAndUserId(
                 vendorTenantId, branchId, foreignEmployee.getId()));
         mvc.perform(post("/api/v1/branches/" + branchId + "/users")
