@@ -1557,3 +1557,14 @@ These changes are deliberately not classified as full closure. The full 222-rout
 - V60 migration and disposable-database preflight verification passed in CI run 42844217653 (MySQL 8.4 migration, Spring Boot preflight, frontend build, and 184 backend tests with zero failures). The production preflight remains unexecuted.
 
 - Latest verification: workflow run 42845389769 passed all four jobs on the implementation branch: 188 backend tests (0 failures/errors), frontend typecheck/production build, MySQL 8.4 Flyway migration validation through V60, and Spring Boot health/preflight against MySQL 8.4/Mailpit. The protected production-data preflight was not run.
+
+
+### Phase 2 continuation — worker, schema and release-gate corrections (2026-11-11)
+
+- Restored the read-only schema inventory SQL, tenant schema inventory, repository-wide asynchronous worker scan, legacy authorization scan and endpoint matrix that were removed in the cleanup merge. Release validation now runs on this Phase 2 branch and uploads the worker/authz scan outputs.
+- Corrected the V60 disposable-MySQL assertion to match the eight tenant-owned columns actually made NOT NULL. notification_delivery is intentionally mixed-scope: platform password-reset/MFA deliveries may have NULL tenant_id, while business deliveries require a tenant and same-tenant recipient. Updated the entity mapping and production preflight to enforce this distinction rather than rejecting legitimate platform messages.
+- Changed export expiry cleanup from an unscoped global expired-job query to tenant-ID discovery followed by tenant-scoped query, storage deletion and state update inside TenantExecutionContext. Added tests for context-scoped cleanup and cross-user export download denial.
+- Restored and updated the background-worker inventory to include ExportService.recoverAndExpire, ExportEventListener, and BusinessNotificationEventListener.
+- The protected production preflight workflow now targets this Phase 2 branch. It remains manual and protected; no production database credentials were used and no production data was queried or modified.
+
+**Acceptance status remains PARTIAL / NOT APPROVED.** The current 222-row endpoint matrix is a historical inventory and has 206 rows without endpoint-specific negative evidence; it is not a completed authenticated role × endpoint × verb test matrix. The newly added /api/v1/exports routes are recorded separately pending full matrix regeneration. Customer/branch tests cover important representative resource families but do not yet prove every read/create/update/delete route. The worker scan artifact must be reviewed line-by-line. Production NULL-row evidence, production preflight PASS output, data-owner review and DBA sign-off remain outstanding. A passing latest-head CI run is also required.
