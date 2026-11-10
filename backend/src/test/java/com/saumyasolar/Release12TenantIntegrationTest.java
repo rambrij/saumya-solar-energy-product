@@ -1847,39 +1847,44 @@ class Release12TenantIntegrationTest {
         customerOrders.saveAllAndFlush(List.of(orderA, orderB));
 
         String token = accessToken(member.getEmail(), "Branch-Member-Password-2026");
-        assertBranchListContainsOnly(mvc.perform(get("/api/v1/enquiries").header("Authorization", "Bearer " + token))
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/enquiries?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), enquiryA.getId(), enquiryB.getId());
-        assertBranchListContainsOnly(mvc.perform(get("/api/v1/leads").header("Authorization", "Bearer " + token))
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/leads?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), leadA.getId(), leadB.getId());
-        assertBranchListContainsOnly(mvc.perform(get("/api/v1/surveys").header("Authorization", "Bearer " + token))
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/surveys?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), surveyA.getId(), surveyB.getId());
-        assertBranchListContainsOnly(mvc.perform(get("/api/v1/quotations").header("Authorization", "Bearer " + token))
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/quotations?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), quoteA.getId(), quoteB.getId());
-        assertBranchListContainsOnly(mvc.perform(get("/api/v1/orders").header("Authorization", "Bearer " + token))
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/orders?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), orderA.getId(), orderB.getId());
 
         Invoice invoiceA = branchInvoice(vendorTenantId, branchA.getId(), orderA.getId(), member.getId());
         Invoice invoiceB = branchInvoice(vendorTenantId, branchB.getId(), orderB.getId(), member.getId());
         invoices.saveAllAndFlush(List.of(invoiceA, invoiceB));
-        assertBranchListContainsOnly(mvc.perform(get("/api/v1/invoices").header("Authorization", "Bearer " + token))
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/invoices?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), invoiceA.getId(), invoiceB.getId());
 
         ServiceRequest ticketA = branchTicket(vendorTenantId, branchA.getId(), branchCustomer.profile().getId());
         ServiceRequest ticketB = branchTicket(vendorTenantId, branchB.getId(), branchCustomer.profile().getId());
         serviceRequests.saveAllAndFlush(List.of(ticketA, ticketB));
-        assertBranchListContainsOnly(mvc.perform(get("/api/v1/service-requests").header("Authorization", "Bearer " + token))
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/service-requests?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), ticketA.getId(), ticketB.getId());
 
         InstallationJob installationA = branchInstallation(vendorTenantId, branchA.getId(), orderA.getId(), branchCustomer.profile().getId(), member.getId());
         InstallationJob installationB = branchInstallation(vendorTenantId, branchB.getId(), orderB.getId(), branchCustomer.profile().getId(), member.getId());
         installationJobs.saveAllAndFlush(List.of(installationA, installationB));
-        assertBranchListContainsOnly(mvc.perform(get("/api/v1/installations").header("Authorization", "Bearer " + token))
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/installations?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), installationA.getId(), installationB.getId());
 
         mvc.perform(get("/api/v1/branches/" + branchA.getId() + "/analytics")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
         mvc.perform(get("/api/v1/branches/" + branchB.getId() + "/analytics")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        // A member cannot use direct branch-scoped resource endpoints to pivot
+        // into a different branch within the same tenant.
+        mvc.perform(get("/api/v1/branches/" + branchB.getId() + "/users")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
 
@@ -1914,11 +1919,11 @@ class Release12TenantIntegrationTest {
         InventoryTransaction movementA = branchMovement(vendorTenantId, warehouseA.getId(), stockProduct.getId(), member.getId());
         InventoryTransaction movementB = branchMovement(vendorTenantId, warehouseB.getId(), stockProduct.getId(), member.getId());
         inventoryTransactions.saveAllAndFlush(List.of(movementA, movementB));
-        assertBranchListContainsOnly(mvc.perform(get("/api/v1/warehouses").header("Authorization", "Bearer " + token))
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/warehouses?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), warehouseA.getId(), warehouseB.getId());
-        assertBranchListContainsOnly(mvc.perform(get("/api/v1/inventory/balances").header("Authorization", "Bearer " + token))
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/inventory/balances?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), balanceA.getId(), balanceB.getId());
-        assertBranchListContainsOnly(mvc.perform(get("/api/v1/inventory/transactions").header("Authorization", "Bearer " + token))
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/inventory/transactions?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), movementA.getId(), movementB.getId());
     }
 
