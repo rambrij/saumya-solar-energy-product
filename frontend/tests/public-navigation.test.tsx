@@ -16,7 +16,7 @@ describe('public navigation',()=>{
  it('preserves normal browser behavior for modified link clicks',()=>{
   const navigate=vi.fn();
   render(<PublicSiteHeader accountName="Solar Customer" onNavigate={navigate}/>);
-  fireEvent.click(screen.getByRole('link',{name:'Our Products'}),{ctrlKey:true});
+  fireEvent.click(screen.getAllByRole('link',{name:'Our Products'})[0],{ctrlKey:true});
   expect(navigate).not.toHaveBeenCalled();
  });
 });
