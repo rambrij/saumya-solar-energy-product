@@ -1449,3 +1449,32 @@ No statuses in the earlier tables were upgraded because no implementation/test i
 - Added unit tests for the second bucket, request-body replay, identifier non-persistence and oversized-body rejection.
 - Status: **Implemented / Pending Verification**. The full release-validation workflow was triggered on this commit (run ID `42818434724`) and was still in progress at the time of this addendum. Do not mark P1-AUTH-001 MET until backend CI passes and public enquiry/export/webhook ingress policies are evidenced.
 - This is a partial remediation; all other Phase 1/2 gaps remain as previously recorded. No other requirement status is upgraded.
+
+## Remediation addendum — 2026-11-10 (Phase 1/2 audit branch)
+
+**Current branch:** `audit/phase-2-implementation-gap-analysis`
+**Latest application/test commit:** `5ccba941c0e7c54c40b038807cc3cb17f73a5e74`
+**Latest validation report:** `docs/PHASE_1_2_VALIDATION_REPORT.md`
+
+### Items extended in this pass
+
+- **P1 authentication throttling:** HMAC-derived account + endpoint buckets for login/password recovery; IP + endpoint buckets for login/refresh/recovery/MFA; configurable IP + endpoint buckets for public enquiries, exports and payment webhooks; bounded authentication request-body replay; focused unit tests. Commits `1a79b562`, `0d2a741d`, `f3cb1d30`.
+- **P1 fine-grained/custom roles:** corrected historical finding: custom-role create/update/delete APIs and `RoleManagementPanel.tsx` already exist. Added tests for cross-tenant custom-role update/delete and tenant-scoped employee role assignment. The exhaustive action-to-permission map and authenticated role matrix remain open. Commit `5f20f0a6`.
+- **P1 assigned-resource scope:** quotation revision reads now enforce the same assigned-sales scope as quotation details/actions; added negative test for another employee's quotation revisions. Commits `bbd10cce`, `5ccba941`.
+- **P2 tenant-qualified lookups:** employee, engineer, integration user, installation and service-visit lookups now use tenant-qualified repository methods instead of bare-ID lookup followed by in-memory tenant comparison. Commits `8be6f0d7`, `1f5ce498`.
+- **P2 composite FK inventory:** V57/V58 were directly inspected. V57 covers product/category/package-item tenant relationships; V58 covers a broad set of sales, order, inventory, installation, warranty, finance, service, evidence, offline-sync, branch, approval, audit and notification relationships. MySQL 8.4 migration/integrity validation passed on workflow `42818724332`. Full table/column NOT NULL and FK inventory remains open.
+- **P2 customer/branch/export/download tests:** existing `Release12TenantIntegrationTest` already covers selected foreign tenant/customer/branch, operations CSV/XLSX/PDF, invoice PDF and private attachment paths. This is meaningful existing coverage, not proof of every endpoint/verb/resource family.
+- **P2 scheduled jobs:** `IntegrationSyncScheduler`, `ServiceSlaScheduler`, `WarrantyExpiryScheduler` and `SubscriptionExpiryScheduler` use `TenantExecutionContext` in try-with-resources. Full `@Async`/executor/export/notification worker inventory and exception/thread-reuse context cleanup tests remain open.
+
+### Verification state
+
+- Prior complete release-validation workflow `42818724332` passed backend compile/tests, MySQL 8.4 migration validation, Spring Boot startup/health and frontend typecheck/production build.
+- Latest-head workflow `42820915064` (commit `5ccba941`) was still running at the time of this addendum. Frontend build had passed; backend tests, MySQL migration validation and Spring Boot/browser checks were pending. No latest-head pass is claimed.
+- Do not change any remaining PARTIAL item to MET until the newest workflow passes and the listed residual coverage is complete.
+
+### Status corrections
+
+- Custom-role CRUD/UI is **PARTIALLY IMPLEMENTED**, not absent. The remaining issue is exhaustive permission/action matrix validation and legacy broad-check reconciliation.
+- Composite tenant FKs are **PARTIALLY IMPLEMENTED**, not unverifiable: V57/V58 exist and MySQL CI has passed on the prior validated head. Full schema coverage and production data preflight remain outstanding.
+- Rate limiting is **PARTIALLY IMPLEMENTED**: public enquiry/export/webhook application buckets have been added, but production ingress and distributed concurrency still require proof.
+- Assigned-sales scope is extended to quotation revision reads; customer/branch/service export/download matrix remains incomplete.
