@@ -228,7 +228,7 @@ CI update (2026-11-10): workflow 42821756695 passed all four jobs, including 163
 - `Phase2OperationsController` now uses tenant-qualified warranty and engineer lookups; `WarrantyRepository.findByIdAndTenantId` was added. `OperationsService.warranties` now limits SERVICE_VIEW-only engineers to their assigned installation warranties (commits `102adc61`, `3e2d6d57`, `a8837dc4`).
 - `FinanceService` SLA controls and `Phase2OperationsController.ops` now use the SRS fine-grained permission codes rather than additional hard-coded role-name gates (commits `128f1fc5`, `2c429418`).
 
-Latest branch workflow results must be read from the exact head commit. Earlier run `42827261872` passed all four jobs and 169 backend tests for commit `eb19f8bb`. Subsequent commits add atomic notification retry claims, the authenticated role matrix and browser auth E2E; these are not covered by that earlier pass. Workflow `42828454430` for commit `6585efe6` passed all four jobs: backend (171 tests), frontend typecheck/production build, MySQL 8.4 migration validation (including the new schema/FK/unique-index inventory query and artifact upload), and Spring Boot health plus Playwright browser security tests. The browser auth/session test passed with the cookie scoped to `/api/v1/auth`. A subsequent CI run exposed test interference because the auth E2E logged out the shared seeded admin while another test used it; the auth E2E now uses the separate seeded sales account. Latest-head workflow `42828592637` for the isolated E2E change is running.
+Latest branch workflow results must be read from the exact head commit. Earlier run `42827261872` passed all four jobs and 169 backend tests for commit `eb19f8bb`. Subsequent commits add atomic notification retry claims, the authenticated role matrix and browser auth E2E; these are not covered by that earlier pass. Workflow `42828454430` for commit `6585efe6` passed all four jobs: backend (171 tests), frontend typecheck/production build, MySQL 8.4 migration validation (including the new schema/FK/unique-index inventory query and artifact upload), and Spring Boot health plus Playwright browser security tests. The browser auth/session test passed with the cookie scoped to `/api/v1/auth`. A subsequent CI run exposed test interference because the auth E2E logged out the shared seeded admin while another test used it; the auth E2E now uses the separate seeded sales account. Latest code workflow `42828934287` for commit `fe7b1181` passed all four jobs, including the isolated browser auth E2E; the current branch head `00b4d767` contains subsequent documentation-only gap-register updates.
 
 
 ## 14. Latest verification snapshot
@@ -237,7 +237,7 @@ Latest branch workflow results must be read from the exact head commit. Earlier 
 - Workflow `42828044536` passed backend (171 tests), frontend build and MySQL migration validation for commit `c55d3bca`; its Spring Boot/browser job was still running.
 - Workflow `42828199821` passed backend (171 tests), frontend build and MySQL migration validation after the browser cookie-path fix (`357aa104`); its Spring Boot/browser job was still running through application startup and Playwright at last check.
 - Workflow `42827698398` failed on the initial browser test because the test queried cookies at `/` while the refresh cookie is scoped to `/api/v1/auth`; the test now queries the cookie at its actual path. The same run's backend failed because the new role-matrix test fixtures were not rollback-isolated; the test now has a transaction. Subsequent run `42828199821` confirms backend success.
-- Workflow `42828297148` for `0e4cefc5` passed all four jobs and 171 backend tests. Workflow `42828454430` for `6585efe6` also passed all four jobs and 171 backend tests, including the new CI schema inventory query and browser auth E2E. The later test-isolation fix is under workflow `42828592637`.
+- Workflow `42828297148` for `0e4cefc5` passed all four jobs and 171 backend tests. Workflow `42828454430` for `6585efe6` also passed all four jobs and 171 backend tests, including the new CI schema inventory query and browser auth E2E. The test-isolation fix is verified by workflow `42828934287` for commit `fe7b1181`.
 
 
 ### Verified full CI checkpoint — 2026-11-10
@@ -249,3 +249,15 @@ Latest branch workflow results must be read from the exact head commit. Earlier 
 - **Database:** Flyway migration validation on MySQL 8.4 passed; the read-only schema/FK/unique-index audit SQL ran after V57/V58 and its artifact upload step passed.
 - **Application/browser:** Spring Boot health and Playwright tests passed, including HttpOnly refresh cookie, CSRF rejection, refresh rotation, logout revocation and tenant-filter tampering.
 - A later workflow failed only in the browser test because two parallel specs logged in/out the same seeded admin user. The auth-session spec now uses the separate seeded sales user to avoid cross-test session revocation; latest-head workflow `42828592637` is pending.
+
+
+### Latest verified code head — 2026-11-10
+
+- Workflow `42828934287` passed all four jobs for code commit `fe7b118117f599d1ab275544afa27245ae3e83e0`.
+- Backend: 171 tests, 0 failures, 0 errors, 0 skipped.
+- Frontend typecheck/production build: PASS.
+- MySQL 8.4 migrations and schema inventory artifact: PASS.
+- Spring Boot health and browser tests: PASS, including the separate-user auth session test, HttpOnly refresh cookie, CSRF negative cases, refresh rotation, logout revocation and tenant filter tampering.
+- Current branch head `00b4d7672b4412d57d0ebdbc75629d9e6f24955d` adds only documentation updates after that verified code commit. Its CI is also running.
+
+**Phase verdict remains NOT MET for both phases** because the complete endpoint/resource matrix, exhaustive tenant schema/NOT NULL and production-data checks, every export/download family, and all worker/branch/customer combinations are still not fully proven.
