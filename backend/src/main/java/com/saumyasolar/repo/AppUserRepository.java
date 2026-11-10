@@ -19,6 +19,8 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
     Optional<AppUser> findForUpdateByEmailIgnoreCase(@Param("email") String email);
     
     List<AppUser> findByTenantId(UUID tenantId);
+
+    Optional<AppUser> findByIdAndTenantId(UUID id, UUID tenantId);
     
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from AppUser u where u.id=:id and u.tenantId=:tenantId")

@@ -435,8 +435,8 @@ public class AuthLifecycleService {
         }
         if (employeeId.equals(actorId))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Administrators cannot change their own role");
-        AppUser employee = users.findById(employeeId)
-                .filter(user -> tenantId.equals(user.getTenantId()) && "VENDOR".equals(user.getAccountType()))
+        AppUser employee = users.findByIdAndTenantId(employeeId, tenantId)
+                .filter(user -> "VENDOR".equals(user.getAccountType()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
         if (employee.getRoles().stream().anyMatch(existing -> "VENDOR_ADMIN".equals(existing.getName())))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Vendor administrator roles cannot be reassigned");
@@ -515,8 +515,8 @@ public class AuthLifecycleService {
     public AppUser setEmployeeEnabled(UUID tenantId, UUID actorId, UUID employeeId, boolean enabled) {
         if (tenantId == null || employeeId == null || employeeId.equals(actorId))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot change this employee account");
-        var employee = users.findById(employeeId)
-                .filter(u -> tenantId.equals(u.getTenantId()) && "VENDOR".equals(u.getAccountType()))
+        var employee = users.findByIdAndTenantId(employeeId, tenantId)
+                .filter(u -> "VENDOR".equals(u.getAccountType()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found in this vendor"));
         if (employee.getRoles().stream().anyMatch(role -> "VENDOR_ADMIN".equals(role.getName())))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Vendor admin accounts cannot be disabled through this endpoint");

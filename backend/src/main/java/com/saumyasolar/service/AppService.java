@@ -119,8 +119,8 @@ public class AppService {
     }
     
     private void requireEmployee(UUID id, UUID tenantId) {
-        if (id != null && users.findById(id).filter(u -> tenantId.equals(u.getTenantId())
-                && "VENDOR".equals(u.getAccountType()) && u.isEnabled()).isEmpty())
+        if (id != null && users.findByIdAndTenantId(id, tenantId).filter(u ->
+                "VENDOR".equals(u.getAccountType()) && u.isEnabled()).isEmpty())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee must belong to this vendor");
     }
     
