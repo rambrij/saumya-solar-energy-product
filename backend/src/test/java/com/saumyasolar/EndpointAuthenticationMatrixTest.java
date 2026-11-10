@@ -218,8 +218,8 @@ class EndpointAuthenticationMatrixTest {
         if ("VENDOR".equals(accountType) && pattern.startsWith("/api/v1/{type:")) {
             path = path.replaceFirst("^/api/v1/tenants$", "/api/v1/users");
         }
-        if ("VENDOR".equals(accountType) && pattern.equals("/api/v1/quotations/{id}/revisions")) {
-            path = "/api/v1/quotations/" + revisionFixtureId + "/revisions";
+        if ("VENDOR".equals(accountType) && pattern.contains("/quotations/") && pattern.contains("/revisions")) {
+            path = path.replace("00000000-0000-4000-8000-000000000001", revisionFixtureId.toString());
         }
         return path;
     }
