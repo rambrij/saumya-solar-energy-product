@@ -34,22 +34,26 @@
 
 ## Remaining inventory work
 
-1. Complete the remaining scan outside the service package: all backend Java packages, application event listeners, Spring executor configuration, export/report paths, and external queue consumers. The 41-file service-package scan found no `@Async` or executor submissions, but this is not yet a repository-wide proof.
+1. The repository-wide static scan is complete for checked-in source and deployment configuration. The remaining discovery item is external-runtime confirmation: inspect the deployed Render/AWS/other cloud project, platform scheduled jobs, managed queues, and environment-specific worker overrides with the infrastructure owner. Those resources are not represented in this repository.
 2. Added `TenantExecutionContextTest` nested exception and reused-single-thread cleanup cases; continue cancellation and all worker exit-path tests.
 3. Notification retries now use an atomic tenant-qualified claim. Add MySQL multi-instance duplicate-delivery tests and idempotency tests for every integration/notification adapter.
 4. Do not pass a tenant ID from a browser or untrusted payload directly into the context; resolve it from a trusted tenant row/job record first.
 
 ## Acceptance
 
-This inventory is a partial, evidence-based list, not a claim that no other asynchronous work exists. Phase 2 job-scoping cannot be marked MET until the repository-wide worker inventory and all worker failure/cancellation/idempotency tests are complete.
+Repository-wide checked-in-source discovery is MET based on CI artifact phase2-async-worker-inventory (run 42911955413, artifact 13806429908). This is not proof about external cloud resources, production-only environment registrations, or runtime configuration. Worker isolation, retry, cancellation and idempotency correctness remain separate tests; external-runtime inventory remains open until the infrastructure owner supplies deployment evidence.
 
 
-## Repository-wide scanner added — 2026-11-10
+## Repository-wide scanner and CI evidence — 2026-11-10
 
-- Added scripts/audit/scan-async-workers.sh to scan backend Java source for @Scheduled, @Async, executor declarations/submissions, CompletableFuture, application event listeners/producers, messaging/queue consumer annotations and startup runners. It also scans backend resource and GitHub workflow configuration for scheduler/worker declarations.
-- release-validation.yml runs the scanner on every push to this audit branch and uploads its output as a 30-day artifact. The current source review identifies exactly seven scheduled methods/classes: AuthenticationRateLimitCleanup, ExportService.recoverAndExpire, IntegrationSyncScheduler, NotificationService.retryFailedDeliveries, ServiceSlaScheduler, SubscriptionExpiryScheduler and WarrantyExpiryScheduler. It also identifies two @Async application listeners (ExportEventListener and BusinessNotificationEventListener) using the bounded applicationEventExecutor.
-- A checked-in scanner and uploaded artifact improve reproducibility but do not themselves prove that every hit is tenant-safe. The artifact must be reviewed and each discovered boundary added to the table above. Queue consumers, event listeners and framework-managed async boundaries remain unverified until that scan output is reviewed.
-
+- `scripts/audit/scan-async-workers.sh` scans the repository root across Java/Spring, JavaScript/TypeScript, Python/Go/Ruby, cloud queue/event client signatures, and deployment/workflow configuration. It excludes generated/dependency folders, test source, and its own scanner file.
+- CI run `42911955413`, artifact `13806429908`, was downloaded and reviewed. It reports exactly seven `@Scheduled` triggers: `AuthenticationRateLimitCleanup`, `ExportService.recoverAndExpire`, `IntegrationSyncScheduler`, `NotificationService.retryFailedDeliveries`, `ServiceSlaScheduler`, `SubscriptionExpiryScheduler`, and `WarrantyExpiryScheduler`.
+- The scan identifies two `@Async` application listeners (`ExportEventListener`, `BusinessNotificationEventListener`) and one bounded `ThreadPoolTaskExecutor` (`applicationEventExecutor`, 2 core / 4 max / queue capacity 100 / `CallerRunsPolicy`).
+- No checked-in Kafka/RabbitMQ/AMQP/JMS/SQS/SNS/EventBridge consumer or producer client was found. The durable integration queue is database-backed (`IntegrationSyncJob`), populated by `IntegrationManagementService.enqueue` and `enqueueAccountingEvent`, and consumed by `IntegrationSyncScheduler.dispatch` using tenant-qualified atomic `claimIfDue`.
+- No Python/Go/Ruby worker primitives or BullMQ/Agenda/node-cron worker clients were found. The frontend hit in `Phase2AdminPanel.tsx` is a browser `setTimeout` used to poll an export's status; it is not a server worker. `EnterpriseSaasPanel` enqueues integration jobs and `OfflineSyncPanel` stores user actions in the browser; neither is a worker process.
+- `docker-compose.yml` declares only `mysql`, `mailpit`, `backend`, and `frontend`; it does not declare a separate worker container. No Kubernetes, Terraform, Render Blueprint, or Serverless deployment file is checked in. This cannot prove that the cloud provider has no separately configured cron jobs, queues, or worker services.
+- Startup runners: `DataSeeder.seedData` and `PlatformAdminBootstrap.bootstrapPlatformAdmin`. Both default to disabled in `application.yml`; local `docker-compose.yml` explicitly sets `SEED_DATA_ENABLED=true` for demo development. Production must override it to `false`. `PLATFORM_BOOTSTRAP_ENABLED` must also remain false unless a reviewed one-time bootstrap is explicitly approved.
+- The static inventory is complete for repository-controlled code/config. Production/runtime configuration outside Git remains an owner verification task.
 
 ## Repository scan findings — CI run 42843505138
 
