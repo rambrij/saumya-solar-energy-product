@@ -56,4 +56,41 @@ class NotificationServiceTest {
         assertNotNull(failed.getNextAttemptAt());
         assertTrue(failed.getNextAttemptAt().isAfter(Instant.now()));
     }
+    @Test
+    void scheduledRetryRunsInsideTheDeliveryTenantContextAndClearsItAfterward() {
+        JavaMailSender sender = mock(JavaMailSender.class);
+        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
+        UUID tenantId = UUID.randomUUID();
+        NotificationDelivery record = new NotificationDelivery();
+        record.setId(UUID.randomUUID());
+        record.setTenantId(tenantId);
+        record.setUserId(UUID.randomUUID());
+        record.setChannel("EMAIL");
+        record.setRecipient("customer@example.test");
+        record.setSubject("Retry test");
+        record.setMessageBody("Retry body");
+        record.setStatus("FAILED");
+        record.setAttemptCount(1);
+        record.setNextAttemptAt(Instant.now().minusSeconds(5));
+        when(repository.findTop50ByStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(eq("FAILED"), any()))
+                .thenReturn(java.util.List.of(record));
+        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doAnswer(invocation -> {
+            assertEquals(tenantId, com.saumyasolar.security.TenantExecutionContext.requireTenantId());
+            return null;
+        }).when(sender).send(any(SimpleMailMessage.class));
+
+        NotificationService service = new NotificationService(
+                sender, repository, "no-reply@example.test", "http://localhost:3000"
+        );
+        service.retryFailedDeliveries();
+
+        verify(sender).send(any(SimpleMailMessage.class));
+        assertEquals("DELIVERED", record.getStatus());
+        assertThrows(
+                IllegalStateException.class,
+                com.saumyasolar.security.TenantExecutionContext::requireTenantId
+        );
+    }
+
 }
