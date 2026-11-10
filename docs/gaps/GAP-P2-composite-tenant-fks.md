@@ -76,3 +76,6 @@ CI update (2026-11-10): workflow 42821756695 passed all four jobs, including 163
 
 - `.github/workflows/release-validation.yml` now executes `docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql` after V57/V58 on the disposable MySQL 8.4 migration schema and uploads the output as `phase-1-2-tenant-schema-inventory` (commit `bebb1a6e`).
 - This provides an automatically refreshed schema/FK/unique-index inventory for the CI migration schema. It does not prove the production schema or production data has the same shape; the approved production-like preflight remains open.
+
+
+CI inventory verification (2026-11-10): workflow `42828454430` passed the new read-only tenant schema/FK/unique-index inventory step on the disposable MySQL 8.4 migrated schema and uploaded the inventory artifact. This is CI schema evidence only; production-like/production data NULL-tenant and orphan preflight plus a full tenant-owned classification remain open.
