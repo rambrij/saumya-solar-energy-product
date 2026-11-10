@@ -75,6 +75,7 @@ class NotificationServiceTest {
         record.setNextAttemptAt(Instant.now().minusSeconds(5));
         when(repository.findTop50ByStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(eq("FAILED"), any()))
                 .thenReturn(java.util.List.of(record));
+        when(repository.claimFailedDelivery(eq(record.getId()), eq(tenantId), any())).thenReturn(1);
         when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
         doAnswer(invocation -> {
             assertEquals(tenantId, com.saumyasolar.security.TenantExecutionContext.requireTenantId());
@@ -92,6 +93,31 @@ class NotificationServiceTest {
                 IllegalStateException.class,
                 com.saumyasolar.security.TenantExecutionContext::requireTenantId
         );
+    }
+
+    @Test
+    void scheduledRetrySkipsDeliveryClaimedByAnotherWorker() {
+        JavaMailSender sender = mock(JavaMailSender.class);
+        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
+        NotificationDelivery record = new NotificationDelivery();
+        record.setId(UUID.randomUUID());
+        record.setTenantId(UUID.randomUUID());
+        record.setChannel("EMAIL");
+        record.setRecipient("customer@example.test");
+        record.setSubject("Concurrent retry");
+        record.setMessageBody("Retry body");
+        record.setStatus("FAILED");
+        record.setAttemptCount(1);
+        record.setNextAttemptAt(Instant.now().minusSeconds(5));
+        when(repository.findTop50ByStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(eq("FAILED"), any()))
+                .thenReturn(java.util.List.of(record));
+        when(repository.claimFailedDelivery(eq(record.getId()), eq(record.getTenantId()), any())).thenReturn(0);
+
+        new NotificationService(sender, repository, "no-reply@example.test", "http://localhost:3000")
+                .retryFailedDeliveries();
+
+        verifyNoInteractions(sender);
+        verify(repository, never()).save(any(NotificationDelivery.class));
     }
 
 }
