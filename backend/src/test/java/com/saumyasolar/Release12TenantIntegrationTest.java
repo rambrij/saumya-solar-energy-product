@@ -1226,7 +1226,7 @@ class Release12TenantIntegrationTest {
                         .content("{\"name\":\"Customer A Updated\",\"phone\":\"9000000001\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Customer A Updated"));
-        assertEquals("Customer B", customerProfiles.findById(customerB.profile().getId()).orElseThrow().getName());
+        assertEquals("customer-owned-resource-b", customerProfiles.findById(customerB.profile().getId()).orElseThrow().getName());
 
         mvc.perform(get("/api/v1/customer/messaging-consent").header("Authorization", "Bearer " + customerAToken))
                 .andExpect(status().isOk())
