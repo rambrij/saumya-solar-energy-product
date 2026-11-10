@@ -7,28 +7,27 @@ if [[ ! -d "$ROOT" ]]; then
   exit 2
 fi
 
+scan_java() {
+  local title="$1"
+  local pattern="$2"
+  echo "## $title"
+  grep -RInE --include='*.java' "$pattern" "$ROOT" || true
+  echo
+}
+
 echo "# Repository asynchronous and scheduled execution inventory"
 echo "# Root: $ROOT"
 echo "# Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo
-echo "## Scheduled triggers"
-rg -n -C 2 --glob '*.java' '@Scheduled' "$ROOT" || true
-echo
-echo "## Async annotations and executor declarations/submissions"
-rg -n -C 2 --glob '*.java' '@Async|ExecutorService|ScheduledExecutorService|ThreadPoolTaskExecutor|TaskExecutor|TaskScheduler|CompletableFuture|ForkJoinPool|new Thread\(|\.submit\(|\.execute\(' "$ROOT" || true
-echo
-echo "## Application event producers and listeners"
-rg -n -C 2 --glob '*.java' '@EventListener|@TransactionalEventListener|ApplicationEventPublisher|publishEvent\(' "$ROOT" || true
-echo
-echo "## Messaging and queue consumers/producers"
-rg -n -C 2 --glob '*.java' '@KafkaListener|@RabbitListener|@JmsListener|KafkaTemplate|RabbitTemplate|JmsTemplate|MessageListener|Queue|Topic' "$ROOT" || true
-echo
-echo "## Startup runners (review for one-shot data mutation and bootstrap behavior)"
-rg -n -C 2 --glob '*.java' 'CommandLineRunner|ApplicationRunner' "$ROOT" || true
-echo
+scan_java "Scheduled triggers" '@Scheduled'
+scan_java "Async annotations and executor declarations/submissions" '@Async|ExecutorService|ScheduledExecutorService|ThreadPoolTaskExecutor|TaskExecutor|TaskScheduler|CompletableFuture|ForkJoinPool|new Thread\(|\.submit\(|\.execute\('
+scan_java "Application event producers and listeners" '@EventListener|@TransactionalEventListener|ApplicationEventPublisher|publishEvent\('
+scan_java "Messaging and queue consumers/producers" '@KafkaListener|@RabbitListener|@JmsListener|KafkaTemplate|RabbitTemplate|JmsTemplate|MessageListener|Queue|Topic'
+scan_java "Startup runners" 'CommandLineRunner|ApplicationRunner'
+
 echo "## Non-Java workflow/scheduler definitions"
 for directory in backend/src/main/resources .github/workflows; do
   if [[ -d "$directory" ]]; then
-    rg -n -C 1 --glob '*.yml' --glob '*.yaml' --glob '*.properties' --glob '*.xml' 'schedule:|fixedDelay|fixedRate|cron:|scheduler|worker|queue|consumer' "$directory" || true
+    grep -RInE --include='*.yml' --include='*.yaml' --include='*.properties' --include='*.xml' 'schedule:|fixedDelay|fixedRate|cron:|scheduler|worker|queue|consumer' "$directory" || true
   fi
 done
