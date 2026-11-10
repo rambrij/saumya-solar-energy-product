@@ -101,6 +101,8 @@ class Release12TenantIntegrationTest {
     @Autowired
     MockMvc mvc;
     @Autowired
+    jakarta.persistence.EntityManager entityManager;
+    @Autowired
     ObjectMapper json;
     @Autowired
     AppUserRepository users;
@@ -1500,8 +1502,11 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isConflict());
 
         // The integration test is transactional, so the after-commit worker event is intentionally
-        // not published until the test ends. Process the persisted job synchronously to exercise
-        // the completed-file HTTP download path as well as the pending-state denial above.
+        // not published until the test ends. Detach the just-created PENDING entity before invoking
+        // the worker directly: the worker's atomic claim is a bulk update and production workers
+        // run with a separate persistence context.
+        entityManager.flush();
+        entityManager.clear();
         exportService.process(UUID.fromString(exportId), vendorTenantId);
 
         String completedStatus = mvc.perform(get("/api/v1/exports/" + exportId)
