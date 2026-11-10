@@ -110,5 +110,34 @@ class ExportServiceTest {
         assertThrows(ResponseStatusException.class,
                 () -> service().status(id, principal(tenant, user, Set.of("REPORT_EXPORT"))));
         verify(jobs).findByIdAndTenantIdAndRequestedBy(id, tenant, user);
+    } 
+    @Test
+    void expiryCleanupLoadsAndDeletesExportsInsideTheirTenantScope() throws Exception {
+        UUID tenant = UUID.randomUUID();
+        ExportJob expired = new ExportJob();
+        expired.setId(UUID.randomUUID());
+        expired.setTenantId(tenant);
+        expired.setStatus("COMPLETED");
+        expired.setStorageKey(tenant + "/exports/" + expired.getId() + ".csv");
+        when(jobs.findDistinctTenantIdsForExpiry(any())).thenReturn(java.util.List.of(tenant));
+        when(jobs.findTop100ByTenantIdAndStatusAndExpiresAtBeforeOrderByExpiresAtAsc(
+                eq(tenant), eq("COMPLETED"), any())).thenAnswer(invocation -> {
+                    assertEquals(tenant, com.saumyasolar.security.TenantExecutionContext.requireTenantId());
+                    return java.util.List.of(expired);
+                });
+        when(jobs.save(any(ExportJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doAnswer(invocation -> {
+            assertEquals(tenant, com.saumyasolar.security.TenantExecutionContext.requireTenantId());
+            return null;
+        }).when(storage).delete(any(), eq(expired.getStorageKey()));
+
+        service().recoverAndExpire();
+
+        assertEquals("EXPIRED", expired.getStatus());
+        assertNull(expired.getStorageKey());
+        verify(storage).delete(any(), eq(tenant + "/exports/" + expired.getId() + ".csv"));
+        assertThrows(IllegalStateException.class,
+                com.saumyasolar.security.TenantExecutionContext::requireTenantId);
     }
+
 }
