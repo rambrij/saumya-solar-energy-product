@@ -46,3 +46,10 @@ The backend domain model includes the following tenant/business areas. The entit
 ## 5. Status
 
 **PARTIAL — Critical.** V57/V58 implement broad composite-FK protection and their CI preflight has passed on a disposable MySQL database. The complete live schema inventory, tenant-owned table NOT NULL proof, all-FK graph, unique-index inventory and production-data preflight are not yet executed. Do not mark P2-TEN-001/P2-TEN-004 MET until those artifacts exist and pass.
+
+
+## 6. Executable metadata and row-count audit update — 2026-11-10
+
+docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql now executes an exact COUNT(*) / SUM(tenant_id IS NULL) query for every base table exposing tenant_id, reports the declared nullability, inventories every FK and unique index, and flags tables with no tenant column. It explicitly labels app_user and role as mixed-scope candidates and does not silently classify all other tables as tenant-owned or global.
+
+This is now executable evidence collection, not yet the requested proof: it must run against the actual production schema and its complete result set must be reviewed. Every table still needs an owner-approved TENANT_OWNED / PLATFORM_GLOBAL / MIXED decision. A tenant-owned table passes only when the column is declared NOT NULL and the exact NULL count is zero. Production data remains unexamined in this session.
