@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   production-preflight:
-    name: Read-only V57/V58 integrity preflight
+    name: Production tenant-integrity and schema preflight
     runs-on: ubuntu-latest
     environment: production
     steps:
