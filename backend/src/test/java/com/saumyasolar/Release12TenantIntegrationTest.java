@@ -1325,17 +1325,40 @@ class Release12TenantIntegrationTest {
         foreignClaim.setUpdatedAt(Instant.now());
         warrantyClaims.save(foreignClaim);
 
+        Warranty customerBWarranty = new Warranty();
+        customerBWarranty.setId(UUID.randomUUID());
+        customerBWarranty.setTenantId(vendorTenantId);
+        customerBWarranty.setCustomerId(customerB.profile().getId());
+        customerBWarranty.setStatus("ACTIVE");
+        customerBWarranty.setStartDate(java.time.LocalDate.now().minusDays(5));
+        customerBWarranty.setEndDate(java.time.LocalDate.now().plusDays(30));
+        warranties.save(customerBWarranty);
+        WarrantyClaim customerBClaim = new WarrantyClaim();
+        customerBClaim.setId(UUID.randomUUID());
+        customerBClaim.setTenantId(vendorTenantId);
+        customerBClaim.setWarrantyId(customerBWarranty.getId());
+        customerBClaim.setCustomerId(customerB.profile().getId());
+        customerBClaim.setClaimNumber("CUSTOMER-B-CLAIM-" + UUID.randomUUID().toString().substring(0, 8));
+        customerBClaim.setSubject("Customer B claim");
+        customerBClaim.setDescription("Same-tenant customer isolation fixture");
+        customerBClaim.setStatus("SUBMITTED");
+        customerBClaim.setCreatedAt(Instant.now());
+        customerBClaim.setUpdatedAt(Instant.now());
+        warrantyClaims.save(customerBClaim);
+
         var customerAToken = accessToken(customerA.user().getEmail(), "Customer-Password-2026");
         var customerBToken = accessToken(customerB.user().getEmail(), "Customer-Password-2026");
         String customerAClaims = mvc.perform(get("/api/v1/customer/warranty-claims")
                         .header("Authorization", "Bearer " + customerAToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertFalse(customerAClaims.contains(foreignClaim.getId().toString()));
+        assertFalse(customerAClaims.contains(customerBClaim.getId().toString()));
 
         String customerBClaims = mvc.perform(get("/api/v1/customer/warranty-claims")
                         .header("Authorization", "Bearer " + customerBToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertTrue(customerBClaims.contains(foreignClaim.getId().toString()));
+        assertFalse(customerBClaims.contains(foreignClaim.getId().toString()));
+        assertTrue(customerBClaims.contains(customerBClaim.getId().toString()));
 
         mvc.perform(post("/api/v1/customer/warranty-claims")
                         .header("Authorization", "Bearer " + customerAToken)
