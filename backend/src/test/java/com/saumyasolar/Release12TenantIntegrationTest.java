@@ -1038,6 +1038,88 @@ class Release12TenantIntegrationTest {
         assertEquals(customerA.profile().getId().toString(), createdJson.get("customerId").asText());
     }
 
+
+    @Test
+    void customerCannotReadAnotherCustomersOrdersInvoicesOrServiceTickets() throws Exception {
+        var customerA = createCustomer(vendorTenantId, "customer-scope-a");
+        var customerB = createCustomer(vendorTenantId, "customer-scope-b");
+        var vendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+
+        CustomerOrder order = new CustomerOrder();
+        order.setId(UUID.randomUUID());
+        order.setTenantId(vendorTenantId);
+        order.setCustomerId(customerB.profile().getId());
+        order.setOrderNumber("CUSTOMER-B-" + UUID.randomUUID().toString().substring(0, 8));
+        order.setStatus("CONFIRMED");
+        order.setSubtotal(BigDecimal.TEN);
+        order.setDiscountPercent(BigDecimal.ZERO);
+        order.setDiscountAmount(BigDecimal.ZERO);
+        order.setTaxTotal(BigDecimal.ZERO);
+        order.setTotal(BigDecimal.TEN);
+        order.setCreatedAt(Instant.now());
+        customerOrders.save(order);
+
+        Invoice invoice = new Invoice();
+        invoice.setId(UUID.randomUUID());
+        invoice.setTenantId(vendorTenantId);
+        invoice.setOrderId(order.getId());
+        invoice.setInvoiceNumber("CUSTOMER-B-INV-" + UUID.randomUUID().toString().substring(0, 8));
+        invoice.setFiscalYear("2026-27");
+        invoice.setStatus("ISSUED");
+        invoice.setCustomerName(customerB.profile().getName());
+        invoice.setCustomerEmail(customerB.profile().getEmail());
+        invoice.setVendorName("Saumya Solar");
+        invoice.setCurrency("INR");
+        invoice.setSubtotal(BigDecimal.TEN);
+        invoice.setTaxTotal(BigDecimal.ZERO);
+        invoice.setGrandTotal(BigDecimal.TEN);
+        invoice.setTaxTreatment("INTRA_STATE");
+        invoice.setDueDate(java.time.LocalDate.now().plusDays(30));
+        invoice.setIssuedAt(Instant.now());
+        invoice.setCreatedBy(vendor.getId());
+        invoice.setCreatedAt(Instant.now());
+        invoices.save(invoice);
+
+        ServiceRequest ticket = new ServiceRequest();
+        ticket.setId(UUID.randomUUID());
+        ticket.setTenantId(vendorTenantId);
+        ticket.setCustomerId(customerB.profile().getId());
+        ticket.setTicketNumber("CUSTOMER-B-SVC-" + UUID.randomUUID().toString().substring(0, 8));
+        ticket.setCategory("GENERAL");
+        ticket.setPriority("LOW");
+        ticket.setDescription("Private customer B service ticket");
+        ticket.setWarrantyStatus("UNKNOWN");
+        ticket.setStatus("OPEN");
+        ticket.setCreatedAt(Instant.now());
+        ticket.setUpdatedAt(Instant.now());
+        serviceRequests.save(ticket);
+
+        var token = accessToken(customerA.user().getEmail(), "Customer-Password-2026");
+        var ordersJson = mvc.perform(get("/api/v1/customer/product-orders")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(ordersJson.contains(order.getId().toString()));
+
+        var invoicesJson = mvc.perform(get("/api/v1/invoices")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(invoicesJson.contains(invoice.getId().toString()));
+        mvc.perform(get("/api/v1/invoices/" + invoice.getId() + "/items")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/invoices/" + invoice.getId() + "/pdf")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+
+        var ticketsJson = mvc.perform(get("/api/v1/service-requests")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(ticketsJson.contains(ticket.getId().toString()));
+        mvc.perform(get("/api/v1/service-requests/" + ticket.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+    }
+
     @Test
     void vendorBranchEndpointsCannotReadOrMutateAnotherTenantsBranch() throws Exception {
         var foreignTenant = newTenant();
