@@ -1782,12 +1782,13 @@ class Release12TenantIntegrationTest {
         SiteSurvey surveyB = survey(vendorTenantId, branchB.getId(), member.getId(), leadB.getId());
         surveys.saveAllAndFlush(List.of(surveyA, surveyB));
 
-        Quotation quoteA = quotation(vendorTenantId, branchA.getId(), member.getId(), leadA.getId());
-        Quotation quoteB = quotation(vendorTenantId, branchB.getId(), member.getId(), leadB.getId());
+        var branchCustomer = createCustomer(vendorTenantId, "branch-scope-customer");
+        Quotation quoteA = quotation(vendorTenantId, branchA.getId(), member.getId(), leadA.getId(), branchCustomer.profile().getId());
+        Quotation quoteB = quotation(vendorTenantId, branchB.getId(), member.getId(), leadB.getId(), branchCustomer.profile().getId());
         quotations.saveAllAndFlush(List.of(quoteA, quoteB));
 
-        CustomerOrder orderA = order(vendorTenantId, branchA.getId(), quoteA.getId());
-        CustomerOrder orderB = order(vendorTenantId, branchB.getId(), quoteB.getId());
+        CustomerOrder orderA = order(vendorTenantId, branchA.getId(), quoteA.getId(), branchCustomer.profile().getId());
+        CustomerOrder orderB = order(vendorTenantId, branchB.getId(), quoteB.getId(), branchCustomer.profile().getId());
         customerOrders.saveAllAndFlush(List.of(orderA, orderB));
 
         String token = accessToken(member.getEmail(), "Branch-Member-Password-2026");
@@ -1854,7 +1855,7 @@ class Release12TenantIntegrationTest {
         return row;
     }
 
-    private Quotation quotation(UUID tenantId, UUID branchId, UUID createdBy, UUID leadId) {
+    private Quotation quotation(UUID tenantId, UUID branchId, UUID createdBy, UUID leadId, UUID customerId) {
         Quotation row = new Quotation();
         row.setId(UUID.randomUUID());
         row.setTenantId(tenantId);
@@ -1862,6 +1863,7 @@ class Release12TenantIntegrationTest {
         row.setQuotationNumber("BR-Q-" + UUID.randomUUID().toString().substring(0, 8));
         row.setRevision(1);
         row.setLeadId(leadId);
+        row.setCustomerId(customerId);
         row.setCreatedBy(createdBy);
         row.setStatus("DRAFT");
         row.setSubtotal(BigDecimal.ZERO);
@@ -1873,12 +1875,13 @@ class Release12TenantIntegrationTest {
         return row;
     }
 
-    private CustomerOrder order(UUID tenantId, UUID branchId, UUID quotationId) {
+    private CustomerOrder order(UUID tenantId, UUID branchId, UUID quotationId, UUID customerId) {
         CustomerOrder row = new CustomerOrder();
         row.setId(UUID.randomUUID());
         row.setTenantId(tenantId);
         row.setBranchId(branchId);
         row.setQuotationId(quotationId);
+        row.setCustomerId(customerId);
         row.setOrderNumber("BR-O-" + UUID.randomUUID().toString().substring(0, 8));
         row.setStatus("DRAFT");
         row.setSubtotal(BigDecimal.ZERO);
