@@ -321,7 +321,7 @@ jobs:
 
   mysql-app-startup:
     name: Start Spring Boot against MySQL 8.4 and Mailpit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       mailpit:
         image: axllent/mailpit:latest
