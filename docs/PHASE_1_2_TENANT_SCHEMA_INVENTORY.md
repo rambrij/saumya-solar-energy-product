@@ -32,20 +32,40 @@ The backend domain model includes the following tenant/business areas. The entit
 | Integrations and offline | IntegrationConnection, IntegrationSyncJob, IntegrationWebhookEvent, OfflineSyncOperation, OfflineSyncAttachment, IdempotencyRecord, IntegrationSecretReference | V58 covers secret reference and offline links; integration connection/job/webhook FKs and tenant nullability need review |
 | Audit and notifications | AuditEvent, NotificationDelivery | V58 covers selected actor/tenant relationships; verify event/consent ownership and retention tables |
 
-## 4. Known gaps to close
+## 4. CI schema-audit findings and V60 remediation
 
-1. Execute the read-only SQL against the exact production-like MySQL schema and archive its output with the release evidence.
-2. Compare every actual base table with the domain/JPA mapping and SRS entity list; include join tables, webhook tables, idempotency records, and legacy tables.
-3. For each table, classify `TENANT_OWNED`, `PLATFORM_GLOBAL`, or `MIXED`; document the reason and owner.
-4. For every tenant-owned table, prove `tenant_id IS NOT NULL` and zero NULL rows. Do not make `app_user` or `role` globally NOT NULL without separating platform/global rows.
-5. Inventory every FK between tenant-owned entities and require a composite FK on `(tenant_id, referenced_id)` where applicable. Document exceptions such as globally shared reference data.
-6. Inventory tenant-scoped unique constraints and verify each business natural key includes `tenant_id`.
-7. Add new Flyway migrations only after the inventory and NULL/orphan preflight have been reviewed. Backfill only when the parent relationship unambiguously identifies the tenant; otherwise fail closed and require operator remediation.
-8. Run fresh-schema and upgrade-schema migration tests on MySQL 8.4, then run the same read-only preflight against an approved production snapshot.
+The read-only schema audit artifact from CI run 42842355967 (fresh disposable MySQL 8.4 schema, before V60) enumerated 70 base tables. It identified 57 tables with a tenant_id column and 7 base tables without one, excluding the tenant registry/global reference tables in the classification output.
 
-## 5. Status
+The exact 12 tenant_id columns declared nullable in that CI schema were:
+- Mixed-scope: app_user, role, audit_event.
+- Tenant-owned: customer_order, idempotency_record, integration_webhook_event, lead_history, notification_delivery, order_item, quotation, quotation_item, site_survey.
 
-**PARTIAL — Critical.** V57/V58 implement broad composite-FK protection and their CI preflight has passed on a disposable MySQL database. The complete live schema inventory, tenant-owned table NOT NULL proof, all-FK graph, unique-index inventory and production-data preflight are not yet executed. Do not mark P2-TEN-001/P2-TEN-004 MET until those artifacts exist and pass.
+All nine tenant-owned tables had zero NULL tenant_id rows in that disposable CI dataset, but the schema still allowed NULL. V60 now changes these nine columns to NOT NULL and the corresponding JPA entities declare @Column(nullable=false). The migration fails closed if any NULL remains; it performs no backfill or guessed tenant assignment.
+
+Mixed-scope tables remain nullable by design:
+- app_user: platform users have no tenant; vendor/customer users must be tenant-bound.
+- role: platform roles have no tenant; vendor roles must be tenant-bound.
+- audit_event: platform audit events may have no tenant; tenant audit events are tenant-bound.
+
+Tables without tenant_id are classified as:
+- PLATFORM_GLOBAL candidates: permission, subscription_plan, auth_rate_limit_bucket, payment_webhook_event, and tenant registry.
+- USER_SCOPED via app_user: mfa_challenge, password_reset_token, refresh_token.
+- JOIN_TABLE scope inherited from parents: role_permission and user_role.
+
+These classifications are grounded in current schema/entity usage but still require data-owner approval. The production preflight now rejects NULL tenant_id in the nine tenant-owned tables and rejects app_user/role rows whose tenant_id does not match their platform-vs-tenant identity classification. It must be executed against production before V60 rollout.
+
+## 5. Remaining schema proof and release gates
+
+1. Execute the read-only SQL against the exact production schema and archive its complete output.
+2. Obtain data-owner sign-off for every PLATFORM_GLOBAL, USER_SCOPED, JOIN_TABLE, MIXED and TENANT_OWNED classification above.
+3. Confirm every TENANT_OWNED table has tenant_id IS_NULLABLE=NO and exact null_tenant_rows=0 in production.
+4. Reconcile every FK and unique index in the audit output against the SRS and migration graph, including join tables and user-scoped security tables.
+5. Review production preflight output and backup/change-window approval before applying V57/V58/V60. Never backfill a NULL tenant without a proven parent mapping and approved repair.
+6. Run fresh-schema and upgrade-schema migration tests on MySQL 8.4 after V60, then retain production preflight evidence and DBA approval.
+
+## 6. Status
+
+**PARTIAL — Critical.** V57/V58 implement broad composite-FK protection. V60 now enforces NOT NULL for the nine tenant-owned columns that the CI schema inventory found nullable. The disposable MySQL schema audit is complete and exact counts are archived, but production classification, production NULL counts, complete FK/unique-index review and production data preflight remain outstanding. Do not mark P2-TEN-001/P2-TEN-004 MET until production evidence and data-owner/DBA sign-off exist.
 
 
 ## 6. Executable metadata and row-count audit update — 2026-11-10
