@@ -125,8 +125,14 @@ class EndpointAuthenticationMatrixTest {
                 for (var method : methods) {
                     if (method == org.springframework.web.bind.annotation.RequestMethod.OPTIONS) continue;
                     String path = probePath(pattern, handler);
-                    int status = mvc.perform(mutationRequest(method, path, handler, mapper))
-                            .andReturn().getResponse().getStatus();
+                    MockHttpServletRequestBuilder publicRequest = mutationRequest(method, path, handler, mapper);
+                    if (pattern.equals("/api/v1/auth/refresh") || pattern.equals("/api/v1/auth/logout")) {
+                        // These routes are bearer-public but intentionally CSRF-protected.
+                        String csrf = "public-route-matrix-csrf";
+                        publicRequest.cookie(new jakarta.servlet.http.Cookie("XSRF-TOKEN", csrf))
+                                .header("X-CSRF-Token", csrf);
+                    }
+                    int status = mvc.perform(publicRequest).andReturn().getResponse().getStatus();
                     checked.add(method + " " + pattern);
                     // 400/401/404 are valid for malformed credentials, signatures or missing public resources.
                     // 403 would mean a role/permission gate was accidentally applied to an allowlisted route.
