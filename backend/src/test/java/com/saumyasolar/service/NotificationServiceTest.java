@@ -138,7 +138,7 @@ class NotificationServiceTest {
         record.setChannel("EMAIL");
         record.setRecipient("customer@example.test");
         record.setSubject("Retry test");
-        record.setMessageBody("Retry body");
+        record.setMessageBody(tenantId.toString());
         record.setStatus("FAILED");
         record.setAttemptCount(1);
         record.setNextAttemptAt(Instant.now().minusSeconds(5));
