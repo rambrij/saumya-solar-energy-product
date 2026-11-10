@@ -98,6 +98,34 @@ class WarrantyClaimAttachmentServiceTest {
     }
 
     @Test
+    void ownerCanDownloadOnlyTheAttachmentBelongingToTheirClaim() throws Exception {
+        UUID tenant = UUID.randomUUID();
+        UUID claimId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
+        UUID attachmentId = UUID.randomUUID();
+        String storageKey = tenant + "/warranty-claims/evidence.pdf";
+        var claim = claim(claimId, tenant, customerId);
+        var attachment = new com.saumyasolar.domain.WarrantyClaimAttachment();
+        attachment.setId(attachmentId);
+        attachment.setTenantId(tenant);
+        attachment.setClaimId(claimId);
+        attachment.setStorageKey(storageKey);
+        attachment.setOriginalName("evidence.pdf");
+        attachment.setContentType("application/pdf");
+        byte[] expected = "%PDF-test".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        when(claims.findByIdAndTenantId(claimId, tenant)).thenReturn(Optional.of(claim));
+        when(attachments.findByIdAndTenantIdAndClaimId(attachmentId, tenant, claimId))
+                .thenReturn(Optional.of(attachment));
+        when(storage.get(tempDir.toAbsolutePath().normalize(), storageKey)).thenReturn(expected);
+
+        var downloaded = service.download(claimId, attachmentId, vendor(tenant));
+
+        assertSame(attachment, downloaded.attachment());
+        assertArrayEquals(expected, downloaded.content());
+        verify(attachments).findByIdAndTenantIdAndClaimId(attachmentId, tenant, claimId);
+    }
+
+    @Test
     void customerCannotUploadEvidenceToAnotherCustomersClaim() {
         UUID tenant = UUID.randomUUID();
         UUID customerA = UUID.randomUUID();
