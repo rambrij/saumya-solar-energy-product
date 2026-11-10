@@ -67,7 +67,7 @@ class ExportServiceTest {
         ExportJob job = new ExportJob();
         job.setId(UUID.randomUUID()); job.setTenantId(tenant); job.setRequestedBy(UUID.randomUUID());
         job.setReportType("OPERATIONS"); job.setFormat("CSV"); job.setStatus("PROCESSING");
-        when(jobs.claim(eq(job.getId()), eq(tenant), any(), any())).thenReturn(1);
+        when(jobs.claim(eq(job.getId()), eq(tenant), nullable(LocalDate.class), nullable(LocalDate.class))).thenReturn(1);
         when(jobs.findByIdAndTenantId(job.getId(), tenant)).thenReturn(Optional.of(job));
         when(reports.operationsReportForTenant(eq(tenant), any(), any())).thenReturn(Map.of("orders", 3, "amount", new BigDecimal("10.00")));
         when(storage.putReplacing(any(), eq("exports"), eq(tenant), anyString(), any(), anyString()))
