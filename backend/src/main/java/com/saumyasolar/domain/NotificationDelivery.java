@@ -16,6 +16,7 @@ import java.util.UUID;
 public class NotificationDelivery {
     @Id
     UUID id;
+    @Column(nullable = false)
     UUID tenantId;
     UUID userId;
     @Column(nullable = false, length = 60)
