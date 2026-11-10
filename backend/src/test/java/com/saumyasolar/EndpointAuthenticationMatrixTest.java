@@ -165,6 +165,7 @@ class EndpointAuthenticationMatrixTest {
     @Test
     void authenticatedZeroPermissionVendorIsDeniedEveryProtectedMutationMapping() throws Exception {
         AppUser seededVendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        validTeamMemberId = createValidTeamMember(seededVendor.getTenantId());
         Role emptyRole = new Role();
         emptyRole.setId(UUID.randomUUID());
         emptyRole.setTenantId(seededVendor.getTenantId());
@@ -186,6 +187,8 @@ class EndpointAuthenticationMatrixTest {
 
         List<String> checked = new ArrayList<>();
         List<String> failures = new ArrayList<>();
+        int forbiddenResponses = 0;
+        int nonDisclosingNotFoundResponses = 0;
         for (var entry : mappings.getHandlerMethods().entrySet()) {
             RequestMappingInfo info = entry.getKey();
             HandlerMethod handler = entry.getValue();
@@ -206,6 +209,8 @@ class EndpointAuthenticationMatrixTest {
                     builder.header("Authorization", "Bearer " + token);
                     int status = mvc.perform(builder).andReturn().getResponse().getStatus();
                     checked.add(method + " " + pattern);
+                    if (status == 403) forbiddenResponses++;
+                    else if (status == 404) nonDisclosingNotFoundResponses++;
                     if (status != 403 && status != 404) {
                         failures.add(method + " " + pattern + " returned " + status
                                 + " (expected authorization denial 403 or non-disclosing 404)");
@@ -215,6 +220,9 @@ class EndpointAuthenticationMatrixTest {
         }
         assertTrue(checked.size() >= 100,
                 "The authenticated mutation matrix unexpectedly shrank: only checked " + checked.size());
+        assertTrue(forbiddenResponses >= 50,
+                "The zero-permission mutation sweep did not reach enough explicit permission gates: 403="
+                        + forbiddenResponses + ", non-disclosing 404=" + nonDisclosingNotFoundResponses);
         assertTrue(failures.isEmpty(),
                 "Authenticated vendor mutation endpoints did not deny a user with no permissions:\n"
                         + String.join("\n", failures));
