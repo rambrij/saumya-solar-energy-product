@@ -47,7 +47,7 @@ test('React vendor workspace stays isolated when switching between two tenant ac
 
   async function signIn(email: string, password: string) {
     await page.goto(baseURL!);
-    await page.getByRole('button', { name: 'Login', exact: true }).first().click();
+    await page.locator('button.public-login-link').click({ force: true });
     await page.getByPlaceholder('Email').fill(email);
     await page.getByPlaceholder('Password').fill(password);
     await page.getByRole('button', { name: 'Login', exact: true }).last().click();
