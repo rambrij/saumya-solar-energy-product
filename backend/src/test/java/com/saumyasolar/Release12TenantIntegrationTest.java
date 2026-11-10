@@ -1173,6 +1173,17 @@ class Release12TenantIntegrationTest {
             assertFalse(body.contains(entry.getValue().toString()),
                     "Foreign tenant resource leaked from /" + entry.getKey());
         }
+
+        var customerActor = createCustomer(vendorTenantId, "catalog-customer");
+        var customerToken = accessToken(customerActor.user().getEmail(), "Customer-Password-2026");
+        for (String type : List.of("catalog-categories", "catalog-products", "catalog-packages")) {
+            String body = mvc.perform(get("/api/v1/" + type)
+                            .header("Authorization", "Bearer " + customerToken))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            assertFalse(body.contains(category.getId().toString()));
+            assertFalse(body.contains(product.getId().toString()));
+            assertFalse(body.contains(solarPackage.getId().toString()));
+        }
     }
 
     @Test
