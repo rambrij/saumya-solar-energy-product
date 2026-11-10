@@ -331,7 +331,9 @@ jobs:
         image: mysql:8.4
         env:
           MYSQL_ROOT_PASSWORD: rootpass
-          MYSQL_DATABASE: solar_app_smoke
+          MYSQL_DATABASE: solar
+          MYSQL_USER: solar
+          MYSQL_PASSWORD: solarpass
         ports:
           - 3306:3306
         options: >-
@@ -364,9 +366,11 @@ jobs:
       - name: Start application and verify health
         working-directory: backend
         env:
-          DB_URL: jdbc:mysql://127.0.0.1:3306/solar_app_smoke?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-          DB_USER: root
-          DB_PASSWORD: rootpass
+          # Match the repository's docker-compose.yml local development profile.
+          # These credentials are disposable CI-only values, never production secrets.
+          DB_URL: jdbc:mysql://127.0.0.1:3306/solar?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+          DB_USER: solar
+          DB_PASSWORD: solarpass
           JWT_SECRET: ci-only-secret-with-at-least-sixty-four-characters-for-hmac-sha256-signing-key
           CORS_ORIGINS: http://localhost:5173
           MAIL_HOST: 127.0.0.1
@@ -396,11 +400,11 @@ jobs:
       - name: Execute V57 and V58 integrity preflight against migrated MySQL CI database
         run: |
           cleanup_preflight_routines() {
-            mysql --connect-timeout=15 --host=127.0.0.1 --port=3306 --user=root --password=rootpass solar_app_smoke \
+            mysql --connect-timeout=15 --host=127.0.0.1 --port=3306 --user=solar --password=solarpass solar \
               -e "DROP PROCEDURE IF EXISTS assert_phase2_catalogue_tenant_integrity; DROP PROCEDURE IF EXISTS assert_phase2_operational_tenant_integrity;" || true
           }
           trap cleanup_preflight_routines EXIT
-          mysql --connect-timeout=15 --host=127.0.0.1 --port=3306 --user=root --password=rootpass solar_app_smoke \
+          mysql --connect-timeout=15 --host=127.0.0.1 --port=3306 --user=solar --password=solarpass solar \
             < backend/src/test/resources/tenant-isolation-production-preflight.sql
 
       - name: Set up Node for browser security tests
