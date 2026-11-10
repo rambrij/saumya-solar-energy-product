@@ -12,6 +12,16 @@ activemq='active''mq'
 artemis='arte''mis'
 pulsar='pul''sar'
 nats='na''ts'
+mqtt='m''qtt'
+mosquitto='mosquit''to'
+emqx='em''qx'
+hivemq='hive''mq'
+zeromq='zero''mq'
+ibmmq='ibm''mq'
+mqseries='mq''series'
+eventbridge='event''bridge'
+pubslash='pub''/''sub'
+redis_pubsub='Redis''PubSub'
 qpid='qp''id'
 hornetq='hornet''q'
 rocketmq='rocket''mq'
@@ -40,7 +50,7 @@ rabbit_listener='@''RabbitListener'
 kafka_template='Kafka''Template'
 rabbit_template='Rabbit''Template'
 redis_stream='Redis''Stream'
-pattern="(${kafka}|${rabbit}|${broker}|${amqp}|${jms}|${jms_lower}|${activemq}|${artemis}|${pulsar}|${nats}|${qpid}|${hornetq}|${rocketmq}|${servicebus}|${pubsub}|${kinesis}|${spring_kafka}|${spring_rabbit}|${spring_amqp}|${spring_cloud_stream}|${spring_integration_amqp}|${starter_amqp}|${starter_jms}|${kafka_clients}|${amqp_client}|${sqs}|${sns}|${sqs_lower}|${sns_lower}|${aws_sqs}|${aws_sns}|${sqs_listener}|${stream_listener}|${kafka_listener}|${rabbit_listener}|${kafka_template}|${rabbit_template}|${redis_stream})"
+pattern="(${kafka}|${rabbit}|${broker}|${amqp}|${jms}|${jms_lower}|${activemq}|${artemis}|${pulsar}|${nats}|${mqtt}|${mosquitto}|${emqx}|${hivemq}|${zeromq}|${ibmmq}|${mqseries}|${eventbridge}|${pubslash}|${redis_pubsub}|${qpid}|${hornetq}|${rocketmq}|${servicebus}|${pubsub}|${kinesis}|${spring_kafka}|${spring_rabbit}|${spring_amqp}|${spring_cloud_stream}|${spring_integration_amqp}|${starter_amqp}|${starter_jms}|${kafka_clients}|${amqp_client}|${sqs}|${sns}|${sqs_lower}|${sns_lower}|${aws_sqs}|${aws_sns}|${sqs_listener}|${stream_listener}|${kafka_listener}|${rabbit_listener}|${kafka_template}|${rabbit_template}|${redis_stream})"
 
 set +e
 matches=$(grep -RInI -E "$pattern" . \
