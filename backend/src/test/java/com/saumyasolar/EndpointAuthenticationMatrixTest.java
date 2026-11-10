@@ -11,6 +11,7 @@ import com.saumyasolar.repo.PermissionRepository;
 import com.saumyasolar.repo.QuotationRepository;
 import com.saumyasolar.repo.EnquiryRepository;
 import com.saumyasolar.repo.SalesLeadRepository;
+import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.security.JwtService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.mock.web.MockMultipartFile;
@@ -70,6 +71,7 @@ class EndpointAuthenticationMatrixTest {
     @Autowired QuotationRepository quotations;
     @Autowired EnquiryRepository enquiries;
     @Autowired SalesLeadRepository leads;
+    @Autowired CustomerProfileRepository customers;
     private UUID revisionFixtureId;
     private UUID acceptedQuotationFixtureId;
     private UUID enquiryFixtureId;
@@ -170,6 +172,8 @@ class EndpointAuthenticationMatrixTest {
         quotations.saveAndFlush(revisionFixture);
         revisionFixtureId = revisionFixture.getId();
 
+        var customerProfile = customers.findByTenantIdAndUserId(seededVendor.getTenantId(), customer.getId())
+                .orElseThrow(() -> new AssertionError("Seeded customer profile is required for the order-conversion fixture"));
         Quotation acceptedQuotationFixture = new Quotation();
         acceptedQuotationFixture.setId(UUID.randomUUID());
         acceptedQuotationFixture.setTenantId(seededVendor.getTenantId());
@@ -177,6 +181,7 @@ class EndpointAuthenticationMatrixTest {
         acceptedQuotationFixture.setQuotationNumber("MATRIX-ACCEPTED-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8));
         acceptedQuotationFixture.setRevision(1);
         acceptedQuotationFixture.setStatus("ACCEPTED");
+        acceptedQuotationFixture.setCustomerId(customerProfile.getId());
         acceptedQuotationFixture.setSubtotal(BigDecimal.ONE);
         acceptedQuotationFixture.setDiscountPercent(BigDecimal.ZERO);
         acceptedQuotationFixture.setDiscountAmount(BigDecimal.ZERO);
