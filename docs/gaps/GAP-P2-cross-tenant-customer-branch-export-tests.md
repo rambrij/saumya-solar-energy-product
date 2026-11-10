@@ -95,3 +95,10 @@ Still open: full customer resource family matrix, all branch CRUD/assignment ope
 - Added a same-tenant customer quotation-list negative case and payment receipt owner/foreign-owner assertions to the customer integration test.
 - Service evidence upload requires SERVICE_UPDATE for vendor users and the existing tenant/assigned-ticket guard; a read-only service viewer cannot upload.
 - The complete customer matrix remains open for all other resource families and each exposed export/download route. Existing PDF/XLSX/CSV and attachment tests are selected evidence, not proof that every binary route is covered.
+
+
+### Assigned service evidence download tests — 2026-11-10
+
+- ServiceAttachmentServiceTest now verifies that a read-only assigned engineer with SERVICE_VIEW can download evidence after the ticket scope guard succeeds, and an unassigned engineer is denied before attachment repository/storage access.
+- The service upload test covers SERVICE_UPDATE enforcement; FinanceService's assigned-ticket guard and visit filtering are separately covered by FinanceServiceAssignedVisitScopeTest.
+- Foreign-tenant HTTP attachment access remains covered by Release12TenantIntegrationTest. A same-tenant cross-customer HTTP download/list test is still required before this route family can be marked exhaustive.
