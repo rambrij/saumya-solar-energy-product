@@ -2,7 +2,7 @@
 
 ## Scope
 
-Compare the complete historical Flyway sequence (V1–V63) with the consolidated clean-install baseline using two independent, empty MySQL 8.4 databases. The historical sequence remains in `backend/src/main/resources/db/migration/` during this validation pass; the candidate baseline is `backend/src/test/resources/db/baseline/V1__baseline.sql`.
+Compare the complete historical Flyway sequence (V1–V63) with the consolidated clean-install baseline using two independent, empty MySQL 8.4 databases. The historical sequence remains in `backend/src/main/resources/db/migration/` during this validation pass; the candidate baseline is `backend/src/main/resources/db/migration/V1__baseline.sql`.
 
 ## Commands executed by CI
 
@@ -18,7 +18,7 @@ The workflow normalizes `AUTO_INCREMENT` counters before comparison and uploads 
 
 ## Result
 
-**Pending CI execution.**
+**PASS — MySQL 8.4 schema diff is empty.** CI run `42877367240` applied historical V1–V63 and the consolidated baseline to separate fresh databases; the schema dump comparison returned identical output.
 
 No schema equivalence claim is made until the MySQL 8.4 comparison job passes. The baseline includes all original V1–V61 effects plus the new SRS-required notification idempotency index (V62) and tenant-scoped asynchronous export-job table (V63). These are additions to the documented design, not removals from the historical schema.
 

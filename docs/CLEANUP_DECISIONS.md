@@ -74,7 +74,7 @@ Any later API, event, persisted-data or configuration contract change must be li
 | Read SRS/HLD fully | PASS — 1,388 lines / 65,492 characters. |
 | Read implementation gap analysis fully | PASS — 1,560 lines / 239,969 characters. |
 | Inspect recursive repository tree | PASS — 447 tree entries; no truncated tree response. |
-| Inventory Flyway migrations | PASS — 63 files, V1–V63 (includes the notification idempotency and export-job additions). |
+| Inventory Flyway migrations | PASS — 1 file, V1 baseline (historical V1–V63 are retrieved from Git history only for equivalence validation). |
 | Inventory GitHub workflows | PASS — two workflow files identified. |
 | Inspect local compose, Maven POM, runtime application configuration and primary controllers | PASS — inspected. |
 | Phase 0 source/config/SQL removals | NONE — no deletion was performed. |
