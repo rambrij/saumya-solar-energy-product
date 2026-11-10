@@ -1319,16 +1319,12 @@ class Release12TenantIntegrationTest {
                 .filter(x -> x.getCreatedAt() != null).count();
         assertEquals(expectedOrders, report.get("orders").asLong());
 
-        var csv = mvc.perform(get("/api/v1/reports/operations/export.csv")
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String csv = new String(exportFile(token, "CSV"), java.nio.charset.StandardCharsets.UTF_8);
         assertTrue(csv.contains("orders," + expectedOrders));
         assertFalse(csv.contains("987654"));
         assertFalse(csv.contains(foreignOrder.getId().toString()));
 
-        byte[] xlsx = mvc.perform(get("/api/v1/reports/operations/export.xlsx")
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        byte[] xlsx = exportFile(token, "XLSX");
         try (var workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
                 new java.io.ByteArrayInputStream(xlsx))) {
             var sheet = workbook.getSheet("Operations");
@@ -1346,9 +1342,7 @@ class Release12TenantIntegrationTest {
             assertFalse(new String(xlsx, java.nio.charset.StandardCharsets.ISO_8859_1).contains("987654"));
         }
 
-        byte[] pdf = mvc.perform(get("/api/v1/reports/operations/export.pdf")
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        byte[] pdf = exportFile(token, "PDF");
         String pdfText = new com.lowagie.text.pdf.parser.PdfTextExtractor(
                 new com.lowagie.text.pdf.PdfReader(pdf)).getTextFromPage(1, true);
         assertTrue(pdfText.contains("orders"));
@@ -1728,10 +1722,8 @@ class Release12TenantIntegrationTest {
                         .header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         long serviceTicketsBefore = json.readTree(reportBefore).get("serviceTickets").asLong();
-        mvc.perform(get("/api/v1/reports/operations/export.csv")
-                        .header("Authorization", "Bearer " + vendorToken))
-                .andExpect(status().isOk())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(org.hamcrest.Matchers.containsString("serviceTickets," + serviceTicketsBefore + "\n")));
+        String csv = new String(exportFile(vendorToken, "CSV"), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(csv.contains("serviceTickets," + serviceTicketsBefore));
         mvc.perform(get("/api/v1/platform/tenants/export")
                         .header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isForbidden());
@@ -2389,5 +2381,26 @@ class Release12TenantIntegrationTest {
                         .header("Authorization", "Bearer " + customerToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertTrue(json.readTree(customerOrdersJson).toString().contains(orderId.toString()));
+    }
+
+    private byte[] exportFile(String token, String format) throws Exception {
+        String created = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/exports")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("reportType", "OPERATIONS", "format", format))))
+                .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
+        String exportId = json.readTree(created).get("id").asText();
+        for (int attempt = 0; attempt < 100; attempt++) {
+            String statusBody = mvc.perform(get("/api/v1/exports/" + exportId).header("Authorization", "Bearer " + token))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            JsonNode job = json.readTree(statusBody);
+            String state = job.path("status").asText();
+            if ("FAILED".equals(state)) throw new AssertionError("Export failed: " + job.path("error").asText());
+            if ("COMPLETED".equals(state)) {
+                return mvc.perform(get("/api/v1/exports/" + exportId + "/download").header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+            }
+            Thread.sleep(50);
+        }
+        throw new AssertionError("Timed out waiting for asynchronous " + format + " export");
     }
 }
