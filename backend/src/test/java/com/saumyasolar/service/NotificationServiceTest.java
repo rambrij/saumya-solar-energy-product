@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.UUID;
 import java.time.Instant;
@@ -18,6 +19,31 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class NotificationServiceTest {
+
+    @Test
+    void businessNotificationPublishesApplicationEventInsteadOfBlockingRequestThread() {
+        JavaMailSender sender = mock(JavaMailSender.class);
+        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        NotificationService service = new NotificationService(
+                sender, repository, null, "no-reply@example.test", "http://localhost:3000",
+                "", "", "", "", publisher
+        );
+        UUID tenantId = UUID.randomUUID();
+        boolean accepted = service.sendBusinessNotification(
+                UUID.randomUUID(), tenantId, "QUOTATION_SENT",
+                "customer@example.test", "Your quotation", "Quotation details"
+        );
+
+        assertTrue(accepted);
+        org.mockito.ArgumentCaptor<Object> event = org.mockito.ArgumentCaptor.forClass(Object.class);
+        verify(publisher).publishEvent(event.capture());
+        assertInstanceOf(BusinessNotificationRequestedEvent.class, event.getValue());
+        assertEquals(tenantId, ((BusinessNotificationRequestedEvent) event.getValue()).tenantId());
+        verifyNoInteractions(sender);
+        verifyNoInteractions(repository);
+    }
+
     @Test
     void sendsAndRecordsPasswordResetEmail() {
         JavaMailSender sender = mock(JavaMailSender.class);

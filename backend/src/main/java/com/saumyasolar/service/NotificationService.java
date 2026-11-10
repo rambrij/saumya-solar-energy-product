@@ -5,6 +5,9 @@ import com.saumyasolar.repo.NotificationDeliveryRepository;
 import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.domain.CustomerProfile;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -35,6 +38,7 @@ public class NotificationService {
     private final CustomerProfileRepository customers;
     private final String twilioSid, twilioToken, smsFrom, whatsappFrom;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    private final ApplicationEventPublisher eventPublisher;
     
     public NotificationService(
             JavaMailSender mailSender,
@@ -42,7 +46,7 @@ public class NotificationService {
             String from,
             String publicBaseUrl
     ) {
-        this(mailSender, deliveries, null, from, publicBaseUrl, "", "", "", "");
+        this(mailSender, deliveries, null, from, publicBaseUrl, "", "", "", "", null);
     }
     
     @Autowired
@@ -53,7 +57,8 @@ public class NotificationService {
             @Value("${app.messaging.twilio-account-sid:}") String twilioSid,
             @Value("${app.messaging.twilio-auth-token:}") String twilioToken,
             @Value("${app.messaging.sms-from:}") String smsFrom,
-            @Value("${app.messaging.whatsapp-from:}") String whatsappFrom
+            @Value("${app.messaging.whatsapp-from:}") String whatsappFrom,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.mailSender = mailSender;
         this.deliveries = deliveries;
@@ -64,6 +69,7 @@ public class NotificationService {
         this.twilioToken = twilioToken;
         this.smsFrom = smsFrom;
         this.whatsappFrom = whatsappFrom;
+        this.eventPublisher = eventPublisher;
     }
     
     public boolean sendPasswordReset(UUID userId, UUID tenantId, String recipient, String displayName, String token) {
@@ -84,13 +90,42 @@ public class NotificationService {
         return deliver(userId, tenantId, "MFA_CODE", recipient, "Your sign-in verification code", body);
     }
     
+    /**
+     * Queues a tenant-scoped business notification for asynchronous delivery.
+     * Authentication recovery and MFA messages deliberately remain synchronous.
+     */
     public boolean sendBusinessNotification(
             UUID userId, UUID tenantId, String eventType,
             String recipient, String subject, String body
     ) {
-        boolean email = deliver(userId, tenantId, eventType, recipient, subject, body);
+        if (eventPublisher == null) {
+            return deliverBusinessNotification(userId, tenantId, eventType, recipient, subject, body);
+        }
+        if (tenantId == null) {
+            throw new IllegalArgumentException("Business notifications require a tenant");
+        }
+        BusinessNotificationRequestedEvent event =
+                new BusinessNotificationRequestedEvent(userId, tenantId, eventType, recipient, subject, body);
+        if (TransactionSynchronizationManager.isSynchronizationActive()
+                && TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    eventPublisher.publishEvent(event);
+                }
+            });
+        } else {
+            eventPublisher.publishEvent(event);
+        }
+        return true;
+    }
+
+    void deliverBusinessNotification(
+            UUID userId, UUID tenantId, String eventType,
+            String recipient, String subject, String body
+    ) {
+        deliver(userId, tenantId, eventType, recipient, subject, body);
         sendConsentedChannels(userId, tenantId, eventType, subject, body);
-        return email;
     }
     
     private boolean deliver(
