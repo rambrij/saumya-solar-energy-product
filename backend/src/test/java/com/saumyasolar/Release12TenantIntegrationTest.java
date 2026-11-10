@@ -149,6 +149,8 @@ class Release12TenantIntegrationTest {
     @Autowired
     com.saumyasolar.service.ServiceAttachmentService serviceAttachments;
     @Autowired
+    com.saumyasolar.service.ExportService exportService;
+    @Autowired
     SurveyAttachmentService surveyAttachments;
     @Autowired
     InstallationJobRepository installationJobs;
@@ -1138,6 +1140,113 @@ class Release12TenantIntegrationTest {
 
 
 
+
+    @org.springframework.transaction.annotation.Transactional
+    @Test
+    void customerProfileMessagingConsentInstallationsAndWarrantiesAreSelfOwned() throws Exception {
+        var customerA = createCustomer(vendorTenantId, "customer-owned-resource-a");
+        var customerB = createCustomer(vendorTenantId, "customer-owned-resource-b");
+        var vendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        var product = productRecords.findByTenantIdOrderByIdDesc(vendorTenantId).stream()
+                .findFirst().orElseThrow();
+
+        CustomerOrder order = new CustomerOrder();
+        order.setId(UUID.randomUUID());
+        order.setTenantId(vendorTenantId);
+        order.setCustomerId(customerB.profile().getId());
+        order.setOrderNumber("CUSTOMER-RESOURCE-" + UUID.randomUUID().toString().substring(0, 8));
+        order.setStatus("CONFIRMED");
+        order.setSubtotal(BigDecimal.valueOf(100));
+        order.setDiscountPercent(BigDecimal.ZERO);
+        order.setDiscountAmount(BigDecimal.ZERO);
+        order.setTaxTotal(BigDecimal.ZERO);
+        order.setTotal(BigDecimal.valueOf(100));
+        order.setCreatedAt(Instant.now());
+        customerOrders.saveAndFlush(order);
+
+        InstallationJob installation = new InstallationJob();
+        installation.setId(UUID.randomUUID());
+        installation.setTenantId(vendorTenantId);
+        installation.setOrderId(order.getId());
+        installation.setCustomerId(customerB.profile().getId());
+        installation.setSiteAddress("Customer B installation address");
+        installation.setScheduledAt(Instant.now().plusSeconds(3600));
+        installation.setAssignedEngineerId(vendor.getId());
+        installation.setStatus("SCHEDULED");
+        installation.setCreatedAt(Instant.now());
+        installationJobs.saveAndFlush(installation);
+
+        Warranty warranty = new Warranty();
+        warranty.setId(UUID.randomUUID());
+        warranty.setTenantId(vendorTenantId);
+        warranty.setOrderId(order.getId());
+        warranty.setInstallationId(installation.getId());
+        warranty.setCustomerId(customerB.profile().getId());
+        warranty.setProductId(product.getId());
+        warranty.setQuantity(1);
+        warranty.setStartDate(java.time.LocalDate.now().minusDays(1));
+        warranty.setEndDate(java.time.LocalDate.now().plusDays(365));
+        warranty.setStatus("ACTIVE");
+        warranty.setActivatedAt(Instant.now());
+        warranties.saveAndFlush(warranty);
+
+        String customerAToken = accessToken(customerA.user().getEmail(), "Customer-Password-2026");
+        String customerBToken = accessToken(customerB.user().getEmail(), "Customer-Password-2026");
+
+        String customerAInstallations = mvc.perform(get("/api/v1/customer/installations")
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(customerAInstallations.contains(installation.getId().toString()),
+                "A customer must not see another customer's installation");
+
+        String customerBInstallations = mvc.perform(get("/api/v1/customer/installations")
+                        .header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(customerBInstallations.contains(installation.getId().toString()),
+                "The installation owner must be able to see its own installation");
+
+        String customerAWarranties = mvc.perform(get("/api/v1/customer/warranties")
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(customerAWarranties.contains(warranty.getId().toString()),
+                "A customer must not see another customer's warranty");
+
+        String customerBWarranties = mvc.perform(get("/api/v1/customer/warranties")
+                        .header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(customerBWarranties.contains(warranty.getId().toString()),
+                "The warranty owner must be able to see its own warranty");
+
+        mvc.perform(get("/api/v1/customer/profile").header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(customerA.user().getEmail()));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/customer/profile")
+                        .header("Authorization", "Bearer " + customerAToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Customer A Updated\",\"phone\":\"9000000001\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Customer A Updated"));
+        assertEquals("Customer B", customerProfiles.findById(customerB.profile().getId()).orElseThrow().getName());
+
+        mvc.perform(get("/api/v1/customer/messaging-consent").header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.smsConsent").value(false))
+                .andExpect(jsonPath("$.whatsappConsent").value(false));
+        mvc.perform(patch("/api/v1/customer/messaging-consent")
+                        .header("Authorization", "Bearer " + customerAToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"smsConsent\":true,\"whatsappConsent\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.smsConsent").value(true))
+                .andExpect(jsonPath("$.whatsappConsent").value(true));
+        mvc.perform(get("/api/v1/customer/messaging-consent").header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.smsConsent").value(false))
+                .andExpect(jsonPath("$.whatsappConsent").value(false));
+        assertTrue(customerProfiles.findById(customerA.profile().getId()).orElseThrow().isSmsConsent());
+        assertFalse(customerProfiles.findById(customerB.profile().getId()).orElseThrow().isSmsConsent());
+    }
+
     @Test
     void genericVendorListEndpointsNeverReturnForeignTenantResources() throws Exception {
         var foreignTenant = newTenant();
@@ -1389,10 +1498,46 @@ class Release12TenantIntegrationTest {
         mvc.perform(get("/api/v1/exports/" + exportId + "/download")
                         .header("Authorization", "Bearer " + ownerToken))
                 .andExpect(status().isConflict());
+
+        // The integration test is transactional, so the after-commit worker event is intentionally
+        // not published until the test ends. Process the persisted job synchronously to exercise
+        // the completed-file HTTP download path as well as the pending-state denial above.
+        exportService.process(UUID.fromString(exportId), vendorTenantId);
+
+        String completedStatus = mvc.perform(get("/api/v1/exports/" + exportId)
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertEquals("COMPLETED", json.readTree(completedStatus).get("status").asText());
+
+        var ownerDownload = mvc.perform(get("/api/v1/exports/" + exportId + "/download")
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk())
+                .andReturn();
+        byte[] ownerBytes = ownerDownload.getResponse().getContentAsByteArray();
+        assertTrue(ownerBytes.length > 0, "The owner must receive the completed private export bytes");
+        String expectedContentType = switch (format) {
+            case "CSV" -> "text/csv";
+            case "XLSX" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            case "PDF" -> "application/pdf";
+            default -> throw new AssertionError("Unexpected export format: " + format);
+        };
+        assertEquals(expectedContentType, ownerDownload.getResponse().getContentType());
+        assertTrue(ownerDownload.getResponse().getHeader("Content-Disposition").contains(format.toLowerCase(java.util.Locale.ROOT)));
+
         mvc.perform(get("/api/v1/exports/" + exportId).header("Authorization", "Bearer " + secondExporterToken))
                 .andExpect(status().isNotFound());
         mvc.perform(get("/api/v1/exports/" + exportId + "/download")
                         .header("Authorization", "Bearer " + secondExporterToken))
+                .andExpect(status().isNotFound());
+
+        var foreignTenant = newTenant();
+        AppUser foreignExporter = createPermissionMatrixUser(
+                foreignTenant.getId(), "foreign-export-requester", List.of("REPORT_EXPORT"));
+        String foreignExporterToken = accessToken(foreignExporter.getEmail(), "Matrix-Password-2026");
+        mvc.perform(get("/api/v1/exports/" + exportId).header("Authorization", "Bearer " + foreignExporterToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/exports/" + exportId + "/download")
+                        .header("Authorization", "Bearer " + foreignExporterToken))
                 .andExpect(status().isNotFound());
 
         String customerToken = accessToken("customer@saumya.local", "Customer@123");
@@ -2093,6 +2238,51 @@ class Release12TenantIntegrationTest {
         return claim;
     }
 
+
+    @org.springframework.transaction.annotation.Transactional
+    @Test
+    void warehouseBranchAssignmentRequiresBranchManageAndRejectsForeignBranch() throws Exception {
+        Branch ownBranch = branch(vendorTenantId, "WH-BR-" + UUID.randomUUID().toString().substring(0, 6));
+        branches.saveAndFlush(ownBranch);
+        var foreignTenant = newTenant();
+        Branch foreignBranch = branch(foreignTenant.getId(), "WH-FOREIGN-" + UUID.randomUUID().toString().substring(0, 6));
+        branches.saveAndFlush(foreignBranch);
+
+        Warehouse warehouse = branchWarehouse(vendorTenantId, null, "BRANCH-GUARD");
+        warehouseRecords.saveAndFlush(warehouse);
+
+        AppUser transferOnly = createPermissionMatrixUser(
+                "warehouse-transfer-only", List.of("INVENTORY_TRANSFER"));
+        String transferOnlyToken = accessToken(transferOnly.getEmail(), "Matrix-Password-2026");
+        AppUser branchManager = createPermissionMatrixUser(
+                "warehouse-branch-manager", List.of("INVENTORY_TRANSFER", "BRANCH_MANAGE"));
+        String branchManagerToken = accessToken(branchManager.getEmail(), "Matrix-Password-2026");
+
+        mvc.perform(patch("/api/v1/warehouses/" + warehouse.getId() + "/branch")
+                        .header("Authorization", "Bearer " + transferOnlyToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"branchId\":\"" + ownBranch.getId() + "\"}"))
+                .andExpect(status().isForbidden());
+        assertNull(warehouseRecords.findById(warehouse.getId()).orElseThrow().getBranchId(),
+                "A user lacking BRANCH_MANAGE must not change warehouse branch assignment");
+
+        mvc.perform(patch("/api/v1/warehouses/" + warehouse.getId() + "/branch")
+                        .header("Authorization", "Bearer " + branchManagerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"branchId\":\"" + ownBranch.getId() + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.branchId").value(ownBranch.getId().toString()));
+        assertEquals(ownBranch.getId(), warehouseRecords.findById(warehouse.getId()).orElseThrow().getBranchId());
+
+        mvc.perform(patch("/api/v1/warehouses/" + warehouse.getId() + "/branch")
+                        .header("Authorization", "Bearer " + branchManagerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"branchId\":\"" + foreignBranch.getId() + "\"}"))
+                .andExpect(status().isBadRequest());
+        assertEquals(ownBranch.getId(), warehouseRecords.findById(warehouse.getId()).orElseThrow().getBranchId(),
+                "A failed cross-tenant branch assignment must leave the existing warehouse assignment unchanged");
+    }
+
     @org.springframework.transaction.annotation.Transactional
     @Test
     void branchAssignedMemberListsOnlyAssignedBranchEnquiriesLeadsSurveysQuotationsAndOrders() throws Exception {
@@ -2302,17 +2492,21 @@ class Release12TenantIntegrationTest {
     }
 
     private AppUser createPermissionMatrixUser(String suffix, List<String> permissionCodes) {
+        return createPermissionMatrixUser(vendorTenantId, suffix, permissionCodes);
+    }
+
+    private AppUser createPermissionMatrixUser(UUID tenantId, String suffix, List<String> permissionCodes) {
         String unique = suffix + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
         Role role = new Role();
         role.setId(UUID.randomUUID());
-        role.setTenantId(vendorTenantId);
+        role.setTenantId(tenantId);
         role.setName("MATRIX_" + unique.toUpperCase(java.util.Locale.ROOT));
         permissionCodes.forEach(code -> role.getPermissions().add(permissions.findByCode(code).orElseThrow()));
         roles.saveAndFlush(role);
 
         AppUser user = new AppUser();
         user.setId(UUID.randomUUID());
-        user.setTenantId(vendorTenantId);
+        user.setTenantId(tenantId);
         user.setName("Permission matrix " + suffix);
         user.setEmail("matrix-" + unique + "@example.test");
         user.setPasswordHash(passwordEncoder.encode("Matrix-Password-2026"));
