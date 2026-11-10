@@ -44,7 +44,7 @@ Application-level route buckets have now been added for `/api/v1/public/{storeSl
 3. **Implemented:** request JSON is buffered with a 16 KiB maximum and replayed to Spring MVC; malformed JSON receives only IP throttling and continues to normal MVC validation; oversized bodies are rejected with a generic 400.
 4. **No migration required:** existing V52 bucket schema accepts both opaque 64-character hashes; no applied migration was edited.
 5. **Implemented in commit `0d2a741d3c6a50aa44668954868a4591084432c2`:** independent configurable IP + endpoint buckets added for public enquiry, export and payment webhook endpoints. Config keys: `app.auth.rate-limit.public-enquiry-per-window`, `export-per-window`, `webhook-per-window`.
-6. **Tests added in commit `f3cb1d3051c12b7ea37f1246de50c0d53994ce9c`:** public enquiry, export and webhook rate-limit unit tests. Latest-head workflow 42821756695: backend suite passed (163 tests), frontend build passed and MySQL migration validation passed; Spring Boot/browser Playwright job remains in progress.
+6. **Tests added in commit `f3cb1d3051c12b7ea37f1246de50c0d53994ce9c`:** public enquiry, export and webhook rate-limit unit tests. Workflow 42821756695 passed all four jobs: backend (163 tests), frontend production build, MySQL 8.4 migration/integrity validation, and Spring Boot health plus Playwright tenant-filter tampering tests. Reset-token throttling changes are under workflow 42822434704.
 7. **Open:** prove distributed/concurrent semantics on MySQL, verify route inventory and production gateway configuration, and decide whether refresh/MFA need a trustworthy account/challenge bucket. Refresh and MFA currently use IP + endpoint throttling.
 
 ## Test plan
