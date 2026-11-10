@@ -108,7 +108,6 @@ class EndpointAuthenticationMatrixTest {
     @Test
     void authenticatedLeastPrivilegeVendorCannotReadProtectedEndpointMappings() throws Exception {
         AppUser seededVendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
-        validTeamMemberId = createValidTeamMember(seededVendor.getTenantId());
         Role emptyRole = new Role();
         emptyRole.setId(UUID.randomUUID());
         emptyRole.setTenantId(seededVendor.getTenantId());
@@ -405,12 +404,8 @@ class EndpointAuthenticationMatrixTest {
     }
 
     private UUID createValidTeamMember(UUID tenantId) {
-        Role installer = new Role();
-        installer.setId(UUID.randomUUID());
-        installer.setTenantId(tenantId);
-        installer.setName("INSTALLER");
-        roles.saveAndFlush(installer);
-
+        Role installer = roles.findByNameAndTenantId("INSTALLER", tenantId).orElseThrow(
+                () -> new IllegalStateException("DataSeeder must create the tenant INSTALLER role for this test fixture"));
         AppUser user = new AppUser();
         user.setId(UUID.randomUUID());
         user.setTenantId(tenantId);
