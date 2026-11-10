@@ -1,4 +1,4 @@
-name: Release 1-4 and Phase 2 tenant-isolation validation (verification)
+name: Release 1-4 and Phase 2 tenant-isolation validation (final verification)
 
 on:
   push:
