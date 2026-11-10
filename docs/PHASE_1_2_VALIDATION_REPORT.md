@@ -81,7 +81,7 @@ No Flyway migration was needed or changed for these code fixes. V57/V58 were ins
 | **Total** | **18** | **18** |
 
 The two UNVERIFIABLE items (tenant-table inventory and composite FK inventory) are now PARTIAL because V57/V58 and the integrity preflight were directly inspected. This does not mean all tenant tables/relationships are proven complete.
-## 3. Conflict log
+## 4. Conflict log
 
 | Conflict ID | Doc A statement | Doc B statement | Rule applied | Decision |
 |---|---|---|---|---|
@@ -89,7 +89,7 @@ The two UNVERIFIABLE items (tenant-table inventory and composite FK inventory) a
 
 No other direct contradiction between the two source documents was established for the Phase 1/2 security and tenant-isolation requirements. The SRS's more prescriptive cookie/CSRF and database-constraint design is treated as technical detail, not as a contradiction of the business document's general JWT/RBAC/tenant-isolation statements.
 
-## 4. Discrepancies in IMPLEMENTATION_GAP_ANALYSIS.md versus inspected code
+## 5. Discrepancies in IMPLEMENTATION_GAP_ANALYSIS.md versus inspected code
 
 The existing gap analysis contains historical snapshots and should not be treated as the current branch truth. The following differences were confirmed against files fetched from the requested branch:
 
@@ -101,7 +101,7 @@ The existing gap analysis contains historical snapshots and should not be treate
 
 No statement from README was used in this comparison.
 
-## 5. Unspecified / needs product decision
+## 6. Unspecified / needs product decision
 
 1. Whether lockout should return a distinct HTTP 423 or the current generic 401. The source documents require temporary lockout and generic non-disclosing errors, but do not prescribe 423. Returning 423 only for existing accounts may enable account-state inference. Product/security owner must choose a non-enumerating contract before changing it.
 2. Exact per-IP, per-account, per-endpoint thresholds, window algorithms, progressive delay policy, and whether account buckets apply to refresh, reset and MFA endpoints. The SRS says to apply rate limits but does not specify numeric thresholds.
