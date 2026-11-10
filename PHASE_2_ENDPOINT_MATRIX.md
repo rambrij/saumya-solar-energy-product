@@ -256,6 +256,18 @@
 | 221 | GET | /api/v1/warranty-claims/{claimId}/attachments/ | `backend/src/main/java/com/saumyasolar/api/WarrantyClaimAttachmentController.java:35` | download | READ | 401/403 without credentials (dynamic gate test) | SERVICE_UPDATE and SERVICE_ASSIGN; tenant-wide warranty claim evidence is dispatcher-managed. | Warranty attachment list and customer ownership are covered by WarrantyClaimAttachmentServiceTest and Release12TenantIntegrationTest; CI run 42845389769 passed. |
 | 222 | GET | /api/v1/warranty-claims/{claimId}/attachments/{attachmentId} | `backend/src/main/java/com/saumyasolar/api/WarrantyClaimAttachmentController.java:40` | download | READ | 401/403 without credentials (dynamic gate test) | SERVICE_UPDATE and SERVICE_ASSIGN; tenant-wide warranty claim evidence is dispatcher-managed. | Warranty attachment download-by-ID and customer ownership are covered by WarrantyClaimAttachmentServiceTest and Release12TenantIntegrationTest; CI run 42845389769 passed. |
 
+## Authenticated least-privilege role × verb regression checks
+
+The current integration suite includes an authenticated cross-module role matrix in Release12TenantIntegrationTest.fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation. It now covers both allowed reads and denied writes:
+
+| Role fixture | Allowed read | Denied cross-module read | Denied write / command |
+|---|---|---|---|
+| Inventory Viewer | GET inventory balances | GET invoices, payments and service requests | POST inventory receipts; POST export; GET export status |
+| Accountant (invoice/payment view + refund only) | GET invoices and payments | GET inventory balances and service requests | POST invoice; POST payment; POST export; GET export status |
+| Service Engineer (service view/update/resolve) | GET service requests | GET invoices, payments and inventory balances | POST service request; POST export; GET export status |
+
+The export status/download service tests additionally verify that a different requesting user cannot obtain another user's export and that private storage is not accessed after an ownership denial. These are representative least-privilege role/verb checks; they do not close every route-specific row in the full matrix.
+
 ## Additional current-branch export-job routes
 
 The current branch also exposes these asynchronous export endpoints, which must be included in the regenerated authenticated role × verb matrix:
