@@ -25,8 +25,14 @@ class NotificationServiceTest {
         JavaMailSender sender = mock(JavaMailSender.class);
         NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(repository.findById(any())).thenAnswer(invocation -> java.util.Optional.of(invocation.getArgument(0)));
+        java.util.concurrent.atomic.AtomicReference<NotificationDelivery> persisted =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> {
+            NotificationDelivery record = invocation.getArgument(0);
+            persisted.set(record);
+            return record;
+        });
+        when(repository.findById(any())).thenAnswer(invocation -> java.util.Optional.ofNullable(persisted.get()));
         NotificationService service = new NotificationService(
                 sender, repository, null, "no-reply@example.test", "http://localhost:3000",
                 "", "", "", "", publisher
