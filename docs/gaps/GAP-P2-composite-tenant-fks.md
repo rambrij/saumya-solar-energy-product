@@ -20,6 +20,7 @@
 - V58 includes a fail-closed preflight for cross-tenant/orphaned relationships. The checked-in MySQL 8.4 CI migration/integrity validation passed in workflow 42818724332.
 - These migrations are substantial and present; they do not by themselves prove every tenant-owned table has tenant_id NOT NULL or every possible relationship is constrained. A full schema-vs-SRS inventory remains open.
 - The SRS requires `tenant_id NOT NULL` on tenant-owned entities and composite constraints where applicable. Single-column references between tenant-owned parents/children can permit inconsistent tenant associations if service validation is bypassed.
+- Added `docs/PHASE_1_2_TENANT_SCHEMA_INVENTORY.md` to enumerate current V57/V58 coverage and entity families still needing database reconciliation; added read-only `docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql` to inventory actual tables, tenant column nullability/NULL rows, FKs and unique indexes. These scripts have not yet been executed against production-like or production data. Commits `ed714646`, `9ada09fa`, `9763e0d7`.
 
 ## Expected state
 
