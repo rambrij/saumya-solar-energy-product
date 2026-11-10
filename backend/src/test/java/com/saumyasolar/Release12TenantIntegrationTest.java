@@ -60,6 +60,7 @@ import com.saumyasolar.repo.OrderItemRepository;
 import com.saumyasolar.repo.QuotationRepository;
 import com.saumyasolar.repo.InvoiceRepository;
 import com.saumyasolar.repo.ServiceRequestRepository;
+import com.saumyasolar.service.SurveyAttachmentService;
 import com.saumyasolar.repo.InstallationJobRepository;
 import com.saumyasolar.repo.WarrantyRepository;
 import com.saumyasolar.repo.WarrantyClaimRepository;
@@ -145,6 +146,8 @@ class Release12TenantIntegrationTest {
     ServiceRequestRepository serviceRequests;
     @Autowired
     com.saumyasolar.service.ServiceAttachmentService serviceAttachments;
+    @Autowired
+    SurveyAttachmentService surveyAttachments;
     @Autowired
     InstallationJobRepository installationJobs;
     @Autowired
@@ -872,6 +875,26 @@ class Release12TenantIntegrationTest {
     @Transactional
     void customerCanRequestSurveyReceiveQuotationAcceptAndConvertExactlyOneOrder() throws Exception {
         var vendorToken = accessToken("admin@saumya.local", "Admin@123");
+        var vendorUser = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        var vendorRoles = vendorUser.getRoles().stream().map(Role::getName).collect(java.util.stream.Collectors.toSet());
+        var vendorPermissions = vendorUser.getRoles().stream().flatMap(role -> role.getPermissions().stream())
+                .map(Permission::getCode).collect(java.util.stream.Collectors.toSet());
+        var vendorPrincipal = new com.saumyasolar.security.Principal(
+                vendorUser.getId(), vendorTenantId, vendorUser.getEmail(), "VENDOR",
+                vendorRoles, vendorPermissions, vendorUser.getTokenVersion());
+        byte[] surveyEvidenceBytes = "%PDF-1.4 survey evidence".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        MockMultipartFile ownSurveyEvidence = new MockMultipartFile(
+                "file", "own-survey.pdf", "application/pdf", surveyEvidenceBytes);
+        var ownSurveyAttachment = surveyAttachments.upload(ownSurvey.getId(), ownSurveyEvidence, vendorPrincipal);
+        mvc.perform(get("/api/v1/surveys/" + ownSurvey.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].id")
+                        .value(ownSurveyAttachment.getId().toString()));
+        mvc.perform(get("/api/v1/surveys/" + ownSurvey.getId() + "/attachments/" + ownSurveyAttachment.getId())
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(surveyEvidenceBytes));
         var customerEmail = "journey-" + UUID.randomUUID() + "@example.test";
         var registration = mvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1808,6 +1831,15 @@ class Release12TenantIntegrationTest {
         foreignTicket.setCreatedAt(Instant.now());
         foreignTicket.setUpdatedAt(Instant.now());
         serviceRequests.save(foreignTicket);
+
+        SiteSurvey ownSurvey = new SiteSurvey();
+        ownSurvey.setId(UUID.randomUUID());
+        ownSurvey.setTenantId(vendorTenantId);
+        ownSurvey.setScheduledAt(Instant.now().plusSeconds(3600));
+        ownSurvey.setPropertyType("RESIDENTIAL");
+        ownSurvey.setRoofType("RCC");
+        ownSurvey.setStatus("SCHEDULED");
+        surveys.save(ownSurvey);
 
         SiteSurvey foreignSurvey = new SiteSurvey();
         foreignSurvey.setId(UUID.randomUUID());
