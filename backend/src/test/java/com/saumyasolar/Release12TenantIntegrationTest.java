@@ -1189,6 +1189,17 @@ class Release12TenantIntegrationTest {
         surveys.save(foreignSurvey);
 
         var vendorToken = accessToken("admin@saumya.local", "Admin@123");
+        var reportBefore = mvc.perform(get("/api/v1/reports/operations")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        long serviceTicketsBefore = json.readTree(reportBefore).get("serviceTickets").asLong();
+        mvc.perform(get("/api/v1/reports/operations/export.csv")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string("serviceTickets," + serviceTicketsBefore));
+        mvc.perform(get("/api/v1/platform/tenants/export")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/service-requests/" + foreignTicket.getId() + "/attachments")
                         .header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isNotFound());
