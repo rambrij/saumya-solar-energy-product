@@ -120,6 +120,8 @@ Any later API, event, persisted-data or configuration contract change must be li
 8. **Single baseline naming and Flyway history — resolved.** The product has not been deployed. Historical V1–V63 are consolidated into `V1__baseline.sql`; the old files are retired and retained only in Git history. CI retrieves historical SQL from commit `467dc8278e13902a39c51d1c9d8d8e588db98f57`, applies it and the baseline to separate fresh MySQL 8.4 databases, and compares schema dumps. The diff is empty (run `42877702249`).
 9. **Other workflow scope.** The repository contains a production preflight workflow with a hard-coded checkout ref. The requested single-branch policy should be applied consistently, but the intended operational status of a workflow named production preflight in a product not yet deployed should be confirmed before disabling or deleting it. Its database checks are not evidence of an actual production deployment.
 
+10. **Private export storage in a deployed environment.** Local Docker Compose now mounts `solar_private_exports` at the configured export directory. Any future deployment must provide an equivalent durable private volume or an approved private object-storage adapter and preserve the configured retention policy; no production storage provider is assumed in this pre-production cleanup.
+
 ## Verification
 
 ### Phase 0 checks performed
