@@ -1531,3 +1531,18 @@ Verified full CI checkpoint: workflow `42828454430` for commit `6585efe6` passed
 - Updated FinanceService so these operations call ensureTicketAccess, reusing the existing customer ownership and engineer-assignment rules. A package-visible predicate is covered by tests for assigned engineer, unassigned engineer and SERVICE_ASSIGN dispatcher behavior.
 - The change is intentionally narrow. It does not close the remaining full endpoint matrix, every service attachment/export route, all customer/branch CRUD families, schema NOT NULL inventory, production data preflight, or repository-wide async inventory.
 - CI verification for this commit is pending; do not treat the new regression tests as passed until the workflow completes.
+
+
+## Follow-up implementation evidence — 2026-11-10
+
+The audit branch has received additional targeted corrections after the initial static review:
+
+- Permission gates for survey review/reassignment, service comments, offline service comments, warranty-claim evidence, branch-wide visibility/warehouse access and service evidence upload now use fine-grained permission codes rather than standard role-name checks. Assigned-resource guards remain enforced.
+- Service ticket mutation/visit reads were tightened in FinanceService; the service attachment upload now requires SERVICE_UPDATE for vendor users.
+- V59 repairs the missing AUDIT_VIEW permission catalogue row/grants on upgrade and ensures BRANCH_MANAGE exists and is granted to tenant VENDOR_ADMIN roles. The MySQL migration CI step asserts these grants.
+- Branch lifecycle integration coverage now exercises create/list/update, membership assign/list/remove, activate/deactivate and denial for an employee without BRANCH_MANAGE. Customer isolation coverage now includes same-tenant quotation list and payment receipt ownership.
+- A service attachment upload unit test covers read-only denial and service updater access.
+- The tenant schema audit now executes exact NULL tenant row counts for every base table with tenant_id and inventories foreign keys, unique indexes and tables without tenant_id.
+- A repository async-worker scan script is wired into release-validation.yml and publishes its output as a CI artifact.
+
+These changes are deliberately not classified as full closure. The full 222-route authenticated role × HTTP verb × resource matrix remains incomplete; all remaining broad/role-name checks require a complete repository scan and an intentional-vs-defect decision; exhaustive customer/branch/export/download tests remain incomplete; the schema audit requires a reviewed production schema result; the worker scan artifact requires review and follow-through for every hit; and production data preflight has not been executed. Do not mark Phase 2 production-ready based on these targeted changes alone.
