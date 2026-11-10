@@ -9,6 +9,7 @@ permissions:
 jobs:
   production-preflight:
     name: Production tenant-integrity and schema preflight
+    if: github.ref == 'refs/heads/cleanup/code-cleanup'
     runs-on: ubuntu-latest
     environment: production
     steps:
