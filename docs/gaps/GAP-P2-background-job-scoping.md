@@ -86,3 +86,5 @@ CI verification (2026-11-10): workflow `42828454430` passed 171 backend tests an
 - The other scheduled tasks remain: authentication rate-limit cleanup (global table), subscription expiry, service SLA evaluation, warranty expiry and integration sync dispatch. The four tenant schedulers iterate tenant IDs and open/close TenantExecutionContext per tenant. Integration sync uses tenant-qualified atomic claims; subscription/warranty/SLA operations use tenant-qualified repositories.
 - Startup runners DataSeeder and PlatformAdminBootstrap are separately identified and gated off by default; their user-seeding policy remains an application-bootstrap governance concern, not an asynchronous worker.
 - The scanner artifact must be retained/reviewed after each source change. External queues/services and runtime dynamically registered tasks cannot be inferred from this repository scan.
+
+- Latest CI run 42845389769 passed all four jobs and 188 backend tests, including the tenant-first notification retry changes and context-isolation tests.
