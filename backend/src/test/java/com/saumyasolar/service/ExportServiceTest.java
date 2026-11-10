@@ -172,6 +172,36 @@ class ExportServiceTest {
     }
 
     @Test
+    void downloadRejectsPendingAndExpiredExportsBeforePrivateStorageAccess() {
+        UUID tenant = UUID.randomUUID(), user = UUID.randomUUID();
+        Principal owner = principal(tenant, user, Set.of("REPORT_EXPORT"));
+        UUID pendingId = UUID.randomUUID();
+        ExportJob pending = new ExportJob();
+        pending.setId(pendingId);
+        pending.setTenantId(tenant);
+        pending.setRequestedBy(user);
+        pending.setStatus("PENDING");
+        when(jobs.findByIdAndTenantIdAndRequestedBy(pendingId, tenant, user)).thenReturn(Optional.of(pending));
+        assertEquals(org.springframework.http.HttpStatus.CONFLICT,
+                assertThrows(ResponseStatusException.class, () -> service().download(pendingId, owner))
+                        .getStatusCode());
+
+        UUID expiredId = UUID.randomUUID();
+        ExportJob expired = new ExportJob();
+        expired.setId(expiredId);
+        expired.setTenantId(tenant);
+        expired.setRequestedBy(user);
+        expired.setStatus("COMPLETED");
+        expired.setStorageKey(tenant + "/exports/" + expiredId + ".csv");
+        expired.setExpiresAt(java.time.Instant.now().minusSeconds(60));
+        when(jobs.findByIdAndTenantIdAndRequestedBy(expiredId, tenant, user)).thenReturn(Optional.of(expired));
+        assertEquals(org.springframework.http.HttpStatus.GONE,
+                assertThrows(ResponseStatusException.class, () -> service().download(expiredId, owner))
+                        .getStatusCode());
+        verifyNoInteractions(storage);
+    }
+
+    @Test
     void expiryCleanupRetainsStorageKeyWhenDeletionFailsForRetry() throws Exception {
         UUID tenant = UUID.randomUUID();
         ExportJob expired = new ExportJob();
