@@ -2,9 +2,11 @@ package com.saumyasolar;
 
 import com.saumyasolar.domain.AppUser;
 import com.saumyasolar.domain.Role;
+import com.saumyasolar.domain.Quotation;
 import com.saumyasolar.repo.AppUserRepository;
 import com.saumyasolar.repo.RoleRepository;
 import com.saumyasolar.repo.PermissionRepository;
+import com.saumyasolar.repo.QuotationRepository;
 import com.saumyasolar.security.JwtService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.mock.web.MockMultipartFile;
@@ -61,6 +63,8 @@ class EndpointAuthenticationMatrixTest {
     @Autowired AppUserRepository users;
     @Autowired RoleRepository roles;
     @Autowired PermissionRepository permissions;
+    @Autowired QuotationRepository quotations;
+    private UUID revisionFixtureId;
     @Autowired JwtService jwt;
     @Autowired PasswordEncoder passwordEncoder;
 
@@ -135,6 +139,28 @@ class EndpointAuthenticationMatrixTest {
 
         AppUser platform = users.findByEmailIgnoreCase("platform@saumya.local").orElseThrow();
         AppUser customer = users.findByEmailIgnoreCase("customer@saumya.local").orElseThrow();
+
+        // Quotation revision is the one mutation whose service deliberately loads the
+        // existing parent before returning a domain result. Supply a real tenant-owned
+        // parent so the positive permission probe tests the authorization path, not a
+        // synthetic missing-ID Optional.get failure.
+        Quotation revisionFixture = new Quotation();
+        revisionFixture.setId(UUID.randomUUID());
+        revisionFixture.setTenantId(seededVendor.getTenantId());
+        revisionFixture.setQuoteGroupId(UUID.randomUUID());
+        revisionFixture.setQuotationNumber("MATRIX-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10));
+        revisionFixture.setRevision(1);
+        revisionFixture.setStatus("SENT");
+        revisionFixture.setSubtotal(BigDecimal.ONE);
+        revisionFixture.setDiscountPercent(BigDecimal.ZERO);
+        revisionFixture.setDiscountAmount(BigDecimal.ZERO);
+        revisionFixture.setTaxAmount(BigDecimal.ZERO);
+        revisionFixture.setGrandTotal(BigDecimal.ONE);
+        revisionFixture.setCreatedBy(vendor.getId());
+        revisionFixture.setCreatedAt(Instant.now());
+        quotations.saveAndFlush(revisionFixture);
+        revisionFixtureId = revisionFixture.getId();
+
         Map<String, String> tokens = Map.of(
                 "VENDOR", "Bearer " + jwt.issue(vendor),
                 "PLATFORM", "Bearer " + jwt.issue(platform),
@@ -191,6 +217,9 @@ class EndpointAuthenticationMatrixTest {
         // positive probe, select the tenant-scoped users collection instead.
         if ("VENDOR".equals(accountType) && pattern.startsWith("/api/v1/{type:")) {
             path = path.replaceFirst("^/api/v1/tenants$", "/api/v1/users");
+        }
+        if ("VENDOR".equals(accountType) && pattern.equals("/api/v1/quotations/{id}/revisions")) {
+            path = "/api/v1/quotations/" + revisionFixtureId + "/revisions";
         }
         return path;
     }
