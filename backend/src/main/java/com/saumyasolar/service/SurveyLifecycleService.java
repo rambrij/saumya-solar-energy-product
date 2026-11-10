@@ -57,8 +57,8 @@ public class SurveyLifecycleService {
     private SiteSurvey requireSurvey(UUID id, Principal actor) {
         SiteSurvey survey = surveys.findByIdAndTenantId(id, actor.tenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Survey not found"));
-        if (actor.permissions() != null && actor.permissions().contains("SERVICE_VIEW")
-                && !actor.permissions().contains("SERVICE_ASSIGN")
+        if (!"CUSTOMER".equals(actor.accountType())
+                && (actor.permissions() == null || !actor.permissions().contains("SURVEY_ASSIGN"))
                 && !actor.userId().equals(survey.getAssignedUserId()))
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Survey not found");
         return survey;
