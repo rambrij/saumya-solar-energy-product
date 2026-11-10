@@ -55,18 +55,11 @@ Repository-wide checked-in-source discovery is MET based on CI artifact phase2-a
 - Startup runners: `DataSeeder.seedData` and `PlatformAdminBootstrap.bootstrapPlatformAdmin`. Both default to disabled in `application.yml`; local `docker-compose.yml` explicitly sets `SEED_DATA_ENABLED=true` for demo development. Production must override it to `false`. `PLATFORM_BOOTSTRAP_ENABLED` must also remain false unless a reviewed one-time bootstrap is explicitly approved.
 - The static inventory is complete for repository-controlled code/config. Production/runtime configuration outside Git remains an owner verification task.
 
-## Repository scan findings — CI run 42843505138
+## Repository scan findings — CI artifact 13806429908
 
-The checked-in scanner is configured to execute across backend/src/main/java and the resource/workflow configuration. The next successful CI artifact is required to confirm the full hit count and review every boundary:
+The reviewed repository-root scan confirms the seven scheduled triggers, two asynchronous application listeners, one bounded in-process executor and two startup runners described above. It finds no checked-in external message-broker client or separate deployment worker service. Browser polling and user-triggered queue actions are identified as UI behavior, not server workers.
 
-- Scheduled triggers found: exactly the six rows already listed above.
-- The current Java source includes @Async application listeners and a bounded ThreadPoolTaskExecutor in ApplicationEventConfiguration. These listeners explicitly open TenantExecutionContext and delegate to tenant-qualified processing/claim paths. CI scan output remains the authoritative full-repository inventory.
-- No application event listeners/producers or Kafka/Rabbit/JMS listener/template consumers found in backend Java source. The scan output has no false-positive business-method submit entries after the pattern refinement.
-- Startup runners found: DataSeeder.seedData (guarded by app.seed.enabled, default false) and PlatformAdminBootstrap.bootstrapPlatformAdmin (guarded by app.bootstrap.platform-admin.enabled, default false). These are startup initialization paths, not background workers; their data-seeding and credential policy must be audited separately against the no-production-bootstrap-user rule.
-- The initial scanner version used ripgrep, which is not installed on the runner; that scan artifact was invalid. The scanner was changed to portable grep. The corrected CI scan at 42841931283 is the first usable result. A follow-up pattern refinement removes false positives for ordinary business methods named submit.
-
-The scan covers checked-in backend Java source and declared YAML/properties/XML schedules. It found seven scheduled triggers, two @Async event listeners and one bounded ThreadPoolTaskExecutor; no Kafka/Rabbit/JMS consumer or producer was found in checked-in Java source. It also found two startup runners: DataSeeder.seedData (app.seed.enabled, default false) and PlatformAdminBootstrap.bootstrapPlatformAdmin (app.bootstrap.platform-admin.enabled, default false). These must remain disabled in production unless separately approved. The scan cannot detect dynamically registered tasks, library-internal asynchronous work, external infrastructure queues configured outside this repository, or production-only runtime integrations. Re-run and review the artifact after any worker-related change.
-
+The scan does not inspect live cloud resources, platform cron settings, secret-driven environment overrides, or provider-managed queues. These remain an external operations sign-off item. Do not infer their absence from the repository scan.
 
 ### Tenant-first notification retry correction — 2026-11-10
 
