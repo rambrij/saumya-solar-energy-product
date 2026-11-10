@@ -1196,7 +1196,7 @@ class Release12TenantIntegrationTest {
         mvc.perform(get("/api/v1/reports/operations/export.csv")
                         .header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isOk())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string("serviceTickets," + serviceTicketsBefore));
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(org.hamcrest.Matchers.containsString("serviceTickets," + serviceTicketsBefore + "\\n")));
         mvc.perform(get("/api/v1/platform/tenants/export")
                         .header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isForbidden());
