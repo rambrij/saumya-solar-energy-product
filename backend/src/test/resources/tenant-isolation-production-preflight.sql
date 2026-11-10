@@ -75,6 +75,9 @@ BEGIN
                                    OR (tenant_id IS NOT NULL AND name IN ('PLATFORM_SUPER_ADMIN','PLATFORM_SUPPORT'))) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Tenant integrity blocked: role tenant_id does not match platform role classification';
     END IF;
+    IF EXISTS (SELECT 1 FROM audit_event WHERE tenant_id IS NULL AND (actor_type IS NULL OR actor_type <> 'PLATFORM')) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Tenant integrity blocked: tenant audit event is missing tenant_id';
+    END IF;
 
     -- Sales, survey and quotation graph.
     IF EXISTS (SELECT 1 FROM sales_lead c LEFT JOIN enquiry p ON p.tenant_id=c.tenant_id AND p.id=c.enquiry_id WHERE c.enquiry_id IS NOT NULL AND p.id IS NULL)
