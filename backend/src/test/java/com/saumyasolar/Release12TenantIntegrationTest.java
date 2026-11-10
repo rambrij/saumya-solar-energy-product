@@ -1380,6 +1380,9 @@ class Release12TenantIntegrationTest {
         String secondExporterToken = accessToken(secondExporter.getEmail(), "Matrix-Password-2026");
         mvc.perform(get("/api/v1/exports/" + exportId).header("Authorization", "Bearer " + ownerToken))
                 .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/exports/" + exportId + "/download")
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isConflict());
         mvc.perform(get("/api/v1/exports/" + exportId).header("Authorization", "Bearer " + secondExporterToken))
                 .andExpect(status().isNotFound());
         mvc.perform(get("/api/v1/exports/" + exportId + "/download")
