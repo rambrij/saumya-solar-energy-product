@@ -73,7 +73,9 @@ class NotificationServiceTest {
         record.setStatus("FAILED");
         record.setAttemptCount(1);
         record.setNextAttemptAt(Instant.now().minusSeconds(5));
-        when(repository.findTop50ByStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(eq("FAILED"), any()))
+        when(repository.findDistinctTenantIdsForRetry(eq("FAILED"), any()))
+                .thenReturn(java.util.List.of(tenantId));
+        when(repository.findTop50ByTenantIdAndStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(eq(tenantId), eq("FAILED"), any()))
                 .thenReturn(java.util.List.of(record));
         when(repository.claimFailedDelivery(eq(record.getId()), eq(tenantId), any())).thenReturn(1);
         when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -109,7 +111,9 @@ class NotificationServiceTest {
         record.setStatus("FAILED");
         record.setAttemptCount(1);
         record.setNextAttemptAt(Instant.now().minusSeconds(5));
-        when(repository.findTop50ByStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(eq("FAILED"), any()))
+        when(repository.findDistinctTenantIdsForRetry(eq("FAILED"), any()))
+                .thenReturn(java.util.List.of(record.getTenantId()));
+        when(repository.findTop50ByTenantIdAndStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(eq(record.getTenantId()), eq("FAILED"), any()))
                 .thenReturn(java.util.List.of(record));
         when(repository.claimFailedDelivery(eq(record.getId()), eq(record.getTenantId()), any())).thenReturn(0);
 
