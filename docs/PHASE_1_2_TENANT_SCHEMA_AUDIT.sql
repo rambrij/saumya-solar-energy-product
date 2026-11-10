@@ -92,7 +92,7 @@ WHERE c.TABLE_SCHEMA=DATABASE() AND c.COLUMN_NAME='tenant_id'
 
 -- Interpretation:
 -- 1) A candidate tenant table passes the schema gate only when IS_NULLABLE='NO' AND null_tenant_rows=0.
--- 2) app_user and role are mixed-scope and require row-level classification; do not bulk alter.
+-- 2) app_user, role and audit_event are mixed-scope; validate their platform-vs-tenant row semantics before any alteration.
 -- 3) A table with no tenant_id is not automatically global. It remains UNCLASSIFIED until its owner
 --    proves platform-global scope or a safe tenant relationship/column is added.
 -- 4) Compare actual base tables, FK and unique indexes with JPA entities, migrations and the SRS.
