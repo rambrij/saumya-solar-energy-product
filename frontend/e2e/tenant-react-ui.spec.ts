@@ -50,6 +50,11 @@ test('React vendor workspace stays isolated when switching between two tenant ac
     return { tenantId: tenant.id, productId: product.id, categoryId: category.id, productNameB };
   }, { emailB, passwordB, suffix, productNameB });
 
+  // Fixture setup used direct fetches; reset browser cookies and tab state so the
+  // React login starts with a fresh CSRF cookie rather than a stale fixture token.
+  await page.context().clearCookies();
+  await page.evaluate(() => sessionStorage.clear());
+
   async function signIn(email: string, password: string) {
     await page.goto(baseURL!);
     await page.locator('button.public-login-link').click({ force: true });
