@@ -75,3 +75,11 @@ Still open: inventory every Controller/secondary-controller mapping and service 
 ## Status
 
 **PARTIAL — implementation extended; workflow 42821756695 passed all four jobs: backend (163 tests), frontend production build, MySQL 8.4 migration/integrity validation, and Spring Boot health plus Playwright tenant-filter tampering tests. New reset-token throttling code is under workflow 42822434704.** The custom-role CRUD and UI already exist and are not a missing feature. Remaining critical work is the exhaustive action-to-permission traceability matrix, review of legacy broad permission grants, and full authenticated role/resource negative tests. Do not mark MET until latest-head backend/MySQL/browser tests pass.
+
+
+### Authenticated role-matrix expansion — 2026-11-10
+
+- Added `Release12TenantIntegrationTest.fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation` with authenticated Inventory, Accountant and Service Engineer test principals. It verifies allowed module reads return 200 and cross-module unauthorized reads return 403.
+- The test fixture runs in a rollback transaction so temporary role/user rows do not contaminate other integration tests.
+- CI workflow `42828044536` passed backend (171 tests), frontend build and MySQL migration validation; Spring Boot/browser job was still running at the time of the check.
+- This is an expanded representative matrix, not every standard role × every endpoint × every HTTP verb. The complete matrix remains PARTIAL.
