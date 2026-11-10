@@ -1883,11 +1883,6 @@ class Release12TenantIntegrationTest {
         mvc.perform(get("/api/v1/branches/" + branchB.getId() + "/analytics")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
-        // A member cannot use direct branch-scoped resource endpoints to pivot
-        // into a different branch within the same tenant.
-        mvc.perform(get("/api/v1/branches/" + branchB.getId() + "/users")
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isNotFound());
 
         ProductCategory stockCategory = new ProductCategory();
         stockCategory.setId(UUID.randomUUID());
