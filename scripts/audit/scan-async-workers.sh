@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="\${1:-.}"
+ROOT="$PWD"
+if [[ $# -gt 0 ]]; then ROOT="$1"; fi
 if [[ ! -d "$ROOT" ]]; then
   echo "ERROR: repository root not found: $ROOT" >&2
   exit 2
