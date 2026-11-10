@@ -27,4 +27,48 @@ class TenantExecutionContextTest {
     void rejectsNullTenantScope() {
         assertThrows(IllegalArgumentException.class, () -> TenantExecutionContext.open(null));
     }
+    @Test
+    void clearsTenantContextAfterExceptionOnReusedWorkerThread() throws Exception {
+        var executor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        UUID tenant = UUID.randomUUID();
+        try {
+            var failed = executor.submit(() -> {
+                try (var scope = TenantExecutionContext.open(tenant)) {
+                    assertEquals(tenant, TenantExecutionContext.requireTenantId());
+                    throw new IllegalStateException("simulated job failure");
+                }
+            });
+            assertThrows(java.util.concurrent.ExecutionException.class, failed::get);
+            UUID nextTenant = UUID.randomUUID();
+            var next = executor.submit(() -> {
+                assertThrows(IllegalStateException.class, TenantExecutionContext::requireTenantId);
+                try (var scope = TenantExecutionContext.open(nextTenant)) {
+                    return TenantExecutionContext.requireTenantId();
+                }
+            });
+            assertEquals(nextTenant, next.get());
+            var after = executor.submit(() -> assertThrows(
+                    IllegalStateException.class, TenantExecutionContext::requireTenantId));
+            assertDoesNotThrow(after::get);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void restoresOuterTenantWhenInnerScopeThrows() {
+        UUID outerTenant = UUID.randomUUID();
+        UUID innerTenant = UUID.randomUUID();
+        try (var outer = TenantExecutionContext.open(outerTenant)) {
+            assertThrows(IllegalArgumentException.class, () -> {
+                try (var inner = TenantExecutionContext.open(innerTenant)) {
+                    assertEquals(innerTenant, TenantExecutionContext.requireTenantId());
+                    throw new IllegalArgumentException("simulated nested job failure");
+                }
+            });
+            assertEquals(outerTenant, TenantExecutionContext.requireTenantId());
+        }
+        assertThrows(IllegalStateException.class, TenantExecutionContext::requireTenantId);
+    }
+
 }
