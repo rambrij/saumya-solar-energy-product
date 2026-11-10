@@ -410,6 +410,13 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      - name: Assert exact tenant schema NULL-row inventory
+        run: |
+          python3 scripts/audit/assert-tenant-schema-audit.py /tmp/tenant-schema-audit.txt
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role WHERE tenant_id IS NULL AND name IN ('PLATFORM_SUPER_ADMIN','PLATFORM_SUPPORT','CUSTOMER')")" = "3"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role WHERE tenant_id IS NULL AND name NOT IN ('PLATFORM_SUPER_ADMIN','PLATFORM_SUPPORT','CUSTOMER')")" = "0"
+          echo "PASS: all three nullable global role rows are explicitly classified; no unexpected global roles."
+
   mysql-app-startup:
     name: Start Spring Boot against MySQL 8.4 and Mailpit
     runs-on: ubuntu-24.04
