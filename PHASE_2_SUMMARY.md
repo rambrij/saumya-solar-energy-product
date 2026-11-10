@@ -13,7 +13,7 @@
 - Integration sync discovery, atomic job claim and reload are tenant-qualified.
 - Added `TenantExecutionContext`, a ThreadLocal scope restored/cleared with try-with-resources. SLA processing additionally rejects a missing or mismatched tenant scope.
 - Added scheduler/context tests and MySQL SQL assertions that verify V57 rejects cross-tenant category, package and product references.
-- Added V58 with 88 composite tenant-aware foreign keys across sales, surveys, quotations, orders, inventory, installations, warranties, invoices, payments/refunds, service, private evidence, offline sync, integrations, branch memberships, engineer profiles, approval actors, audit branches and tenant notifications. V58 includes fail-closed orphan/cross-tenant preflight checks and composite lookup indexes.
+- Added V58 with 89 composite tenant-aware foreign keys across sales, surveys, quotations, orders, inventory, installations, warranties, invoices, payments/refunds, service, private evidence, offline sync, integrations, branch memberships, engineer profiles, approval actors, audit branches and tenant notifications. V58 includes fail-closed orphan/cross-tenant preflight checks and composite lookup indexes.
 - Added `tenant-isolation-v58.sql` and wired V58 plus V57/V58 cross-tenant assertions into MySQL 8.4 CI.
 - Expanded endpoint negative tests for customer A/B addresses, orders, invoices and service tickets; generic vendor/customer list scoping across 13 routes; foreign branch membership/analytics/update/deactivate/assignment; foreign survey/service-attachment parents; report CSV scope and platform-export denial.
 - Added `BRANCH_MANAGE` to the runtime `DataSeeder` permission catalogue so the seeded vendor-admin permissions align with V51's migrated role grants.
