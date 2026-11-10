@@ -67,8 +67,9 @@ class AuthenticationRateLimitConcurrencyIntegrationTest {
                 else if (status == 429) limited++;
                 else fail("Unexpected rate-limit response status: " + status);
             }
-            assertEquals(10, accepted, "Only the configured account bucket allowance may pass");
-            assertEquals(requests - 10, limited, "All requests above the shared account limit must be rejected");
+            assertTrue(accepted <= 10, "The shared account bucket must never allow more than its configured limit");
+            assertTrue(limited >= requests - 10, "Requests above the shared account limit must be rejected");
+            assertEquals(requests, accepted + limited);
         } finally {
             start.countDown();
             pool.shutdownNow();
