@@ -436,8 +436,10 @@ public class FinanceService {
         if ("CUSTOMER".equals(p.accountType())) {
             if (listInvoices(p).stream().noneMatch(i -> i.getId().equals(payment.getInvoiceId())))
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        } else financeAccess(p);
-        permission(p, "PAYMENT_VIEW");
+        } else {
+            financeAccess(p);
+            permission(p, "PAYMENT_VIEW");
+        }
         return payment;
     }
     
