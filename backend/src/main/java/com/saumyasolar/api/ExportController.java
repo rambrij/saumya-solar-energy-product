@@ -22,7 +22,8 @@ public class ExportController {
     private Principal principal(Authentication a){return (Principal)a.getPrincipal();}
     private ExportJobResponse view(ExportJob j){
         String url="COMPLETED".equals(j.getStatus())?"/api/v1/exports/"+j.getId()+"/download":null;
-        return new ExportJobResponse(j.getId(),j.getReportType(),j.getFormat(),j.getStatus(),j.getFromDate(),j.getToDate(),j.getFileSize(),j.getCreatedAt(),j.getExpiresAt(),j.getLastError(),url);
+        String error = "FAILED".equals(j.getStatus()) ? "Export failed. Please retry or contact support." : null;
+        return new ExportJobResponse(j.getId(),j.getReportType(),j.getFormat(),j.getStatus(),j.getFromDate(),j.getToDate(),j.getFileSize(),j.getCreatedAt(),j.getExpiresAt(),error,url);
     }
     @PostMapping @Valid
     public ResponseEntity<ExportJobResponse> create(@Valid @RequestBody CreateExportRequest x,Authentication a){
