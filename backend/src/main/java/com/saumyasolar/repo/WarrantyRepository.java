@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.UUID;
 import java.time.LocalDate;
 public interface WarrantyRepository extends JpaRepository<Warranty, UUID> {
+    java.util.Optional<Warranty> findByIdAndTenantId(UUID id, UUID tenantId);
+
     List<Warranty> findByTenantIdAndStatusAndEndDateBefore(UUID tenantId, String status, LocalDate date);
     
     List<Warranty> findByTenantIdAndStatusAndEndDate(UUID tenantId, String status, LocalDate date);
