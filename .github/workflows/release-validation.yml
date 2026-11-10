@@ -319,6 +319,18 @@ jobs:
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema='solar_migration_test' AND constraint_name IN ('fk_sales_lead_enquiry_tenant','fk_customer_order_quote_tenant','fk_inventory_balance_product_tenant','fk_invoice_order_tenant','fk_service_comment_ticket_tenant','fk_warranty_claim_warranty_tenant')")" = "6"
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/test/resources/tenant-isolation-v58.sql
 
+      - name: Emit read-only tenant schema, FK and unique-index inventory
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql | tee /tmp/tenant-schema-audit.txt
+      - name: Upload tenant schema inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-1-2-tenant-schema-inventory
+          path: /tmp/tenant-schema-audit.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
   mysql-app-startup:
     name: Start Spring Boot against MySQL 8.4 and Mailpit
     runs-on: ubuntu-24.04
