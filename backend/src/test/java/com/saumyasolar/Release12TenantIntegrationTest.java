@@ -1746,7 +1746,7 @@ class Release12TenantIntegrationTest {
         role.setId(UUID.randomUUID());
         role.setTenantId(vendorTenantId);
         role.setName("BRANCH_SCOPE_TEST_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10));
-        for (String code : List.of("LEAD_VIEW", "SURVEY_VIEW", "QUOTATION_VIEW", "ORDER_VIEW", "BRANCH_MANAGE")) {
+        for (String code : List.of("LEAD_VIEW", "SURVEY_VIEW", "QUOTATION_VIEW", "ORDER_VIEW", "BRANCH_MANAGE", "INVOICE_VIEW", "SERVICE_VIEW", "SERVICE_ASSIGN", "INSTALLATION_VIEW", "INSTALLATION_ASSIGN")) {
             Permission permission = permissions.findByCode(code).orElseThrow();
             role.getPermissions().add(permission);
         }
@@ -1803,6 +1803,31 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), quoteA.getId(), quoteB.getId());
         assertBranchListContainsOnly(mvc.perform(get("/api/v1/orders").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), orderA.getId(), orderB.getId());
+
+        Invoice invoiceA = branchInvoice(vendorTenantId, branchA.getId(), orderA.getId(), member.getId());
+        Invoice invoiceB = branchInvoice(vendorTenantId, branchB.getId(), orderB.getId(), member.getId());
+        invoices.saveAllAndFlush(List.of(invoiceA, invoiceB));
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/invoices").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), invoiceA.getId(), invoiceB.getId());
+
+        ServiceRequest ticketA = branchTicket(vendorTenantId, branchA.getId(), branchCustomer.profile().getId());
+        ServiceRequest ticketB = branchTicket(vendorTenantId, branchB.getId(), branchCustomer.profile().getId());
+        serviceRequests.saveAllAndFlush(List.of(ticketA, ticketB));
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/service-requests").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), ticketA.getId(), ticketB.getId());
+
+        InstallationJob installationA = branchInstallation(vendorTenantId, branchA.getId(), orderA.getId(), branchCustomer.profile().getId(), member.getId());
+        InstallationJob installationB = branchInstallation(vendorTenantId, branchB.getId(), orderB.getId(), branchCustomer.profile().getId(), member.getId());
+        installationJobs.saveAllAndFlush(List.of(installationA, installationB));
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/installations").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), installationA.getId(), installationB.getId());
+
+        mvc.perform(get("/api/v1/branches/" + branchA.getId() + "/analytics")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/branches/" + branchB.getId() + "/analytics")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
     }
 
     private Branch branch(UUID tenantId, String code) {
@@ -1892,6 +1917,61 @@ class Release12TenantIntegrationTest {
         row.setTotal(BigDecimal.ZERO);
         row.setCreatedAt(Instant.now());
         return row;
+    }
+
+    private Invoice branchInvoice(UUID tenantId, UUID branchId, UUID orderId, UUID actorId) {
+        Invoice invoice = new Invoice();
+        invoice.setId(UUID.randomUUID());
+        invoice.setTenantId(tenantId);
+        invoice.setBranchId(branchId);
+        invoice.setOrderId(orderId);
+        invoice.setInvoiceNumber("BR-I-" + UUID.randomUUID().toString().substring(0, 8));
+        invoice.setFiscalYear("2026-27");
+        invoice.setStatus("ISSUED");
+        invoice.setCustomerName("Branch scope customer");
+        invoice.setVendorName("Branch scope vendor");
+        invoice.setCurrency("INR");
+        invoice.setSubtotal(BigDecimal.ZERO);
+        invoice.setTaxTotal(BigDecimal.ZERO);
+        invoice.setGrandTotal(BigDecimal.ZERO);
+        invoice.setTaxTreatment("INTRA_STATE");
+        invoice.setCreatedBy(actorId);
+        invoice.setIssuedAt(Instant.now());
+        invoice.setCreatedAt(Instant.now());
+        return invoice;
+    }
+
+    private ServiceRequest branchTicket(UUID tenantId, UUID branchId, UUID customerId) {
+        ServiceRequest ticket = new ServiceRequest();
+        ticket.setId(UUID.randomUUID());
+        ticket.setTenantId(tenantId);
+        ticket.setBranchId(branchId);
+        ticket.setCustomerId(customerId);
+        ticket.setTicketNumber("BR-S-" + UUID.randomUUID().toString().substring(0, 8));
+        ticket.setCategory("INSTALLATION");
+        ticket.setPriority("MEDIUM");
+        ticket.setDescription("Branch scoped service request");
+        ticket.setWarrantyStatus("UNKNOWN");
+        ticket.setStatus("OPEN");
+        ticket.setPausedSeconds(0);
+        ticket.setCreatedAt(Instant.now());
+        ticket.setUpdatedAt(Instant.now());
+        return ticket;
+    }
+
+    private InstallationJob branchInstallation(UUID tenantId, UUID branchId, UUID orderId, UUID customerId, UUID engineerId) {
+        InstallationJob installation = new InstallationJob();
+        installation.setId(UUID.randomUUID());
+        installation.setTenantId(tenantId);
+        installation.setBranchId(branchId);
+        installation.setOrderId(orderId);
+        installation.setCustomerId(customerId);
+        installation.setSiteAddress("Branch installation test");
+        installation.setScheduledAt(Instant.now().plusSeconds(7200));
+        installation.setAssignedEngineerId(engineerId);
+        installation.setStatus("SCHEDULED");
+        installation.setCreatedAt(Instant.now());
+        return installation;
     }
 
     private void assertBranchListContainsOnly(String response, UUID expectedId, UUID excludedId) throws Exception {
