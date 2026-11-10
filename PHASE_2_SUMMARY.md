@@ -29,7 +29,7 @@
 
 - The 222-mapping controller inventory is documented, but the automated negative matrix does not yet exercise every mapping and every verb. Remaining cases include full CRUD variants for each domain resource, platform lifecycle endpoints, warranty-claim attachment downloads, direct attachment-ID tampering, and XLSX/PDF report content assertions.
 - Full branch-assigned record filtering for all record families, including the policy for records with `branch_id IS NULL`, remains to be verified.
-- V58 covers 88 tenant-aware foreign keys. Production rollout still requires running its fail-closed data-integrity preflight against a production snapshot and resolving any mismatched rows.
+- V58 covers 89 tenant-aware foreign keys. Production rollout still requires running its fail-closed data-integrity preflight against a production snapshot and resolving any mismatched rows.
 - DB-backed multi-tenant concurrency tests for SLA, subscription expiry, warranty expiry and integration sync remain.
 - Async/event listeners and future queue consumers must establish and clear `TenantExecutionContext` explicitly.
 - Browser-level tests for client filter tampering and 403/404 UX remain.
@@ -43,16 +43,16 @@ The latest base-branch CI observed before Phase 2 changes (commit `295e284900d7a
 - Frontend: 22 tests, 1 pre-existing failure (duplicate responsive navigation link queried with `getByRole`).
 - MySQL migration validation and Spring Boot startup: passed.
 
-A local clone/build was not possible because this execution environment could not resolve github.com. Full GitHub Actions run `42779608893` on commit `969ec08c171861b7929086b4e73d8cbf269d9387` passed all jobs: backend 136 tests / 0 failures / 0 errors; frontend 22 tests / 0 failures plus production build; MySQL 8.4 V1–V58 migration plus V57/V58 cross-tenant FK rejection assertions; Spring Boot startup against MySQL 8.4 and Mailpit. Later commits add CSV export assertions and audit documentation; the latest run for those changes must pass before merge. Do not treat queued/in-progress CI as a pass.
+A local clone/build was not possible because this execution environment could not resolve github.com. Full GitHub Actions run `42780928514` on commit `862198c5f40baa86ca69629520d108b561384ea3` passed all jobs: backend 137 tests / 0 failures / 0 errors; frontend 22 tests / 0 failures plus production build; MySQL 8.4 V1–V58 migration plus V57/V58 cross-tenant FK rejection assertions (including customer-profile/user mismatch); Spring Boot startup against MySQL 8.4 and Mailpit. Subsequent commits update documentation only.
 
 ## Migration / rollback
 
-V57 and V58 are additive and ordered after V56. V57 checks catalogue relationships; V58 checks tenant-owned sales, operational, finance, service, evidence, offline, integration and actor relationships before adding 88 composite foreign keys. If any preflight fails, fix the underlying data and retry; do not bypass it. CI migration checks use an isolated MySQL 8.4 database, not a production snapshot.
+V57 and V58 are additive and ordered after V56. V57 checks catalogue relationships; V58 checks tenant-owned sales, operational, finance, service, evidence, offline, integration and actor relationships before adding 89 composite foreign keys. If any preflight fails, fix the underlying data and retry; do not bypass it. CI migration checks use an isolated MySQL 8.4 database, not a production snapshot.
 
 Flyway Community does not automatically reverse applied versioned migrations. Rollback must be a reviewed forward migration: drop the V58 `fk_*_tenant` constraints and V58 `uq_*_tenant_id` unique keys, then the three V57 foreign keys and their referenced unique keys if rollback of V57 is also required. Preserve pre-existing V37/V43/V49 constraints. Do not restore nullable tenant columns unless a separately reviewed application/schema contract requires it.
 
 ## Open Questions
 
-1. Should remaining global/platform identity relationships and non-tenant resource references be brought into Phase 2.1, or are the 88 V58 tenant-owned links the accepted DB scope?
+1. Should remaining global/platform identity relationships and non-tenant resource references be brought into Phase 2.1, or are the 89 V58 tenant-owned links the accepted DB scope?
 2. Should branch-unassigned legacy records remain visible to all branch memberships, as current behavior permits?
 3. Production database preflight has not been run. Who will approve the remediation window if V58 detects legacy tenant mismatches?
