@@ -1224,6 +1224,71 @@ class Release12TenantIntegrationTest {
     }
 
     @Test
+    void operationsCsvXlsxAndPdfExportsContainOnlyAuthenticatedTenantAggregates() throws Exception {
+        var foreignTenant = newTenant();
+        CustomerProfile foreignCustomer = createCustomer(foreignTenant.getId(), "report-export-foreign").profile();
+
+        CustomerOrder foreignOrder = new CustomerOrder();
+        foreignOrder.setId(UUID.randomUUID());
+        foreignOrder.setTenantId(foreignTenant.getId());
+        foreignOrder.setCustomerId(foreignCustomer.getId());
+        foreignOrder.setOrderNumber("FOREIGN-EXPORT-" + UUID.randomUUID().toString().substring(0, 8));
+        foreignOrder.setStatus("CONFIRMED");
+        foreignOrder.setSubtotal(BigDecimal.valueOf(987654));
+        foreignOrder.setDiscountPercent(BigDecimal.ZERO);
+        foreignOrder.setDiscountAmount(BigDecimal.ZERO);
+        foreignOrder.setTaxTotal(BigDecimal.ZERO);
+        foreignOrder.setTotal(BigDecimal.valueOf(987654));
+        foreignOrder.setCreatedAt(Instant.now());
+        customerOrders.save(foreignOrder);
+
+        var token = accessToken("admin@saumya.local", "Admin@123");
+        var reportResponse = mvc.perform(get("/api/v1/reports/operations")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        JsonNode report = json.readTree(reportResponse);
+        long expectedOrders = customerOrders.findByTenantIdOrderByIdDesc(vendorTenantId).stream()
+                .filter(x -> x.getCreatedAt() != null).count();
+        assertEquals(expectedOrders, report.get("orders").asLong());
+
+        var csv = mvc.perform(get("/api/v1/reports/operations/export.csv")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(csv.contains("orders," + expectedOrders));
+        assertFalse(csv.contains("987654"));
+        assertFalse(csv.contains(foreignOrder.getId().toString()));
+
+        byte[] xlsx = mvc.perform(get("/api/v1/reports/operations/export.xlsx")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try (var workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
+                new java.io.ByteArrayInputStream(xlsx))) {
+            var sheet = workbook.getSheet("Operations");
+            assertNotNull(sheet);
+            boolean foundOrders = false;
+            for (int row = 1; row <= sheet.getLastRowNum(); row++) {
+                var cells = sheet.getRow(row);
+                if (cells != null && "orders".equals(cells.getCell(0).getStringCellValue())) {
+                    assertEquals(String.valueOf(expectedOrders), cells.getCell(1).getStringCellValue());
+                    foundOrders = true;
+                }
+            }
+            assertTrue(foundOrders, "XLSX must contain the authenticated tenant's order aggregate");
+            assertFalse(xlsx.length == 0);
+            assertFalse(new String(xlsx, java.nio.charset.StandardCharsets.ISO_8859_1).contains("987654"));
+        }
+
+        byte[] pdf = mvc.perform(get("/api/v1/reports/operations/export.pdf")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        String pdfText = com.lowagie.text.pdf.parser.PdfTextExtractor
+                .getTextFromPage(new com.lowagie.text.pdf.PdfReader(pdf), 1);
+        assertTrue(pdfText.contains("orders"));
+        assertTrue(pdfText.contains(String.valueOf(expectedOrders)));
+        assertFalse(pdfText.contains("987654"));
+    }
+
+    @Test
     void customerCannotReadAnotherCustomersOrdersInvoicesOrServiceTickets() throws Exception {
         var customerA = createCustomer(vendorTenantId, "customer-scope-a");
         var customerB = createCustomer(vendorTenantId, "customer-scope-b");
