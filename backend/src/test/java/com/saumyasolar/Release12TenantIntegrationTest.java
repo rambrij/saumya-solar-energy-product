@@ -947,7 +947,14 @@ class Release12TenantIntegrationTest {
                         )))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var quotationId = json.readTree(quoteResponse).get("quotation").get("id").asText();
-        
+        AppUser noQuotationPermission = createPermissionMatrixUser("quotation-no-send", List.of());
+        String noQuotationPermissionToken = accessToken(noQuotationPermission.getEmail(), "Matrix-Password-2026");
+        mvc.perform(post("/api/v1/quotations/" + quotationId + "/send")
+                        .header("Authorization", "Bearer " + noQuotationPermissionToken))
+                .andExpect(status().isForbidden());
+        assertEquals("DRAFT", quotations.findByIdAndTenantId(UUID.fromString(quotationId), vendorTenantId)
+                .orElseThrow().getStatus(), "A denied quotation send must not change its status");
+
         mvc.perform(post("/api/v1/quotations/" + quotationId + "/send")
                         .header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isOk());
@@ -1099,6 +1106,12 @@ class Release12TenantIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(addressBody()))
                 .andExpect(status().isNotFound());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                                "/api/v1/customer/addresses/" + addressB.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        assertEquals("Home", customerAddresses.findByIdAndTenantId(addressB.getId(), vendorTenantId)
+                .orElseThrow().getLabel(), "A failed cross-customer delete must not mutate the target address");
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
                                 "/api/v1/customer/addresses/" + addressC.getId())
                         .header("Authorization", "Bearer " + token))
@@ -1542,6 +1555,21 @@ class Release12TenantIntegrationTest {
         var privateAttachment = serviceAttachments.upload(ticket.getId(), privateEvidence, customerBPrincipal);
         assertThrows(org.springframework.web.server.ResponseStatusException.class,
                 () -> serviceAttachments.download(ticket.getId(), privateAttachment.getId(), customerAPrincipal));
+        var customerAToken = accessToken(customerA.user().getEmail(), "Customer-Password-2026");
+        var customerBTokenForEvidence = accessToken(customerB.user().getEmail(), "Customer-Password-2026");
+        mvc.perform(get("/api/v1/service-requests/" + ticket.getId() + "/attachments/" + privateAttachment.getId())
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/service-requests/" + ticket.getId() + "/attachments/" + privateAttachment.getId())
+                        .header("Authorization", "Bearer " + customerBTokenForEvidence))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(privateEvidenceBytes));
+        MockMultipartFile tamperedCustomerUpload = new MockMultipartFile("file", "tampered.pdf", "application/pdf", privateEvidenceBytes);
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/service-requests/" + ticket.getId() + "/attachments")
+                        .file(tamperedCustomerUpload)
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isNotFound());
         assertArrayEquals(privateEvidenceBytes,
                 serviceAttachments.download(ticket.getId(), privateAttachment.getId(), customerBPrincipal).content());
 
@@ -1743,6 +1771,13 @@ class Release12TenantIntegrationTest {
                         .header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isNotFound());
         mvc.perform(get("/api/v1/surveys/" + foreignSurvey.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+        MockMultipartFile foreignSurveyUpload = new MockMultipartFile(
+                "file", "foreign-survey.txt", "text/plain", "foreign tenant evidence".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/surveys/" + foreignSurvey.getId() + "/attachments")
+                        .file(foreignSurveyUpload)
                         .header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isNotFound());
     }
