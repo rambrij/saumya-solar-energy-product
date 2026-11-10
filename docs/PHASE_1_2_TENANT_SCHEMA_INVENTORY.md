@@ -57,7 +57,7 @@ These classifications are grounded in current schema/entity usage but still requ
 
 ## 5. Remaining schema proof and release gates
 
-1. Execute the read-only SQL against the exact production schema and archive its complete output.
+1. Run the protected workflow .github/workflows/phase-2-production-preflight.yml manually from audit/phase-2-implementation-gap-analysis after the production environment approval; execute the read-only SQL against the exact production schema and archive its complete output.
 2. Obtain data-owner sign-off for every PLATFORM_GLOBAL, USER_SCOPED, JOIN_TABLE, MIXED and TENANT_OWNED classification above.
 3. Confirm every TENANT_OWNED table has tenant_id IS_NULLABLE=NO and exact null_tenant_rows=0 in production.
 4. Reconcile every FK and unique index in the audit output against the SRS and migration graph, including join tables and user-scoped security tables.
