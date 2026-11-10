@@ -30,7 +30,7 @@ class AuthenticationRateLimitFilterTest {
 
         assertEquals(429, response.getStatus());
         assertEquals("60", response.getHeader("Retry-After"));
-        assertTrue(response.getContentAsString().contains("Too many authentication attempts"));
+        assertTrue(response.getContentAsString().contains("Too many requests"));
         assertNull(chain.getRequest());
     }
 

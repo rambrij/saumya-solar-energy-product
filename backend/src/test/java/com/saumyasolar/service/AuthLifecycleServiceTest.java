@@ -127,7 +127,7 @@ class AuthLifecycleServiceTest {
         role.setId(UUID.randomUUID());
         role.setTenantId(tenantId);
         role.setName("CUSTOM_SALES_READ");
-        when(users.findById(employeeId)).thenReturn(Optional.of(employee));
+        when(users.findByIdAndTenantId(employeeId, tenantId)).thenReturn(Optional.of(employee));
         when(roles.findByNameAndTenantId("CUSTOM_SALES_READ", tenantId)).thenReturn(Optional.of(role));
         when(users.save(any(AppUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
