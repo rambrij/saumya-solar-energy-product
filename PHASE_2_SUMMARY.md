@@ -15,7 +15,7 @@
 - Added scheduler/context tests and MySQL SQL assertions that verify V57 rejects cross-tenant category, package and product references.
 - Added V58 with 88 composite tenant-aware foreign keys across sales, surveys, quotations, orders, inventory, installations, warranties, invoices, payments/refunds, service, private evidence, offline sync, integrations, branch memberships, engineer profiles, approval actors, audit branches and tenant notifications. V58 includes fail-closed orphan/cross-tenant preflight checks and composite lookup indexes.
 - Added `tenant-isolation-v58.sql` and wired V58 plus V57/V58 cross-tenant assertions into MySQL 8.4 CI.
-- Expanded endpoint negative tests for customer A/B addresses, orders, invoices and service tickets; foreign branch membership/analytics/update/deactivate/assignment; foreign survey/service-attachment parents; report CSV scope and platform-export denial.
+- Expanded endpoint negative tests for customer A/B addresses, orders, invoices and service tickets; generic vendor/customer list scoping across 13 routes; foreign branch membership/analytics/update/deactivate/assignment; foreign survey/service-attachment parents; report CSV scope and platform-export denial.
 - Added `BRANCH_MANAGE` to the runtime `DataSeeder` permission catalogue so the seeded vendor-admin permissions align with V51's migrated role grants.
 - Fixed two pre-existing CI failures discovered at baseline: role-escalation audit events now survive the expected `ResponseStatusException` rollback while retaining the caller transaction for actor foreign-key integrity, and the responsive navigation test selects among duplicate mobile/desktop links.
 - Added Flyway V57 with fail-closed preflight checks and composite tenant foreign keys for:
