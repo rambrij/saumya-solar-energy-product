@@ -101,23 +101,14 @@ public class NotificationService {
         if (eventPublisher == null) {
             return deliverBusinessNotification(userId, tenantId, eventType, recipient, subject, body);
         }
-        if (tenantId == null) {
-            throw new IllegalArgumentException("Business notifications require a tenant");
-        }
-        BusinessNotificationRequestedEvent event =
-                new BusinessNotificationRequestedEvent(userId, tenantId, eventType, recipient, subject, body);
-        if (TransactionSynchronizationManager.isSynchronizationActive()
-                && TransactionSynchronizationManager.isActualTransactionActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    eventPublisher.publishEvent(event);
-                }
-            });
-        } else {
-            eventPublisher.publishEvent(event);
-        }
-        return true;
+        if (tenantId == null) throw new IllegalArgumentException("Business notifications require a tenant");
+
+        UUID emailId = queueDelivery(userId, tenantId, eventType, "EMAIL", recipient, subject, body);
+        List<UUID> queuedIds = new java.util.ArrayList<>();
+        if (emailId != null) queuedIds.add(emailId);
+        queueConsentedChannels(userId, tenantId, eventType, subject, body, queuedIds);
+        queuedIds.forEach(this::publishAfterCommit);
+        return emailId != null;
     }
 
     boolean deliverBusinessNotification(
@@ -128,7 +119,120 @@ public class NotificationService {
         sendConsentedChannels(userId, tenantId, eventType, subject, body);
         return emailDelivered;
     }
-    
+
+    private UUID queueDelivery(
+            UUID userId, UUID tenantId, String eventType, String channel,
+            String recipient, String subject, String body
+    ) {
+        if (recipient == null || recipient.isBlank()) return null;
+        String normalizedRecipient = recipient.trim();
+        String normalizedSubject = subject == null || subject.isBlank() ? eventType : subject;
+        String idempotencyKey = UUID.nameUUIDFromBytes(
+                (tenantId + ":" + userId + ":" + eventType + ":" + channel + ":"
+                        + normalizedRecipient + ":" + normalizedSubject + ":" + body)
+                        .getBytes(StandardCharsets.UTF_8)).toString();
+        if (deliveries.existsByTenantIdAndIdempotencyKey(tenantId, idempotencyKey)) return null;
+
+        NotificationDelivery record = new NotificationDelivery();
+        record.setId(UUID.randomUUID());
+        record.setTenantId(tenantId);
+        record.setUserId(userId);
+        record.setEventType(eventType);
+        record.setChannel(channel);
+        record.setRecipient(normalizedRecipient);
+        record.setSubject(normalizedSubject);
+        record.setMessageBody(body);
+        record.setIdempotencyKey(idempotencyKey);
+        record.setStatus("PENDING");
+        record.setAttemptCount(0);
+        record.setCreatedAt(Instant.now());
+        deliveries.save(record);
+        return record.getId();
+    }
+
+    private void queueConsentedChannels(
+            UUID userId, UUID tenantId, String eventType, String subject, String body, List<UUID> queuedIds
+    ) {
+        if (customers == null || userId == null || twilioSid.isBlank() || twilioToken.isBlank()) return;
+        CustomerProfile customer = customers.findByTenantIdAndUserId(tenantId, userId)
+                .filter(CustomerProfile::isActive).orElse(null);
+        if (customer == null || customer.getPhone() == null
+                || !customer.getPhone().matches("^\\+[1-9][0-9]{7,14}$")) return;
+        if (customer.isSmsConsent() && !smsFrom.isBlank()) {
+            UUID id = queueDelivery(userId, tenantId, eventType, "SMS", customer.getPhone(), eventType, body);
+            if (id != null) queuedIds.add(id);
+        }
+        if (customer.isWhatsappConsent() && !whatsappFrom.isBlank()) {
+            String to = "whatsapp:" + customer.getPhone();
+            String message = (subject == null ? eventType : subject) + "\\n" + body;
+            UUID id = queueDelivery(userId, tenantId, eventType, "WHATSAPP", to, eventType, message);
+            if (id != null) queuedIds.add(id);
+        }
+    }
+
+    private void publishAfterCommit(UUID deliveryId) {
+        NotificationDelivery persisted = deliveries.findById(deliveryId).orElseThrow();
+        BusinessNotificationRequestedEvent event =
+                new BusinessNotificationRequestedEvent(this, deliveryId, persisted.getTenantId());
+        if (TransactionSynchronizationManager.isSynchronizationActive()
+                && TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() { eventPublisher.publishEvent(event); }
+            });
+        } else {
+            eventPublisher.publishEvent(event);
+        }
+    }
+
+    public void processPendingDelivery(UUID deliveryId, UUID tenantId) {
+        Instant now = Instant.now();
+        if (deliveries.claimPendingDelivery(deliveryId, tenantId, now, now.minusSeconds(60)) != 1) return;
+        NotificationDelivery record = deliveries.findByIdAndTenantId(deliveryId, tenantId).orElse(null);
+        if (record == null || !"PENDING".equals(record.getStatus())) return;
+        try {
+            if ("EMAIL".equals(record.getChannel())) {
+                SimpleMailMessage message = new SimpleMailMessage();
+                message.setFrom(from);
+                message.setTo(record.getRecipient());
+                message.setSubject(record.getSubject());
+                message.setText(record.getMessageBody());
+                mailSender.send(message);
+            } else {
+                sendProviderDelivery(record);
+            }
+            record.setAttemptCount(record.getAttemptCount() + 1);
+            record.setStatus("DELIVERED");
+            record.setSentAt(Instant.now());
+            record.setNextAttemptAt(null);
+            record.setLastError(null);
+        } catch (Exception ex) {
+            int attempts = record.getAttemptCount() + 1;
+            record.setAttemptCount(attempts);
+            record.setStatus("FAILED");
+            record.setLastError("Delivery attempt failed");
+            record.setNextAttemptAt(attempts >= 5 ? null
+                    : Instant.now().plusSeconds(Math.min(3600, 60L * (1L << Math.min(attempts, 5)))));
+        }
+        deliveries.save(record);
+    }
+
+    private void sendProviderDelivery(NotificationDelivery record) throws Exception {
+        if (twilioSid.isBlank() || twilioToken.isBlank()) throw new IllegalStateException("Messaging provider is not configured");
+        String sender = "SMS".equals(record.getChannel()) ? smsFrom
+                : (whatsappFrom.startsWith("whatsapp:") ? whatsappFrom : "whatsapp:" + whatsappFrom);
+        String form = "To=" + encForm(record.getRecipient()) + "&From=" + encForm(sender)
+                + "&Body=" + encForm(record.getMessageBody());
+        String auth = Base64.getEncoder().encodeToString((twilioSid + ":" + twilioToken).getBytes(StandardCharsets.UTF_8));
+        HttpRequest request = HttpRequest.newBuilder(URI.create(
+                "https://api.twilio.com/2010-04-01/Accounts/" + twilioSid + "/Messages.json"))
+                .timeout(Duration.ofSeconds(10)).header("Authorization", "Basic " + auth)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(form)).build();
+        HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() < 200 || response.statusCode() >= 300)
+            throw new IllegalStateException("Messaging provider returned HTTP " + response.statusCode());
+    }
+
     private boolean deliver(
             UUID userId, UUID tenantId, String eventType,
             String recipient, String subject, String body
@@ -235,6 +339,7 @@ public class NotificationService {
     @Scheduled(fixedDelayString = "${app.messaging.retry-interval-ms:60000}")
     public void retryFailedDeliveries() {
         Instant now = Instant.now();
+        recoverPendingDeliveries(now);
         for (UUID tenantId : deliveries.findDistinctTenantIdsForRetry("FAILED", now)) {
             try (var scope = com.saumyasolar.security.TenantExecutionContext.open(tenantId)) {
                 List<NotificationDelivery> batch = deliveries
@@ -244,6 +349,17 @@ public class NotificationService {
                     if (deliveries.claimFailedDelivery(record.getId(), tenantId, Instant.now()) != 1) continue;
                     retryFailedDelivery(record);
                 }
+            }
+        }
+    }
+
+    private void recoverPendingDeliveries(Instant now) {
+        Instant staleBefore = now.minusSeconds(60);
+        for (UUID tenantId : deliveries.findDistinctTenantIdsForPending(staleBefore)) {
+            try (var scope = com.saumyasolar.security.TenantExecutionContext.open(tenantId)) {
+                List<NotificationDelivery> pending = deliveries
+                        .findTop50ByTenantIdAndStatusAndCreatedAtBeforeOrderByCreatedAtAsc(tenantId, "PENDING", staleBefore);
+                for (NotificationDelivery record : pending) processPendingDelivery(record.getId(), tenantId);
             }
         }
     }

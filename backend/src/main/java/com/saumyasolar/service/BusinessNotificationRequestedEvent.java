@@ -1,13 +1,18 @@
 package com.saumyasolar.service;
 
+import org.springframework.context.ApplicationEvent;
 import java.util.UUID;
 
-/** Immutable payload for a tenant-scoped business notification request. */
-public record BusinessNotificationRequestedEvent(
-        UUID userId, UUID tenantId, String eventType, String recipient, String subject, String body
-) {
-    public BusinessNotificationRequestedEvent {
-        if (tenantId == null) throw new IllegalArgumentException("tenantId is required");
-        if (eventType == null || eventType.isBlank()) throw new IllegalArgumentException("eventType is required");
+/** Identifies a persisted tenant-scoped notification delivery to process. */
+public final class BusinessNotificationRequestedEvent extends ApplicationEvent {
+    private final UUID deliveryId;
+    private final UUID tenantId;
+    public BusinessNotificationRequestedEvent(Object source, UUID deliveryId, UUID tenantId) {
+        super(source);
+        if (deliveryId == null || tenantId == null) throw new IllegalArgumentException("deliveryId and tenantId are required");
+        this.deliveryId = deliveryId;
+        this.tenantId = tenantId;
     }
+    public UUID deliveryId() { return deliveryId; }
+    public UUID tenantId() { return tenantId; }
 }

@@ -29,6 +29,33 @@ public interface NotificationDeliveryRepository extends JpaRepository<Notificati
             String status,
             java.time.Instant before
     );
+
+    @Query("""
+            select distinct d.tenantId from NotificationDelivery d
+            where d.status = 'PENDING' and d.tenantId is not null
+              and (d.nextAttemptAt is null or d.nextAttemptAt <= :staleBefore)
+            """)
+    List<UUID> findDistinctTenantIdsForPending(@Param("staleBefore") java.time.Instant staleBefore);
+
+    List<NotificationDelivery> findTop50ByTenantIdAndStatusAndCreatedAtBeforeOrderByCreatedAtAsc(
+            UUID tenantId, String status, java.time.Instant before
+    );
+
+    @Modifying
+    @Transactional
+    @Query("""
+            update NotificationDelivery d
+            set d.nextAttemptAt = :now
+            where d.id = :id and d.tenantId = :tenantId and d.status = 'PENDING'
+              and (d.nextAttemptAt is null or d.nextAttemptAt <= :staleBefore)
+            """)
+    int claimPendingDelivery(
+            @Param("id") UUID id, @Param("tenantId") UUID tenantId,
+            @Param("now") java.time.Instant now, @Param("staleBefore") java.time.Instant staleBefore
+    );
+
+    java.util.Optional<NotificationDelivery> findByIdAndTenantId(UUID id, UUID tenantId);
+
     @Modifying
     @Transactional
     @Query("""

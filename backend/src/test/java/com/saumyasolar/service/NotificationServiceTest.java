@@ -21,10 +21,12 @@ import static org.mockito.Mockito.*;
 class NotificationServiceTest {
 
     @Test
-    void businessNotificationPublishesApplicationEventInsteadOfBlockingRequestThread() {
+    void persistsPendingNotificationBeforePublishingItsEvent() {
         JavaMailSender sender = mock(JavaMailSender.class);
         NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
         ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.findById(any())).thenAnswer(invocation -> java.util.Optional.of(invocation.getArgument(0)));
         NotificationService service = new NotificationService(
                 sender, repository, null, "no-reply@example.test", "http://localhost:3000",
                 "", "", "", "", publisher
@@ -34,14 +36,13 @@ class NotificationServiceTest {
                 UUID.randomUUID(), tenantId, "QUOTATION_SENT",
                 "customer@example.test", "Your quotation", "Quotation details"
         );
-
         assertTrue(accepted);
-        org.mockito.ArgumentCaptor<Object> event = org.mockito.ArgumentCaptor.forClass(Object.class);
-        verify(publisher).publishEvent(event.capture());
-        assertInstanceOf(BusinessNotificationRequestedEvent.class, event.getValue());
-        assertEquals(tenantId, ((BusinessNotificationRequestedEvent) event.getValue()).tenantId());
+        ArgumentCaptor<NotificationDelivery> saved = ArgumentCaptor.forClass(NotificationDelivery.class);
+        verify(repository).save(saved.capture());
+        assertEquals("PENDING", saved.getValue().getStatus());
+        assertEquals(tenantId, saved.getValue().getTenantId());
+        verify(publisher).publishEvent(any(BusinessNotificationRequestedEvent.class));
         verifyNoInteractions(sender);
-        verifyNoInteractions(repository);
     }
 
     @Test
