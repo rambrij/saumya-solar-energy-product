@@ -126,3 +126,10 @@ The role-name inventory still requires explicit classification:
 - VendorAnalyticsService requires Vendor Admin for cross-branch aggregate analytics; a branch-scoped custom role must not gain tenant-wide analytics by receiving BRANCH_MANAGE.
 
 The scanner is a repeatable inventory, not a proof of all endpoint authorization. These classifications must be revisited when adding a new role or changing tenant/branch semantics. The complete route × verb × role matrix and endpoint-specific test evidence remain open.
+
+
+### Survey assignment and evidence upload hardening — 2026-11-10
+
+- Survey read scope now applies to every non-customer principal without SURVEY_ASSIGN, not only principals carrying SERVICE_VIEW. Such users can read only surveys assigned to their user ID; dispatch/reviewer roles with SURVEY_ASSIGN retain tenant-wide scope.
+- Survey evidence upload now requires SURVEY_COMPLETE for vendor users after the survey tenant/customer/assignment guard. Customers retain self-owned survey evidence upload.
+- Added SurveyLifecycleIntegrationTest coverage for assigned survey reader access and unassigned sales-user denial, plus SurveyAttachmentServiceTest for read-only upload denial and SURVEY_COMPLETE upload success.
