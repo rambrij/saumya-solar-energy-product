@@ -24,9 +24,11 @@ jobs:
           DB_NAME: ${{ secrets.PROD_DB_NAME }}
           DB_USER: ${{ secrets.PROD_DB_USER }}
           DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          DB_AUDIT_USER: ${{ secrets.PROD_DB_AUDIT_USER }}
+          DB_AUDIT_PASSWORD: ${{ secrets.PROD_DB_AUDIT_PASSWORD }}
         run: |
           set -euo pipefail
-          for key in DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD; do
+          for key in DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD DB_AUDIT_USER DB_AUDIT_PASSWORD; do
             if [ -z "${!key:-}" ]; then
               echo "::error::Missing required GitHub environment secret for ${key}"
               exit 1
@@ -57,11 +59,24 @@ jobs:
             exit "$mysql_status"
           fi
           echo "V57/V58 production data-integrity preflight completed successfully." | tee -a phase2-production-preflight-output.txt
+      - name: Run full tenant schema and NOT NULL audit with read-only account
+        env:
+          MYSQL_HOST: ${{ secrets.PROD_DB_HOST }}
+          MYSQL_TCP_PORT: ${{ secrets.PROD_DB_PORT }}
+          MYSQL_DATABASE: ${{ secrets.PROD_DB_NAME }}
+          MYSQL_USER: ${{ secrets.PROD_DB_AUDIT_USER }}
+          MYSQL_PWD: ${{ secrets.PROD_DB_AUDIT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mysql --connect-timeout=15 --host="$MYSQL_HOST" --port="$MYSQL_TCP_PORT" --user="$MYSQL_USER" "$MYSQL_DATABASE" \
+            < docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql | tee tenant-schema-audit-output.txt
       - name: Preserve preflight evidence for remediation review
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: phase2-production-preflight-${{ github.run_id }}
-          path: phase2-production-preflight-output.txt
+          path: |
+            phase2-production-preflight-output.txt
+            tenant-schema-audit-output.txt
           if-no-files-found: warn
           retention-days: 30
