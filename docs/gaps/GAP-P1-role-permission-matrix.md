@@ -72,4 +72,4 @@
 
 ## Status
 
-**PARTIAL — implementation extended; latest CI pending.** The custom-role CRUD and UI already exist and are not a missing feature. Remaining critical work is the exhaustive action-to-permission traceability matrix, review of legacy broad permission grants, and full authenticated role/resource negative tests. Do not mark MET until latest-head backend/MySQL/browser tests pass.
+**PARTIAL — implementation extended; latest-head workflow 42821756695: backend suite passed (163 tests), frontend build passed, MySQL migration validation passed; Spring Boot/browser Playwright job remains in progress.** The custom-role CRUD and UI already exist and are not a missing feature. Remaining critical work is the exhaustive action-to-permission traceability matrix, review of legacy broad permission grants, and full authenticated role/resource negative tests. Do not mark MET until latest-head backend/MySQL/browser tests pass.
