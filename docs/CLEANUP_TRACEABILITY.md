@@ -3,7 +3,8 @@
 **Repository:** `rambrij/saumya-solar-energy-product`  
 **Only target branch:** `cleanup/code-cleanup`  
 **Phase:** 0 complete; Phases 1–4 in progress  
-**Baseline commit inspected:** `d4acfa8edb8e6828299f6a8abcbe3e9e46178afe`  
+**Initial analysis baseline:** `d4acfa8edb8e6828299f6a8abcbe3e9e46178afe`  
+**Current cleanup commit:** `5b0f519369ccbc5ca4d5d484ea5bf9458f3ca391`  
 **Requirements sources read in full:** `saumya-solar-energy-solution-requirements.md` (880 lines), `saumya-solar-production-ready-srs-hld.md` (1,388 lines), `IMPLEMENTATION_GAP_ANALYSIS.md` (1,560 lines).  
 **Validation-source exclusion:** `README.md` was not used.
 
@@ -63,13 +64,13 @@ The SRS §13 API tables are normative design references. Actual controller mappi
 
 | SRS database area | Entity / repository implementation | SQL implementation |
 |---|---|---|
-| Tenant, user, role, permission, global identity | `Tenant`, `AppUser`, `Role`, `Permission`; matching repositories | V1, V5, V10, V13, V16, V37, V51–V56, V59, V61 |
-| Customer, addresses, enquiries, leads and activity | `CustomerProfile`, `CustomerAddress`, `Enquiry`, `SalesLead`, `LeadHistory` | V1, V8, V37, V43, V49–V50, V58 |
-| Catalogue and packages | `ProductCategory`, `Product`, `SolarPackage`, `PackageItem` | V1, V5–V7, V16, V37, V57 |
-| Surveys, quotations and approval | `SiteSurvey`, survey attachments/history, `Quotation`, `QuotationItem`, approval entities | V3, V9, V25–V30, V35, V39, V58 |
-| Orders and inventory | `CustomerOrder`, `OrderItem`, `OrderStatusHistory`, `Warehouse`, `InventoryBalance`, `InventoryReservation`, `InventoryTransaction` | V1, V11–V14, V26, V33–V34, V37, V43, V58 |
-| Installation, warranty and service | installation entities, `Warranty`, `WarrantyClaim`, `ServiceRequest`, `ServiceVisit`, `ServiceSlaPolicy`, evidence entities | V11–V12, V18, V21–V22, V27–V28, V30–V32, V35–V36, V37, V43, V58 |
-| Finance and payments | `Invoice`, `InvoiceItem`, `Payment`, `Refund`, `CreditNote`, webhook entities | V14, V18–V20, V25–V26, V37, V42–V43, V58 |
+| Tenant, user, role, permission, global identity | `Tenant`, `AppUser`, `Role`, `Permission`; matching repositories | `V1__baseline.sql` (historical source migrations V1, V5, V10, V13, V16, V37, V51–V56, V59, V61) |
+| Customer, addresses, enquiries, leads and activity | `CustomerProfile`, `CustomerAddress`, `Enquiry`, `SalesLead`, `LeadHistory` | `V1__baseline.sql` (historical source migrations V1, V8, V37, V43, V49–V50, V58) |
+| Catalogue and packages | `ProductCategory`, `Product`, `SolarPackage`, `PackageItem` | `V1__baseline.sql` (historical source migrations V1, V5–V7, V16, V37, V57) |
+| Surveys, quotations and approval | `SiteSurvey`, survey attachments/history, `Quotation`, `QuotationItem`, approval entities | `V1__baseline.sql` (historical source migrations V3, V9, V25–V30, V35, V39, V58) |
+| Orders and inventory | `CustomerOrder`, `OrderItem`, `OrderStatusHistory`, `Warehouse`, `InventoryBalance`, `InventoryReservation`, `InventoryTransaction` | `V1__baseline.sql` (historical source migrations V1, V11–V14, V26, V33–V34, V37, V43, V58) |
+| Installation, warranty and service | installation entities, `Warranty`, `WarrantyClaim`, `ServiceRequest`, `ServiceVisit`, `ServiceSlaPolicy`, evidence entities | `V1__baseline.sql` (historical source migrations V11–V12, V18, V21–V22, V27–V28, V30–V32, V35–V37, V43, V58) |
+| Finance and payments | `Invoice`, `InvoiceItem`, `Payment`, `Refund`, `CreditNote`, webhook entities | `V1__baseline.sql` (historical source migrations V14, V18–V20, V25–V26, V37, V42–V43, V58) |
 | Notifications, MFA and authentication controls | `NotificationDelivery`, `MfaChallenge`, refresh token and rate-limit persistence entities | `V1__baseline.sql` (historical source migrations V4, V23–V24, V29, V52–V53, V58–V60, V62) |
 | SaaS, branches, integrations and offline sync | `TenantSubscription`, `SubscriptionPlan`, `Branch`, integration and offline sync entities | `V1__baseline.sql` (historical source migrations V37–V48, V58, V61) |
 | Tenant-scoped asynchronous exports | `ExportJob`; `ExportJobRepository` | `V1__baseline.sql` (historical source migration V63) |
