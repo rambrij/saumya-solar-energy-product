@@ -978,9 +978,18 @@ public class OperationsService {
     public List<Warranty> warranties(Principal p) {
         UUID t = tenant(p);
         permission(p, "SERVICE_VIEW");
-        if (p.roles() == null || p.roles().stream().noneMatch(r -> Set.of("VENDOR_ADMIN", "OPERATIONS_MANAGER", "SERVICE_MANAGER").contains(r)))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-        return warranties.findByTenantIdOrderByStartDateDesc(t);
+        List<Warranty> tenantWarranties = warranties.findByTenantIdOrderByStartDateDesc(t);
+        if (p.permissions() != null && p.permissions().contains("INSTALLATION_ASSIGN")) {
+            return tenantWarranties;
+        }
+        Set<UUID> assignedInstallationIds = installations.findByTenantIdOrderByScheduledAtAsc(t).stream()
+                .filter(job -> p.userId().equals(job.getAssignedEngineerId()))
+                .map(InstallationJob::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        return tenantWarranties.stream()
+                .filter(warranty -> warranty.getInstallationId() != null
+                        && assignedInstallationIds.contains(warranty.getInstallationId()))
+                .toList();
     }
     
     private CustomerProfile customer(Principal p) {
