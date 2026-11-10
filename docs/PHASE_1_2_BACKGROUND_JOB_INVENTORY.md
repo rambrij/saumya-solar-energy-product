@@ -46,3 +46,16 @@ This inventory is a partial, evidence-based list, not a claim that no other asyn
 - Added scripts/audit/scan-async-workers.sh to scan backend Java source for @Scheduled, @Async, executor declarations/submissions, CompletableFuture, application event listeners/producers, messaging/queue consumer annotations and startup runners. It also scans backend resource and GitHub workflow configuration for scheduler/worker declarations.
 - release-validation.yml runs the scanner on every push to this audit branch and uploads its output as a 30-day artifact. The current source review identifies six scheduled methods/classes: AuthenticationRateLimitCleanup, IntegrationSyncScheduler, NotificationService.retryFailedDeliveries, ServiceSlaScheduler, SubscriptionExpiryScheduler and WarrantyExpiryScheduler.
 - A checked-in scanner and uploaded artifact improve reproducibility but do not themselves prove that every hit is tenant-safe. The artifact must be reviewed and each discovered boundary added to the table above. Queue consumers, event listeners and framework-managed async boundaries remain unverified until that scan output is reviewed.
+
+
+## Repository scan findings — CI run 42841931283
+
+The checked-in scanner executed across backend/src/main/java and the resource/workflow configuration:
+
+- Scheduled triggers found: exactly the six rows already listed above.
+- No @Async methods, executor declarations/submissions, CompletableFuture, ForkJoinPool or explicit new Thread use found in backend Java source.
+- No application event listeners/producers or Kafka/Rabbit/JMS listener/template consumers found in backend Java source.
+- Startup runners found: DataSeeder.seedData (guarded by app.seed.enabled, default false) and PlatformAdminBootstrap.bootstrapPlatformAdmin (guarded by app.bootstrap.platform-admin.enabled, default false). These are startup initialization paths, not background workers; their data-seeding and credential policy must be audited separately against the no-production-bootstrap-user rule.
+- The initial scanner version used ripgrep, which is not installed on the runner; that scan artifact was invalid. The scanner was changed to portable grep. The corrected CI scan at 42841931283 is the first usable result. A follow-up pattern refinement removes false positives for ordinary business methods named submit.
+
+The scan covers checked-in Java source and declared YAML/properties/XML schedules. It cannot detect dynamically registered tasks, library-internal asynchronous work, external infrastructure queues configured outside this repository, or production-only runtime integrations. Re-run and review the artifact after any worker-related change.
