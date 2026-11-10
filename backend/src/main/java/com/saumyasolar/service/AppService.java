@@ -140,7 +140,7 @@ public class AppService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found");
     }
 
-    private void assertSalesQuotationScope(Quotation quotation, Principal p) {
+    void assertSalesQuotationScope(Quotation quotation, Principal p) {
         if (!assignedSalesScope(p)) return;
         boolean createdBySelf = p.userId().equals(quotation.getCreatedBy());
         boolean assignedLead = quotation.getLeadId() != null

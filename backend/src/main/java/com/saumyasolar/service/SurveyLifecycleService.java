@@ -120,9 +120,8 @@ public class SurveyLifecycleService {
                     || actor.roles() == null || actor.roles().stream().noneMatch(Set.of("VENDOR_ADMIN", "SALES_MANAGER", "OPERATIONS_MANAGER")::contains))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Survey reassignment requires SURVEY_ASSIGN");
         }
-        if (input.assignedUserId() != null && users.findById(input.assignedUserId())
-                .filter(user -> actor.tenantId().equals(user.getTenantId())
-                        && "VENDOR".equals(user.getAccountType()) && user.isEnabled()).isEmpty()) {
+        if (input.assignedUserId() != null && users.findByIdAndTenantId(input.assignedUserId(), actor.tenantId())
+                .filter(user -> "VENDOR".equals(user.getAccountType()) && user.isEnabled()).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Assigned engineer must be an enabled employee of this vendor");
         }
         if (input.scheduledAt() != null) survey.setScheduledAt(input.scheduledAt());

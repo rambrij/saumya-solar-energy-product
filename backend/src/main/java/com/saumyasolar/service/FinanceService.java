@@ -728,7 +728,7 @@ public class FinanceService {
         permission(p, "SERVICE_RESOLVE");
         ServiceRequest t = ticket(id, p.tenantId());
         ensureTicketAccess(t, p);
-        ServiceVisit v = visits.findById(visitId).filter(a -> a.getTenantId().equals(p.tenantId()) && a.getServiceRequestId().equals(id)).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Visit not found"));
+        ServiceVisit v = visits.findByIdAndTenantIdAndServiceRequestId(visitId, p.tenantId(), id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Visit not found"));
         if (!v.getEngineerId().equals(p.userId()) && !(p.permissions() != null && p.permissions().contains("SERVICE_ASSIGN")))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (v.getCompletedAt() != null)
