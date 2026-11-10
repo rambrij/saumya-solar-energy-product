@@ -81,3 +81,6 @@ Application-level route buckets have now been added for `/api/v1/public/{storeSl
 - The SQL increment uses atomic UPDATE and handles concurrent first inserts with a duplicate-key retry. This is a shared-database concurrency test, not proof of independent-node behavior behind production ingress.
 - Test commit: `eb19f8bb` (assertion refinement: `c970dfaf`). Latest-head CI for subsequent branch commits is running; do not mark concurrency MET until it passes.
 - Remaining: validate real multi-instance deployment/DB isolation, proxy CIDRs and WAF limits; choose numeric thresholds and monitor rate-limit bucket contention.
+
+
+CI verification (2026-11-10): `AuthenticationRateLimitConcurrencyIntegrationTest` passed in workflow `42828454430` as part of 171 backend tests. The shared MySQL bucket did not exceed the configured account allowance under concurrent worker threads. Real multi-instance ingress/proxy configuration and threshold tuning remain open.
