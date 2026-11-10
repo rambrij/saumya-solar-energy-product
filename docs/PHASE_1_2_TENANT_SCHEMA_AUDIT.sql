@@ -11,7 +11,7 @@ SELECT
     CASE
       WHEN t.TABLE_NAME IN ('tenant', 'subscription_plan', 'permission', 'auth_rate_limit_bucket', 'payment_webhook_event')
         THEN 'PLATFORM_GLOBAL_CANDIDATE_OWNER_CONFIRMATION'
-      WHEN t.TABLE_NAME IN ('app_user', 'role', 'audit_event')
+      WHEN t.TABLE_NAME IN ('app_user', 'role', 'audit_event', 'notification_delivery')
         THEN 'MIXED_PLATFORM_AND_TENANT_REVIEW_REQUIRED'
       WHEN t.TABLE_NAME IN ('mfa_challenge', 'password_reset_token', 'refresh_token')
         THEN 'USER_SCOPED_VIA_APP_USER_REVIEW_REQUIRED'
@@ -92,7 +92,7 @@ WHERE c.TABLE_SCHEMA=DATABASE() AND c.COLUMN_NAME='tenant_id'
 
 -- Interpretation:
 -- 1) A candidate tenant table passes the schema gate only when IS_NULLABLE='NO' AND null_tenant_rows=0.
--- 2) app_user, role and audit_event are mixed-scope; validate their platform-vs-tenant row semantics before any alteration.
+-- 2) app_user, role, audit_event and notification_delivery are mixed-scope; notification_delivery permits NULL tenant_id only for platform authentication messages. Validate owner/account_type semantics before any alteration.
 -- 3) A table with no tenant_id is not automatically global. It remains UNCLASSIFIED until its owner
 --    proves platform-global scope or a safe tenant relationship/column is added.
 -- 4) Compare actual base tables, FK and unique indexes with JPA entities, migrations and the SRS.
