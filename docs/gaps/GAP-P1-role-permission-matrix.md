@@ -107,3 +107,22 @@ Still open: inventory every Controller/secondary-controller mapping and service 
 - Service evidence upload now requires SERVICE_UPDATE for vendor principals after FinanceService verifies tenant/customer/assigned-ticket access. Customer upload remains limited to the customer's own ticket.
 - Added ServiceAttachmentServiceTest for read-only service-viewer upload denial and service-updater upload success; latest-head CI must verify it.
 - One role-name check remains in FinanceService.saveServiceReopenPolicy because this is a tenant-wide policy setting with no dedicated SRS permission code. It is intentionally admin-only pending product approval for a new dedicated permission; it is not silently treated as migrated.
+
+
+### Repository-wide legacy authorization scan review — CI run 42842491454
+
+The portable grep inventory scanned backend/src/main/java. The only references to coarse legacy permission codes are:
+- AuthLifecycleService custom-role allowlist: the legacy codes are explicitly excluded so a custom role cannot reintroduce broad permissions.
+- DataSeeder employee role permission declarations: these are fine-grained grants; the scanner's coarse-code pattern also matched the substrings in role names INVENTORY_MANAGER and SERVICE_MANAGER, not broad permission checks.
+
+No runtime authorization call site was found enforcing CATALOG_MANAGE, CUSTOMER_MANAGE, LEAD_MANAGE, SURVEY_MANAGE, QUOTATION_MANAGE, INVENTORY_MANAGE, SERVICE_MANAGE, FINANCE_MANAGE or USER_MANAGE. The remaining references are a denylist and role identifiers, not authorization grants.
+
+The role-name inventory still requires explicit classification:
+- Intentional platform identity/scope: TenantAdminService and EnterpriseSaasService restrict PLATFORM_SUPER_ADMIN / PLATFORM_SUPPORT, including support read-only behavior; Controller's platform admin action is super-admin-only.
+- Intentional tenant-wide exception: EnterpriseSaasService branch/warehouse record filtering and BranchAnalyticsService permit VENDOR_ADMIN to bypass branch membership; custom branch managers remain membership-scoped.
+- Intentional business eligibility: OperationsService, FinanceService and Phase2OperationsController validate that an assignee has an engineer/installer role. This is employee classification, not an actor authorization check.
+- Intentional admin-only policy: FinanceService.saveServiceReopenPolicy is restricted to VENDOR_ADMIN because no dedicated SRS permission exists yet.
+- Intentional governance: AuthLifecycleService protects the last VENDOR_ADMIN and prevents unsupported administrator role assignment/demotion; ApprovalWorkflowService checks the configured approver role.
+- VendorAnalyticsService requires Vendor Admin for cross-branch aggregate analytics; a branch-scoped custom role must not gain tenant-wide analytics by receiving BRANCH_MANAGE.
+
+The scanner is a repeatable inventory, not a proof of all endpoint authorization. These classifications must be revisited when adding a new role or changing tenant/branch semantics. The complete route × verb × role matrix and endpoint-specific test evidence remain open.
