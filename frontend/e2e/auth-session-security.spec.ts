@@ -17,7 +17,7 @@ test('browser auth uses HttpOnly refresh cookie and enforces CSRF, rotation and 
   expect(session.accessToken).toBeTruthy();
   expect(session.csrfToken).toBeTruthy();
 
-  const cookies = await page.context().cookies(baseURL);
+  const cookies = await page.context().cookies(baseURL.replace(/\/$/, '') + '/api/v1/auth/refresh');
   const refreshCookie = cookies.find(cookie => cookie.name === 'saumya_refresh');
   expect(refreshCookie, 'refresh credential must be a browser cookie').toBeTruthy();
   expect(refreshCookie?.httpOnly).toBe(true);
