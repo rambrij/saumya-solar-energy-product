@@ -63,3 +63,6 @@
 ## Status
 
 **PARTIAL — V57/V58 present and MySQL 8.4 CI passed.** The migration coverage is substantial, not exhaustive proof of tenant_id NOT NULL on every tenant-owned table or every relationship. Complete entity/table/FK/unique-index inventory and production-data preflight remain open.
+
+
+Latest-head verification update (2026-11-10): workflow 42821756695 passed backend (163 tests), frontend production build and MySQL 8.4 migration validation; Spring Boot/browser Playwright job remains in progress.
