@@ -84,7 +84,7 @@ class ExportServiceTest {
         verify(storage).putReplacing(any(), eq("exports"), eq(tenant), anyString(), any(), anyString());
         verify(jobs).save(job);
 
-        byte[] privateCsv = "id,total\\n1,10.00\\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] privateCsv = "id,total\n1,10.00\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
         when(jobs.findByIdAndTenantIdAndRequestedBy(job.getId(), tenant, job.getRequestedBy()))
                 .thenReturn(Optional.of(job));
         when(storage.get(any(), eq(job.getStorageKey()))).thenReturn(privateCsv);
