@@ -87,7 +87,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
-@SpringBootTest(properties = "app.warranty.attachment-location=${java.io.tmpdir}/saumya-warranty-attachment-it")
+@SpringBootTest(properties = {
+        "app.warranty.attachment-location=${java.io.tmpdir}/saumya-warranty-attachment-it",
+        "app.service.attachment-location=${java.io.tmpdir}/saumya-service-attachment-it"
+})
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class Release12TenantIntegrationTest {
@@ -139,6 +142,8 @@ class Release12TenantIntegrationTest {
     com.saumyasolar.repo.SubscriptionPlanRepository subscriptionPlans;
     @Autowired
     ServiceRequestRepository serviceRequests;
+    @Autowired
+    com.saumyasolar.service.ServiceAttachmentService serviceAttachments;
     @Autowired
     InstallationJobRepository installationJobs;
     @Autowired
@@ -1531,6 +1536,20 @@ class Release12TenantIntegrationTest {
         ticket.setCreatedAt(Instant.now());
         ticket.setUpdatedAt(Instant.now());
         serviceRequests.save(ticket);
+
+        var customerAPrincipal = new com.saumyasolar.security.Principal(customerA.user().getId(), vendorTenantId,
+                customerA.user().getEmail(), "CUSTOMER", java.util.Set.of("CUSTOMER"), java.util.Set.of(), 0);
+        var customerBPrincipal = new com.saumyasolar.security.Principal(customerB.user().getId(), vendorTenantId,
+                customerB.user().getEmail(), "CUSTOMER", java.util.Set.of("CUSTOMER"), java.util.Set.of(), 0);
+        byte[] privateEvidenceBytes = "%PDF-1.4 customer B service evidence"
+                .getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        MockMultipartFile privateEvidence = new MockMultipartFile("file", "customer-b-evidence.pdf",
+                "application/pdf", privateEvidenceBytes);
+        var privateAttachment = serviceAttachments.upload(ticket.getId(), privateEvidence, customerBPrincipal);
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> serviceAttachments.download(ticket.getId(), privateAttachment.getId(), customerAPrincipal));
+        assertArrayEquals(privateEvidenceBytes,
+                serviceAttachments.download(ticket.getId(), privateAttachment.getId(), customerBPrincipal).content());
 
         var token = accessToken(customerA.user().getEmail(), "Customer-Password-2026");
         var ordersJson = mvc.perform(get("/api/v1/customer/product-orders")
