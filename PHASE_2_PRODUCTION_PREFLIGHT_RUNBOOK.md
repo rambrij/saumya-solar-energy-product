@@ -18,6 +18,10 @@ The branch's .github/workflows/release-validation.yml already provisions an isol
 
 Use the CI run to validate SQL syntax, migration compatibility and the preflight's behavior against a clean schema. It cannot establish that production legacy rows are clean, because the disposable schema has no production data. A separate production preflight and DBA/release-owner sign-off remain mandatory before V57/V58 rollout.
 
+## Development-credential CI smoke preflight
+
+For this repository's non-production validation, `.github/workflows/release-validation.yml` provisions a fresh disposable MySQL 8.4 database using the same local development settings as `docker-compose.yml`: database `solar`, application user `solar`, password `solarpass`. The application starts with this least-purpose application account and the V57/V58 read-only integrity SQL is executed against that migrated CI database. The runner is ephemeral; these values are test fixtures only. They are not production credentials and must never be copied into the protected `production` GitHub environment. The separate `phase-2-production-preflight.yml` remains gated on real, protected production secrets and reviewer approval.
+
 ## Execution prerequisites
 
 1. Confirm a current production backup and an approved change window.
