@@ -5,6 +5,7 @@ import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.repo.WarrantyRepository;
 import com.saumyasolar.repo.TenantRepository;
 import com.saumyasolar.domain.Tenant;
+import com.saumyasolar.security.TenantExecutionContext;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Value;
@@ -42,18 +43,21 @@ public class WarrantyExpiryScheduler {
     public void evaluateWarrantyExpiry() {
         LocalDate today = LocalDate.now(zone);
         for (Tenant tenant : tenants.findAll()) {
-            for (Warranty expired : warranties.findByTenantIdAndStatusAndEndDateBefore(tenant.getId(), "ACTIVE", today)) {
+            try (var scope = TenantExecutionContext.open(tenant.getId())) {
+            UUID tenantId = TenantExecutionContext.requireTenantId();
+            for (Warranty expired : warranties.findByTenantIdAndStatusAndEndDateBefore(tenantId, "ACTIVE", today)) {
                 expired.setStatus("EXPIRED");
                 warranties.save(expired);
             }
             for (long days : Set.of(30L, 7L, 1L)) {
-                for (Warranty warranty : warranties.findByTenantIdAndStatusAndEndDate(tenant.getId(), "ACTIVE", today.plusDays(days))) {
+                for (Warranty warranty : warranties.findByTenantIdAndStatusAndEndDate(tenantId, "ACTIVE", today.plusDays(days))) {
                 customers.findByIdAndTenantId(warranty.getCustomerId(), warranty.getTenantId()).filter(c -> c.isActive()).ifPresent(customer -> {
                     String event = "WARRANTY_EXPIRY_" + days + "_DAYS";
                     String body = "Your product warranty expires in " + days + " day(s), on " + warranty.getEndDate() + ". Warranty reference: " + warranty.getId() + ". Contact your vendor for assistance.";
                     notifications.sendBusinessNotification(customer.getUserId(), warranty.getTenantId(), event, customer.getEmail(), "Warranty expiry reminder", body);
                 });
                 }
+            }
             }
         }
     }
