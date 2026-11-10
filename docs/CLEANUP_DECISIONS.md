@@ -19,7 +19,7 @@
 
 ### Evidence-based removal inventory
 
-Only historical Flyway filenames were retired. No application feature, controller, DTO, dependency, runtime property, environment variable, script or test was removed. The individual migration files are listed separately so every removed path has explicit rationale and evidence.
+Approved removals are the historical Flyway filenames, three undocumented synchronous operations file-export handlers, and the frontend helper that called them. The operations report and CSV/XLSX/PDF capability remain through the documented asynchronous export-job API. No other business feature, documented API, dependency, runtime property, environment variable, script or test was removed. Every removed path or method is listed separately with rationale and evidence.
 
 | Path | Why this path is no longer needed | Evidence | Disposition |
 |---|---|---|---|
