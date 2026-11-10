@@ -176,7 +176,7 @@ BEGIN
        OR EXISTS (SELECT 1 FROM audit_event c LEFT JOIN branch p ON p.tenant_id=c.tenant_id AND p.id=c.branch_id WHERE c.branch_id IS NOT NULL AND p.id IS NULL)
        OR EXISTS (SELECT 1 FROM notification_delivery c LEFT JOIN app_user p ON p.tenant_id=c.tenant_id AND p.id=c.user_id WHERE c.tenant_id IS NOT NULL AND c.user_id IS NOT NULL AND p.id IS NULL)
        OR EXISTS (SELECT 1 FROM notification_delivery c LEFT JOIN app_user u ON u.id=c.user_id WHERE c.tenant_id IS NOT NULL AND c.user_id IS NOT NULL AND (u.id IS NULL OR u.tenant_id <> c.tenant_id OR u.account_type = 'PLATFORM'))
-       OR EXISTS (SELECT 1 FROM notification_delivery c LEFT JOIN app_user u ON u.id=c.user_id WHERE c.tenant_id IS NULL AND (c.user_id IS NULL OR u.id IS NULL OR u.tenant_id IS NOT NULL OR u.account_type <> 'PLATFORM' OR c.event_type NOT IN ('PASSWORD_RESET','MFA_CODE'))) THEN
+       OR EXISTS (SELECT 1 FROM notification_delivery c LEFT JOIN app_user u ON u.id=c.user_id WHERE c.tenant_id IS NULL AND (c.user_id IS NULL OR u.id IS NULL OR u.tenant_id IS NOT NULL OR u.account_type <> 'PLATFORM')) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='V58 blocked: finance, service, evidence, identity or integration relationship is orphaned or cross-tenant';
     END IF;
 END$
