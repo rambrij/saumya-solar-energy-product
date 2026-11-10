@@ -149,6 +149,35 @@ class WarrantyClaimAttachmentServiceTest {
         verifyNoInteractions(attachments, storage);
     }
 
+
+    @Test
+    void customRoleWithServiceAssignAndUpdateCanAccessClaimEvidenceWithoutRoleName() {
+        UUID tenant = UUID.randomUUID();
+        UUID claimId = UUID.randomUUID();
+        when(claims.findByIdAndTenantId(claimId, tenant)).thenReturn(Optional.of(claim(claimId, tenant, UUID.randomUUID())));
+        when(attachments.findByTenantIdAndClaimIdOrderByCreatedAtAsc(tenant, claimId)).thenReturn(java.util.List.of());
+        Principal customDispatcher = new Principal(UUID.randomUUID(), tenant, "dispatcher@example.test", "VENDOR",
+                Set.of("CUSTOM_SERVICE_DISPATCHER"), Set.of("SERVICE_UPDATE", "SERVICE_ASSIGN"), 0);
+
+        assertTrue(service.list(claimId, customDispatcher).isEmpty());
+        verify(attachments).findByTenantIdAndClaimIdOrderByCreatedAtAsc(tenant, claimId);
+    }
+
+    @Test
+    void serviceUpdaterWithoutAssignmentPermissionCannotAccessClaimEvidence() {
+        UUID tenant = UUID.randomUUID();
+        UUID claimId = UUID.randomUUID();
+        when(claims.findByIdAndTenantId(claimId, tenant)).thenReturn(Optional.of(claim(claimId, tenant, UUID.randomUUID())));
+        Principal updater = new Principal(UUID.randomUUID(), tenant, "engineer@example.test", "VENDOR",
+                Set.of("CUSTOM_SERVICE_ENGINEER"), Set.of("SERVICE_UPDATE"), 0);
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> service.list(claimId, updater));
+
+        assertEquals(HttpStatus.FORBIDDEN, error.getStatusCode());
+        verifyNoInteractions(attachments, storage);
+    }
+
     private WarrantyClaim claim(UUID id, UUID tenant, UUID customer) {
         WarrantyClaim claim = new WarrantyClaim();
         claim.setId(id);
