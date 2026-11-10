@@ -2118,6 +2118,40 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/inventory/balances").header("Authorization", "Bearer " + engineerToken))
                 .andExpect(status().isForbidden());
+
+        // Read grants do not imply mutation grants for the same resource family.
+        mvc.perform(post("/api/v1/inventory/receipts").header("Authorization", "Bearer " + inventoryToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"warehouseId":"%s","productId":"%s","quantity":1,"reason":"least privilege matrix"}
+                                """.formatted(UUID.randomUUID(), UUID.randomUUID())))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/invoices").header("Authorization", "Bearer " + accountantToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"orderId\\":\\"" + UUID.randomUUID() + "\\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/payments").header("Authorization", "Bearer " + accountantToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"invoiceId":"%s","amount":1,"method":"CASH","paidAt":"2026-11-11T00:00:00Z"}
+                                """.formatted(UUID.randomUUID())))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/service-requests").header("Authorization", "Bearer " + engineerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"category":"GENERAL","priority":"LOW","description":"least privilege matrix"}
+                                """))
+                .andExpect(status().isForbidden());
+
+        for (String token : List.of(inventoryToken, accountantToken, engineerToken)) {
+            mvc.perform(post("/api/v1/exports").header("Authorization", "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\\"reportType\\":\\"OPERATIONS\\",\\"format\\":\\"CSV\\"}"))
+                    .andExpect(status().isForbidden());
+            mvc.perform(get("/api/v1/exports/" + UUID.randomUUID())
+                            .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isForbidden());
+        }
     }
 
     private AppUser createPermissionMatrixUser(String suffix, List<String> permissionCodes) {
