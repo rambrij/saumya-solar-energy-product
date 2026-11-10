@@ -19,7 +19,7 @@ public class AuthenticationAuditService {
         this.addresses = addresses;
     }
 
-    @jakarta.transaction.Transactional
+    @jakarta.transaction.Transactional(rollbackOn = {}, dontRollbackOn = {})
     public void record(String action, UUID tenantId, UUID actorId, String outcome,
                        String safeReason, String entityId, HttpServletRequest request) {
         AuditEvent event = new AuditEvent();
