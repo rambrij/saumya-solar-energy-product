@@ -89,3 +89,5 @@ CI inventory verification (2026-11-10): workflow `42828454430` passed the new re
 - The MySQL 8.4 migration workflow now applies V60 after the V58 negative FK test and asserts all nine columns are NOT NULL. Latest-head CI is pending.
 - app_user, role and audit_event remain nullable because they mix platform and tenant rows; their NULL semantics are explicitly checked/documented. Tables without tenant_id are classified as platform-global, user-scoped through app_user, or join tables whose scope is inherited from parent rows.
 - This closes the schema-definition gap on the nine direct tenant-owned tables only. Production row counts and owner-approved classification still require the protected production preflight and DBA sign-off.
+
+- CI verification: workflow run 42844217653 passed all four jobs, including MySQL 8.4 migrations through V60, tenant integrity preflight, schema inventory, frontend build, and 184 backend tests (0 failures). This is disposable CI evidence only; production data remains unverified.
