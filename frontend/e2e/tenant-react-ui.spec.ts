@@ -55,7 +55,10 @@ test('React vendor workspace stays isolated when switching between two tenant ac
     await page.locator('button.public-login-link').click({ force: true });
     await page.getByPlaceholder('Email').fill(email);
     await page.getByPlaceholder('Password').fill(password);
+    const loginResponsePromise = page.waitForResponse(response => response.url().includes('/api/v1/auth/login') && response.request().method() === 'POST');
     await page.locator('form.card.form button').first().click({ force: true });
+    const loginResponse = await loginResponsePromise;
+    if (!loginResponse.ok()) throw new Error('React login request failed with HTTP ' + loginResponse.status());
     await expect(page.locator('aside[aria-label="Application navigation"]')).toBeVisible();
     await page.getByRole('button', { name: 'Catalog', exact: true }).click();
     await page.getByRole('button', { name: 'Products', exact: true }).click();
