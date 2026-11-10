@@ -1033,7 +1033,8 @@ public class FinanceService {
     
     @Transactional
     public void evaluateSlaBreaches(UUID tenantId) {
-        if (tenantId == null) throw new IllegalArgumentException("Tenant context is required for SLA evaluation");
+        if (tenantId == null || !tenantId.equals(com.saumyasolar.security.TenantExecutionContext.requireTenantId()))
+            throw new IllegalArgumentException("Matching tenant execution context is required for SLA evaluation");
         Instant now = Instant.now();
         for (ServiceRequest t : tickets.findByTenantIdOrderByCreatedAtDesc(tenantId)) {
             if (t.getSlaPausedAt() != null || Set.of("CLOSED", "CANCELLED", "CUSTOMER_CONFIRMED").contains(t.getStatus()))
