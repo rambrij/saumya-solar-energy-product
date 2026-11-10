@@ -1514,4 +1514,12 @@ Verified full CI checkpoint: workflow `42828454430` for commit `6585efe6` passed
 - Frontend production build passed.
 - MySQL 8.4 migration validation passed, including read-only tenant table/FK/unique-index inventory SQL execution and artifact upload.
 - Spring Boot health and Playwright browser tests passed, including CSRF, HttpOnly refresh cookie, refresh rotation, logout revocation and tenant-filter tampering.
-- The follow-up auth E2E test now uses `sales@saumya.local` rather than the shared admin account to prevent parallel logout/revocation interference. Latest-head workflow `42828592637` is pending.
+- The follow-up auth E2E test now uses `sales@saumya.local` rather than the shared admin account to prevent parallel logout/revocation interference. Latest code workflow `42828934287` for commit `fe7b1181` passed all four jobs; current branch head `00b4d767` contains documentation-only gap-register updates after that verified code commit.
+
+
+### Final verification checkpoint for this remediation pass
+
+- Code commit `fe7b118117f599d1ab275544afa27245ae3e83e0` passed workflow `42828934287` across backend (171 tests), frontend production build, MySQL 8.4 migrations/schema inventory artifact, and Spring Boot/Playwright browser tests.
+- The auth-session Playwright test now uses the seeded Sales user rather than the shared Vendor Admin to avoid cross-test logout/revocation interference.
+- Current branch head `00b4d7672b4412d57d0ebdbc75629d9e6f24955d` is documentation-only after the verified code checkpoint; its own workflow is running.
+- Phase 1 and Phase 2 remain NOT MET at the requirement level because the complete role × endpoint matrix, every customer/branch/export/download family, exhaustive schema/NOT NULL inventory and production data preflight, and full async/worker discovery are not complete.
