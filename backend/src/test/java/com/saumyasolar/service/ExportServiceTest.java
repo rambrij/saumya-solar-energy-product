@@ -154,6 +154,13 @@ class ExportServiceTest {
         assertThrows(ResponseStatusException.class, () -> service().download(exportId, attacker));
 
         verify(jobs).findByIdAndTenantIdAndRequestedBy(exportId, tenant, otherUser);
+
+        UUID foreignTenant = UUID.randomUUID();
+        Principal sameUserFromAnotherTenant = principal(foreignTenant, owner, Set.of("REPORT_EXPORT"));
+        when(jobs.findByIdAndTenantIdAndRequestedBy(exportId, foreignTenant, owner)).thenReturn(Optional.empty());
+        assertThrows(ResponseStatusException.class,
+                () -> service().download(exportId, sameUserFromAnotherTenant));
+        verify(jobs).findByIdAndTenantIdAndRequestedBy(exportId, foreignTenant, owner);
         verifyNoInteractions(storage);
     }
 
