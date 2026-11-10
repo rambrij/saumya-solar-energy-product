@@ -16,8 +16,9 @@
 ## Current state and evidence
 
 - The repository contains many tenant-owned entities, tenant-qualified repository methods and existing tenant-aware constraints.
-- The existing gap analysis describes composite tenant/branch foreign keys in V37/V43 and later tenant-integrity work in V57/V58, including a MySQL integrity preflight. These claims were treated as hypotheses.
-- In this inspection, the exact V57/V58 migration paths and complete migration inventory could not be independently located through the available file-fetch interface. Therefore, the completeness of those constraints is **UNVERIFIABLE**, not assumed absent or complete.
+- Exact V57 and V58 migrations are present and were inspected. V57 adds tenant-aware FKs for product/category/package_item. V58 adds composite keys and tenant-aware FKs across sales, orders, inventory, installation, warranty, finance, service, private evidence, offline sync, branch membership, engineer profiles, approval, audit and notification relationships.
+- V58 includes a fail-closed preflight for cross-tenant/orphaned relationships. The checked-in MySQL 8.4 CI migration/integrity validation passed in workflow 42818724332.
+- These migrations are substantial and present; they do not by themselves prove every tenant-owned table has tenant_id NOT NULL or every possible relationship is constrained. A full schema-vs-SRS inventory remains open.
 - The SRS requires `tenant_id NOT NULL` on tenant-owned entities and composite constraints where applicable. Single-column references between tenant-owned parents/children can permit inconsistent tenant associations if service validation is bypassed.
 
 ## Expected state
@@ -61,4 +62,4 @@
 
 ## Status
 
-**Open / Unverifiable** — existing composite constraints are present in selected schema areas, but the complete latest migration and FK inventory could not be independently verified in this audit pass.
+**PARTIAL — V57/V58 present and MySQL 8.4 CI passed.** The migration coverage is substantial, not exhaustive proof of tenant_id NOT NULL on every tenant-owned table or every relationship. Complete entity/table/FK/unique-index inventory and production-data preflight remain open.
