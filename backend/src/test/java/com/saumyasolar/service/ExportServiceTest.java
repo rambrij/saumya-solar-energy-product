@@ -113,7 +113,14 @@ class ExportServiceTest {
         assertThrows(ResponseStatusException.class,
                 () -> service().status(id, principal(tenant, user, Set.of("REPORT_EXPORT"))));
         verify(jobs).findByIdAndTenantIdAndRequestedBy(id, tenant, user);
-    } 
+
+        UUID foreignTenant = UUID.randomUUID();
+        Principal sameUserIdFromAnotherTenant = principal(foreignTenant, user, Set.of("REPORT_EXPORT"));
+        when(jobs.findByIdAndTenantIdAndRequestedBy(id, foreignTenant, user)).thenReturn(Optional.empty());
+        assertThrows(ResponseStatusException.class,
+                () -> service().status(id, sameUserIdFromAnotherTenant));
+        verify(jobs).findByIdAndTenantIdAndRequestedBy(id, foreignTenant, user);
+    }
     @Test
     void expiryCleanupLoadsAndDeletesExportsInsideTheirTenantScope() throws Exception {
         UUID tenant = UUID.randomUUID();
