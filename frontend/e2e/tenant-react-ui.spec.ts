@@ -64,9 +64,12 @@ test('React vendor workspace stays isolated when switching between two tenant ac
       response => response.url().includes('/api/v1/auth/login') && response.request().method() === 'POST',
       { timeout: 20_000 },
     );
-    // Exercise the same submit control a user activates; do not bypass React's
-    // event delegation with a programmatic form.requestSubmit() call.
-    await page.locator('form.card.form button').first().click({ force: true });
+    const loginForm = page.locator('form.card.form');
+    await expect(loginForm).toBeVisible();
+    await expect(loginForm.locator('button[type="submit"]')).toBeVisible();
+    // Use a real keyboard form submission, which follows the browser's native
+    // submit path and React's onSubmit handler.
+    await page.getByPlaceholder('Password').press('Enter');
     const loginResponse = await loginResponsePromise;
     if (!loginResponse.ok()) throw new Error('React login request failed with HTTP ' + loginResponse.status());
     await expect(page.locator('aside[aria-label="Application navigation"]')).toBeVisible();
