@@ -5,9 +5,20 @@ import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.domain.TenantSubscription;
 import com.saumyasolar.domain.ServiceRequest;
 import com.saumyasolar.domain.Warranty;
+import com.saumyasolar.domain.IntegrationConnection;
+import com.saumyasolar.domain.SubscriptionPlan;
+import com.saumyasolar.domain.CustomerProfile;
+import com.saumyasolar.domain.AppUser;
+import com.saumyasolar.domain.CustomerOrder;
 import com.saumyasolar.repo.ServiceRequestRepository;
 import com.saumyasolar.repo.ServiceEventRepository;
 import com.saumyasolar.repo.WarrantyRepository;
+import com.saumyasolar.repo.IntegrationConnectionRepository;
+import com.saumyasolar.repo.SubscriptionPlanRepository;
+import com.saumyasolar.repo.CustomerProfileRepository;
+import com.saumyasolar.repo.AppUserRepository;
+import com.saumyasolar.repo.CustomerOrderRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import com.saumyasolar.service.ServiceSlaScheduler;
 import com.saumyasolar.service.WarrantyExpiryScheduler;
 import com.saumyasolar.service.FinanceService;
@@ -44,6 +55,12 @@ class TenantSchedulerConcurrencyIntegrationTest {
     @Autowired ServiceRequestRepository serviceRequests;
     @Autowired ServiceEventRepository serviceEvents;
     @Autowired WarrantyRepository warranties;
+    @Autowired IntegrationConnectionRepository connections;
+    @Autowired SubscriptionPlanRepository plans;
+    @Autowired CustomerProfileRepository customers;
+    @Autowired AppUserRepository users;
+    @Autowired CustomerOrderRepository orders;
+    @Autowired PasswordEncoder passwordEncoder;
 
     @DynamicPropertySource
     static void optionalMySqlTestDatabase(DynamicPropertyRegistry registry) {
@@ -66,8 +83,11 @@ class TenantSchedulerConcurrencyIntegrationTest {
         Tenant tenantB = tenant("worker-b");
         tenants.saveAllAndFlush(List.of(tenantA, tenantB));
 
-        IntegrationSyncJob jobA = job(tenantA.getId());
-        IntegrationSyncJob jobB = job(tenantB.getId());
+        IntegrationConnection connectionA = connection(tenantA.getId());
+        IntegrationConnection connectionB = connection(tenantB.getId());
+        connections.saveAllAndFlush(List.of(connectionA, connectionB));
+        IntegrationSyncJob jobA = job(tenantA.getId(), connectionA.getId());
+        IntegrationSyncJob jobB = job(tenantB.getId(), connectionB.getId());
         jobs.saveAllAndFlush(List.of(jobA, jobB));
 
         Instant now = Instant.now();
@@ -102,8 +122,11 @@ class TenantSchedulerConcurrencyIntegrationTest {
         Tenant activeTenant = tenant("expiry-b");
         tenants.saveAllAndFlush(List.of(expiredTenant, activeTenant));
 
-        TenantSubscription expired = subscription(expiredTenant.getId(), Instant.now().minusSeconds(60));
-        TenantSubscription stillActive = subscription(activeTenant.getId(), Instant.now().plusSeconds(3600));
+        SubscriptionPlan planA = plan();
+        SubscriptionPlan planB = plan();
+        plans.saveAllAndFlush(List.of(planA, planB));
+        TenantSubscription expired = subscription(expiredTenant.getId(), planA.getId(), Instant.now().minusSeconds(60));
+        TenantSubscription stillActive = subscription(activeTenant.getId(), planB.getId(), Instant.now().plusSeconds(3600));
         subscriptions.saveAllAndFlush(List.of(expired, stillActive));
 
         expiryScheduler.expireSubscriptions();
@@ -118,8 +141,11 @@ class TenantSchedulerConcurrencyIntegrationTest {
         Tenant futureTenant = tenant("sla-future");
         tenants.saveAllAndFlush(List.of(overdueTenant, futureTenant));
 
-        ServiceRequest overdue = serviceRequest(overdueTenant.getId(), Instant.now().minusSeconds(120));
-        ServiceRequest future = serviceRequest(futureTenant.getId(), Instant.now().plusSeconds(3600));
+        CustomerProfile overdueCustomer = customer(overdueTenant.getId());
+        CustomerProfile futureCustomer = customer(futureTenant.getId());
+        customers.saveAllAndFlush(List.of(overdueCustomer, futureCustomer));
+        ServiceRequest overdue = serviceRequest(overdueTenant.getId(), overdueCustomer.getId(), Instant.now().minusSeconds(120));
+        ServiceRequest future = serviceRequest(futureTenant.getId(), futureCustomer.getId(), Instant.now().plusSeconds(3600));
         serviceRequests.saveAllAndFlush(List.of(overdue, future));
 
         var pool = Executors.newFixedThreadPool(2);
@@ -154,8 +180,14 @@ class TenantSchedulerConcurrencyIntegrationTest {
         Tenant validTenant = tenant("warranty-valid");
         tenants.saveAllAndFlush(List.of(expiredTenant, validTenant));
 
-        Warranty expired = warranty(expiredTenant.getId(), java.time.LocalDate.now().minusDays(1));
-        Warranty valid = warranty(validTenant.getId(), java.time.LocalDate.now().plusDays(90));
+        CustomerProfile expiredCustomer = customer(expiredTenant.getId());
+        CustomerProfile validCustomer = customer(validTenant.getId());
+        customers.saveAllAndFlush(List.of(expiredCustomer, validCustomer));
+        CustomerOrder expiredOrder = order(expiredTenant.getId(), expiredCustomer.getId());
+        CustomerOrder validOrder = order(validTenant.getId(), validCustomer.getId());
+        orders.saveAllAndFlush(List.of(expiredOrder, validOrder));
+        Warranty expired = warranty(expiredTenant.getId(), expiredCustomer.getId(), expiredOrder.getId(), java.time.LocalDate.now().minusDays(1));
+        Warranty valid = warranty(validTenant.getId(), validCustomer.getId(), validOrder.getId(), java.time.LocalDate.now().plusDays(90));
         warranties.saveAllAndFlush(List.of(expired, valid));
 
         var pool = Executors.newFixedThreadPool(2);
@@ -199,10 +231,11 @@ class TenantSchedulerConcurrencyIntegrationTest {
         }
     }
 
-    private ServiceRequest serviceRequest(UUID tenantId, Instant responseDueAt) {
+    private ServiceRequest serviceRequest(UUID tenantId, UUID customerId, Instant responseDueAt) {
         ServiceRequest request = new ServiceRequest();
         request.setId(UUID.randomUUID());
         request.setTenantId(tenantId);
+        request.setCustomerId(customerId);
         request.setTicketNumber("SLA-" + UUID.randomUUID().toString().substring(0, 8));
         request.setCategory("INSTALLATION");
         request.setPriority("HIGH");
@@ -216,10 +249,12 @@ class TenantSchedulerConcurrencyIntegrationTest {
         return request;
     }
 
-    private Warranty warranty(UUID tenantId, java.time.LocalDate endDate) {
+    private Warranty warranty(UUID tenantId, UUID customerId, UUID orderId, java.time.LocalDate endDate) {
         Warranty warranty = new Warranty();
         warranty.setId(UUID.randomUUID());
         warranty.setTenantId(tenantId);
+        warranty.setCustomerId(customerId);
+        warranty.setOrderId(orderId);
         warranty.setStatus("ACTIVE");
         warranty.setStartDate(java.time.LocalDate.now().minusDays(30));
         warranty.setEndDate(endDate);
@@ -228,10 +263,12 @@ class TenantSchedulerConcurrencyIntegrationTest {
         return warranty;
     }
 
-    private TenantSubscription subscription(UUID tenantId, Instant endsAt) {
+    private TenantSubscription subscription(UUID tenantId, UUID planId, Instant endsAt) {
         TenantSubscription subscription = new TenantSubscription();
         subscription.setId(UUID.randomUUID());
         subscription.setTenantId(tenantId);
+        subscription.setPlanId(planId);
+        subscription.setBillingCycle("MONTHLY");
         subscription.setStatus("TRIAL");
         subscription.setStartsAt(Instant.now().minusSeconds(3600));
         subscription.setEndsAt(endsAt);
@@ -258,11 +295,87 @@ class TenantSchedulerConcurrencyIntegrationTest {
         return tenant;
     }
 
-    private IntegrationSyncJob job(UUID tenantId) {
+    private IntegrationConnection connection(UUID tenantId) {
+        IntegrationConnection connection = new IntegrationConnection();
+        connection.setId(UUID.randomUUID());
+        connection.setTenantId(tenantId);
+        connection.setProviderCode("TEST");
+        connection.setIntegrationType("GENERIC");
+        connection.setDisplayName("Scheduler test connection");
+        connection.setStatus("ACTIVE");
+        connection.setSecretReference("test-secret-ref");
+        connection.setConfigJson("{}");
+        connection.setCreatedAt(Instant.now());
+        connection.setUpdatedAt(Instant.now());
+        return connection;
+    }
+
+    private SubscriptionPlan plan() {
+        SubscriptionPlan plan = new SubscriptionPlan();
+        plan.setId(UUID.randomUUID());
+        plan.setPlanCode("TEST-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8));
+        plan.setName("Scheduler test plan");
+        plan.setBillingCycle("MONTHLY");
+        plan.setPrice(java.math.BigDecimal.ZERO);
+        plan.setCurrency("INR");
+        plan.setMaxUsers(10);
+        plan.setMaxBranches(5);
+        plan.setMaxWarehouses(5);
+        plan.setMaxStorageMb(1024);
+        plan.setMaxProducts(100);
+        plan.setMaxCustomers(100);
+        plan.setTrialPeriodDays(14);
+        plan.setDisplayOrder(1);
+        plan.setEntitlementsJson("{}");
+        plan.setActive(true);
+        plan.setCreatedAt(Instant.now());
+        plan.setUpdatedAt(Instant.now());
+        return plan;
+    }
+
+    private CustomerProfile customer(UUID tenantId) {
+        AppUser user = new AppUser();
+        user.setId(UUID.randomUUID());
+        user.setTenantId(tenantId);
+        user.setName("Scheduler test customer");
+        user.setEmail("scheduler-" + UUID.randomUUID() + "@example.test");
+        user.setPasswordHash(passwordEncoder.encode("Scheduler-Password-2026"));
+        user.setAccountType("CUSTOMER");
+        user.setEnabled(true);
+        user.setTokenVersion(0);
+        users.saveAndFlush(user);
+
+        CustomerProfile customer = new CustomerProfile();
+        customer.setId(UUID.randomUUID());
+        customer.setTenantId(tenantId);
+        customer.setUserId(user.getId());
+        customer.setName(user.getName());
+        customer.setEmail(user.getEmail());
+        customer.setActive(true);
+        return customer;
+    }
+
+    private CustomerOrder order(UUID tenantId, UUID customerId) {
+        CustomerOrder order = new CustomerOrder();
+        order.setId(UUID.randomUUID());
+        order.setTenantId(tenantId);
+        order.setCustomerId(customerId);
+        order.setOrderNumber("SCHED-" + UUID.randomUUID().toString().substring(0, 8));
+        order.setStatus("CONFIRMED");
+        order.setSubtotal(java.math.BigDecimal.ZERO);
+        order.setDiscountPercent(java.math.BigDecimal.ZERO);
+        order.setDiscountAmount(java.math.BigDecimal.ZERO);
+        order.setTaxTotal(java.math.BigDecimal.ZERO);
+        order.setTotal(java.math.BigDecimal.ZERO);
+        order.setCreatedAt(Instant.now());
+        return order;
+    }
+
+    private IntegrationSyncJob job(UUID tenantId, UUID connectionId) {
         IntegrationSyncJob job = new IntegrationSyncJob();
         job.setId(UUID.randomUUID());
         job.setTenantId(tenantId);
-        job.setConnectionId(UUID.randomUUID());
+        job.setConnectionId(connectionId);
         job.setEntityType("ORDER");
         job.setEntityId(UUID.randomUUID().toString());
         job.setOperation("UPSERT");
