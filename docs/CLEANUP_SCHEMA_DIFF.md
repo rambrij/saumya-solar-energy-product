@@ -18,7 +18,7 @@ The workflow normalizes `AUTO_INCREMENT` counters before comparison and uploads 
 
 ## Result
 
-<badge>Pending CI execution</badge>
+**Pending CI execution.**
 
 No schema equivalence claim is made until the MySQL 8.4 comparison job passes. The baseline includes all original V1–V61 effects plus the new SRS-required notification idempotency index (V62) and tenant-scoped asynchronous export-job table (V63). These are additions to the documented design, not removals from the historical schema.
 

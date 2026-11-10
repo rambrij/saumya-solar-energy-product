@@ -366,8 +366,12 @@ jobs:
           mysql -h 127.0.0.1 -uroot -prootpass solar_baseline_test < backend/src/test/resources/db/baseline/V1__baseline.sql
           mysqldump -h 127.0.0.1 -uroot -prootpass --no-data --skip-comments --skip-add-drop-table --skip-set-charset --skip-lock-tables solar_migration_test | sed -E 's/AUTO_INCREMENT=[0-9]+/AUTO_INCREMENT=1/g' > /tmp/historical-schema.sql
           mysqldump -h 127.0.0.1 -uroot -prootpass --no-data --skip-comments --skip-add-drop-table --skip-set-charset --skip-lock-tables solar_baseline_test | sed -E 's/AUTO_INCREMENT=[0-9]+/AUTO_INCREMENT=1/g' > /tmp/baseline-schema.sql
-          diff -u /tmp/historical-schema.sql /tmp/baseline-schema.sql | tee schema-diff.txt
-          echo "Schema equivalence: identical" > schema-diff.txt
+          if diff -u /tmp/historical-schema.sql /tmp/baseline-schema.sql > schema-diff.txt; then
+            echo "Schema equivalence: identical" > schema-diff.txt
+          else
+            cat schema-diff.txt
+            exit 1
+          fi
 
       - name: Upload schema equivalence result
         if: always()
