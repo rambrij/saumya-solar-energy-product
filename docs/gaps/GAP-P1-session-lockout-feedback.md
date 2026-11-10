@@ -70,7 +70,7 @@ The source-level contract appears implemented, but latest-head browser verificat
 
 - Existing HttpOnly refresh cookie, CSRF double-submit, memory-only access token and generic lockout response are retained; no change was needed to avoid exposing lockout state.
 - Existing auth tests cover password lockout expiry, disabled users and refresh-family replay (`AuthLifecycleServiceTest`). Existing browser tests cover tenant filter tampering but do not establish the full session lifecycle.
-- Latest CI run 42818724332 passed backend tests, MySQL migration validation, Spring Boot health and frontend build. Newer changes are under workflow 42820915064 and are not yet verified.
+- Run 42821337890 passed backend (162 tests), frontend build, MySQL migration validation and the Spring Boot/browser job. Latest-head run 42821756695 passed backend (163 tests), frontend build and MySQL migration validation; its Spring Boot/browser Playwright job remains in progress.
 - Still open: browser tests for missing/mismatched CSRF, refresh-cookie attributes, concurrent tabs, logout and expired refresh; explicit 429 Retry-After UX assertions; production cookie/CORS settings. SRS does not require a 423 response; preserve generic 401 until product/security approves otherwise.
 
 ## Status
