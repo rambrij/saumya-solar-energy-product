@@ -103,7 +103,7 @@ Still open: inventory every Controller/secondary-controller mapping and service 
 
 ### Branch and attachment authorization follow-up — 2026-11-10
 
-- Branch-wide visibility and warehouse access now use BRANCH_MANAGE rather than a hard-coded VENDOR_ADMIN role-name bypass. Warehouse reassignment also requires BRANCH_MANAGE. Tenant and membership predicates remain in place for branch IDs.
+- Branch administration and warehouse reassignment require BRANCH_MANAGE. The VENDOR_ADMIN role remains the explicit tenant-wide data-scope exception in branch record/warehouse filtering; custom roles that also hold BRANCH_MANAGE remain constrained to their branch memberships. This distinction is intentional and is covered by the existing branch-assigned member isolation test.
 - Service evidence upload now requires SERVICE_UPDATE for vendor principals after FinanceService verifies tenant/customer/assigned-ticket access. Customer upload remains limited to the customer's own ticket.
 - Added ServiceAttachmentServiceTest for read-only service-viewer upload denial and service-updater upload success; latest-head CI must verify it.
 - One role-name check remains in FinanceService.saveServiceReopenPolicy because this is a tenant-wide policy setting with no dedicated SRS permission code. It is intentionally admin-only pending product approval for a new dedicated permission; it is not silently treated as migrated.
