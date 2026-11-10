@@ -1746,7 +1746,8 @@ class Release12TenantIntegrationTest {
                         .header("Authorization", "Bearer " + customerAToken))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(pdf));
-        mvc.perform(post("/api/v1/warranty-claims/" + claimB.getId() + "/attachments")
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/warranty-claims/" + claimB.getId() + "/attachments")
                         .file(evidence)
                         .header("Authorization", "Bearer " + customerAToken))
                 .andExpect(status().isNotFound());
