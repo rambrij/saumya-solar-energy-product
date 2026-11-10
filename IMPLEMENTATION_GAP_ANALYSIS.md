@@ -1568,3 +1568,8 @@ These changes are deliberately not classified as full closure. The full 222-rout
 - The protected production preflight workflow now targets this Phase 2 branch. It remains manual and protected; no production database credentials were used and no production data was queried or modified.
 
 **Acceptance status remains PARTIAL / NOT APPROVED.** The current 222-row endpoint matrix is a historical inventory and has 206 rows without endpoint-specific negative evidence; it is not a completed authenticated role × endpoint × verb test matrix. The newly added /api/v1/exports routes are recorded separately pending full matrix regeneration. Customer/branch tests cover important representative resource families but do not yet prove every read/create/update/delete route. The worker scan artifact must be reviewed line-by-line. Production NULL-row evidence, production preflight PASS output, data-owner review and DBA sign-off remain outstanding. A passing latest-head CI run is also required.
+
+
+### Authenticated role × HTTP verb regression extension — 2026-11-11
+
+Release12TenantIntegrationTest.fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation now checks both positive reads and negative writes for Inventory Viewer, Accountant and Service Engineer fixtures. Added denied inventory receipt, invoice create, payment record, service request create, export create and export status operations for roles lacking the corresponding grants. This improves representative authenticated role × verb evidence but does not satisfy all 222 route-specific cases; the endpoint matrix continues to track remaining rows as PARTIAL.
