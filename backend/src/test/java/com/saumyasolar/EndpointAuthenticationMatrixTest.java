@@ -2,6 +2,7 @@ package com.saumyasolar;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpMethod;
@@ -30,7 +31,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @ActiveProfiles("test")
 class EndpointAuthenticationMatrixTest {
     @Autowired MockMvc mvc;
-    @Autowired RequestMappingHandlerMapping mappings;
+    @Autowired @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping mappings;
 
     private static final Pattern VARIABLE = Pattern.compile("\\{[^}]+}");
     private static final Set<String> PUBLIC_PREFIXES = Set.of(
