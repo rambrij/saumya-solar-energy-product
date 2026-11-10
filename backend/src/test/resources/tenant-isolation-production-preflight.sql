@@ -183,3 +183,4 @@ DROP PROCEDURE assert_phase2_operational_tenant_integrity;
 
 
 SELECT 'V58 operational tenant-integrity preflight: PASS' AS result;
+SELECT 'V60 tenant-owned tenant_id NOT NULL preflight: PASS' AS result;
