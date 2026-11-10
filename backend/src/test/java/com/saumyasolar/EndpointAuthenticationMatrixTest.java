@@ -105,6 +105,37 @@ class EndpointAuthenticationMatrixTest {
 
 
     @Test
+    void explicitlyPublicMappingsRemainReachableWithoutBearerAuthentication() throws Exception {
+        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+        List<String> checked = new ArrayList<>();
+        List<String> failures = new ArrayList<>();
+        for (var entry : mappings.getHandlerMethods().entrySet()) {
+            RequestMappingInfo info = entry.getKey();
+            HandlerMethod handler = entry.getValue();
+            Set<org.springframework.web.bind.annotation.RequestMethod> methods =
+                    info.getMethodsCondition().getMethods();
+            if (methods.isEmpty()) continue;
+            for (String pattern : info.getPatternValues()) {
+                if (!isPublic(pattern)) continue;
+                for (var method : methods) {
+                    if (method == org.springframework.web.bind.annotation.RequestMethod.OPTIONS) continue;
+                    String path = probePath(pattern, handler);
+                    int status = mvc.perform(mutationRequest(method, path, handler, mapper))
+                            .andReturn().getResponse().getStatus();
+                    checked.add(method + " " + pattern);
+                    // 400/401/404 are valid for malformed credentials, signatures or missing public resources.
+                    // 403 would mean a role/permission gate was accidentally applied to an allowlisted route.
+                    if (status == 403) failures.add(method + " " + pattern + " returned 403 without credentials");
+                }
+            }
+        }
+        assertTrue(checked.size() >= 10,
+                "The explicit public allowlist unexpectedly shrank: only checked " + checked.size());
+        assertTrue(failures.isEmpty(), "Public allowlist routes were blocked by role authorization:\n"
+                + String.join("\n", failures));
+    }
+
+    @Test
     void authenticatedLeastPrivilegeVendorCannotReadProtectedEndpointMappings() throws Exception {
         AppUser seededVendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
         Role emptyRole = new Role();
