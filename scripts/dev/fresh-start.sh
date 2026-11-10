@@ -16,7 +16,7 @@ if ! docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
-PROJECT_NAME="$(docker compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin).get("name", ""))')"
+PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(basename "$ROOT_DIR" | tr '[:upper:]' '[:lower:]')}"
 if [[ -z "$PROJECT_NAME" ]]; then
   echo "Could not determine the Docker Compose project name." >&2
   exit 1

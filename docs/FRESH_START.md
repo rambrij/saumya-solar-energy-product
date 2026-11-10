@@ -29,7 +29,7 @@ The script asks for the exact confirmation `RESET` before deleting the Compose-m
 ```bash
 docker compose down --remove-orphans
 # Remove only this Compose project's mysql_data volume (not uploads or private-file volumes).
-PROJECT_NAME="$(docker compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin).get("name", ""))')"
+PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(basename "$PWD" | tr '[:upper:]' '[:lower:]')}"
 MYSQL_VOLUME="$(docker volume ls --filter "label=com.docker.compose.project=$PROJECT_NAME" --filter "label=com.docker.compose.volume=mysql_data" --format '{{.Name}}')"
 if [ -n "$MYSQL_VOLUME" ]; then docker volume rm "$MYSQL_VOLUME"; fi
 docker compose up --build -d

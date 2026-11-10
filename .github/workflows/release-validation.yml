@@ -112,6 +112,7 @@ jobs:
             exit 1
           fi
           echo "PASS: one baseline, 74 table definitions, no ALTER TABLE or standalone CREATE INDEX."
+          bash -n scripts/dev/fresh-start.sh
       - name: Apply V1 schema
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass -e "CREATE DATABASE solar_migration_test"

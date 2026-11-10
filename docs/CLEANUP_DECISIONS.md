@@ -177,13 +177,3 @@ Any later API, event, persisted-data or configuration contract change must be li
 | CI branch restrictions | Inspect both workflow files for trigger and checkout refs | PASS — only `cleanup/code-cleanup` appears as a branch target/ref. |
 
 **Remaining scope note:** no unproven dead-code or orphan-file removals were made. The traceability and removal inventories must continue to be used for any further deletion; documented CMS/blog gaps and export-family/filter parity remain open questions, not cleanup candidates.
-
-
-## Fresh-install schema refinement
-
-The clean-install baseline was rewritten so all 74 tables are created with their final columns, primary keys, unique keys, checks, foreign keys and indexes in the original `CREATE TABLE` statements. The 126 historical `ALTER TABLE` statements (267 column/constraint/index operations) and 32 standalone `CREATE INDEX` statements were folded into those table definitions. Table creation order is topologically sorted by foreign-key dependencies. No foreign-key dependency cycles or unresolved table references were found.
-
-The two historical conditional DDL blocks for `order_item.tax_percent` and `solar_package.image_url` are no longer needed on a fresh install; their final columns are declared directly in the table definitions. Temporary V57/V58 preflight stored procedures were historical migration-time validation helpers, not runtime schema objects; their logic remains covered by the dedicated tenant-isolation SQL preflight and CI checks. No business tables, columns, indexes, constraints, seed grants or required API behavior are intentionally removed.
-
-**Fresh-start policy:** this product is pre-production. The local fresh-start script removes only the Compose-managed `mysql_data` volume and preserves uploaded/private-file volumes. It does not run a SQL data export or backup. The user must explicitly type `RESET` before the destructive database-volume removal.
-
