@@ -147,19 +147,19 @@ Any later API, event, persisted-data or configuration contract change must be li
 
 ### Phase 1–4 verification evidence
 
-**Full verification run:** GitHub Actions run `42878162886` — `success`  
+**Full verification run:** GitHub Actions run `42878871625` — `success`  
 **Schema-equivalence run:** GitHub Actions run `42877702249` — `success`  
-**Resolved Maven dependency scan:** GitHub Actions run `42878486653` — scanner step passed; remaining jobs were running when this entry was prepared.
+**Resolved Maven dependency scan:** GitHub Actions run `42878871625` — `success`
 
 | Area | Command / check | Result |
 |---|---|---|
 | Whole-repository external messaging scan | `bash scripts/audit/scan-external-messaging.sh` | PASS — all repository text files scanned, including README for banned infrastructure terms only; README was not used as a requirements or feature-validation source. |
-| Resolved Maven dependency graph | `mvn --batch-mode --no-transfer-progress dependency:tree -Dscope=test -DoutputType=text` (invoked by the scan script) | PASS — no matching external messaging libraries in the resolved graph (run 42878486653 scan step). |
+| Resolved Maven dependency graph | `mvn --batch-mode --no-transfer-progress dependency:tree -Dscope=test -DoutputType=text` (invoked by the scan script) | PASS — no matching external messaging libraries in the resolved graph (run 42878871625). |
 | Async execution inventory | `bash scripts/audit/scan-async-workers.sh | tee async-worker-inventory.txt` | PASS — artifact uploaded. |
 | Legacy authorization inventory | `bash scripts/audit/scan-legacy-authz.sh | tee legacy-authz-inventory.txt` | PASS — artifact uploaded. |
 | Permission catalogue drift | `python3 scripts/audit/check-permission-catalogue.py backend | tee permission-catalogue-drift.txt` | PASS. |
-| Backend build and full test suite | `cd backend && mvn --batch-mode --no-transfer-progress clean verify` | PASS — run 42878162886. |
-| Frontend tests and production build | `cd frontend && npm install && npm test && npm run build` | PASS — run 42878162886. |
+| Backend build and full test suite | `cd backend && mvn --batch-mode --no-transfer-progress clean verify` | PASS — run 42878871625. |
+| Frontend tests and production build | `cd frontend && npm install && npm test && npm run build` | PASS — run 42878871625. |
 | MySQL migration equivalence | Historical V1–V63 from Git commit `467dc8278e13902a39c51d1c9d8d8e588db98f57` applied to a fresh MySQL 8.4 schema; baseline applied to a second fresh schema; schema-only `mysqldump` outputs compared with `diff -u`. | PASS — empty schema diff; artifact `cleanup-schema-equivalence`; run 42877702249. |
 | Exactly one Flyway migration | Recursive Git tree inspection of `backend/src/main/resources/db/migration/` | PASS — only `V1__baseline.sql`. |
 | MySQL scheduler concurrency | `mvn --batch-mode --no-transfer-progress -Dtest=TenantSchedulerConcurrencyIntegrationTest test` | PASS — 4 tests, 0 failures, 0 errors. |
