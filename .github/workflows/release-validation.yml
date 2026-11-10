@@ -395,6 +395,11 @@ jobs:
           exit 1
       - name: Execute V57 and V58 integrity preflight against migrated MySQL CI database
         run: |
+          cleanup_preflight_routines() {
+            mysql --connect-timeout=15 --host=127.0.0.1 --port=3306 --user=root --password=rootpass solar_app_smoke \
+              -e "DROP PROCEDURE IF EXISTS assert_phase2_catalogue_tenant_integrity; DROP PROCEDURE IF EXISTS assert_phase2_operational_tenant_integrity;" || true
+          }
+          trap cleanup_preflight_routines EXIT
           mysql --connect-timeout=15 --host=127.0.0.1 --port=3306 --user=root --password=rootpass solar_app_smoke \
             < backend/src/test/resources/tenant-isolation-production-preflight.sql
 
