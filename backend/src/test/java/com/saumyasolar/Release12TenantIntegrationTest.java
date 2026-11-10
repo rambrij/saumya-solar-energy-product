@@ -1617,6 +1617,15 @@ class Release12TenantIntegrationTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertFalse(quotationsJson.contains(quotation.getId().toString()));
+        mvc.perform(get("/api/v1/quotations/" + quotation.getId() + "/pdf")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        var customerBToken = accessToken(customerB.user().getEmail(), "Customer-Password-2026");
+        mvc.perform(get("/api/v1/quotations/" + quotation.getId() + "/pdf")
+                        .header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .contentType(MediaType.APPLICATION_PDF));
 
         var invoicesJson = mvc.perform(get("/api/v1/invoices")
                         .header("Authorization", "Bearer " + token))
@@ -1628,6 +1637,11 @@ class Release12TenantIntegrationTest {
         mvc.perform(get("/api/v1/invoices/" + invoice.getId() + "/pdf")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/invoices/" + invoice.getId() + "/pdf")
+                        .header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .contentType(MediaType.APPLICATION_PDF));
         mvc.perform(get("/api/v1/payments/" + payment.getId() + "/receipt.pdf")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
