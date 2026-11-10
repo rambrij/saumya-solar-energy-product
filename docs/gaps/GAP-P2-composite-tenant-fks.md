@@ -70,3 +70,9 @@ Latest-head verification update (2026-11-10): workflow 42821756695 passed backen
 
 
 CI update (2026-11-10): workflow 42821756695 passed all four jobs, including 163 backend tests, frontend build, MySQL migration/integrity validation and Playwright tenant-filter tampering. Reset-token throttling code/tests are being verified in workflow 42822434704.
+
+
+### CI schema inventory artifact — 2026-11-10
+
+- `.github/workflows/release-validation.yml` now executes `docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql` after V57/V58 on the disposable MySQL 8.4 migration schema and uploads the output as `phase-1-2-tenant-schema-inventory` (commit `bebb1a6e`).
+- This provides an automatically refreshed schema/FK/unique-index inventory for the CI migration schema. It does not prove the production schema or production data has the same shape; the approved production-like preflight remains open.
