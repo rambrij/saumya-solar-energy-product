@@ -504,7 +504,7 @@ public class EnterpriseSaasService {
     
     public void assertBranchAccess(UUID branchId, Principal p) {
         UUID tenantId = branchTenant(p);
-        if (branchId == null || p.roles() != null && p.roles().contains("VENDOR_ADMIN")) return;
+        if (branchId == null || p.permissions() != null && p.permissions().contains("BRANCH_MANAGE")) return;
         branches.findByIdAndTenantId(branchId, tenantId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Business record not found"));
         if (!memberships.existsByTenantIdAndBranchIdAndUserId(tenantId, branchId, p.userId()))
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Business record not found");
@@ -512,7 +512,7 @@ public class EnterpriseSaasService {
     
     public <T> List<T> filterBranchRecords(List<T> rows, java.util.function.Function<T, UUID> branchId, Principal p) {
         UUID tenantId = branchTenant(p);
-        if (p.roles() != null && p.roles().contains("VENDOR_ADMIN")) return rows;
+        if (p.permissions() != null && p.permissions().contains("BRANCH_MANAGE")) return rows;
         Set<UUID> assigned = new HashSet<>();
         memberships.findByTenantIdAndUserId(tenantId, p.userId()).forEach(m -> assigned.add(m.getBranchId()));
         return rows.stream().filter(row -> {
@@ -524,7 +524,7 @@ public class EnterpriseSaasService {
     public void assertWarehouseAccess(Warehouse warehouse, Principal p) {
         if (!"VENDOR".equals(p.accountType()) || !Objects.equals(warehouse.getTenantId(), p.tenantId()))
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Warehouse not found");
-        if (p.roles() != null && p.roles().contains("VENDOR_ADMIN")) return;
+        if (p.permissions() != null && p.permissions().contains("BRANCH_MANAGE")) return;
         if (warehouse.getBranchId() == null)
             return; // Unassigned legacy warehouses remain available to existing vendor operations.
         List<BranchMembership> assigned = memberships.findByTenantIdAndUserId(p.tenantId(), p.userId());
