@@ -13,7 +13,7 @@
 - Integration sync discovery, atomic job claim and reload are tenant-qualified.
 - Added `TenantExecutionContext`, a ThreadLocal scope restored/cleared with try-with-resources. SLA processing additionally rejects a missing or mismatched tenant scope.
 - Added scheduler/context tests and MySQL SQL assertions that verify V57 rejects cross-tenant category, package and product references.
-- Fixed two pre-existing CI failures discovered at baseline: authentication audit events now use `REQUIRES_NEW`, and the responsive navigation test selects among duplicate mobile/desktop links.
+- Fixed two pre-existing CI failures discovered at baseline: role-escalation audit events now survive the expected `ResponseStatusException` rollback while retaining the caller transaction for actor foreign-key integrity, and the responsive navigation test selects among duplicate mobile/desktop links.
 - Added Flyway V57 with fail-closed preflight checks and composite tenant foreign keys for:
   - `product(tenant_id, category_id)` → `product_category(tenant_id, id)`
   - `package_item(tenant_id, package_id)` → `solar_package(tenant_id, id)`
@@ -39,7 +39,7 @@ The latest base-branch CI observed before Phase 2 changes (commit `295e284900d7a
 - Frontend: 22 tests, 1 pre-existing failure (duplicate responsive navigation link queried with `getByRole`).
 - MySQL migration validation and Spring Boot startup: passed.
 
-A local clone/build was not possible because this execution environment could not resolve github.com. The MySQL 8.4 migration job passed V57 and its catalogue cross-tenant rejection assertions on commit `8aa08480d7195da7095ea9054a11132eabbdff13`. A later full run on current branch head `e68287fd4641daf0853f01ed665fbc617111882b` includes the latest context and test changes and is still being verified. Do not treat queued/in-progress CI as a pass.
+A local clone/build was not possible because this execution environment could not resolve github.com. The MySQL 8.4 migration job passed V57 and its catalogue cross-tenant rejection assertions on commit `8aa08480d7195da7095ea9054a11132eabbdff13`. A completed full run on commit `32abaf4f896f69e5fcab8fb7ef08af8e73a9d758` reported 132 backend tests with one remaining failure in the pre-existing authentication-audit transaction test; frontend, MySQL V57 plus cross-tenant FK assertions, and Spring Boot startup passed. The audit transaction fix has since been corrected and a fresh full run is required to confirm it. Do not treat queued/in-progress CI as a pass.
 
 ## Migration / rollback
 
