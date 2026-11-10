@@ -39,7 +39,7 @@ Application-level route buckets have now been added for `/api/v1/public/{storeSl
 
 ## Implementation plan
 
-1. **Implemented in commit `1a79b56244af6aa23bd58f15f835766574eae908`:** account bucket added for login, forgot-password and reset-password requests. The identifier is normalized in memory and keyed with HMAC-SHA-256 derived from the configured JWT secret; only the 64-character digest is stored in the existing `auth_rate_limit_bucket` table.
+1. **Implemented in commit `1a79b56244af6aa23bd58f15f835766574eae908`:** account bucket added for login and forgot-password requests; reset-password attempts use an HMAC-SHA-256 digest of the opaque reset token as the subject bucket. Identifiers are normalized/processed in memory and keyed with HMAC-SHA-256 derived from the configured JWT secret; only the 64-character digest is stored in the existing `auth_rate_limit_bucket` table.
 2. **Implemented:** the existing IP + endpoint bucket remains independent; account + endpoint is an additional bucket. Both use the configured route-specific limit and window.
 3. **Implemented:** request JSON is buffered with a 16 KiB maximum and replayed to Spring MVC; malformed JSON receives only IP throttling and continues to normal MVC validation; oversized bodies are rejected with a generic 400.
 4. **No migration required:** existing V52 bucket schema accepts both opaque 64-character hashes; no applied migration was edited.
@@ -67,9 +67,9 @@ Application-level route buckets have now been added for `/api/v1/public/{storeSl
 
 **Implemented / Pending Verification (expanded partial closure).**
 
-- Account + endpoint throttling is implemented for login, forgot-password and reset-password, reusing V52 and the existing filter.
+- Account + endpoint throttling is implemented for login and forgot-password; reset-password uses an opaque reset-token + endpoint bucket. All reuse V52 and the existing filter.
 - IP + endpoint throttling remains in place for all five existing authentication routes.
-- Focused unit tests were added for the additional bucket, request-body replay, raw identifier non-persistence and oversized-body rejection.
+- Focused unit tests cover account/IP buckets, reset-token digest non-persistence, request-body replay, oversized-body rejection, public enquiry, export and webhook throttling.
 - The GitHub Actions full validation workflow was triggered for commit `1a79b56244af6aa23bd58f15f835766574eae908`; at report update time its run was still in progress. Do not mark this requirement MET until the backend job passes.
 - Application rate limits now also cover public enquiry/export/webhook routes; production ingress/WAF configuration and distributed concurrency verification remain Open.
 - No applied migration was changed and no schema migration was needed.
