@@ -59,8 +59,21 @@ BEGIN
        OR EXISTS (SELECT 1 FROM quotation WHERE tenant_id IS NULL)
        OR EXISTS (SELECT 1 FROM quotation_item WHERE tenant_id IS NULL)
        OR EXISTS (SELECT 1 FROM customer_order WHERE tenant_id IS NULL)
-       OR EXISTS (SELECT 1 FROM order_item WHERE tenant_id IS NULL) THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='V58 blocked: legacy tenant-owned sales rows have NULL tenant_id';
+       OR EXISTS (SELECT 1 FROM order_item WHERE tenant_id IS NULL)
+       OR EXISTS (SELECT 1 FROM idempotency_record WHERE tenant_id IS NULL)
+       OR EXISTS (SELECT 1 FROM notification_delivery WHERE tenant_id IS NULL)
+       OR EXISTS (SELECT 1 FROM integration_webhook_event WHERE tenant_id IS NULL) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='V60 blocked: tenant-owned rows have NULL tenant_id; remediate only with owner-proven tenant mapping';
+    END IF;
+
+    -- app_user and role are mixed platform/tenant tables; NULL is valid only for platform principals.
+    IF EXISTS (SELECT 1 FROM app_user WHERE (tenant_id IS NULL AND account_type <> 'PLATFORM')
+                                       OR (tenant_id IS NOT NULL AND account_type = 'PLATFORM')) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Tenant integrity blocked: app_user tenant_id does not match platform account_type';
+    END IF;
+    IF EXISTS (SELECT 1 FROM role WHERE (tenant_id IS NULL AND name NOT IN ('PLATFORM_SUPER_ADMIN','PLATFORM_SUPPORT'))
+                                   OR (tenant_id IS NOT NULL AND name IN ('PLATFORM_SUPER_ADMIN','PLATFORM_SUPPORT'))) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Tenant integrity blocked: role tenant_id does not match platform role classification';
     END IF;
 
     -- Sales, survey and quotation graph.
