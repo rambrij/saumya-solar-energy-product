@@ -55,26 +55,80 @@ test('React vendor workspace stays isolated when switching between two tenant ac
   await page.context().clearCookies();
   await page.evaluate(() => sessionStorage.clear());
 
-  async function signIn(email: string, password: string) {
-    await page.goto(baseURL!);
-    await page.locator('button.public-login-link').click({ force: true });
-    await page.getByPlaceholder('Email').fill(email);
-    await page.getByPlaceholder('Password').fill(password);
-    const loginResponsePromise = page.waitForResponse(
-      response => response.url().includes('/api/v1/auth/login') && response.request().method() === 'POST',
-      { timeout: 20_000 },
-    );
-    const loginForm = page.locator('form.card.form');
-    await expect(loginForm).toBeVisible();
-    const submitButton = loginForm.locator('button').first();
-    await expect(submitButton).toBeVisible();
-    await submitButton.click();
-    const loginResponse = await loginResponsePromise;
-    if (!loginResponse.ok()) throw new Error('React login request failed with HTTP ' + loginResponse.status());
-    await expect(page.locator('aside[aria-label="Application navigation"]')).toBeVisible();
-    await page.getByRole('button', { name: 'Catalog', exact: true }).click();
-    await page.getByRole('button', { name: 'Products', exact: true }).click();
+
+async function signIn(email: string, password: string) {
+  await page.goto(baseURL!);
+
+  // Wait for React navigation to become interactive.
+  const loginLink = page.locator('button.public-login-link:visible').first();
+  await expect(loginLink).toBeVisible();
+  await loginLink.click();
+
+  const signInHeading = page.getByRole('heading', {
+    name: 'Sign in',
+    exact: true,
+  });
+
+  const registrationHeading = page.getByRole('heading', {
+    name: 'Customer registration',
+    exact: true,
+  });
+
+  // Recover if the application is displaying registration.
+  if (await registrationHeading.isVisible().catch(() => false)) {
+    await page.getByRole('button', {
+      name: 'Back to sign in',
+      exact: true,
+    }).click();
   }
+
+  await expect(signInHeading).toBeVisible();
+
+  const loginForm = page.locator('form.card.form')
+    .filter({ has: signInHeading });
+
+  await expect(loginForm).toBeVisible();
+
+  await loginForm.getByPlaceholder('Email').fill(email);
+  await loginForm.getByPlaceholder('Password', {
+    exact: true,
+  }).fill(password);
+
+  const loginResponsePromise = page.waitForResponse(
+    response =>
+      new URL(response.url()).pathname.endsWith('/api/v1/auth/login') &&
+      response.request().method() === 'POST',
+    { timeout: 20000 },
+  );
+
+  await loginForm.getByRole('button', {
+    name: 'Login',
+    exact: true,
+  }).click();
+
+  const response = await loginResponsePromise;
+
+  if (!response.ok()) {
+    throw new Error(
+      `Login failed with HTTP ${response.status()}`
+    );
+  }
+
+  await expect(
+    page.locator('aside[aria-label="Application navigation"]')
+  ).toBeVisible();
+
+  await page.getByRole('button', {
+    name: 'Catalog',
+    exact: true,
+  }).click();
+
+  await page.getByRole('button', {
+    name: 'Products',
+    exact: true,
+  }).click();
+}
+
 
   await signIn('admin@saumya.local', 'Admin@123');
   const tenantA = await page.evaluate(async () => {
