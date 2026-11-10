@@ -1931,6 +1931,7 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), movementA.getId(), movementB.getId());
     }
 
+    @org.springframework.transaction.annotation.Transactional
     @Test
     void fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation() throws Exception {
         AppUser inventoryUser = createPermissionMatrixUser("inventory", List.of("INVENTORY_VIEW"));
