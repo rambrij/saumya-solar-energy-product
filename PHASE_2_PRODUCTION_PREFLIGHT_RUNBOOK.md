@@ -6,8 +6,8 @@ Run the V57/V58 tenant-integrity preflight against the production MySQL database
 
 ## Important safety properties
 
-- The script does not INSERT, UPDATE or DELETE business rows.
-- It creates and drops two named stored procedures to express fail-fast checks. The database identity therefore needs CREATE ROUTINE and DROP ROUTINE privileges in addition to SELECT access. Both production and CI workflows install an EXIT cleanup trap so the named procedures are removed even when a SIGNAL aborts the SQL script. Review that privilege grant with the DBA before execution.
+- The V57/V58 integrity script does not INSERT, UPDATE or DELETE business rows. It creates and drops two named stored procedures to express fail-fast checks. Its execution identity therefore needs CREATE ROUTINE and DROP ROUTINE privileges in addition to SELECT access. Both production and CI workflows install an EXIT cleanup trap so the named procedures are removed even when a SIGNAL aborts the SQL script. Review that temporary DDL privilege with the DBA before execution.
+- The separate docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql script uses INFORMATION_SCHEMA, SELECT and prepared SELECT statements only. It runs with a distinct SELECT-only account and returns exact tenant_id NULL counts, nullability, FK inventory, unique-index inventory and tables without tenant_id.
 - It does not apply V57/V58 indexes, foreign keys or constraints.
 - It does not repair rows automatically.
 - Do not run V57/V58 migrations after a failed preflight.
@@ -26,9 +26,10 @@ For this repository's non-production validation, `.github/workflows/release-vali
 
 1. Confirm a current production backup and an approved change window.
 2. The workflow `.github/workflows/phase-2-production-preflight.yml` uses the protected GitHub environment named `production`.
-3. Configure these environment secrets: `PROD_DB_HOST`, `PROD_DB_PORT`, `PROD_DB_NAME`, `PROD_DB_USER`, `PROD_DB_PASSWORD`.
-4. Restrict the database identity to the minimum required schema privileges. Confirm the procedure create/drop privileges are permitted by the DBA.
-5. The workflow file must exist on the repository default branch before GitHub enables workflow_dispatch. The Phase 2 branch intentionally does not change the default/base branch. Merge the workflow file only after the normal PR review, or have the DBA execute the exact SQL from an approved secure workstation.
+3. Configure these environment secrets: `PROD_DB_HOST`, `PROD_DB_PORT`, `PROD_DB_NAME`, `PROD_DB_USER`, `PROD_DB_PASSWORD`, `PROD_DB_AUDIT_USER`, `PROD_DB_AUDIT_PASSWORD`.
+4. Grant the V57/V58 execution identity the reviewed temporary CREATE ROUTINE / DROP ROUTINE / SELECT privileges. Grant the separate audit identity SELECT-only access to the target schema and INFORMATION_SCHEMA.
+5. Restrict each database identity to the minimum required schema privileges. Confirm the procedure create/drop privileges are permitted by the DBA.
+6. The workflow file must exist on the repository default branch before GitHub enables workflow_dispatch. The Phase 2 branch intentionally does not change the default/base branch. Merge the workflow file only after the normal PR review, or have the DBA execute the exact SQL from an approved secure workstation.
 
 ## Run and retain evidence
 
@@ -52,4 +53,4 @@ For this repository's non-production validation, `.github/workflows/release-vali
 
 ## Current execution record
 
-**Not executed in this branch session.** No production database connection or protected environment secrets were available to this session. No production data was read or modified. A passing MySQL 8.4 CI migration/scheduler run is not a substitute for this production data preflight.
+**Not executed in this branch session.** No production database connection or protected environment secrets were available to this session. No production data was read or modified. The production workflow now runs both the V57/V58 relationship preflight and the separate SELECT-only tenant schema/NOT NULL audit using a dedicated read-only account. A passing MySQL 8.4 CI migration/scheduler run is not a substitute for this production data preflight.
