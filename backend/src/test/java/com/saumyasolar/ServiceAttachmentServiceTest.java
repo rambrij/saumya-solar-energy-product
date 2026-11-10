@@ -37,6 +37,50 @@ class ServiceAttachmentServiceTest {
         service = new ServiceAttachmentService(tempDir.toString(), attachments, finance, storage);
     }
 
+
+    @Test
+    void assignedReadOnlyEngineerCanDownloadEvidenceAfterTicketScopeCheck() throws Exception {
+        UUID tenant = UUID.randomUUID();
+        UUID ticketId = UUID.randomUUID();
+        UUID attachmentId = UUID.randomUUID();
+        Principal viewer = new Principal(UUID.randomUUID(), tenant, "viewer@example.test", "VENDOR",
+                Set.of("CUSTOM_SERVICE_ENGINEER"), Set.of("SERVICE_VIEW"), 0);
+        ServiceAttachment attachment = new ServiceAttachment();
+        attachment.setId(attachmentId);
+        attachment.setTenantId(tenant);
+        attachment.setServiceRequestId(ticketId);
+        attachment.setStorageKey("private/service-evidence.pdf");
+        attachment.setContentType("application/pdf");
+        byte[] bytes = "%PDF-1.4 private evidence".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        when(attachments.findByIdAndTenantIdAndServiceRequestId(attachmentId, tenant, ticketId))
+                .thenReturn(java.util.Optional.of(attachment));
+        when(storage.get(eq(tempDir.toAbsolutePath().normalize()), eq(attachment.getStorageKey()))).thenReturn(bytes);
+
+        ServiceAttachmentService.Download download = service.download(ticketId, attachmentId, viewer);
+
+        assertArrayEquals(bytes, download.content());
+        verify(finance).getTicket(ticketId, viewer);
+        verify(storage).get(eq(tempDir.toAbsolutePath().normalize()), eq(attachment.getStorageKey()));
+    }
+
+    @Test
+    void unassignedEngineerCannotDownloadAnotherEngineersEvidence() {
+        UUID tenant = UUID.randomUUID();
+        UUID ticketId = UUID.randomUUID();
+        UUID attachmentId = UUID.randomUUID();
+        Principal unassigned = new Principal(UUID.randomUUID(), tenant, "other@example.test", "VENDOR",
+                Set.of("CUSTOM_SERVICE_ENGINEER"), Set.of("SERVICE_VIEW"), 0);
+        org.springframework.web.server.ResponseStatusException hidden = new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.NOT_FOUND);
+        doThrow(hidden).when(finance).getTicket(ticketId, unassigned);
+
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> service.download(ticketId, attachmentId, unassigned));
+
+        verify(finance).getTicket(ticketId, unassigned);
+        verifyNoInteractions(attachments, storage);
+    }
+
     @Test
     void readOnlyServiceViewerCannotUploadEvidence() {
         UUID tenant = UUID.randomUUID();
