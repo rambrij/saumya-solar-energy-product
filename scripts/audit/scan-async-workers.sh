@@ -17,10 +17,10 @@ grep_repo() {
   # grep (rather than ripgrep) is available on the standard GitHub Actions runner.
   # shellcheck disable=SC2086
   grep -RInE --binary-files=without-match \
-    --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=target \
+    --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=target --exclude-dir=test \
     --exclude-dir=dist --exclude-dir=build --exclude-dir=coverage \
     --exclude-dir=.next --exclude-dir=.venv --exclude-dir=venv \
-    --exclude='*lock*' --exclude='*.md' --exclude='*.svg' --exclude='*.min.js' \
+    --exclude='*lock*' --exclude='*.md' --exclude='*.svg' --exclude='*.min.js' --exclude='scan-async-workers.sh' \
     $includes "$pattern" "$ROOT" || true
   echo
 }
