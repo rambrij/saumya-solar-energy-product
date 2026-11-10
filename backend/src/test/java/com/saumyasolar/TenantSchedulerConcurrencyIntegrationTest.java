@@ -178,16 +178,25 @@ class TenantSchedulerConcurrencyIntegrationTest {
         assertThrows(IllegalStateException.class, TenantExecutionContext::requireTenantId);
     }
 
-    private void runScheduler(CountDownLatch ready, CountDownLatch start) throws InterruptedException {
+    private void runScheduler(CountDownLatch ready, CountDownLatch start) {
         ready.countDown();
-        if (!start.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("SLA scheduler start timed out");
+        awaitStart(start, "SLA scheduler");
         slaScheduler.evaluate();
     }
 
-    private void runWarrantyScheduler(CountDownLatch ready, CountDownLatch start) throws InterruptedException {
+    private void runWarrantyScheduler(CountDownLatch ready, CountDownLatch start) {
         ready.countDown();
-        if (!start.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("Warranty scheduler start timed out");
+        awaitStart(start, "Warranty scheduler");
         warrantyExpiryScheduler.evaluateWarrantyExpiry();
+    }
+
+    private void awaitStart(CountDownLatch start, String worker) {
+        try {
+            if (!start.await(5, TimeUnit.SECONDS)) throw new IllegalStateException(worker + " start timed out");
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(worker + " was interrupted", interrupted);
+        }
     }
 
     private ServiceRequest serviceRequest(UUID tenantId, Instant responseDueAt) {
