@@ -1388,3 +1388,16 @@ The MySQL scheduler suite initially exposed incomplete test fixtures (missing in
 #### Production preflight limitation
 
 The production preflight script reads tenant-integrity relationships and fails closed. It creates/drops named stored procedures to implement SIGNAL-based assertions, so it is business-data read-only but requires CREATE ROUTINE and DROP ROUTINE privileges. A workflow artifact now preserves output for remediation review. The protected production secrets and DBA approval were not available in this session; no production database was accessed.
+
+
+#### Evidence line references (latest source layout)
+
+- Runtime endpoint authentication matrix: `backend/src/test/java/com/saumyasolar/EndpointAuthenticationMatrixTest.java:44-73`.
+- Warranty claim list/create/decision integration: `backend/src/test/java/com/saumyasolar/Release12TenantIntegrationTest.java:1334-1415`.
+- Warranty attachment controller multipart/download integration: `Release12TenantIntegrationTest.java:1665-1754`.
+- Branch integration coverage (CRM, finance, service, installations, warehouses, inventory and analytics): `Release12TenantIntegrationTest.java:1755-2030`.
+- Branch-filtered invoice and ticket lists: `backend/src/main/java/com/saumyasolar/service/FinanceService.java:348-358,642-654`.
+- Branch-filtered installation list: `backend/src/main/java/com/saumyasolar/service/OperationsService.java:634-641`.
+- Tenant row locking for SLA scheduler: `backend/src/main/java/com/saumyasolar/repo/ServiceRequestRepository.java` (`findForSlaEvaluationByTenantId`); concurrent SLA and warranty tests: `backend/src/test/java/com/saumyasolar/TenantSchedulerConcurrencyIntegrationTest.java:148-225`.
+- MySQL 8.4 scheduler CI step: `.github/workflows/release-validation.yml` (`Run concurrent SLA, warranty and integration scheduler tests on MySQL 8.4`).
+- React two-tenant browser test: `frontend/e2e/tenant-react-ui.spec.ts:3-120`; Playwright config: `frontend/playwright.config.ts`.
