@@ -192,9 +192,10 @@ class EndpointAuthenticationMatrixTest {
             for (String pattern : info.getPatternValues()) {
                 if (isPublic(pattern)) continue;
                 for (var method : methods) {
-                    // This action resolves a persisted quotation before authorization; a dedicated
-                    // lifecycle integration test supplies a real quotation fixture for this route.
-                    if (pattern.startsWith("/api/v1/quotations/{id}/{action:")) continue;
+                    // These routes intentionally delegate authorization to an existing resource's
+                    // owner/assignment policy; dedicated tests provide real resource fixtures.
+                    if (pattern.startsWith("/api/v1/quotations/{id}/{action:")
+                            || pattern.equals("/api/v1/offline-sync/operations")) continue;
                     if (method == org.springframework.web.bind.annotation.RequestMethod.GET
                             || method == org.springframework.web.bind.annotation.RequestMethod.OPTIONS
                             || method == org.springframework.web.bind.annotation.RequestMethod.HEAD) continue;
@@ -341,7 +342,26 @@ class EndpointAuthenticationMatrixTest {
         if (type.isEnum()) return type.getEnumConstants()[0];
         if (type == byte[].class) return new byte[] {1};
         if (type.isArray()) return new Object[] {sampleValue(type.getComponentType(), null, name, new Annotation[0])};
-        if (Map.class.isAssignableFrom(type)) return Map.of("reason", "Authorization matrix probe");
+        if (Map.class.isAssignableFrom(type)) {
+            if (name.toLowerCase(java.util.Locale.ROOT).contains("reopen")) return Map.of("reopenDays", 7);
+            return Map.of("reason", "Authorization matrix probe");
+        }
+        if ("items".equals(name)) {
+            return List.of(Map.of("productId", UUID.fromString("00000000-0000-4000-8000-000000000001"),
+                    "quantity", 1, "optionalItem", false));
+        }
+        if ("memberIds".equals(name)) {
+            UUID validMember = users.findByEmailIgnoreCase("engineer@saumya.local")
+                    .or(() -> users.findByEmailIgnoreCase("technician@saumya.local"))
+                    .or(() -> users.findByEmailIgnoreCase("installer@saumya.local"))
+                    .map(AppUser::getId)
+                    .orElseGet(() -> users.findByTenantId(users.findByEmailIgnoreCase("admin@saumya.local")
+                            .orElseThrow().getTenantId()).stream()
+                            .filter(user -> user.getRoles().stream().anyMatch(role -> Set.of(
+                                    "SERVICE_ENGINEER", "INSTALLER", "TECHNICIAN", "OPERATIONS_MANAGER").contains(role.getName())))
+                            .map(AppUser::getId).findFirst().orElse(UUID.fromString("00000000-0000-4000-8000-000000000001")));
+            return List.of(validMember);
+        }
         if (Collection.class.isAssignableFrom(type)) {
             boolean requiredElements = hasAnnotation(annotations, "NotEmpty") || hasAnnotation(annotations, "NotNull");
             for (Annotation annotation : annotations) {
