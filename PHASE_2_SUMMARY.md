@@ -30,7 +30,7 @@
 - Production-snapshot execution of V57's integrity preflight.
 - Runtime verification of frontend filters, branch access, exports and binary downloads across tenants.
 
-These items are explicitly classified as partial/deferred in the gap analysis. The current changes do not justify a claim that every cross-tenant path has been proven closed.
+These items are explicitly classified as partial/deferred in the gap analysis. The current changes do not justify a claim that every cross-tenant path has been proven closed. The endpoint inventory lists 222 HTTP mappings and the repository inventory lists all 69 repository interfaces; both are marked Partial pending per-resource negative tests.
 
 ## Baseline and CI
 
@@ -39,7 +39,7 @@ The latest base-branch CI observed before Phase 2 changes (commit `295e284900d7a
 - Frontend: 22 tests, 1 pre-existing failure (duplicate responsive navigation link queried with `getByRole`).
 - MySQL migration validation and Spring Boot startup: passed.
 
-A local clone/build was not possible because this execution environment could not resolve github.com. The MySQL 8.4 migration job passed V57 and its catalogue cross-tenant rejection assertions on commit `8aa08480d7195da7095ea9054a11132eabbdff13`. A completed full run on commit `32abaf4f896f69e5fcab8fb7ef08af8e73a9d758` reported 132 backend tests with one remaining failure in the pre-existing authentication-audit transaction test; frontend, MySQL V57 plus cross-tenant FK assertions, and Spring Boot startup passed. The audit transaction fix has since been corrected and a fresh full run is required to confirm it. Do not treat queued/in-progress CI as a pass.
+A local clone/build was not possible because this execution environment could not resolve github.com. The MySQL 8.4 migration job passed V57 and its catalogue cross-tenant rejection assertions on commit `8aa08480d7195da7095ea9054a11132eabbdff13`. Full GitHub Actions run `42773745740` on commit `0d41b66e4a25f048bbe74c67bc62a9816f1c35b5` passed all jobs: backend 132 tests / 0 failures / 0 errors; frontend 22 tests / 0 failures plus production build; MySQL 8.4 V1–V57 migration and cross-tenant FK rejection assertions; Spring Boot startup against MySQL 8.4 and Mailpit. The latest changes after that tested code commit are documentation/workflow-name only. Do not treat queued/in-progress CI as a pass.
 
 ## Migration / rollback
 
