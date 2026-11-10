@@ -266,11 +266,17 @@ The inventory contains 222 concrete HTTP method mappings: 15 intentionally publi
 
 Representative positive/negative role fixtures remain:
 
-| Role fixture | Allowed read | Denied cross-module read | Denied write / command |
-|---|---|---|---|
-| Inventory Viewer | GET inventory balances | GET invoices, payments and service requests | POST inventory receipts; POST export; GET export status |
-| Accountant (invoice/payment view + refund only) | GET invoices and payments | GET inventory balances and service requests | POST invoice; POST payment; POST export; GET export status |
-| Service Engineer (service view/update/resolve) | GET service requests | GET invoices, payments and inventory balances | POST service request; POST export; GET export status |
+| Role fixture | Allowed read / positive evidence | Negative evidence |
+|---|---|---|
+| Platform Super Admin | Tenant provisioning, plan creation/assignment, platform tenant export | Vendor principals cannot access platform exports; duplicate plan codes and unauthorized tenant mutations are rejected (`platformCanProvisionTenantAndVendorAdminCanManageSalesEmployee`, `platformCanManagePlansAndAssignReplacementWithHistory`, `platformTenantDashboardAndExportsArePlatformOnlyAndFiltered`) |
+| Platform Support | Read-only tenant directory | Platform-state mutation denied (`platformSupportCanReadTenantDirectoryButCannotMutatePlatformState`) |
+| Vendor Admin | Tenant catalogue, discount policy, branch CRUD/membership and operations | Cannot promote an employee to Platform Super Admin; cannot access foreign tenant branches (`vendorAdminCannotEscalateEmployeeToPlatformSuperAdmin`, `vendorBranchEndpointsCannotReadOrMutateAnotherTenantsBranch`) |
+| Sales Executive | Assigned leads only; can update assigned lead | Unassigned lead reads/updates and out-of-scope assignment denied (`salesExecutiveCanOnlyReadAndUpdateAssignedLeads`) |
+| Custom Sales Role | Assigned-resource read under granted SALES_VIEW | Cannot read unassigned leads or assign outside its scope (`customSalesRoleCannotReadUnassignedLeadsOrAssignOutsideItsScope`) |
+| Inventory Viewer | GET inventory balances | GET invoices, payments and service requests; POST inventory receipts; export denied (`fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation`) |
+| Accountant (invoice/payment view + refund only) | GET invoices and payments | GET inventory balances and service requests; POST invoice and payment record; export denied (`fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation`) |
+| Service Engineer (service view/update/resolve) | Assigned service requests and visits | GET invoices, payments and inventory balances; vendor service create and export denied (`fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation`, `customServiceViewerCanOnlyReadTicketsAssignedToItsUser`) |
+| Customer | Own addresses, orders, quotations, invoices, payments, service tickets and warranty claims | Tampered owner IDs and another customer's address/order/quotation PDF/invoice PDF/receipt/service attachment/warranty attachment denied (`customerAddressEndpointsEnforceAuthenticatedCustomerOwnershipAndIgnoreTamperedOwnerIds`, `customerCannotReadAnotherCustomersOrdersInvoicesOrServiceTickets`, `warrantyClaimAttachmentHttpUploadAndDownloadAreBoundToTenantAndParentClaim`) |
 
 **Coverage interpretation:** every matrix row now has an explicit classification or negative-probe reference (zero rows remain labelled pending). The dynamic sweeps close broad authentication and least-privilege denial coverage, but they do not prove successful access for every valid business role on every resource-bearing route. Positive-role/resource-fixture coverage remains representative rather than exhaustive; do not label the full role × endpoint × verb acceptance complete until those positive paths are reconciled.
 
