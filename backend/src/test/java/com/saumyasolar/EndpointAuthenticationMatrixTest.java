@@ -154,6 +154,9 @@ class EndpointAuthenticationMatrixTest {
         vendor.setAccountType("VENDOR");
         vendor.setEnabled(true);
         vendor.getRoles().add(allGrants);
+        // The HTTP security chain intentionally protects tenant administration routes
+        // with the VENDOR_ADMIN role in addition to fine-grained permission checks.
+        vendor.getRoles().add(roles.findByNameAndTenantIdIsNull("VENDOR_ADMIN").orElseThrow());
         users.saveAndFlush(vendor);
 
         AppUser platform = users.findByEmailIgnoreCase("platform@saumya.local").orElseThrow();
