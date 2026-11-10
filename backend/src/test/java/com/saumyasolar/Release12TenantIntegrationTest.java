@@ -6,6 +6,8 @@ import com.saumyasolar.domain.AppUser;
 import com.saumyasolar.domain.Branch;
 import com.saumyasolar.domain.CustomerAddress;
 import com.saumyasolar.domain.SiteSurvey;
+import com.saumyasolar.domain.SalesLead;
+import com.saumyasolar.domain.SolarPackage;
 import com.saumyasolar.domain.Enquiry;
 import com.saumyasolar.domain.Product;
 import com.saumyasolar.domain.ProductCategory;
@@ -19,6 +21,8 @@ import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.repo.CustomerAddressRepository;
 import com.saumyasolar.repo.BranchRepository;
 import com.saumyasolar.repo.SiteSurveyRepository;
+import com.saumyasolar.repo.SalesLeadRepository;
+import com.saumyasolar.repo.SolarPackageRepository;
 import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.AppUserRepository;
 import com.saumyasolar.repo.RoleRepository;
@@ -86,6 +90,10 @@ class Release12TenantIntegrationTest {
     BranchRepository branches;
     @Autowired
     SiteSurveyRepository surveys;
+    @Autowired
+    SalesLeadRepository leads;
+    @Autowired
+    SolarPackageRepository packages;
     @Autowired
     CustomerOrderRepository customerOrders;
     @Autowired
@@ -1038,6 +1046,134 @@ class Release12TenantIntegrationTest {
         assertEquals(customerA.profile().getId().toString(), createdJson.get("customerId").asText());
     }
 
+
+
+    @Test
+    void genericVendorListEndpointsNeverReturnForeignTenantResources() throws Exception {
+        var foreignTenant = newTenant();
+
+        AppUser foreignVendor = new AppUser();
+        foreignVendor.setId(UUID.randomUUID());
+        foreignVendor.setTenantId(foreignTenant.getId());
+        foreignVendor.setName("Foreign Vendor User");
+        foreignVendor.setEmail("foreign-vendor-" + UUID.randomUUID() + "@example.test");
+        foreignVendor.setPasswordHash("not-used");
+        foreignVendor.setAccountType("VENDOR");
+        foreignVendor.setEnabled(true);
+        users.save(foreignVendor);
+
+        ProductCategory category = new ProductCategory();
+        category.setId(UUID.randomUUID());
+        category.setTenantId(foreignTenant.getId());
+        category.setName("Foreign category " + UUID.randomUUID());
+        category.setActive(true);
+        categories.save(category);
+
+        Product product = new Product();
+        product.setId(UUID.randomUUID());
+        product.setTenantId(foreignTenant.getId());
+        product.setCategoryId(category.getId());
+        product.setSku("FOREIGN-" + UUID.randomUUID());
+        product.setName("Foreign product");
+        product.setPrice(BigDecimal.TEN);
+        product.setTaxPercent(BigDecimal.ZERO);
+        product.setActive(true);
+        products.save(product);
+
+        SolarPackage solarPackage = new SolarPackage();
+        solarPackage.setId(UUID.randomUUID());
+        solarPackage.setTenantId(foreignTenant.getId());
+        solarPackage.setCode("FOREIGN-" + UUID.randomUUID().toString().substring(0, 8));
+        solarPackage.setName("Foreign package");
+        solarPackage.setActive(true);
+        packages.save(solarPackage);
+
+        CustomerProfile customer = createCustomer(foreignTenant.getId(), "generic-list-customer").profile();
+
+        Enquiry enquiry = new Enquiry();
+        enquiry.setId(UUID.randomUUID());
+        enquiry.setTenantId(foreignTenant.getId());
+        enquiry.setCustomerId(customer.getId());
+        enquiry.setName("Foreign enquiry");
+        enquiry.setStatus("NEW");
+        enquiry.setCreatedAt(Instant.now());
+        enquiries.save(enquiry);
+
+        SalesLead lead = new SalesLead();
+        lead.setId(UUID.randomUUID());
+        lead.setTenantId(foreignTenant.getId());
+        lead.setEnquiryId(enquiry.getId());
+        lead.setCustomerId(customer.getId());
+        lead.setStage("NEW");
+        lead.setPriority("LOW");
+        lead.setCreatedAt(Instant.now());
+        leads.save(lead);
+
+        SiteSurvey survey = new SiteSurvey();
+        survey.setId(UUID.randomUUID());
+        survey.setTenantId(foreignTenant.getId());
+        survey.setLeadId(lead.getId());
+        survey.setPropertyType("RESIDENTIAL");
+        survey.setRoofType("RCC");
+        survey.setStatus("SCHEDULED");
+        survey.setScheduledAt(Instant.now().plusSeconds(3600));
+        surveys.save(survey);
+
+        Quotation quotation = new Quotation();
+        quotation.setId(UUID.randomUUID());
+        quotation.setTenantId(foreignTenant.getId());
+        quotation.setQuoteGroupId(UUID.randomUUID());
+        quotation.setQuotationNumber("FOREIGN-" + UUID.randomUUID().toString().substring(0, 8));
+        quotation.setRevision(1);
+        quotation.setCustomerId(customer.getId());
+        quotation.setLeadId(lead.getId());
+        quotation.setSurveyId(survey.getId());
+        quotation.setStatus("DRAFT");
+        quotation.setSubtotal(BigDecimal.ZERO);
+        quotation.setDiscountPercent(BigDecimal.ZERO);
+        quotation.setDiscountAmount(BigDecimal.ZERO);
+        quotation.setTaxAmount(BigDecimal.ZERO);
+        quotation.setGrandTotal(BigDecimal.ZERO);
+        quotation.setCreatedBy(foreignVendor.getId());
+        quotation.setCreatedAt(Instant.now());
+        quotations.save(quotation);
+
+        CustomerOrder order = new CustomerOrder();
+        order.setId(UUID.randomUUID());
+        order.setTenantId(foreignTenant.getId());
+        order.setQuotationId(quotation.getId());
+        order.setCustomerId(customer.getId());
+        order.setOrderNumber("FOREIGN-" + UUID.randomUUID().toString().substring(0, 8));
+        order.setStatus("PENDING");
+        order.setSubtotal(BigDecimal.ZERO);
+        order.setDiscountPercent(BigDecimal.ZERO);
+        order.setDiscountAmount(BigDecimal.ZERO);
+        order.setTaxTotal(BigDecimal.ZERO);
+        order.setTotal(BigDecimal.ZERO);
+        order.setCreatedAt(Instant.now());
+        customerOrders.save(order);
+
+        var token = accessToken("admin@saumya.local", "Admin@123");
+        Map<String, UUID> foreignIds = Map.of(
+                "users", foreignVendor.getId(),
+                "categories", category.getId(),
+                "products", product.getId(),
+                "packages", solarPackage.getId(),
+                "customers", customer.getId(),
+                "enquiries", enquiry.getId(),
+                "leads", lead.getId(),
+                "surveys", survey.getId(),
+                "quotations", quotation.getId(),
+                "orders", order.getId()
+        );
+        for (var entry : foreignIds.entrySet()) {
+            String body = mvc.perform(get("/api/v1/" + entry.getKey())
+                            .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            assertFalse(body.contains(entry.getValue().toString()),
+                    "Foreign tenant resource leaked from /" + entry.getKey());
+        }
+    }
 
     @Test
     void customerCannotReadAnotherCustomersOrdersInvoicesOrServiceTickets() throws Exception {
