@@ -901,3 +901,95 @@ Final source commit `aca7facda4fbd4133f79b732c9b5b1bc0ce1e931` passed [GitHub Ac
 The report and gap analysis were updated after this source commit; no application source changes were made after the passing CI run.
 
 The remaining production blocker is outside the source tree: the inspected Render API service still points at the legacy `saumya-solar-energy-solution` repository on `main`, not this repository/branch. Its runtime CORS, cookie and trusted-proxy environment values are not exposed in the service inspection response. Do not claim production deployment readiness until the intended Render service is explicitly aligned and its runtime settings are verified.
+
+
+---
+
+## Phase 2 — Tenant isolation and data integrity (2026-11-10)
+
+### Scope and audit method
+
+This section extends the existing analysis. The source-of-truth order is the business requirements document, then the SRS/HLD, then this gap analysis. README was not used to validate Phase 2 behavior. The source audit covered all API controller mapping inventories, service/repository interfaces, scheduled components, migration V1–V57 and the frontend source/test inventory. Evidence below is file path plus line number from the audited branch; line numbers refer to the post-change source unless stated otherwise.
+
+**Stack detected:** Java 21, Spring Boot 3.5.7, Maven, Spring Data JPA, MySQL 8.4, Flyway SQL migrations, React/TypeScript, Vite and Vitest. Test frameworks: JUnit 5/Spring Boot Test/Mockito and Vitest/Testing Library. No separate ORM tenant filter or universal tenant-aware base repository was found; the current design is service-level tenant-scoped repository methods.
+
+### Phase 2 audit table
+
+| Item | Requirement ref | Status (Implemented/Partial/Missing) | Evidence (file:line) | Planned fix |
+|---|---|---|---|---|
+| Authenticated tenant identity is reloaded and matched to JWT tenant/account claims | SRS §8.2, §15; TEN-02 | Implemented | `backend/src/main/java/com/saumyasolar/security/JwtFilter.java:36-56` | Retain DB-backed identity check; add broader tampered-claim integration cases |
+| Generic vendor list endpoints (users/catalog/customers/enquiries/leads/surveys/quotes/orders) | Business req §13; SRS §8.2, §20.4 | Partial | `backend/src/main/java/com/saumyasolar/service/AppService.java:157-240` | Expand guessed-ID/list/export tests for every resource and permission/assignment combination |
+| Generic create endpoints and linked category/product/customer validation | SRS §8.2, §10.4 | Partial | `AppService.java:298-344`; `Controller.java:439-444` | Add cross-tenant body-ID mutation tests and DB FK coverage for all relationships |
+| Lead update/history and employee assignment | SRS §9.3, §10.3 | Partial | `AppService.java:650-696`; `Controller.java:472-477` | Complete negative tests for reassignment, branch scope and history IDOR |
+| Survey create/update and survey-linked quotation validation | SRS §10.5, §8.4 | Partial | `AppService.java:717-767`; `SurveyLifecycleService.java`; `SurveyLifecycleController.java` | Add full guessed-ID and attachment boundary tests |
+| Quotation create/action/revision/PDF endpoints | SRS §10.6, §8.4 | Partial | `Controller.java:491-516`; `AppService.java:751-933`; `QuotationRevisionService.java` | Exercise every action, revision and PDF using Tenant A against Tenant B IDs |
+| Package/product/category update/delete and image upload | SRS §10.4, §8.2 | Partial | `Controller.java:559-628`; `AppService.java:458-526` | Complete update/delete/upload cross-tenant tests; verify object key ownership |
+| Customer profile/address/order endpoints | Business req §3; SRS §10.3, §10.12 | Partial | `CustomerAccountController.java`; `CustomerAccountService.java`; `AppService.java:570-590, 989-1055` | Add exhaustive customer A vs customer B tests for each customer-owned record |
+| Inventory/warehouse/order/installations/warranty endpoints | SRS §10.8-10.11 | Partial | `Controller.java:696-916`; `OperationsService.java:90-1055` | Expand branch/customer IDOR and tampered body IDs; keep 404 for out-of-scope resources |
+| Finance invoice/payment/refund/service endpoints | SRS §10.12-10.14 | Partial | `FinanceController.java:37-263`; `FinanceService.java:131-450,563-993` | Add tenant/customer/branch tests for every mutation and read path |
+| Operations reports CSV/PDF | Business req §14; SRS §10.16, §8.3 | Partial | `Phase2OperationsController.java:290-383` | Prove tenant scoping for all filters, aggregate counts, exports and branch filters |
+| Platform tenant CSV/PDF exports | SRS §9, §10.2 | Partial | `Controller.java:300-426`; `TenantAdminService.java` | Keep platform-only authorization; test non-platform denial and audit of export |
+| Quotation PDF download | SRS §10.6, §8.3 | Partial | `Controller.java:516`; `AppService.java:921-933` | Add cross-tenant and assigned-sales PDF negative tests |
+| Invoice/payment PDF and receipts | SRS §10.12, §8.3 | Partial | `FinanceController.java:72-114`; `FinanceService.java:131-450` | Add customer ownership and cross-tenant binary response tests |
+| Private service/survey/warranty attachment download | SRS §8.3, §10.14 | Partial | `ServiceAttachmentService.java:78-96`; `SurveyAttachmentService.java:76-99`; `WarrantyClaimAttachmentService.java:96-116` | Existing download methods check parent resource and tenant-scoped attachment row; add all three IDOR integration suites; no signed URL is currently used by these controller paths |
+| Service SLA scheduler | SRS §8.3, §10.14 | Implemented (source) | `ServiceSlaScheduler.java:7-22`; `FinanceService.java:1037-1070` | Scheduler now iterates tenants and passes explicit tenant ID; add multi-tenant scheduler integration test |
+| Subscription expiry scheduler | SRS §8.3, §10.2 | Implemented (source) | `SubscriptionExpiryScheduler.java:14-48`; `TenantSubscriptionRepository.java` | Scheduler now iterates tenants and uses tenant-qualified query; add multi-tenant scheduler integration test |
+| Warranty expiry/reminder scheduler | SRS §8.3, §10.11 | Implemented (source) | `WarrantyExpiryScheduler.java:13-57`; `WarrantyRepository.java`; `WarrantyExpirySchedulerTest.java` | Tenant-qualified expiry/reminder queries and test fixture added; add DB-backed multi-tenant test |
+| Integration queue scan/claim/process | SRS §8.3, §10.17 | Implemented (source) | `IntegrationSyncScheduler.java:11-130`; `IntegrationSyncJobRepository.java` | Queue discovery, atomic claim and reload now include tenant ID; add concurrent multi-tenant scheduler test |
+| Scheduled jobs tenant context lifecycle | SRS §8.3 | Partial | Scheduled services above | Jobs use explicit tenant IDs and tenant-qualified queries. There is no shared ThreadLocal TenantContext lifecycle; add only if future async execution requires it. Verify async/event listeners separately before enabling them |
+| Product → category FK | SRS §8.3, §11 | Implemented by V57 | `V1__complete_release2.sql`; `V57__tenant_aware_catalogue_foreign_keys.sql` | V57 adds composite (tenant_id,id) parent key and tenant-aware FK after fail-closed integrity preflight |
+| Package item → package/product FKs | SRS §8.3, §11 | Implemented by V57 | `V1__complete_release2.sql`; `V57__tenant_aware_catalogue_foreign_keys.sql` | V57 requires non-null package_item.tenant_id and adds both composite tenant-aware FKs |
+| Branch relationships | SRS §8.3, §11 | Implemented for branch-owned records | `V37__enterprise_saas_foundation.sql`; `V43__branch_scope_business_records.sql` | Existing composite tenant/branch FKs retained; broader customer/employee relationship coverage remains |
+| Remaining tenant-owned foreign keys | SRS §8.3, §11 | Partial | `V1__complete_release2.sql`; migrations V2–V56 | Inventory and add composite constraints in subsequent reviewed migrations, each with preflight and safe rollout |
+| Repository query predicates (derived/JPQL/native) | SRS §8.2-8.3 | Partial | `repo/*.java`; example `CustomerOrderRepository.java:13-25`, `ProductRepository.java:9-15` | Tenant-aware derived methods are common; exhaustive query-by-query static/runtime proof remains |
+| Frontend tenant/customer/branch filters and route params | SRS §6.2, §8.2 | Partial | `frontend/src/EnterpriseSaasPanel.tsx`; `OperationsPanel.tsx`; `FinanceServicePanel.tsx`; `authenticatedFetch.ts` | Client filters remain UX only; add API-level tampering tests and verify 403/404 handling per workflow |
+| Phase 1 identity and permission baseline | SRS §8.2, §9 | Implemented as prerequisite baseline | `JwtFilter.java:36-60`; `PHASE_1_AUTHENTICATION_SECURITY_IMPLEMENTATION.md`; V54–V56 | Do not redo Phase 1; tenant-resource coverage still needs Phase 2 negative tests |
+
+### What changed in Phase 2
+
+1. **SLA breach processing:** removed the global `ServiceRequestRepository.findAll()` scan. `FinanceService.evaluateSlaBreaches(UUID tenantId)` rejects a null tenant and reads only `findByTenantIdOrderByCreatedAtDesc(tenantId)`. The scheduler iterates tenants and passes the explicit tenant ID.
+2. **Subscription expiry:** replaced the global expiry query with `findByTenantIdAndStatusInAndEndsAtBefore`; the scheduler loops over tenants and audits each expired subscription with that subscription's tenant ID.
+3. **Warranty expiry/reminders:** replaced unscoped warranty queries with tenant-qualified repository methods. The scheduler loops over tenants; customer lookup already includes the warranty tenant. Updated unit tests to exercise tenant-qualified query calls.
+4. **Integration sync:** queued and stale job discovery now includes tenant ID; atomic claim includes both job ID and tenant ID; reload uses `findByIdAndTenantId`; connection lookup remains tenant-qualified.
+5. **Database:** V57 adds fail-closed data-integrity preflight checks for product/category and package-item/package/product relationships, then adds composite tenant-aware foreign keys and unique referenced keys. V57 is included in the MySQL 8.4 migration workflow.
+6. **CI:** release validation now runs on this audit branch and applies/asserts V57 on MySQL 8.4.
+
+### Gaps deferred / remaining evidence
+
+- **Full endpoint-level negative matrix:** the existing `Release12TenantIntegrationTest` includes selected tenant isolation cases, but it does not prove every read/list/create/update/delete/export/download operation for every resource type. A complete matrix is still required.
+- **Customer and branch matrix:** cross-customer and cross-branch access needs systematic ID-guessing tests for every resource family, including attachment IDs, branch query parameters and body-supplied linked IDs.
+- **Database constraints:** V57 deliberately covers the core catalogue relationships only. Many tenant-owned FKs elsewhere in V1 and later migrations still use single-column IDs or have not been proven tenant-aware. Expand only after preflight identifies clean data and each relationship is reviewed.
+- **Background jobs:** scheduled loops are explicitly tenant-qualified. The integration sync worker also carries tenant ID from the persisted job. No current `@Async` method was identified in the reviewed backend inventory; asynchronous event listeners and future queue consumers need explicit tenant context before use.
+- **Signed URLs:** reviewed attachment controllers stream bytes after checking parent and attachment ownership; no signed-URL route was found in those paths. If object storage later returns signed URLs, the token must bind tenant + resource and expire.
+- **Frontend:** source has authenticated API helpers and role/branch UI filters. UI filters are not an authorization control; complete API negative tests are still needed to demonstrate tampered client filters cannot broaden data access.
+- **Migration data preflight:** V57 contains fail-closed SQL checks. The migration workflow will report whether the checks pass against its MySQL fixture; this is not a substitute for running the same preflight against a production snapshot before rollout.
+
+### Document conflicts
+
+- The business requirements describe vendor/tenant separation and customer identities as tenant-specific; the SRS §8.1 explicitly says a customer may have separate identities per vendor and cross-vendor customer unification is not required. These are consistent.
+- The SRS §8.2 allows tenant resolution from trusted JWT/server-side identity or verified public storefront slug. No conflict: public storefront slug is a separate unauthenticated discovery path; authenticated business writes must use principal-derived tenant.
+- The SRS requires tenant-owned entities to have non-null tenant_id, while V1 contains nullable tenant_id on some older relationship tables (for example package_item). V57 makes package_item.tenant_id NOT NULL after a preflight check; other legacy tables remain to be inventoried.
+- No business-vs-technical conflict was found that changes Phase 2 scope.
+
+### Verification status and baseline
+
+- **Local baseline/build:** not run. A local clone was attempted but the execution environment could not resolve github.com. The repository's GitHub Actions run for base-branch commit `295e284900d7aa7f85dc002f8aa2f905d4ec36df` is the available baseline.
+- **Baseline backend:** 128 tests, 1 failure, 0 errors, 0 skipped. Existing failure: `Release12TenantIntegrationTest.customSalesRoleCannotReadUnassignedLeadsOrAssignOutsideItsScope` expected the blocked platform-permission escalation audit event but did not find it.
+- **Baseline frontend:** 22 tests, 1 failure. Existing failure: `public-navigation.test.tsx` queries `Our Products` with `getByRole`, but the responsive header renders two matching links.
+- **Baseline MySQL migration and application startup jobs:** passed on that base commit.
+- **Phase 2 branch CI:** triggered for the Phase 2 source and migration changes; results must be read from the latest run before merge. No local test pass is claimed.
+- **Lint/format:** no dedicated lint/format scripts or Maven formatter plugin were found in the inspected build configuration; frontend `npm run build` performs TypeScript typecheck plus Vite production build.
+
+### Migration and rollback notes
+
+- V57 is additive and ordered after V56. It does not rewrite existing IDs or edit any previously applied migration.
+- Before rollout, run the preflight statements against a production-like snapshot and resolve any mismatch rather than bypassing the checks.
+- Forward rollback for V57: drop `fk_package_item_product_tenant`, `fk_package_item_package_tenant`, and `fk_product_category_tenant`; drop the three `uq_*_tenant_id` unique indexes; restore `package_item.tenant_id` nullable only if the application/schema contract explicitly requires it. Flyway Community does not automatically reverse applied versioned migrations; prefer a reviewed forward corrective migration in shared environments.
+- V57 increases index storage and may take metadata/DDL locks. Apply during a controlled migration window and verify the MySQL version/DDL behavior in staging first.
+
+### Open Questions
+
+1. Should the Phase 2 acceptance boundary include every legacy single-column tenant-owned FK in the full schema, or may the remaining relationships be delivered as a separately approved Phase 2.1 migration set?
+2. Are branch-unassigned legacy records intentionally visible to all branch memberships, as current `EnterpriseSaasService` behavior allows for null branch IDs?
+3. Which browser versions are supported for the frontend's branch and role filtering UX? (Authorization remains server-side regardless.)
+
