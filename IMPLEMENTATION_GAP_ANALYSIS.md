@@ -1573,3 +1573,11 @@ These changes are deliberately not classified as full closure. The full 222-rout
 ### Authenticated role × HTTP verb regression extension — 2026-11-11
 
 Release12TenantIntegrationTest.fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation now checks both positive reads and negative writes for Inventory Viewer, Accountant and Service Engineer fixtures. Added denied inventory receipt, invoice create, payment record, service request create, export create and export status operations for roles lacking the corresponding grants. This improves representative authenticated role × verb evidence but does not satisfy all 222 route-specific cases; the endpoint matrix continues to track remaining rows as PARTIAL.
+
+
+### CI and static worker evidence — 2026-11-11
+
+- GitHub Actions run 42904851740 (commit 3d05d94846e0a71e86cdef4b942e03cebf245dbe) passed all four jobs: backend compile/tests, MySQL 8.4 Flyway validation, frontend typecheck/build, and Spring Boot startup against MySQL 8.4/Mailpit. Backend reported 203 tests, zero failures/errors/skips. The V60 gate additionally asserted eight tenant-owned tenant_id columns are NOT NULL and four mixed-scope tenant_id columns remain nullable.
+- The repository-wide worker scan artifact from run 42904851740 was reviewed in the backend job log: seven scheduled triggers, two @Async application listeners, one bounded ThreadPoolTaskExecutor, no Kafka/Rabbit/JMS consumer or producer in checked-in Java source, and two startup runners. DataSeeder and PlatformAdminBootstrap are property-gated and must remain disabled in production unless separately approved.
+- Run 42905191168 adds the authenticated zero-permission vendor read matrix. Its current-head result is pending; do not treat it as passed until that run completes.
+- The protected production workflow is manual and branch-restricted. No production DB connection was made in this session; production NULL-row evidence and DBA/data-owner sign-off remain outstanding.
