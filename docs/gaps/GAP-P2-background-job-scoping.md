@@ -61,3 +61,6 @@
 ## Status
 
 **PARTIAL — scheduled tenant context is implemented in the four identified tenant-aware schedulers and selected MySQL concurrency tests exist.** The full asynchronous/worker inventory and exception/thread-reuse context-leak coverage remain open.
+
+
+Latest-head verification update (2026-11-10): workflow 42821756695 passed backend (163 tests), frontend production build and MySQL 8.4 migration validation; Spring Boot/browser Playwright job remains in progress.
