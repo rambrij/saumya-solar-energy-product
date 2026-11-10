@@ -71,3 +71,11 @@
 **PARTIAL — selected negative coverage is extensive and present; exhaustive matrix remains open.** Existing integration tests cover multiple tenant/customer/branch/export/download paths. Added a same-tenant cross-customer negative case: customer A cannot create a warranty claim against customer B's warranty, even when both belong to the same vendor tenant (`Release12TenantIntegrationTest.warrantyClaimListCreateAndDecisionAreTenantAndCustomerScoped`, commit `ea118cd0`). Engineer and warranty lookups in `Phase2OperationsController` now use tenant-qualified repository methods (commits `102adc61`, `3e2d6d57`).
 
 Still open: full customer resource family matrix, all branch CRUD/assignment operations, every export and private file download family, and service engineer assigned-resource access across detail/write/download/export paths. Workflow 42821756695 passed all four jobs: backend (163 tests), frontend production build, MySQL 8.4 migration/integrity validation and Spring Boot/Playwright tenant-filter tampering. The later reset-token change is under workflow 42822434704.
+
+
+### Assigned-engineer ticket mutation guard — 2026-11-10
+
+- Closed a concrete authorization bypass in FinanceService: ticket closure and SLA pause/resume previously loaded a tenant-qualified ticket and checked a broad service permission, but did not consistently call the shared assigned-ticket ownership guard.
+- Extracted the assignment predicate into package-visible assertAssignedTicketAccess and reused it from ensureTicketAccess; closeTicket, pauseSla and resumeSla now call ensureTicketAccess before mutation. A SERVICE_ASSIGN dispatcher retains tenant-wide access; a non-dispatcher must be the ticket's assigned engineer.
+- Added regression cases in FinanceServiceAssignedVisitScopeTest for unassigned engineer denial, assigned engineer access and dispatcher access.
+- This closes the listed ticket mutation path only. Service engineer authorization across every endpoint, export and download remains open pending the complete endpoint/resource matrix and CI.

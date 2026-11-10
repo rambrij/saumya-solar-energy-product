@@ -1,6 +1,7 @@
 package com.saumyasolar.service;
 
 import com.saumyasolar.domain.ServiceVisit;
+import com.saumyasolar.domain.ServiceRequest;
 import com.saumyasolar.security.Principal;
 import org.junit.jupiter.api.Test;
 
@@ -43,6 +44,41 @@ class FinanceServiceAssignedVisitScopeTest {
                         "CUSTOMER", Set.of("CUSTOMER"), Set.of(), 0));
 
         assertEquals(2, visible.size());
+    }
+
+    @Test
+    void unassignedEngineerCannotMutateAnotherEngineersTicket() {
+        UUID assignedEngineer = UUID.randomUUID();
+        ServiceRequest ticket = ticket(assignedEngineer);
+        Principal otherEngineer = principal(UUID.randomUUID(), Set.of("SERVICE_UPDATE", "SERVICE_CLOSE"));
+
+        org.junit.jupiter.api.Assertions.assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> FinanceService.assertAssignedTicketAccess(ticket, otherEngineer));
+    }
+
+    @Test
+    void assignedEngineerCanMutateTheirOwnTicket() {
+        UUID assignedEngineer = UUID.randomUUID();
+        ServiceRequest ticket = ticket(assignedEngineer);
+
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> FinanceService.assertAssignedTicketAccess(ticket,
+                        principal(assignedEngineer, Set.of("SERVICE_UPDATE"))));
+    }
+
+    @Test
+    void serviceDispatcherCanMutateAnyTicketWithinTheirTenant() {
+        ServiceRequest ticket = ticket(UUID.randomUUID());
+
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> FinanceService.assertAssignedTicketAccess(ticket,
+                        principal(UUID.randomUUID(), Set.of("SERVICE_UPDATE", "SERVICE_ASSIGN"))));
+    }
+
+    private static ServiceRequest ticket(UUID assignedEngineerId) {
+        ServiceRequest ticket = new ServiceRequest();
+        ticket.setAssignedEngineerId(assignedEngineerId);
+        return ticket;
     }
 
     private static ServiceVisit visit(UUID engineerId) {

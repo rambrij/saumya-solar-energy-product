@@ -83,3 +83,10 @@ Still open: inventory every Controller/secondary-controller mapping and service 
 - The test fixture runs in a rollback transaction so temporary role/user rows do not contaminate other integration tests.
 - CI workflow `42828044536` passed backend (171 tests), frontend build and MySQL migration validation; Spring Boot/browser job was still running at the time of the check.
 - This is an expanded representative matrix, not every standard role × every endpoint × every HTTP verb. The complete matrix remains PARTIAL.
+
+
+### Assigned service-ticket mutation follow-up — 2026-11-10
+
+- FinanceService.closeTicket, pauseSla and resumeSla now invoke the shared customer/assigned-engineer ticket access guard before changing ticket state.
+- The assignment predicate is covered by regression tests for unassigned engineer denial, assigned engineer access and tenant dispatcher access.
+- This is a targeted correction, not completion of the full role × endpoint × verb × resource matrix; legacy permission reconciliation and exhaustive role tests remain open.

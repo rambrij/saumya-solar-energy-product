@@ -1523,3 +1523,11 @@ Verified full CI checkpoint: workflow `42828454430` for commit `6585efe6` passed
 - The auth-session Playwright test now uses the seeded Sales user rather than the shared Vendor Admin to avoid cross-test logout/revocation interference.
 - Current branch head `00b4d7672b4412d57d0ebdbc75629d9e6f24955d` is documentation-only after the verified code checkpoint; its own workflow is running.
 - Phase 1 and Phase 2 remain NOT MET at the requirement level because the complete role × endpoint matrix, every customer/branch/export/download family, exhaustive schema/NOT NULL inventory and production data preflight, and full async/worker discovery are not complete.
+
+
+### Assigned-service mutation authorization correction — 2026-11-10
+
+- Latest branch review identified three service-ticket mutation methods (closeTicket, pauseSla, resumeSla) that checked tenant and permission but did not invoke the common assigned-ticket scope predicate.
+- Updated FinanceService so these operations call ensureTicketAccess, reusing the existing customer ownership and engineer-assignment rules. A package-visible predicate is covered by tests for assigned engineer, unassigned engineer and SERVICE_ASSIGN dispatcher behavior.
+- The change is intentionally narrow. It does not close the remaining full endpoint matrix, every service attachment/export route, all customer/branch CRUD families, schema NOT NULL inventory, production data preflight, or repository-wide async inventory.
+- CI verification for this commit is pending; do not treat the new regression tests as passed until the workflow completes.

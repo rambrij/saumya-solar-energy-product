@@ -563,14 +563,20 @@ public class FinanceService {
         serviceEvents.save(e);
     }
     
+    static void assertAssignedTicketAccess(ServiceRequest t, Principal p) {
+        if ((p.permissions() == null || !p.permissions().contains("SERVICE_ASSIGN"))
+                && !Objects.equals(t.getAssignedEngineerId(), p.userId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
+    }
+
     private void ensureTicketAccess(ServiceRequest t, Principal p) {
         if ("CUSTOMER".equals(p.accountType())) {
             CustomerProfile cp = customer(p);
             if (!cp.getId().equals(t.getCustomerId())) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         } else {
             servicePermission(p);
-            if ((p.permissions() == null || !p.permissions().contains("SERVICE_ASSIGN")) && !Objects.equals(t.getAssignedEngineerId(), p.userId()))
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+            assertAssignedTicketAccess(t, p);
         }
     }
     
@@ -805,6 +811,7 @@ public class FinanceService {
         if (reason == null || reason.isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Closure reason is required");
         ServiceRequest t = ticket(id, p.tenantId());
+        ensureTicketAccess(t, p);
         if (!"CUSTOMER_CONFIRMED".equals(t.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Customer confirmation is required before closure");
         String old = t.getStatus();
@@ -1000,6 +1007,7 @@ public class FinanceService {
         if (reason == null || reason.isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SLA pause reason is required");
         ServiceRequest t = ticket(id, p.tenantId());
+        ensureTicketAccess(t, p);
         if (t.getSlaPausedAt() != null) throw new ResponseStatusException(HttpStatus.CONFLICT, "SLA is already paused");
         if (Set.of("CLOSED", "CANCELLED").contains(t.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Closed tickets cannot be paused");
@@ -1015,6 +1023,7 @@ public class FinanceService {
         servicePermission(p);
         permission(p, "SERVICE_UPDATE");
         ServiceRequest t = ticket(id, p.tenantId());
+        ensureTicketAccess(t, p);
         if (t.getSlaPausedAt() == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "SLA is not paused");
         long seconds = Duration.between(t.getSlaPausedAt(), Instant.now()).getSeconds();
         t.setPausedSeconds(t.getPausedSeconds() + seconds);
