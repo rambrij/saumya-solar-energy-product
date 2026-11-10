@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.saumyasolar.domain.AppUser;
 import com.saumyasolar.domain.Branch;
 import com.saumyasolar.domain.CustomerAddress;
+import com.saumyasolar.domain.SiteSurvey;
 import com.saumyasolar.domain.Enquiry;
 import com.saumyasolar.domain.Product;
 import com.saumyasolar.domain.ProductCategory;
@@ -17,6 +18,7 @@ import com.saumyasolar.domain.InstallationJob;
 import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.repo.CustomerAddressRepository;
 import com.saumyasolar.repo.BranchRepository;
+import com.saumyasolar.repo.SiteSurveyRepository;
 import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.AppUserRepository;
 import com.saumyasolar.repo.RoleRepository;
@@ -82,6 +84,8 @@ class Release12TenantIntegrationTest {
     CustomerAddressRepository customerAddresses;
     @Autowired
     BranchRepository branches;
+    @Autowired
+    SiteSurveyRepository surveys;
     @Autowired
     CustomerOrderRepository customerOrders;
     @Autowired
@@ -1051,6 +1055,9 @@ class Release12TenantIntegrationTest {
         mvc.perform(get("/api/v1/branches/" + foreignBranch.getId() + "/users")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/branches/" + foreignBranch.getId() + "/analytics")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
                                 "/api/v1/branches/" + foreignBranch.getId())
                         .header("Authorization", "Bearer " + token)
@@ -1068,6 +1075,49 @@ class Release12TenantIntegrationTest {
                         .content("""
                                 {"userId":"%s"}
                                 """.formatted(users.findByEmailIgnoreCase("sales@saumya.local").orElseThrow().getId())))
+                .andExpect(status().isNotFound());
+    }
+
+
+    @Test
+    void vendorCannotReadForeignSurveyOrDownloadForeignServiceEvidence() throws Exception {
+        var foreignTenant = newTenant();
+        var foreignCustomer = createCustomer(foreignTenant.getId(), "foreign-evidence-customer");
+        ServiceRequest foreignTicket = new ServiceRequest();
+        foreignTicket.setId(UUID.randomUUID());
+        foreignTicket.setTenantId(foreignTenant.getId());
+        foreignTicket.setTicketNumber("FOREIGN-EVIDENCE-" + UUID.randomUUID().toString().substring(0, 8));
+        foreignTicket.setCustomerId(foreignCustomer.profile().getId());
+        foreignTicket.setCategory("GENERAL");
+        foreignTicket.setPriority("LOW");
+        foreignTicket.setDescription("Foreign tenant private evidence");
+        foreignTicket.setWarrantyStatus("UNKNOWN");
+        foreignTicket.setStatus("OPEN");
+        foreignTicket.setCreatedAt(Instant.now());
+        foreignTicket.setUpdatedAt(Instant.now());
+        serviceRequests.save(foreignTicket);
+
+        SiteSurvey foreignSurvey = new SiteSurvey();
+        foreignSurvey.setId(UUID.randomUUID());
+        foreignSurvey.setTenantId(foreignTenant.getId());
+        foreignSurvey.setScheduledAt(Instant.now().plusSeconds(3600));
+        foreignSurvey.setPropertyType("RESIDENTIAL");
+        foreignSurvey.setRoofType("RCC");
+        foreignSurvey.setStatus("SCHEDULED");
+        surveys.save(foreignSurvey);
+
+        var vendorToken = accessToken("admin@saumya.local", "Admin@123");
+        mvc.perform(get("/api/v1/service-requests/" + foreignTicket.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/service-requests/" + foreignTicket.getId() + "/attachments/" + UUID.randomUUID())
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/surveys/" + foreignSurvey.getId())
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/surveys/" + foreignSurvey.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isNotFound());
     }
 
