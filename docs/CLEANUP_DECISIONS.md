@@ -44,7 +44,9 @@
 
 | Old | New | Reason | Document reference |
 |---|---|---|---|
-| None approved in Phase 0 | None | No API, event, data, configuration or screen contract has been changed. | SRS §§10–15; traceability matrix |
+| No asynchronous export-job API existed | Add `POST /api/v1/exports`, `GET /api/v1/exports/{exportId}` and `GET /api/v1/exports/{exportId}/download`; retain all existing synchronous report/export routes unchanged. | Implement required RPT-005 persisted asynchronous exports with controlled status and download. | SRS §§10.14, 13.8, 16; RPT-005; NFR-PERF-005 |
+| Notification delivery had no pre-publish persisted job guarantee | Persist a tenant/channel-idempotent `PENDING` delivery before publishing an event; recover stale pending rows from MySQL. | Prevent process restart from losing unprocessed business notification requests. | Requirements §15; SRS §§10.12, 17–18 |
+| V1–V63 migration sequence | One V1 clean-install baseline containing the same schema and seed effects. | Product is pre-production; preserve schema effects while removing migration-history clutter. | SRS §§8, 17, 18; task scope |
 
 Any later API, event, persisted-data or configuration contract change must be listed here before it is applied. Do not add compatibility layers: the environment is pre-production, but required documented contracts still have to be preserved.
 
