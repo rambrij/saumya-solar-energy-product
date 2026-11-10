@@ -1495,7 +1495,7 @@ CI update (2026-11-10): workflow 42821756695 passed all four jobs, including 163
 - `ea118cd0`: same-tenant cross-customer warranty claim creation denial.
 - `ed714646`, `9ada09fa`, `9763e0d7`: schema audit SQL and inventory documents.
 
-Latest-head CI: workflow `42826862684` is running for commit `7d65478e`. Earlier runs failed because the warranty repository method was missing and the JUnit Future assertion was ambiguous; both defects have been fixed. Do not count the earlier failures as passing test evidence.
+Verified full CI checkpoint: workflow `42828454430` for commit `6585efe6` passed all four jobs — backend (171 tests, zero failures), frontend typecheck/production build, MySQL 8.4 Flyway plus tenant schema inventory artifact, and Spring Boot health/Playwright browser security. A subsequent browser run exposed parallel-test interference because the auth E2E logged out the same seeded admin used by the tenant-filter spec; the auth E2E now uses the separate seeded sales account. Latest-head workflow `42828592637` is running for that test-isolation fix. Earlier warranty repository and JUnit assertion failures were corrected; do not count those failed runs as passing evidence.
 
 
 ### Latest follow-up verification and CI work
@@ -1505,3 +1505,13 @@ Latest-head CI: workflow `42826862684` is running for commit `7d65478e`. Earlier
 - Added authenticated cross-module role test; initial run failed because temporary matrix fixtures were not rolled back. The test now uses `@Transactional`; run `42828044536` passed backend (171 tests), frontend and migration jobs.
 - Added browser auth E2E for HttpOnly refresh cookie, CSRF missing/mismatch, refresh rotation and logout revocation. The first run exposed a test URL-path mistake (cookie path is `/api/v1/auth`); test now inspects cookies at that path. Run `42828199821` passed backend (171 tests), frontend and migration jobs; browser/Spring Boot job was still in progress at last check.
 - CI workflow now uploads a disposable-MySQL schema inventory artifact after V57/V58. Production-like DB inventory and NULL-row proof remain outstanding.
+
+
+### Latest complete CI checkpoint — 2026-11-10
+
+- Workflow `42828454430` passed all four jobs at commit `6585efe6ae98e009a975c1c63fb83f6e529faf65`.
+- Backend: 171 tests passed, 0 failures/errors/skips.
+- Frontend production build passed.
+- MySQL 8.4 migration validation passed, including read-only tenant table/FK/unique-index inventory SQL execution and artifact upload.
+- Spring Boot health and Playwright browser tests passed, including CSRF, HttpOnly refresh cookie, refresh rotation, logout revocation and tenant-filter tampering.
+- The follow-up auth E2E test now uses `sales@saumya.local` rather than the shared admin account to prevent parallel logout/revocation interference. Latest-head workflow `42828592637` is pending.
