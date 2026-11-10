@@ -1156,6 +1156,30 @@ class Release12TenantIntegrationTest {
         customerOrders.save(order);
 
         var token = accessToken("admin@saumya.local", "Admin@123");
+        mvc.perform(patch("/api/v1/products/" + product.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Tampered foreign product\",\"price\":1}"))
+                .andExpect(status().isNotFound());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/products/" + product.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(patch("/api/v1/categories/" + category.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Tampered foreign category\"}"))
+                .andExpect(status().isNotFound());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/categories/" + category.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(patch("/api/v1/packages/" + solarPackage.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Tampered foreign package\"}"))
+                .andExpect(status().isNotFound());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/packages/" + solarPackage.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
         Map<String, UUID> foreignIds = Map.of(
                 "users", foreignVendor.getId(),
                 "categories", category.getId(),
@@ -1186,6 +1210,13 @@ class Release12TenantIntegrationTest {
             assertFalse(body.contains(product.getId().toString()));
             assertFalse(body.contains(solarPackage.getId().toString()));
         }
+        mvc.perform(post("/api/v1/customer/product-orders")
+                        .header("Authorization", "Bearer " + customerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"productId":"%s","quantity":1,"tenantId":"%s","customerId":"%s"}
+                                """.formatted(product.getId(), foreignTenant.getId(), customer.getId())))
+                .andExpect(status().isNotFound());
     }
 
     @Test
