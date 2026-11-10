@@ -14,9 +14,8 @@ import java.util.UUID;
 public interface IntegrationSyncJobRepository extends JpaRepository<IntegrationSyncJob, UUID> {
     List<IntegrationSyncJob> findTop100ByTenantIdAndConnectionIdOrderByCreatedAtDesc(UUID tenantId, UUID connectionId);
     
-    List<IntegrationSyncJob> findTop50ByStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(
-            List<String> statuses,
-            Instant now
+    List<IntegrationSyncJob> findTop50ByTenantIdAndStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(
+            UUID tenantId, List<String> statuses, Instant now
     );
     
     Optional<IntegrationSyncJob> findByIdAndTenantId(UUID id, UUID tenantId);
@@ -27,13 +26,12 @@ public interface IntegrationSyncJobRepository extends JpaRepository<IntegrationS
             String idempotencyKey
     );
     
-    List<IntegrationSyncJob> findTop50ByStatusAndUpdatedAtLessThanEqualOrderByUpdatedAtAsc(
-            String status,
-            Instant staleBefore
+    List<IntegrationSyncJob> findTop50ByTenantIdAndStatusAndUpdatedAtLessThanEqualOrderByUpdatedAtAsc(
+            UUID tenantId, String status, Instant staleBefore
     );
     
     @Modifying
     @Transactional
-    @Query("update IntegrationSyncJob j set j.status='PROCESSING', j.attemptCount=j.attemptCount+1, j.updatedAt=:now where j.id=:id and ((j.status in ('QUEUED','RETRY') and j.nextAttemptAt<=:now) or (j.status='PROCESSING' and j.updatedAt<=:staleBefore))")
-    int claimIfDue(@Param("id") UUID id, @Param("now") Instant now, @Param("staleBefore") Instant staleBefore);
+    @Query("update IntegrationSyncJob j set j.status='PROCESSING', j.attemptCount=j.attemptCount+1, j.updatedAt=:now where j.id=:id and j.tenantId=:tenantId and ((j.status in ('QUEUED','RETRY') and j.nextAttemptAt<=:now) or (j.status='PROCESSING' and j.updatedAt<=:staleBefore))")
+    int claimIfDue(@Param("id") UUID id, @Param("tenantId") UUID tenantId, @Param("now") Instant now, @Param("staleBefore") Instant staleBefore);
 }
