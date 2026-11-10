@@ -71,6 +71,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.mock.web.MockMultipartFile;
 
@@ -868,6 +869,7 @@ class Release12TenantIntegrationTest {
     }
     
     @Test
+    @Transactional
     void customerCanRequestSurveyReceiveQuotationAcceptAndConvertExactlyOneOrder() throws Exception {
         var vendorToken = accessToken("admin@saumya.local", "Admin@123");
         var customerEmail = "journey-" + UUID.randomUUID() + "@example.test";
@@ -1364,6 +1366,7 @@ class Release12TenantIntegrationTest {
     }
 
     @Test
+    @Transactional
     void asynchronousExportStatusAndDownloadAreRestrictedToTheRequestingPrincipal() throws Exception {
         String ownerToken = accessToken("admin@saumya.local", "Admin@123");
         String created = mvc.perform(post("/api/v1/exports")
