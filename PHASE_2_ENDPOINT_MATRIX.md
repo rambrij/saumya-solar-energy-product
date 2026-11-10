@@ -258,7 +258,13 @@
 
 ## Authenticated least-privilege role × verb regression checks
 
-The integration suite includes the representative cross-module role matrix in Release12TenantIntegrationTest.fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation, a dynamic least-privilege GET sweep in EndpointAuthenticationMatrixTest.authenticatedLeastPrivilegeVendorCannotReadProtectedEndpointMappings, and a dynamic mutation sweep in EndpointAuthenticationMatrixTest.authenticatedZeroPermissionVendorIsDeniedEveryProtectedMutationMapping. The GET sweep checks every non-public GET mapping except its explicit self-service/system-read allowlist: /api/v1/me, /api/v1/subscription, /api/v1/subscription-plans, /api/v1/subscription/usage, /api/v1/subscription/storage, /api/v1/payment-gateways/availability, /api/v1/offline-sync/operations and /v3/api-docs.yaml. The mutation sweep exercises at least 100 protected non-GET mappings, requires at least 50 explicit 403 permission denials, accepts 404 only for non-disclosing missing-resource probes, and asserts tenant execution context is cleared after each request. It excludes quotation action and offline-sync routes because their authorization is resource-delegated and separately tested:
+The inventory contains 222 concrete HTTP method mappings: 15 intentionally public/authentication/webhook mappings and 207 non-public mappings. `EndpointAuthenticationMatrixTest.everyNonPublicHttpHandlerRequiresAuthentication` now asserts coverage of all 207 non-public mappings without credentials (401/403).
+
+`EndpointAuthenticationMatrixTest.authenticatedLeastPrivilegeVendorCannotReadProtectedEndpointMappings` checks all 83 protected GET mappings outside the explicit self-service/system-read allowlist (`/api/v1/me`, `/api/v1/subscription`, `/api/v1/subscription-plans`, `/api/v1/subscription/usage`, `/api/v1/subscription/storage`, `/api/v1/payment-gateways/availability`, `/api/v1/offline-sync/operations`, `/v3/api-docs.yaml).
+
+`EndpointAuthenticationMatrixTest.authenticatedZeroPermissionVendorIsDeniedEveryProtectedMutationMapping` checks all 115 protected non-GET mappings other than the two resource-delegated exceptions below. It requires at least 50 explicit 403 permission denials; 404 is accepted only as a non-disclosing response for a missing-resource probe. It also verifies tenant execution context is cleared after every request. Quotation action authorization is tested against a real persisted quotation in `Release12TenantIntegrationTest.customerCanRequestSurveyReceiveQuotationAcceptAndConvertExactlyOneOrder`; offline sync delegates to the target resource service, and `OfflineSyncServiceTest.propagatesTargetResourceAuthorizationDenialWithoutPersistingAnOfflineOperation` verifies that a target 403 propagates without persistence.
+
+Representative positive/negative role fixtures remain:
 
 | Role fixture | Allowed read | Denied cross-module read | Denied write / command |
 |---|---|---|---|
@@ -266,7 +272,9 @@ The integration suite includes the representative cross-module role matrix in Re
 | Accountant (invoice/payment view + refund only) | GET invoices and payments | GET inventory balances and service requests | POST invoice; POST payment; POST export; GET export status |
 | Service Engineer (service view/update/resolve) | GET service requests | GET invoices, payments and inventory balances | POST service request; POST export; GET export status |
 
-The export status/download service tests additionally verify that a different requesting user cannot obtain another user's export and that private storage is not accessed after an ownership denial. These are representative least-privilege role/verb checks; the GET sweep exercises every non-public GET mapping with an authenticated vendor that has no permissions. They do not close every route-specific positive/negative row in the full matrix. CI run 42905191168 is pending for the new GET sweep.
+**Coverage interpretation:** every matrix row now has an explicit classification or negative-probe reference (zero rows remain labelled pending). The dynamic sweeps close broad authentication and least-privilege denial coverage, but they do not prove successful access for every valid business role on every resource-bearing route. Positive-role/resource-fixture coverage remains representative rather than exhaustive; do not label the full role × endpoint × verb acceptance complete until those positive paths are reconciled.
+
+The 15 public rows are intentionally outside the authenticated role matrix. Their boundaries are documented individually in the endpoint table: authentication routes retain refresh/CSRF/replay protections; public enquiry derives tenant from its store slug; payment webhooks require provider signature and idempotency validation.
 
 ## Additional current-branch export-job routes
 
@@ -278,7 +286,7 @@ The current branch also exposes these asynchronous export endpoints, which must 
 | GET | /api/v1/exports/{exportId} | REPORT_EXPORT; same tenant and requesting user | Another user and another tenant receive non-disclosing 404 |
 | GET | /api/v1/exports/{exportId}/download | REPORT_EXPORT; same tenant and requesting user; completed, unexpired export only | Another user and another tenant receive 404; expired/not-ready exports cannot download |
 
-Release12TenantIntegrationTest.asynchronousExportStatusAndDownloadAreRestrictedToTheRequestingPrincipal verifies owner status access, same-tenant second-exporter 404 for status and download, and customer 403 for both routes over HTTP. ExportServiceTest also covers foreign-tenant download denial, no private-storage access after ownership failure, tenant-scoped recovery/expiry and deletion retry. Existing operations export tests validate CSV/XLSX/PDF contents and platform export denial. Latest current-head CI is still running; do not mark these tests passed until it completes.
+Release12TenantIntegrationTest.asynchronousExportStatusAndDownloadAreRestrictedToTheRequestingPrincipal verifies owner status access, same-tenant second-exporter 404 for status and download, and customer 403 for both routes over HTTP. ExportServiceTest also covers foreign-tenant download denial, no private-storage access after ownership failure, tenant-scoped recovery/expiry and deletion retry. Existing operations export tests validate CSV/XLSX/PDF contents and platform export denial. The HTTP requester-isolation test and service-level foreign-tenant tests are included in the current backend regression suite; confirm the latest CI run before treating them as passed.
 
 ## Acceptance rules for closing each row
 
