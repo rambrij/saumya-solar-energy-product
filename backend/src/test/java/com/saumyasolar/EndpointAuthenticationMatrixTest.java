@@ -192,6 +192,9 @@ class EndpointAuthenticationMatrixTest {
             for (String pattern : info.getPatternValues()) {
                 if (isPublic(pattern)) continue;
                 for (var method : methods) {
+                    // This action resolves a persisted quotation before authorization; a dedicated
+                    // lifecycle integration test supplies a real quotation fixture for this route.
+                    if (pattern.startsWith("/api/v1/quotations/{id}/{action:")) continue;
                     if (method == org.springframework.web.bind.annotation.RequestMethod.GET
                             || method == org.springframework.web.bind.annotation.RequestMethod.OPTIONS
                             || method == org.springframework.web.bind.annotation.RequestMethod.HEAD) continue;
@@ -257,13 +260,20 @@ class EndpointAuthenticationMatrixTest {
                 }
                 continue;
             }
+            if (parameter.hasParameterAnnotation(org.springframework.web.bind.annotation.RequestHeader.class)
+                    || parameter.hasParameterAnnotation(org.springframework.web.bind.annotation.PathVariable.class)) continue;
             var requestParam = parameter.getParameterAnnotation(org.springframework.web.bind.annotation.RequestParam.class);
-            if (requestParam != null && requestParam.required() && requestParam.defaultValue().equals(
-                    org.springframework.web.bind.annotation.ValueConstants.DEFAULT_NONE)) {
+            if (requestParam != null) {
+                if (!requestParam.required() || !requestParam.defaultValue().equals(
+                        org.springframework.web.bind.annotation.ValueConstants.DEFAULT_NONE)) continue;
                 String name = !requestParam.name().isBlank() ? requestParam.name()
                         : !requestParam.value().isBlank() ? requestParam.value()
                         : (parameter.getParameterName() == null ? "probe" : parameter.getParameterName());
-                builder.param(name, sampleString(name, parameter.getParameterAnnotations()));
+                builder.param(name, sampleParameter(name, parameter.getParameterType(), parameter.getParameterAnnotations()));
+            } else if (org.springframework.beans.BeanUtils.isSimpleProperty(parameter.getParameterType())
+                    && parameter.getParameterName() != null) {
+                builder.param(parameter.getParameterName(),
+                        sampleParameter(parameter.getParameterName(), parameter.getParameterType(), parameter.getParameterAnnotations()));
             }
         }
         return builder;
@@ -345,6 +355,17 @@ class EndpointAuthenticationMatrixTest {
             if (annotation.annotationType().getSimpleName().equals(simpleName)) return true;
         }
         return false;
+    }
+
+    private String sampleParameter(String name, Class<?> type, Annotation[] annotations) {
+        if (type == Instant.class) return "2030-01-01T00:00:00Z";
+        if (type == LocalDate.class) return "2030-01-01";
+        if (type == LocalDateTime.class) return "2030-01-01T10:00:00";
+        if (type == LocalTime.class) return "10:00:00";
+        if (type == UUID.class) return "00000000-0000-4000-8000-000000000001";
+        if (type == Integer.class || type == int.class || type == Long.class || type == long.class) return "1";
+        if (type == Boolean.class || type == boolean.class) return "true";
+        return sampleString(name, annotations);
     }
 
     private String sampleString(String name, Annotation[] annotations) {
