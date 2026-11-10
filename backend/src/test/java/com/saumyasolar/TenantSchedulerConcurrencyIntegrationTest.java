@@ -2,6 +2,9 @@ package com.saumyasolar;
 
 import com.saumyasolar.domain.IntegrationSyncJob;
 import com.saumyasolar.domain.Tenant;
+import com.saumyasolar.domain.TenantSubscription;
+import com.saumyasolar.repo.TenantSubscriptionRepository;
+import com.saumyasolar.service.SubscriptionExpiryScheduler;
 import com.saumyasolar.repo.IntegrationSyncJobRepository;
 import com.saumyasolar.repo.TenantRepository;
 import com.saumyasolar.security.TenantExecutionContext;
@@ -24,6 +27,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class TenantSchedulerConcurrencyIntegrationTest {
     @Autowired TenantRepository tenants;
     @Autowired IntegrationSyncJobRepository jobs;
+    @Autowired TenantSubscriptionRepository subscriptions;
+    @Autowired SubscriptionExpiryScheduler expiryScheduler;
 
     @Test
     void concurrentWorkersCanClaimOnlyOneTimeAndOnlyWithinTheOwningTenant() throws Exception {
@@ -59,6 +64,34 @@ class TenantSchedulerConcurrencyIntegrationTest {
         assertEquals("QUEUED", jobs.findByIdAndTenantId(jobB.getId(), tenantB.getId()).orElseThrow().getStatus());
         assertThrows(IllegalStateException.class, TenantExecutionContext::requireTenantId,
                 "No tenant execution context may leak into the test thread");
+    }
+
+    @Test
+    void expirySchedulerProcessesOnlyExpiredRowsForTheirOwningTenants() {
+        Tenant expiredTenant = tenant("expiry-a");
+        Tenant activeTenant = tenant("expiry-b");
+        tenants.saveAllAndFlush(List.of(expiredTenant, activeTenant));
+
+        TenantSubscription expired = subscription(expiredTenant.getId(), Instant.now().minusSeconds(60));
+        TenantSubscription stillActive = subscription(activeTenant.getId(), Instant.now().plusSeconds(3600));
+        subscriptions.saveAllAndFlush(List.of(expired, stillActive));
+
+        expiryScheduler.expireSubscriptions();
+
+        assertEquals("EXPIRED", subscriptions.findById(expired.getId()).orElseThrow().getStatus());
+        assertEquals("TRIAL", subscriptions.findById(stillActive.getId()).orElseThrow().getStatus());
+    }
+
+    private TenantSubscription subscription(UUID tenantId, Instant endsAt) {
+        TenantSubscription subscription = new TenantSubscription();
+        subscription.setId(UUID.randomUUID());
+        subscription.setTenantId(tenantId);
+        subscription.setStatus("TRIAL");
+        subscription.setStartsAt(Instant.now().minusSeconds(3600));
+        subscription.setEndsAt(endsAt);
+        subscription.setCreatedAt(Instant.now());
+        subscription.setUpdatedAt(Instant.now());
+        return subscription;
     }
 
     private int claim(IntegrationSyncJob job, Tenant tenant, Instant now, Instant staleBefore,
