@@ -17,6 +17,8 @@ import com.saumyasolar.domain.Quotation;
 import com.saumyasolar.domain.Invoice;
 import com.saumyasolar.domain.ServiceRequest;
 import com.saumyasolar.domain.InstallationJob;
+import com.saumyasolar.domain.Warranty;
+import com.saumyasolar.domain.WarrantyClaim;
 import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.repo.CustomerAddressRepository;
 import com.saumyasolar.repo.BranchRepository;
@@ -37,6 +39,8 @@ import com.saumyasolar.repo.QuotationRepository;
 import com.saumyasolar.repo.InvoiceRepository;
 import com.saumyasolar.repo.ServiceRequestRepository;
 import com.saumyasolar.repo.InstallationJobRepository;
+import com.saumyasolar.repo.WarrantyRepository;
+import com.saumyasolar.repo.WarrantyClaimRepository;
 import com.saumyasolar.repo.TenantRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -108,6 +112,10 @@ class Release12TenantIntegrationTest {
     ServiceRequestRepository serviceRequests;
     @Autowired
     InstallationJobRepository installationJobs;
+    @Autowired
+    WarrantyRepository warranties;
+    @Autowired
+    WarrantyClaimRepository warrantyClaims;
     
     UUID vendorTenantId;
     
@@ -1286,6 +1294,69 @@ class Release12TenantIntegrationTest {
         assertTrue(pdfText.contains("orders"));
         assertTrue(pdfText.contains(String.valueOf(expectedOrders)));
         assertFalse(pdfText.contains("987654"));
+    }
+
+    @Test
+    void warrantyClaimListCreateAndDecisionAreTenantAndCustomerScoped() throws Exception {
+        var customerA = createCustomer(vendorTenantId, "claim-customer-a");
+        var customerB = createCustomer(vendorTenantId, "claim-customer-b");
+        var foreignTenant = newTenant();
+        var foreignCustomer = createCustomer(foreignTenant.getId(), "claim-customer-foreign");
+
+        Warranty foreignWarranty = new Warranty();
+        foreignWarranty.setId(UUID.randomUUID());
+        foreignWarranty.setTenantId(foreignTenant.getId());
+        foreignWarranty.setCustomerId(foreignCustomer.profile().getId());
+        foreignWarranty.setStatus("ACTIVE");
+        foreignWarranty.setStartDate(java.time.LocalDate.now().minusDays(5));
+        foreignWarranty.setEndDate(java.time.LocalDate.now().plusDays(30));
+        warranties.save(foreignWarranty);
+
+        WarrantyClaim foreignClaim = new WarrantyClaim();
+        foreignClaim.setId(UUID.randomUUID());
+        foreignClaim.setTenantId(foreignTenant.getId());
+        foreignClaim.setWarrantyId(foreignWarranty.getId());
+        foreignClaim.setCustomerId(foreignCustomer.profile().getId());
+        foreignClaim.setClaimNumber("FOREIGN-CLAIM-" + UUID.randomUUID().toString().substring(0, 8));
+        foreignClaim.setSubject("Foreign warranty claim");
+        foreignClaim.setDescription("Tenant isolation fixture");
+        foreignClaim.setStatus("SUBMITTED");
+        foreignClaim.setCreatedAt(Instant.now());
+        foreignClaim.setUpdatedAt(Instant.now());
+        warrantyClaims.save(foreignClaim);
+
+        var customerAToken = accessToken(customerA.user().getEmail(), "Customer-Password-2026");
+        var customerBToken = accessToken(customerB.user().getEmail(), "Customer-Password-2026");
+        String customerAClaims = mvc.perform(get("/api/v1/customer/warranty-claims")
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(customerAClaims.contains(foreignClaim.getId().toString()));
+
+        String customerBClaims = mvc.perform(get("/api/v1/customer/warranty-claims")
+                        .header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(customerBClaims.contains(foreignClaim.getId().toString()));
+
+        mvc.perform(post("/api/v1/customer/warranty-claims")
+                        .header("Authorization", "Bearer " + customerAToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"warrantyId":"%s","subject":"Tampered claim","description":"Cross-customer warranty"}
+                                """.formatted(foreignWarranty.getId())))
+                .andExpect(status().isNotFound());
+
+        var vendorToken = accessToken("admin@saumya.local", "Admin@123");
+        String vendorClaims = mvc.perform(get("/api/v1/warranty-claims")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(vendorClaims.contains(foreignClaim.getId().toString()));
+
+        mvc.perform(post("/api/v1/warranty-claims/" + foreignClaim.getId() + "/approve")
+                        .header("Authorization", "Bearer " + vendorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Tampered cross-tenant decision\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("SUBMITTED", warrantyClaims.findById(foreignClaim.getId()).orElseThrow().getStatus());
     }
 
     @Test
