@@ -377,7 +377,7 @@ public class AuthLifecycleService {
         return roleName == null || java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT", "CUSTOMER").contains(roleName);
     }
 
-    @Transactional
+    @Transactional(dontRollbackOn = ResponseStatusException.class)
     public com.saumyasolar.domain.Role createCustomRole(UUID tenantId, UUID actorId, String name, java.util.Set<String> permissionCodes) {
         if (tenantId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         String normalized = name == null ? "" : name.trim().toUpperCase(java.util.Locale.ROOT);
@@ -406,7 +406,7 @@ public class AuthLifecycleService {
         return saved;
     }
 
-    @Transactional
+    @Transactional(dontRollbackOn = ResponseStatusException.class)
     public com.saumyasolar.domain.Role updateCustomRole(UUID tenantId, UUID actorId, UUID roleId, java.util.Set<String> permissionCodes) {
         if (tenantId == null || roleId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         var role = roles.findByIdAndTenantId(roleId, tenantId)
@@ -426,7 +426,7 @@ public class AuthLifecycleService {
         return saved;
     }
 
-    @Transactional
+    @Transactional(dontRollbackOn = ResponseStatusException.class)
     public AppUser assignEmployeeRole(UUID tenantId, UUID actorId, UUID employeeId, String roleName) {
         if (tenantId == null || employeeId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (reservedVendorRole(roleName)) {
