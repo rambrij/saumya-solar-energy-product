@@ -9,13 +9,13 @@ permissions:
 jobs:
   production-preflight:
     name: Production tenant-integrity and schema preflight
-    if: github.ref == 'refs/heads/cleanup/code-cleanup'
+    if: github.ref == 'refs/heads/audit/phase-2-implementation-gap-analysis'
     runs-on: ubuntu-latest
     environment: production
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: cleanup/code-cleanup
+          ref: audit/phase-2-implementation-gap-analysis
       - name: Install MySQL client
         run: sudo apt-get update && sudo apt-get install -y default-mysql-client
       - name: Validate required production connection secrets
