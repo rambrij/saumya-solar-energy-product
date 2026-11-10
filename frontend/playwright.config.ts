@@ -6,7 +6,7 @@ export default defineConfig({
   reporter: 'list',
   timeout: 30_000,
   use: {
-    baseURL: process.env.E2E_API_BASE_URL || 'http://127.0.0.1:8080',
+    baseURL: process.env.E2E_BASE_URL || 'http://localhost:5173',
     browserName: 'chromium',
     headless: true,
   },
