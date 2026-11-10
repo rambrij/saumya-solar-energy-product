@@ -42,6 +42,21 @@ jobs:
           MYSQL_PWD: ${{ secrets.PROD_DB_PASSWORD }}
         run: |
           set -euo pipefail
+          set +e
           mysql --connect-timeout=15 --host="$MYSQL_HOST" --port="$MYSQL_TCP_PORT" --user="$MYSQL_USER" "$MYSQL_DATABASE" \
-            < backend/src/test/resources/tenant-isolation-production-preflight.sql
-          echo "V57/V58 production data-integrity preflight completed successfully."
+            < backend/src/test/resources/tenant-isolation-production-preflight.sql 2>&1 | tee phase2-production-preflight-output.txt
+          mysql_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$mysql_status" -ne 0 ]; then
+            echo "V57/V58 production preflight FAILED (exit $mysql_status). Preserve the artifact and remediate only after reviewing the reported relationship."
+            exit "$mysql_status"
+          fi
+          echo "V57/V58 production data-integrity preflight completed successfully." | tee -a phase2-production-preflight-output.txt
+      - name: Preserve preflight evidence for remediation review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-production-preflight-${{ github.run_id }}
+          path: phase2-production-preflight-output.txt
+          if-no-files-found: warn
+          retention-days: 30
