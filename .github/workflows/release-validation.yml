@@ -3,10 +3,10 @@ name: Release 1-4 and Phase 2 tenant-isolation validation (final verification)
 on:
   push:
     branches:
-      - cleanup/code-cleanup
+      - audit/phase-2-implementation-gap-analysis
   pull_request:
     branches:
-      - cleanup/code-cleanup
+      - audit/phase-2-implementation-gap-analysis
 
 permissions:
   contents: read
@@ -24,8 +24,24 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      # The standalone audit utilities were removed during repository cleanup.
-      # Keep maintained regression coverage in the backend test suite.
+      - name: Scan repository asynchronous and scheduled execution boundaries
+        run: |
+          bash scripts/audit/scan-async-workers.sh | tee /tmp/phase2-async-worker-inventory.txt
+      - name: Upload asynchronous worker inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-async-worker-inventory
+          path: /tmp/phase2-async-worker-inventory.txt
+          retention-days: 30
+      - name: Scan legacy authorization and role-name checks
+        run: |
+          bash scripts/audit/scan-legacy-authz.sh | tee /tmp/phase2-legacy-authz-inventory.txt
+      - name: Upload legacy authorization inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-legacy-authz-inventory
+          path: /tmp/phase2-legacy-authz-inventory.txt
+          retention-days: 30
       - name: Run backend security, tenant-context and messaging regression tests
         working-directory: backend
         run: >
