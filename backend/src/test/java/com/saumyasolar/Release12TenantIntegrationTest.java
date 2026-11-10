@@ -1735,6 +1735,7 @@ class Release12TenantIntegrationTest {
         return claim;
     }
 
+    @org.springframework.transaction.annotation.Transactional
     @Test
     void branchAssignedMemberListsOnlyAssignedBranchEnquiriesLeadsSurveysQuotationsAndOrders() throws Exception {
         Branch branchA = branch(vendorTenantId, "BR-A-" + UUID.randomUUID().toString().substring(0, 6));
