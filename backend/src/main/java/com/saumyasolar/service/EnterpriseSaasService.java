@@ -533,7 +533,7 @@ public class EnterpriseSaasService {
     }
     
     public List<Warehouse> filterWarehouses(List<Warehouse> rows, Principal p) {
-        if (p.roles() != null && p.roles().contains("VENDOR_ADMIN")) return rows;
+        if (p.permissions() != null && p.permissions().contains("BRANCH_MANAGE")) return rows;
         List<BranchMembership> assigned = memberships.findByTenantIdAndUserId(p.tenantId(), p.userId());
         Set<UUID> branchIds = new HashSet<>();
         assigned.forEach(m -> branchIds.add(m.getBranchId()));
@@ -604,7 +604,7 @@ public class EnterpriseSaasService {
     @Transactional
     public Warehouse assignWarehouseBranch(UUID warehouseId, UUID branchId, Principal p) {
         UUID t = vendor(p, "INVENTORY_TRANSFER");
-        if (( p.roles() == null || !p.roles().contains("VENDOR_ADMIN") ) && ( p.permissions() == null || !p.permissions().contains("BRANCH_MANAGE") ))
+        if (p.permissions() == null || !p.permissions().contains("BRANCH_MANAGE"))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Branch management permission is required to move warehouses between branches");
         Warehouse w = warehouses.findByIdAndTenantId(warehouseId, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Warehouse not found"));
         if (branchId != null) branches.findByIdAndTenantId(branchId, t).filter(Branch::isActive)
