@@ -156,4 +156,31 @@ class AuthenticationRateLimitFilterTest {
         assertEquals(429, webhookResponse.getStatus());
     }
 
+    @Test
+    void passwordResetUsesOpaqueTokenDigestAndNeverPersistsRawResetToken() throws Exception {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
+        when(jdbc.queryForObject(anyString(), eq(Integer.class), any(Object[].class))).thenReturn(1);
+        AuthenticationRateLimitFilter filter =
+                new AuthenticationRateLimitFilter(jdbc, new ObjectMapper(), 10, 5, 10, 60);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/auth/reset-password");
+        request.setRemoteAddr("192.0.2.15");
+        request.setContentType("application/json");
+        request.setContent("{\"token\":\"opaque-reset-token-value\",\"password\":\"new-secret-password\"}"
+                .getBytes(StandardCharsets.UTF_8));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertEquals(200, response.getStatus());
+        org.mockito.ArgumentCaptor<Object[]> args = org.mockito.ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc, times(2)).update(contains("auth_rate_limit_bucket"), args.capture());
+        for (Object[] values : args.getAllValues()) {
+            for (Object value : values) {
+                assertFalse(value instanceof String text && text.contains("opaque-reset-token-value"));
+                assertFalse(value instanceof String text && text.contains("new-secret-password"));
+            }
+        }
+    }
+
 }
