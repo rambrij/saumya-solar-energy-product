@@ -15,7 +15,17 @@ public interface NotificationDeliveryRepository extends JpaRepository<Notificati
     
     boolean existsByTenantIdAndIdempotencyKey(UUID tenantId, String idempotencyKey);
     
-    List<NotificationDelivery> findTop50ByStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(
+    @Query("""
+            select distinct d.tenantId from NotificationDelivery d
+            where d.status = :status and d.nextAttemptAt < :before and d.tenantId is not null
+            """)
+    List<UUID> findDistinctTenantIdsForRetry(
+            @Param("status") String status,
+            @Param("before") java.time.Instant before
+    );
+
+    List<NotificationDelivery> findTop50ByTenantIdAndStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(
+            UUID tenantId,
             String status,
             java.time.Instant before
     );
