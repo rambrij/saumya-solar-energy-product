@@ -132,6 +132,8 @@ class Release12TenantIntegrationTest {
     @Autowired
     InvoiceRepository invoices;
     @Autowired
+    com.saumyasolar.repo.PaymentRepository payments;
+    @Autowired
     ServiceRequestRepository serviceRequests;
     @Autowired
     InstallationJobRepository installationJobs;
@@ -1481,6 +1483,22 @@ class Release12TenantIntegrationTest {
         invoice.setCreatedAt(Instant.now());
         invoices.save(invoice);
 
+        com.saumyasolar.domain.Payment payment = new com.saumyasolar.domain.Payment();
+        payment.setId(UUID.randomUUID());
+        payment.setTenantId(vendorTenantId);
+        payment.setInvoiceId(invoice.getId());
+        payment.setOrderId(order.getId());
+        payment.setAmount(BigDecimal.TEN);
+        payment.setCurrency("INR");
+        payment.setMethod("CASH");
+        payment.setSource("MANUAL");
+        payment.setStatus("CONFIRMED");
+        payment.setReference("CUSTOMER-B-PAY-" + UUID.randomUUID().toString().substring(0, 8));
+        payment.setPaidAt(Instant.now());
+        payment.setRecordedBy(vendor.getId());
+        payment.setCreatedAt(Instant.now());
+        payments.save(payment);
+
         ServiceRequest ticket = new ServiceRequest();
         ticket.setId(UUID.randomUUID());
         ticket.setTenantId(vendorTenantId);
@@ -1516,6 +1534,15 @@ class Release12TenantIntegrationTest {
         mvc.perform(get("/api/v1/invoices/" + invoice.getId() + "/pdf")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/payments/" + payment.getId() + "/receipt.pdf")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        var customerBToken = accessToken(customerB.user().getEmail(), "Customer-Password-2026");
+        mvc.perform(get("/api/v1/payments/" + payment.getId() + "/receipt.pdf")
+                        .header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .contentType(MediaType.APPLICATION_PDF));
 
         var ticketsJson = mvc.perform(get("/api/v1/service-requests")
                         .header("Authorization", "Bearer " + token))
