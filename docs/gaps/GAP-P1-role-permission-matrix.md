@@ -99,3 +99,11 @@ Still open: inventory every Controller/secondary-controller mapping and service 
 - Added regression tests for custom survey reviewer permissions, assigned survey visibility and warranty evidence dispatch permissions. A branch lifecycle integration test covers branch creation, listing, update, membership assign/remove and activation/deactivation, including denial for a sales employee without branch-management permission.
 - Added V59 because V53 grants AUDIT_VIEW to platform roles without inserting the permission code in its catalogue seed. V59 inserts the missing platform-only code and grants it to the two platform roles; the migration CI job now asserts the grant.
 - Remaining role-name checks must be classified one by one as either an intentional role-specific business rule or an authorization defect. This targeted pass does not prove every 222 endpoint against every role and HTTP verb. The complete matrix remains open pending an executable authenticated matrix and passing latest-head CI.
+
+
+### Branch and attachment authorization follow-up — 2026-11-10
+
+- Branch-wide visibility and warehouse access now use BRANCH_MANAGE rather than a hard-coded VENDOR_ADMIN role-name bypass. Warehouse reassignment also requires BRANCH_MANAGE. Tenant and membership predicates remain in place for branch IDs.
+- Service evidence upload now requires SERVICE_UPDATE for vendor principals after FinanceService verifies tenant/customer/assigned-ticket access. Customer upload remains limited to the customer's own ticket.
+- Added ServiceAttachmentServiceTest for read-only service-viewer upload denial and service-updater upload success; latest-head CI must verify it.
+- One role-name check remains in FinanceService.saveServiceReopenPolicy because this is a tenant-wide policy setting with no dedicated SRS permission code. It is intentionally admin-only pending product approval for a new dedicated permission; it is not silently treated as migrated.
