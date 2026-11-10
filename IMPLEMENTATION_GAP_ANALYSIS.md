@@ -997,6 +997,22 @@ This section extends the existing analysis. The source-of-truth order is the bus
 3. Which browser versions are supported for the frontend's branch and role filtering UX? (Authorization remains server-side regardless.)
 
 
+### Phase 2 endpoint security test matrix (post-V58)
+
+The matrix below records the endpoint families exercised by automated negative tests. It is not a claim that every mapping in the 222-route inventory has an individual test. Unlisted operations remain Partial and must not be treated as production-accepted.
+
+| Endpoint family | Negative scenarios executed | Automated evidence | Status / remaining |
+|---|---|---|---|
+| Catalogue product | Cross-tenant category ID on create; cross-tenant product excluded from list | `Release12TenantIntegrationTest.productCannotReferenceAnotherTenantsCategory`; `productListDoesNotExposeAnotherTenantsProducts`; `tenant-isolation-v57.sql` | Implemented for create/list and DB category relationship; update/delete/image still Partial |
+| Enquiry/lead | Foreign employee assignment rejected; assigned-sales user cannot read/update another user's lead; cross-tenant lead history read denied | `Release12TenantIntegrationTest.leadCannotBeAssignedToEmployeeFromAnotherTenant`; `salesExecutiveCanOnlyReadAndUpdateAssignedLeads`; `customSalesRoleCannotReadUnassignedLeadsOrAssignOutsideItsScope`; V58 SQL | Partial: all lead action variants and enquiry IDOR not individually tested |
+| Order/quotation/invoice/service/installation | Foreign tenant guessed IDs denied for order history, quotation revisions, invoice items, service ticket and installation checklist | `Release12TenantIntegrationTest.vendorCannotReadAnotherTenantsOrdersQuotesInvoicesServiceOrInstallationRecords` | Partial: write/action/PDF/payment/refund paths still require per-route tests |
+| Customer-owned data | Customer A cannot list customer B addresses/orders/invoices/service tickets; address update/delete guessed IDs return 404; tampered tenant/customer IDs in address create are ignored | `Release12TenantIntegrationTest.customerAddressEndpointsEnforceAuthenticatedCustomerOwnershipAndIgnoreTamperedOwnerIds`; `customerCannotReadAnotherCustomersOrdersInvoicesOrServiceTickets` | Partial: profile, payment, installation, warranty, quotation and document actions still require tests |
+| Branch | Foreign branch membership, analytics, update, deactivate and assignment access denied | `Release12TenantIntegrationTest.vendorBranchEndpointsCannotReadOrMutateAnotherTenantsBranch` | Partial: assigned-branch record filters and null-branch behavior remain |
+| Private evidence | Foreign service-ticket attachment list/download parent and foreign survey detail/attachment list denied | `Release12TenantIntegrationTest.vendorCannotReadForeignSurveyOrDownloadForeignServiceEvidence` | Partial: warranty-claim attachment, direct foreign attachment IDs and upload tampering remain |
+| Reporting/export | Tenant operations report and CSV export use caller tenant; vendor cannot invoke platform tenant export | `Release12TenantIntegrationTest.vendorCannotReadForeignSurveyOrDownloadForeignServiceEvidence` | Partial: XLSX/PDF output assertions, filter tampering and platform export audit remain |
+| Database constraints | Cross-tenant category/package/product, lead-history, service-comment and service-request/customer links rejected | `tenant-isolation-v57.sql`; `tenant-isolation-v58.sql`; MySQL 8.4 migration CI | Implemented for tested constraints; all 88 V58 constraints have preflight and schema enforcement; production snapshot preflight remains |
+| Scheduled jobs | Tenant-qualified SLA, subscription expiry, warranty expiry and integration queue tests; execution context cleanup test | `ServiceSlaSchedulerTest`; `SubscriptionExpirySchedulerTest`; `WarrantyExpirySchedulerTest`; `TenantExecutionContextTest` | Partial: multi-tenant database-backed concurrent worker test and async event tests remain |
+
 ### Controller endpoint inventory (one row per HTTP mapping)
 
 The route annotations below were enumerated from every `*Controller.java` under `backend/src/main/java/com/saumyasolar/api/`. All are marked **Partial** until the corresponding cross-tenant/customer/branch negative tests exist; current service checks are not treated as proof that every verb and identifier path is closed.
