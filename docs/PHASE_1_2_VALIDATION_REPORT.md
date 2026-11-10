@@ -185,3 +185,6 @@ The following gap files are tracked. P1 rate limiting, role/permission enforceme
 **Phase 2: NOT MET.** Tenant identity and scoping controls are present and meaningful, but the exhaustive tenant/customer/branch CRUD/export/download matrix and complete database relationship inventory are not proven. Background-job scoping is implemented in several schedulers but not verified for every worker.
 
 No requirement is marked MET based solely on source presence. Production approval should wait for the remaining high-priority evidence and a successful latest-head CI run.
+
+
+CI update (2026-11-10): workflow 42821756695 passed all four jobs, including 163 backend tests, frontend build, MySQL migration/integrity validation and Playwright tenant-filter tampering. Reset-token throttling code/tests are being verified in workflow 42822434704.
