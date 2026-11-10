@@ -124,4 +124,50 @@ class Release2SecurityTest {
         var constructor = Input.class.getDeclaredConstructor(types);
         return (Input) constructor.newInstance(args);
     }
+    @Test
+    void assignedSalesExecutiveCannotReadAnotherEmployeesQuotationRevisions() {
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID otherAssignee = UUID.randomUUID();
+        UUID quotationId = UUID.randomUUID();
+        UUID leadId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+
+        var quotation = new com.saumyasolar.domain.Quotation();
+        quotation.setId(quotationId);
+        quotation.setTenantId(tenantId);
+        quotation.setLeadId(leadId);
+        quotation.setCreatedBy(otherAssignee);
+        quotation.setQuoteGroupId(groupId);
+
+        var lead = new com.saumyasolar.domain.SalesLead();
+        lead.setId(leadId);
+        lead.setTenantId(tenantId);
+        lead.setAssignedUserId(otherAssignee);
+
+        var quotations = mock(QuotationRepository.class);
+        var leads = mock(SalesLeadRepository.class);
+        when(quotations.findByIdAndTenantId(quotationId, tenantId)).thenReturn(Optional.of(quotation));
+        when(leads.findByIdAndTenantId(leadId, tenantId)).thenReturn(Optional.of(lead));
+
+        AppService service = new AppService(
+                mock(TenantRepository.class), mock(AppUserRepository.class), mock(ProductCategoryRepository.class),
+                mock(ProductRepository.class), mock(SolarPackageRepository.class), mock(PackageItemRepository.class),
+                mock(CustomerProfileRepository.class), mock(EnquiryRepository.class), leads,
+                mock(LeadHistoryRepository.class), mock(SiteSurveyRepository.class), quotations,
+                mock(QuotationItemRepository.class), mock(CustomerOrderRepository.class),
+                mock(OrderItemRepository.class), mock(IdempotencyRecordRepository.class),
+                mock(RoleRepository.class), mock(OrderStatusHistoryRepository.class),
+                mock(com.saumyasolar.service.NotificationService.class), mock(com.saumyasolar.service.ApprovalWorkflowService.class)
+        );
+        var principal = new Principal(userId, tenantId, "sales@test", "VENDOR",
+                Set.of("SALES_EXECUTIVE"), Set.of("QUOTATION_VIEW", "LEAD_VIEW"));
+
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class,
+                () -> service.quotationRevisions(quotationId, principal));
+
+        assertEquals(HttpStatus.NOT_FOUND, failure.getStatusCode());
+        verify(quotations, never()).findByQuoteGroupIdAndTenantIdOrderByRevisionAsc(groupId, tenantId);
+    }
+
 }
