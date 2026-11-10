@@ -990,7 +990,6 @@ public class FinanceService {
     public List<Refund> listRefunds(Principal p) {
         financeAccess(p);
         permission(p, "PAYMENT_REFUND");
-        permission(p, "PAYMENT_REFUND");
         return refunds.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
     }
     
