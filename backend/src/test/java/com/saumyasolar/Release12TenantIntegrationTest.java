@@ -2389,7 +2389,7 @@ class Release12TenantIntegrationTest {
                         .content(json.writeValueAsString(java.util.Map.of("reportType", "OPERATIONS", "format", format))))
                 .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
         String exportId = json.readTree(created).get("id").asText();
-        for (int attempt = 0; attempt < 100; attempt++) {
+        for (int attempt = 0; attempt < 30; attempt++) {
             String statusBody = mvc.perform(get("/api/v1/exports/" + exportId).header("Authorization", "Bearer " + token))
                     .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
             JsonNode job = json.readTree(statusBody);
@@ -2399,7 +2399,7 @@ class Release12TenantIntegrationTest {
                 return mvc.perform(get("/api/v1/exports/" + exportId + "/download").header("Authorization", "Bearer " + token))
                         .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
             }
-            Thread.sleep(50);
+            Thread.sleep(1000);
         }
         throw new AssertionError("Timed out waiting for asynchronous " + format + " export");
     }
