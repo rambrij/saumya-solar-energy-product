@@ -1480,3 +1480,5 @@ No statuses in the earlier tables were upgraded because no implementation/test i
 - Composite tenant FKs are **PARTIALLY IMPLEMENTED**, not unverifiable: V57/V58 exist and MySQL CI has passed on the prior validated head. Full schema coverage and production data preflight remain outstanding.
 - Rate limiting is **PARTIALLY IMPLEMENTED**: public enquiry/export/webhook application buckets have been added, but production ingress and distributed concurrency still require proof.
 - Assigned-sales scope is extended to quotation revision reads; customer/branch/service export/download matrix remains incomplete.
+
+CI update (2026-11-10): workflow 42821756695 passed all four jobs, including 163 backend tests, frontend build, MySQL migration/integrity validation and Playwright tenant-filter tampering. Reset-token throttling code/tests are being verified in workflow 42822434704.
