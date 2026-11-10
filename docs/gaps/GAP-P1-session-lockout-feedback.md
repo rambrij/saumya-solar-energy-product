@@ -76,3 +76,6 @@ The source-level contract appears implemented, but latest-head browser verificat
 ## Status
 
 **PARTIAL — implementation exists and prior CI passed; full latest-head browser session verification remains open.**
+
+
+Browser verification (2026-11-10): workflow `42828454430` passed Playwright checks for HttpOnly refresh cookie path, no access-token persistence in localStorage, missing/mismatched CSRF rejection, refresh rotation and logout token revocation. The auth E2E is being isolated from parallel tenant tests by using a dedicated seeded sales account; latest-head rerun is pending. Lockout expiry/browser message and multiple-tab edge cases remain open.
