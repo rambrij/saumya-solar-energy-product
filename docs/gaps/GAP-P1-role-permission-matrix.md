@@ -68,7 +68,7 @@
 - Fine-grained enforcement extended: AppService.requirePermission is used for catalogue, CRM, quotation and order actions; OperationsService.permission and FinanceService.permission enforce inventory, installation, service and finance permissions. Existing tests cover selected deny cases in Release2SecurityTest and AuthLifecycleServiceTest.
 - Tenant-safe employee resolution extended: commits 8be6f0d78bd19b3a5629524e0556255fd7505bdf and 1f5ce498369a2781fff439dcc12bb99f1e48e978 add tenant-qualified employee/engineer/visit lookup methods and use them in role/assignment workflows.
 - Assigned quotation scope extended: commit bbd10cce0efb86c839925b59eaae7e87e348b735 enforces assigned-sales scope on quotation revision reads; test added in commit 5ccba941c0e7c54c40b038807cc3cb17f73a5e74.
-- Still open: map every Controller/secondary controller action to the exact SRS permission; verify there are no legacy broad grants that bypass the matrix; expand authenticated role × endpoint integration tests; audit assigned-service and customer detail/export/download paths. Do not claim all roles are verified from current unit tests.
+- Still open: map every Controller/secondary controller action to the exact SRS permission; verify there are no legacy broad grants that bypass the matrix; expand authenticated role × endpoint integration tests; audit assigned-service and customer detail/export/download paths. Survey employee reassignment and service visit lookups were also changed to tenant-qualified repository methods. Do not claim all roles are verified from current unit tests.
 
 ## Status
 
