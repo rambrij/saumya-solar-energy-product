@@ -1,5 +1,6 @@
 -- READ-ONLY DATA PREFLIGHT for production rollout of Flyway V57/V58.
--- This creates and drops temporary stored procedures only. It does not alter business rows,
+-- This creates and drops two named stored procedures only. The workflow also drops them on error.
+-- It does not alter business rows,
 -- add indexes, or apply the V57/V58 constraints. A SIGNAL aborts immediately on dirty data.
 -- Run with mysql client; requires CREATE ROUTINE and DROP ROUTINE privileges.
 -- Phase 2: enforce tenant ownership for core catalogue relationships.
