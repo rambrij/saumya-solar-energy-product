@@ -18,11 +18,11 @@ public class ExportController {
     public ExportController(ExportService exports){this.exports=exports;}
     public record CreateExportRequest(@NotBlank String reportType,@NotBlank String format,LocalDate from,LocalDate to){}
     public record ExportJobResponse(UUID id,String reportType,String format,String status,LocalDate from,LocalDate to,
-            Long fileSize,java.time.Instant createdAt,java.time.Instant expiresAt,String downloadUrl){}
+            Long fileSize,java.time.Instant createdAt,java.time.Instant expiresAt,String error,String downloadUrl){}
     private Principal principal(Authentication a){return (Principal)a.getPrincipal();}
     private ExportJobResponse view(ExportJob j){
         String url="COMPLETED".equals(j.getStatus())?"/api/v1/exports/"+j.getId()+"/download":null;
-        return new ExportJobResponse(j.getId(),j.getReportType(),j.getFormat(),j.getStatus(),j.getFromDate(),j.getToDate(),j.getFileSize(),j.getCreatedAt(),j.getExpiresAt(),url);
+        return new ExportJobResponse(j.getId(),j.getReportType(),j.getFormat(),j.getStatus(),j.getFromDate(),j.getToDate(),j.getFileSize(),j.getCreatedAt(),j.getExpiresAt(),j.getLastError(),url);
     }
     @PostMapping @Valid
     public ResponseEntity<ExportJobResponse> create(@Valid @RequestBody CreateExportRequest x,Authentication a){

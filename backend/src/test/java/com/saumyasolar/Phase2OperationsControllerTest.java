@@ -91,7 +91,7 @@ class Phase2OperationsControllerTest {
         when(refunds.findByTenantIdAndPaymentId(tenantId, confirmedId)).thenReturn(List.of());
         when(refunds.findByTenantIdAndPaymentId(tenantId, partialId)).thenReturn(List.of(refund));
         
-        Authentication auth = auth(tenantId, "VENDOR", Set.of("VENDOR_ADMIN"), Set.of("INSTALLATION_ASSIGN"));
+        Authentication auth = auth(tenantId, "VENDOR", Set.of("VENDOR_ADMIN"), Set.of("REPORT_VIEW"));
         Map<String, Object> result = controller.operationsReport(LocalDate.now().minusDays(1), LocalDate.now().plusDays(1), auth);
         
         assertEquals(new BigDecimal("130.00"), result.get("paymentsReceived"));
