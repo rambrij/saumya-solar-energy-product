@@ -41,6 +41,15 @@ jobs:
           name: async-worker-inventory-${{ github.run_id }}
           path: async-worker-inventory.txt
           retention-days: 30
+      - name: Scan legacy authorization and role-name guards
+        run: |
+          bash scripts/audit/scan-legacy-authz.sh | tee legacy-authz-inventory.txt
+      - name: Upload legacy authorization inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: legacy-authz-inventory-${{ github.run_id }}
+          path: legacy-authz-inventory.txt
+          retention-days: 30
       - name: Compile and test
         working-directory: backend
         run: mvn --batch-mode --no-transfer-progress clean verify
