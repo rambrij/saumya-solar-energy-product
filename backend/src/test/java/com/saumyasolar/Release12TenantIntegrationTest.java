@@ -1444,6 +1444,22 @@ class Release12TenantIntegrationTest {
         order.setCreatedAt(Instant.now());
         customerOrders.save(order);
 
+        Quotation quotation = new Quotation();
+        quotation.setId(UUID.randomUUID());
+        quotation.setTenantId(vendorTenantId);
+        quotation.setCustomerId(customerB.profile().getId());
+        quotation.setQuotationNumber("CUSTOMER-B-QUOTE-" + UUID.randomUUID().toString().substring(0, 8));
+        quotation.setRevision(1);
+        quotation.setStatus("SENT");
+        quotation.setSubtotal(BigDecimal.TEN);
+        quotation.setDiscountPercent(BigDecimal.ZERO);
+        quotation.setDiscountAmount(BigDecimal.ZERO);
+        quotation.setTaxAmount(BigDecimal.ZERO);
+        quotation.setGrandTotal(BigDecimal.TEN);
+        quotation.setCreatedBy(vendor.getId());
+        quotation.setCreatedAt(Instant.now());
+        quotations.save(quotation);
+
         Invoice invoice = new Invoice();
         invoice.setId(UUID.randomUUID());
         invoice.setTenantId(vendorTenantId);
@@ -1484,6 +1500,11 @@ class Release12TenantIntegrationTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertFalse(ordersJson.contains(order.getId().toString()));
+
+        var quotationsJson = mvc.perform(get("/api/v1/quotations")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(quotationsJson.contains(quotation.getId().toString()));
 
         var invoicesJson = mvc.perform(get("/api/v1/invoices")
                         .header("Authorization", "Bearer " + token))
