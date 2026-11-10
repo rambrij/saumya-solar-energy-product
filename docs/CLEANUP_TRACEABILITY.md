@@ -83,9 +83,9 @@ The exact table/column/constraint definition must be derived from the SQL itself
 | Concern | Implementation paths |
 |---|---|
 | Backend build/dependencies | `backend/pom.xml`, `backend/Dockerfile` |
-| Runtime properties | `backend/src/main/resources/application.yml` |
+| Runtime properties | `backend/src/main/resources/application.yml` (`app.exports.location`, retention, recovery interval and processing lease) |
 | Test properties/schema | `backend/src/test/resources/application-test.yml`, `schema-test.sql`, tenant isolation SQL fixtures |
-| Local infrastructure | `docker-compose.yml` (MySQL, Mailpit, backend, frontend and private upload volumes) |
+| Local infrastructure | `docker-compose.yml` (MySQL, Mailpit, backend, frontend, private upload volumes and persistent `solar_private_exports` volume) |
 | Frontend dependencies/build | `frontend/package.json`, `tsconfig.json`, `vite.config.ts`, `vitest.config.ts`, `playwright.config.ts`, `frontend/Dockerfile`, `frontend/nginx.conf` |
 | CI | `.github/workflows/release-validation.yml`, `.github/workflows/phase-2-production-preflight.yml` |
 | Auditing scripts | `scripts/audit/check-permission-catalogue.py`, `scripts/audit/scan-async-workers.sh`, `scripts/audit/scan-legacy-authz.sh`, `scripts/audit/scan-external-messaging.sh` |
