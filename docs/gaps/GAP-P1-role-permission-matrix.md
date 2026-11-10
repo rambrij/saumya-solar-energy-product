@@ -20,7 +20,7 @@
 - `Controller.createVendorEmployee` and `Controller.assignEmployeeRole` enforce vendor identity and permission checks; role assignment is still based on role names.
 - V53 and `DataSeeder.employeeRolePermissions` are described in the branch's implementation notes as adding the SRS catalogue and predefined grants.
 - Existing services retain legacy broad permission checks. The complete SRS catalogue is not yet consistently enforced at each controller/service boundary.
-- The inspected controller surface does not establish a complete vendor custom-role CRUD/permission-editor API and UI.
+- Controller.employeeRoles/vendorRolePermissions/createCustomRole/updateCustomRole/deleteCustomRole exposes tenant role listing, an assignable permission catalogue, and custom-role create/update/delete APIs. RoleManagementPanel.tsx provides create/edit/delete and employee role assignment UI. This is not absent; the remaining issue is proving the complete action-to-permission matrix and closing legacy/broad checks consistently.
 - `EndpointAuthenticationMatrixTest` checks unauthenticated access only. `Release12TenantIntegrationTest` covers selected role-escalation cases, not the full role × endpoint matrix.
 
 ## Expected state
@@ -62,6 +62,14 @@
 - Assigned-resource restrictions apply consistently to all read/write/export/download paths.
 - Role-matrix and privilege-escalation tests pass in CI.
 
+## Remediation update — 2026-11-10
+
+- Custom-role workflow verified in source: Controller.java lines 250–288 exposes GET roles/permissions and POST/PATCH/DELETE role endpoints with ROLE_VIEW/CREATE/UPDATE guards; AuthLifecycleService.java lines 381–464 implements tenant-scoped role create/update/delete, vendor permission allowlisting and assigned-role deletion protection; RoleManagementPanel.tsx contains the permission editor and employee assignment UI.
+- Fine-grained enforcement extended: AppService.requirePermission is used for catalogue, CRM, quotation and order actions; OperationsService.permission and FinanceService.permission enforce inventory, installation, service and finance permissions. Existing tests cover selected deny cases in Release2SecurityTest and AuthLifecycleServiceTest.
+- Tenant-safe employee resolution extended: commits 8be6f0d78bd19b3a5629524e0556255fd7505bdf and 1f5ce498369a2781fff439dcc12bb99f1e48e978 add tenant-qualified employee/engineer/visit lookup methods and use them in role/assignment workflows.
+- Assigned quotation scope extended: commit bbd10cce0efb86c839925b59eaae7e87e348b735 enforces assigned-sales scope on quotation revision reads; test added in commit 5ccba941c0e7c54c40b038807cc3cb17f73a5e74.
+- Still open: map every Controller/secondary controller action to the exact SRS permission; verify there are no legacy broad grants that bypass the matrix; expand authenticated role × endpoint integration tests; audit assigned-service and customer detail/export/download paths. Do not claim all roles are verified from current unit tests.
+
 ## Status
 
-**Open** — catalogue and service foundations exist, but legacy broad checks, full custom-role workflow and exhaustive role matrix tests remain incomplete.
+**PARTIAL — implementation extended; latest CI pending.** The custom-role CRUD and UI already exist and are not a missing feature. Remaining critical work is the exhaustive action-to-permission traceability matrix, review of legacy broad permission grants, and full authenticated role/resource negative tests. Do not mark MET until latest-head backend/MySQL/browser tests pass.
