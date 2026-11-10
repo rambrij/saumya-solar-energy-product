@@ -130,6 +130,32 @@ class NotificationServiceTest {
                 com.saumyasolar.security.TenantExecutionContext::requireTenantId);
     }
 
+
+    @Test
+    void scheduledRetryFailureStillClearsTenantContextAndSchedulesNextAttempt() {
+        JavaMailSender sender = mock(JavaMailSender.class);
+        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
+        UUID tenantId = UUID.randomUUID();
+        NotificationDelivery record = failedRecord(tenantId);
+        when(repository.findDistinctTenantIdsForRetry(eq("FAILED"), any()))
+                .thenReturn(java.util.List.of(tenantId));
+        when(repository.findTop50ByTenantIdAndStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(eq(tenantId), eq("FAILED"), any()))
+                .thenReturn(java.util.List.of(record));
+        when(repository.claimFailedDelivery(eq(record.getId()), eq(tenantId), any())).thenReturn(1);
+        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doThrow(new MailSendException("SMTP temporarily unavailable"))
+                .when(sender).send(any(SimpleMailMessage.class));
+
+        new NotificationService(sender, repository, "no-reply@example.test", "http://localhost:3000")
+                .retryFailedDeliveries();
+
+        assertEquals("FAILED", record.getStatus());
+        assertEquals(2, record.getAttemptCount());
+        assertNotNull(record.getNextAttemptAt());
+        assertThrows(IllegalStateException.class,
+                com.saumyasolar.security.TenantExecutionContext::requireTenantId);
+    }
+
     private static NotificationDelivery failedRecord(UUID tenantId) {
         NotificationDelivery record = new NotificationDelivery();
         record.setId(UUID.randomUUID());
