@@ -1931,6 +1931,68 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), movementA.getId(), movementB.getId());
     }
 
+    @Test
+    void fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation() throws Exception {
+        AppUser inventoryUser = createPermissionMatrixUser("inventory", List.of("INVENTORY_VIEW"));
+        String inventoryToken = accessToken(inventoryUser.getEmail(), "Matrix-Password-2026");
+        mvc.perform(get("/api/v1/inventory/balances").header("Authorization", "Bearer " + inventoryToken))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/invoices").header("Authorization", "Bearer " + inventoryToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/payments").header("Authorization", "Bearer " + inventoryToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/service-requests").header("Authorization", "Bearer " + inventoryToken))
+                .andExpect(status().isForbidden());
+
+        AppUser accountant = createPermissionMatrixUser(
+                "accountant", List.of("INVOICE_VIEW", "PAYMENT_VIEW", "PAYMENT_REFUND")
+        );
+        String accountantToken = accessToken(accountant.getEmail(), "Matrix-Password-2026");
+        mvc.perform(get("/api/v1/invoices").header("Authorization", "Bearer " + accountantToken))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/payments").header("Authorization", "Bearer " + accountantToken))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/inventory/balances").header("Authorization", "Bearer " + accountantToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/service-requests").header("Authorization", "Bearer " + accountantToken))
+                .andExpect(status().isForbidden());
+
+        AppUser engineer = createPermissionMatrixUser(
+                "service-engineer", List.of("SERVICE_VIEW", "SERVICE_UPDATE", "SERVICE_RESOLVE")
+        );
+        String engineerToken = accessToken(engineer.getEmail(), "Matrix-Password-2026");
+        mvc.perform(get("/api/v1/service-requests").header("Authorization", "Bearer " + engineerToken))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/invoices").header("Authorization", "Bearer " + engineerToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/payments").header("Authorization", "Bearer " + engineerToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/inventory/balances").header("Authorization", "Bearer " + engineerToken))
+                .andExpect(status().isForbidden());
+    }
+
+    private AppUser createPermissionMatrixUser(String suffix, List<String> permissionCodes) {
+        String unique = suffix + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setTenantId(vendorTenantId);
+        role.setName("MATRIX_" + unique.toUpperCase(java.util.Locale.ROOT));
+        permissionCodes.forEach(code -> role.getPermissions().add(permissions.findByCode(code).orElseThrow()));
+        roles.saveAndFlush(role);
+
+        AppUser user = new AppUser();
+        user.setId(UUID.randomUUID());
+        user.setTenantId(vendorTenantId);
+        user.setName("Permission matrix " + suffix);
+        user.setEmail("matrix-" + unique + "@example.test");
+        user.setPasswordHash(passwordEncoder.encode("Matrix-Password-2026"));
+        user.setAccountType("VENDOR");
+        user.setEnabled(true);
+        user.setTokenVersion(0);
+        user.getRoles().add(role);
+        return users.saveAndFlush(user);
+    }
+
     private Branch branch(UUID tenantId, String code) {
         Branch branch = new Branch();
         branch.setId(UUID.randomUUID());
