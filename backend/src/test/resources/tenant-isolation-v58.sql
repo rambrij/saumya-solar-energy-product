@@ -7,6 +7,7 @@ BEGIN
     DECLARE tenant_a BINARY(16);
     DECLARE tenant_b BINARY(16);
     DECLARE user_a BINARY(16);
+    DECLARE user_b BINARY(16);
     DECLARE customer_a BINARY(16);
     DECLARE customer_b BINARY(16);
     DECLARE lead_a BINARY(16);
@@ -18,6 +19,7 @@ BEGIN
     SET tenant_a=UUID_TO_BIN(UUID());
     SET tenant_b=UUID_TO_BIN(UUID());
     SET user_a=UUID_TO_BIN(UUID());
+    SET user_b=UUID_TO_BIN(UUID());
     SET customer_a=UUID_TO_BIN(UUID());
     SET customer_b=UUID_TO_BIN(UUID());
     SET lead_a=UUID_TO_BIN(UUID());
@@ -29,12 +31,23 @@ BEGIN
       (tenant_a,'V58 Tenant A',CONCAT('v58-a-',REPLACE(UUID(),'-','')),'ACTIVE'),
       (tenant_b,'V58 Tenant B',CONCAT('v58-b-',REPLACE(UUID(),'-','')),'ACTIVE');
 
-    INSERT INTO app_user(id,tenant_id,name,email,password_hash,account_type,enabled)
-      VALUES(user_a,tenant_a,'V58 Actor',CONCAT('v58-',REPLACE(UUID(),'-',''),'@example.test'),'not-used','VENDOR',TRUE);
+    INSERT INTO app_user(id,tenant_id,name,email,password_hash,account_type,enabled) VALUES
+      (user_a,tenant_a,'V58 Actor A',CONCAT('v58-a-',REPLACE(UUID(),'-',''),'@example.test'),'not-used','VENDOR',TRUE),
+      (user_b,tenant_b,'V58 Actor B',CONCAT('v58-b-',REPLACE(UUID(),'-',''),'@example.test'),'not-used','VENDOR',TRUE);
 
     INSERT INTO customer_profile(id,tenant_id,name,email,active) VALUES
       (customer_a,tenant_a,'V58 Customer A',CONCAT('v58-a-',REPLACE(UUID(),'-',''),'@example.test'),TRUE),
       (customer_b,tenant_b,'V58 Customer B',CONCAT('v58-b-',REPLACE(UUID(),'-',''),'@example.test'),TRUE);
+
+    SET rejected=FALSE;
+    BEGIN
+      DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET rejected=TRUE;
+      INSERT INTO customer_profile(id,tenant_id,user_id,name,email,active)
+        VALUES(UUID_TO_BIN(UUID()),tenant_a,user_b,'Cross tenant profile',CONCAT('v58-cross-',REPLACE(UUID(),'-',''),'@example.test'),TRUE);
+    END;
+    IF rejected=FALSE THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='V58 failed to reject cross-tenant customer_profile.user_id';
+    END IF;
 
     INSERT INTO sales_lead(id,tenant_id,stage,priority,created_at) VALUES
       (lead_a,tenant_a,'NEW','LOW',CURRENT_TIMESTAMP(6)),
