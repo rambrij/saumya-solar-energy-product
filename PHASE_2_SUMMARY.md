@@ -86,7 +86,7 @@ Intermediate CI runs caught an OpenPDF text extractor compile error; the test wa
 
 ### Latest verification evidence
 
-- GitHub Actions run **42785193481** for code commit **2eaddfc6c0b35459190ddc392dea12e022b886c3**: backend **149 tests / 0 failures / 0 errors**; frontend typecheck and production build **passed**; MySQL 8.4 V1–V58 migration validation **passed**. The MySQL application-startup job (which includes Chromium installation and Playwright) was still in progress at the time this summary was updated.
+- GitHub Actions run **42785193481** for code commit **2eaddfc6c0b35459190ddc392dea12e022b886c3**: backend **149 tests / 0 failures / 0 errors**; frontend typecheck and production build **passed**; MySQL 8.4 V1–V58 migration validation **passed**. The MySQL application-startup job, Chromium installation and Playwright browser test also passed; all four jobs succeeded.
 - The browser job itself completed successfully in run **42784999436** on commit 084782c8bda9edf5ae88e320b44abe4b322cb35a: Spring Boot started against MySQL 8.4, Chromium installed, and the Playwright tenant-filter test passed. That run's backend suite had one warranty-claim fixture assertion failure; the fixture was corrected in 2eaddfc, and the latest backend suite now passes all 149 tests.
 - The 149-test suite includes the new warranty claim lifecycle, attachment service, CSV/XLSX/PDF export, branch-filter and H2 database concurrency tests.
 - Production V57/V58 preflight remains unexecuted because no production DB connection/secrets were available. No production rows were read or modified.
