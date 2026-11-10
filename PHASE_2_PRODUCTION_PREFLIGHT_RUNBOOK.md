@@ -7,7 +7,7 @@ Run the V57/V58 tenant-integrity preflight against the production MySQL database
 ## Important safety properties
 
 - The script does not INSERT, UPDATE or DELETE business rows.
-- It does create and drop two named stored procedures to express fail-fast checks. The database identity therefore needs CREATE ROUTINE and DROP ROUTINE privileges in addition to SELECT access. Review that privilege grant with the DBA before execution.
+- It creates and drops two named stored procedures to express fail-fast checks. The database identity therefore needs CREATE ROUTINE and DROP ROUTINE privileges in addition to SELECT access. Both production and CI workflows install an EXIT cleanup trap so the named procedures are removed even when a SIGNAL aborts the SQL script. Review that privilege grant with the DBA before execution.
 - It does not apply V57/V58 indexes, foreign keys or constraints.
 - It does not repair rows automatically.
 - Do not run V57/V58 migrations after a failed preflight.
