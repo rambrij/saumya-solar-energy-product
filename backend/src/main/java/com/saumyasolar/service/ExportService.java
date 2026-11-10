@@ -80,7 +80,7 @@ public class ExportService {
         try {
             Map<String,Object> report=reports.operationsReportForTenant(tenantId,job.getFromDate(),job.getToDate());
             FilePayload file=render(report,job);
-            key=storage.put(root,"exports",tenantId,id+"."+file.extension(),file.bytes(),file.contentType());
+            key=storage.putReplacing(root,"exports",tenantId,id+"."+file.extension(),file.bytes(),file.contentType());
             job.setStorageKey(key); job.setContentType(file.contentType()); job.setFileSize((long)file.bytes().length);
             job.setStatus("COMPLETED"); job.setCompletedAt(Instant.now()); job.setExpiresAt(Instant.now().plusSeconds(retentionHours*3600));
             job.setLastError(null);

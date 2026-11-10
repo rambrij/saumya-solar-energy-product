@@ -153,7 +153,7 @@ public class NotificationService {
     private void queueConsentedChannels(
             UUID userId, UUID tenantId, String eventType, String subject, String body, List<UUID> queuedIds
     ) {
-        if (customers == null || userId == null || twilioSid.isBlank() || twilioToken.isBlank()) return;
+        if (customers == null || userId == null) return;
         CustomerProfile customer = customers.findByTenantIdAndUserId(tenantId, userId)
                 .filter(CustomerProfile::isActive).orElse(null);
         if (customer == null || customer.getPhone() == null
