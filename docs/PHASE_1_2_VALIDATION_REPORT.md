@@ -22,7 +22,7 @@ The status-before column means the state found at the start of the audit/remedia
 | UNVERIFIABLE | 2 | 0 |
 | **Total** | **18** | **18** |
 
-No NOT MET designation is used where an implementation exists but is incomplete; those are PARTIAL. The two initially UNVERIFIABLE database findings were upgraded to PARTIAL after directly inspecting V57/V58 and their preflight SQL. No item is MET because the complete end-to-end security requirements still have residual coverage gaps, even though workflow 42821756695 passed all four jobs, including Playwright tenant-filter tampering. The subsequent reset-token throttling change is under workflow 42822434704.
+No NOT MET designation is used where an implementation exists but is incomplete; those are PARTIAL. The two initially UNVERIFIABLE database findings were upgraded to PARTIAL after directly inspecting V57/V58 and their preflight SQL. No item is MET because the complete end-to-end security requirements still have residual coverage gaps, even though workflow 42821756695 passed all four jobs, including Playwright tenant-filter tampering. The reset-token throttling code/test is under workflow 42822455302: backend (164 tests), frontend build and MySQL validation passed; Spring Boot health and V57/V58 preflight passed; Playwright tenant-filter tampering test is still running.
 
 ## 2. Requirement extraction and traceability matrix
 
