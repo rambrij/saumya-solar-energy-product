@@ -16,7 +16,7 @@ base_header = next((i for i, line in enumerate(lines)
                     ["TABLE_NAME", "TOTAL_ROWS", "TENANT_ID_COLUMN", "NULL_TENANT_ROWS", "IS_NULLABLE"]), None)
 exact_header = next((i for i, line in enumerate(lines)
                      if line.strip().split("\t") ==
-                     ["table_name", "total_rows", "null_tenant_rows", "is_nullable"]), None)
+                     ["table_name", "total_rows", "null_tenant_rows", "column_is_nullable"]), None)
 if base_header is None or exact_header is None:
     raise SystemExit("FAIL: schema audit output is missing the expected base-table or exact tenant count section")
 
@@ -35,13 +35,13 @@ exact_rows = list(csv.DictReader(exact_lines, delimiter="\t"))
 
 if len(base_rows) != 74:
     raise SystemExit(f"FAIL: expected 74 base tables, found {len(base_rows)}")
-tenant_tables = [row for row in base_rows if len(row) >= 3 and row[2].upper() != "NO"]
+tenant_tables = [row for row in base_rows if len(row) >= 3 and row[2].upper() != "MISSING"]
 if len(tenant_tables) != 64 or len(exact_rows) != 64:
     raise SystemExit(f"FAIL: expected 64 tenant_id-bearing tables, found inventory={len(tenant_tables)}, exact_counts={len(exact_rows)}")
 
 nullable = {row["table_name"]: int(row["null_tenant_rows"]) for row in exact_rows
-            if row["is_nullable"].upper() == "YES"}
-not_null = [row for row in exact_rows if row["is_nullable"].upper() == "NO"]
+            if row["column_is_nullable"].upper() == "YES"}
+not_null = [row for row in exact_rows if row["column_is_nullable"].upper() == "NO"]
 expected_nullable = {"app_user", "role", "audit_event", "notification_delivery"}
 if set(nullable) != expected_nullable:
     raise SystemExit(f"FAIL: nullable tenant_id columns differ from approved mixed-scope set: {sorted(nullable)}")
