@@ -134,6 +134,10 @@ class Release12TenantIntegrationTest {
     @Autowired
     com.saumyasolar.repo.PaymentRepository payments;
     @Autowired
+    com.saumyasolar.repo.TenantSubscriptionRepository tenantSubscriptions;
+    @Autowired
+    com.saumyasolar.repo.SubscriptionPlanRepository subscriptionPlans;
+    @Autowired
     ServiceRequestRepository serviceRequests;
     @Autowired
     InstallationJobRepository installationJobs;
@@ -1609,8 +1613,15 @@ class Release12TenantIntegrationTest {
     }
 
 
+    @org.springframework.transaction.annotation.Transactional
     @Test
     void vendorBranchCrudAndMembershipAssignmentArePermissionAndTenantScoped() throws Exception {
+        var activeSubscription = tenantSubscriptions.findByTenantIdOrderByCreatedAtDesc(vendorTenantId).stream()
+                .filter(subscription -> "ACTIVE".equals(subscription.getStatus())).findFirst().orElseThrow();
+        var professionalPlan = subscriptionPlans.findByPlanCodeIgnoreCase("PROFESSIONAL").orElseThrow();
+        activeSubscription.setPlanId(professionalPlan.getId());
+        tenantSubscriptions.saveAndFlush(activeSubscription);
+
         var adminToken = accessToken("admin@saumya.local", "Admin@123");
         var salesToken = accessToken("sales@saumya.local", "Sales@123");
         var suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
