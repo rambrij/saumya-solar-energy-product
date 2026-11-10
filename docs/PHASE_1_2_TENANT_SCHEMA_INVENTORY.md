@@ -78,10 +78,16 @@ This is now executable evidence collection, not yet the requested proof: it must
 - CI run 42844217653 passed the V60 migration and tenant integrity preflight on disposable MySQL 8.4; the schema inventory artifact was emitted. This confirms migration compatibility and clean test data, not production data cleanliness.
 
 
-### Post-V60 CI schema proof — run 42843505138
+### Post-V60 CI schema proof — run 42912143460
 
-The MySQL 8.4 schema audit artifact after V60 reports nullable tenant_id columns on four mixed-scope tables: app_user, role, audit_event and notification_delivery; all eight formerly nullable tenant-owned columns now report IS_NULLABLE=NO; notification_delivery remains nullable by design for global platform authentication notifications. Every tenant-owned table in the disposable CI schema reports null_tenant_rows=0. Mixed-scope tables may contain documented NULL-tenant rows corresponding to global platform principals, roles, audit events and authentication notifications; the production preflight explicitly permits only PLATFORM_SUPER_ADMIN, PLATFORM_SUPPORT and the shared CUSTOMER role to be global. CI run 42844217653 also passed the mixed-scope preflight checks.
+The downloaded MySQL 8.4 schema audit artifact `phase-1-2-tenant-schema-inventory` (artifact ID `13808500261`) contains the complete current disposable-schema inventory and exact row counts:
 
-This closes the schema-level tenant_id NOT NULL proof for the current checked-in schema in disposable MySQL 8.4. It does not prove production row cleanliness or approve the global/mixed classification; those remain subject to the protected production preflight and data-owner sign-off.
+- 74 base tables were enumerated; 64 have a `tenant_id` column and 10 do not.
+- Of the 64 `tenant_id` columns, 60 are declared `NOT NULL` and four remain nullable by design: `app_user`, `role`, `audit_event`, and `notification_delivery`.
+- The exact count query reports **three NULL `tenant_id` rows in `role` and zero in every other tenant_id-bearing table**. These three rows are the expected platform/global roles (`PLATFORM_SUPER_ADMIN`, `PLATFORM_SUPPORT`, and shared `CUSTOMER`) in this disposable CI dataset. The other three mixed-scope tables have zero NULL rows in this CI dataset.
+- Every tenant-scoped table with `tenant_id NOT NULL` has an exact `null_tenant_rows=0` result in this artifact. The artifact also contains the full FK and unique-index inventories.
+- The V60 workflow gate separately asserts that the eight migration-target tenant-owned columns are `NOT NULL` and the four mixed-scope columns remain nullable.
 
-- Latest full validation run 42845389769 passed all four jobs; the backend suite now reports 188 tests with zero failures/errors. V60 and the schema audit remain green in MySQL 8.4. This does not replace production-data audit.
+This is complete schema and NULL-row evidence for the **disposable CI MySQL 8.4 database only**. It is not production evidence and does not constitute owner approval for the three global role rows or any other classification. Production must be audited with the same read-only SQL and reviewed by the data owner/DBA before release.
+
+The workflow run above has successful MySQL migration/schema jobs, but the overall run's backend test job failed on the then-present public CSRF probe test; do not describe that whole run as green. A later current-head run must pass the full suite.
