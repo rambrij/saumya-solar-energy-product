@@ -3,7 +3,7 @@
 **Branch:** `audit/phase-2-implementation-gap-analysis`  
 **Source:** Spring MVC controller annotations at the current Phase 2 branch HEAD  
 **Inventory generated:** 2026-11-10  
-**Scope:** Controller method mappings only. Public/authentication endpoints are retained in the inventory and identified by the SecurityConfig allowlist.
+**Scope:** Controller method mappings only. Public/authentication endpoints are retained in the inventory and identified by the SecurityConfig allowlist. This restored historical inventory predates the current ExportController; the current dynamic Spring mapping test remains the source of truth for newly added mappings.
 
 ## Inventory totals
 
@@ -255,6 +255,18 @@
 | 220 | POST | /api/v1/warranty-claims/{claimId}/attachments/ | `backend/src/main/java/com/saumyasolar/api/WarrantyClaimAttachmentController.java:26` | upload | CREATE / COMMAND | 401/403 without credentials (dynamic gate test) | SERVICE_UPDATE and SERVICE_ASSIGN; tenant-wide warranty claim evidence is dispatcher-managed. | Warranty attachment HTTP upload is covered by Release12TenantIntegrationTest.warrantyClaimAttachmentHttpUploadAndDownloadAreBoundToTenantAndParentClaim; CI run 42845389769 passed. |
 | 221 | GET | /api/v1/warranty-claims/{claimId}/attachments/ | `backend/src/main/java/com/saumyasolar/api/WarrantyClaimAttachmentController.java:35` | download | READ | 401/403 without credentials (dynamic gate test) | SERVICE_UPDATE and SERVICE_ASSIGN; tenant-wide warranty claim evidence is dispatcher-managed. | Warranty attachment list and customer ownership are covered by WarrantyClaimAttachmentServiceTest and Release12TenantIntegrationTest; CI run 42845389769 passed. |
 | 222 | GET | /api/v1/warranty-claims/{claimId}/attachments/{attachmentId} | `backend/src/main/java/com/saumyasolar/api/WarrantyClaimAttachmentController.java:40` | download | READ | 401/403 without credentials (dynamic gate test) | SERVICE_UPDATE and SERVICE_ASSIGN; tenant-wide warranty claim evidence is dispatcher-managed. | Warranty attachment download-by-ID and customer ownership are covered by WarrantyClaimAttachmentServiceTest and Release12TenantIntegrationTest; CI run 42845389769 passed. |
+
+## Additional current-branch export-job routes
+
+The current branch also exposes these asynchronous export endpoints, which must be included in the regenerated authenticated role × verb matrix:
+
+| HTTP | Route | Expected authorization | Required negative evidence |
+|---|---|---|---|
+| POST | /api/v1/exports | Vendor account with REPORT_EXPORT; tenant and requester derived from authenticated principal | Missing permission denied; no tenant/requester body override; customer/platform denial |
+| GET | /api/v1/exports/{exportId} | REPORT_EXPORT; same tenant and requesting user | Another user and another tenant receive non-disclosing 404 |
+| GET | /api/v1/exports/{exportId}/download | REPORT_EXPORT; same tenant and requesting user; completed, unexpired export only | Another user and another tenant receive 404; expired/not-ready exports cannot download |
+
+ExportServiceTest covers permission denial, requester-scoped status lookup, requester-scoped download denial and tenant-scoped expiry cleanup. The existing end-to-end operations export test validates CSV/XLSX/PDF contents and the platform export test validates vendor denial. A current-head CI run is required before these tests count as passed.
 
 ## Acceptance rules for closing each row
 
