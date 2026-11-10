@@ -68,4 +68,4 @@
 
 ## Status
 
-**PARTIAL — selected negative coverage is extensive and present; exhaustive matrix remains open.** Existing integration tests cover multiple tenant/customer/branch/export/download paths, but every resource family and every exposed read/write/delete/export/download endpoint is not yet represented. Latest-head CI is pending.
+**PARTIAL — selected negative coverage is extensive and present; exhaustive matrix remains open.** Existing integration tests cover multiple tenant/customer/branch/export/download paths, but every resource family and every exposed read/write/delete/export/download endpoint is not yet represented. Latest-head workflow 42821756695 passed backend (163 tests), frontend build and MySQL validation; the Spring Boot/browser Playwright job remains in progress.
