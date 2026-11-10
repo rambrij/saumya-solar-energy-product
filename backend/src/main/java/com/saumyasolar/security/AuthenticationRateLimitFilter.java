@@ -37,6 +37,9 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
     private final int loginLimit;
     private final int recoveryLimit;
     private final int mfaLimit;
+    private final int publicEnquiryLimit;
+    private final int exportLimit;
+    private final int webhookLimit;
     private final int windowSeconds;
     private final ClientAddressResolver addressResolver;
     private final byte[] accountHmacKey;
@@ -47,6 +50,9 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
             @Value("${app.auth.rate-limit.login-per-window:10}") int loginLimit,
             @Value("${app.auth.rate-limit.recovery-per-window:5}") int recoveryLimit,
             @Value("${app.auth.rate-limit.mfa-per-window:10}") int mfaLimit,
+            @Value("${app.auth.rate-limit.public-enquiry-per-window:30}") int publicEnquiryLimit,
+            @Value("${app.auth.rate-limit.export-per-window:20}") int exportLimit,
+            @Value("${app.auth.rate-limit.webhook-per-window:60}") int webhookLimit,
             @Value("${app.auth.rate-limit.window-seconds:60}") int windowSeconds,
             @Value("${app.jwt-secret}") String jwtSecret) {
         this.jdbc = jdbc;
@@ -55,6 +61,9 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
         this.loginLimit = Math.max(1, loginLimit);
         this.recoveryLimit = Math.max(1, recoveryLimit);
         this.mfaLimit = Math.max(1, mfaLimit);
+        this.publicEnquiryLimit = Math.max(1, publicEnquiryLimit);
+        this.exportLimit = Math.max(1, exportLimit);
+        this.webhookLimit = Math.max(1, webhookLimit);
         this.windowSeconds = Math.max(1, windowSeconds);
         if (jwtSecret == null || jwtSecret.isBlank()) {
             throw new IllegalArgumentException("JWT secret must be configured for account rate-limit hashing");
@@ -65,7 +74,14 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
     AuthenticationRateLimitFilter(JdbcTemplate jdbc, ObjectMapper mapper, int loginLimit,
                                    int recoveryLimit, int mfaLimit, int windowSeconds) {
         this(jdbc, mapper, new ClientAddressResolver(""), loginLimit, recoveryLimit,
-                mfaLimit, windowSeconds, "test-only-rate-limit-hmac-secret");
+                mfaLimit, recoveryLimit, recoveryLimit, recoveryLimit, windowSeconds, "test-only-rate-limit-hmac-secret");
+    }
+
+    AuthenticationRateLimitFilter(JdbcTemplate jdbc, ObjectMapper mapper, ClientAddressResolver resolver,
+                                   int loginLimit, int recoveryLimit, int mfaLimit, int publicEnquiryLimit,
+                                   int exportLimit, int webhookLimit, int windowSeconds) {
+        this(jdbc, mapper, resolver, loginLimit, recoveryLimit, mfaLimit, publicEnquiryLimit,
+                exportLimit, webhookLimit, windowSeconds, "test-only-rate-limit-hmac-secret");
     }
 
     private String requestPath(HttpServletRequest request) {
@@ -79,20 +95,14 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = requestPath(request);
-        return !("POST".equalsIgnoreCase(request.getMethod()) &&
-                (path.equals("/api/v1/auth/login") ||
-                 path.equals("/api/v1/auth/refresh") ||
-                 path.equals("/api/v1/auth/forgot-password") ||
-                 path.equals("/api/v1/auth/reset-password") ||
-                 path.equals("/api/v1/auth/mfa/verify")));
+        return limitFor(request.getMethod(), path) == 0;
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String path = requestPath(request);
-        int limit = path.endsWith("/login") || path.endsWith("/refresh") ? loginLimit
-                : path.endsWith("/mfa/verify") ? mfaLimit : recoveryLimit;
+        int limit = limitFor(request.getMethod(), path);
 
         HttpServletRequest effectiveRequest = request;
         String accountIdentifier = null;
@@ -125,6 +135,20 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
         }
 
         chain.doFilter(effectiveRequest, response);
+    }
+
+    private int limitFor(String method, String path) {
+        if ("POST".equalsIgnoreCase(method)) {
+            if (path.equals("/api/v1/auth/login") || path.equals("/api/v1/auth/refresh")) return loginLimit;
+            if (path.equals("/api/v1/auth/mfa/verify")) return mfaLimit;
+            if (path.equals("/api/v1/auth/forgot-password") || path.equals("/api/v1/auth/reset-password")) return recoveryLimit;
+            if (path.matches("/api/v1/public/[^/]+/enquiries")) return publicEnquiryLimit;
+            if (path.startsWith("/api/v1/payment-webhooks/") || path.startsWith("/api/v1/payment-gateway-webhooks/")) return webhookLimit;
+            if (path.equals("/api/v1/exports") || path.startsWith("/api/v1/exports/")) return exportLimit;
+        }
+        if ("GET".equalsIgnoreCase(method)
+                && (path.contains("/export") || path.startsWith("/api/v1/exports/"))) return exportLimit;
+        return 0;
     }
 
     private boolean isAccountScopedPath(String path) {
@@ -187,7 +211,7 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         mapper.writeValue(response.getWriter(), Map.of(
                 "type", "about:blank", "title", "Too Many Requests", "status", 429,
-                "detail", "Too many authentication attempts. Please try again later.",
+                "detail", "Too many requests. Please try again later.",
                 "timestamp", now.toString()));
     }
 
