@@ -1357,6 +1357,6 @@ Do not approve production until the final CI run for the latest branch head pass
 
 #### Latest continuation verification record
 
-- Run 42785193481 on code commit 2eaddfc6c0b35459190ddc392dea12e022b886c3: backend 149 tests, 0 failures/errors; frontend typecheck/build passed; MySQL 8.4 V1–V58 migration validation passed. The MySQL application-startup/Playwright job was still in progress at report update.
+- Run 42785193481 on code commit 2eaddfc6c0b35459190ddc392dea12e022b886c3: backend 149 tests, 0 failures/errors; frontend typecheck/build passed; MySQL 8.4 V1–V58 migration validation passed. The MySQL application-startup job, Chromium installation and Playwright browser test also passed; all four jobs succeeded.
 - Run 42784999436 on commit 084782c8bda9edf5ae88e320b44abe4b322cb35a: Spring Boot MySQL startup and Chromium Playwright browser-filter test passed. That run's backend suite exposed one incorrect warranty-claim fixture expectation; corrected in 2eaddfc and all 149 backend tests pass in run 42785193481.
 - Production preflight remains Partial and unexecuted. The preflight script contains only the V57/V58 integrity procedures (no business-row INSERT/UPDATE/DELETE and no constraint/index DDL); it still requires a production database operator with approved credentials and routine privileges.
