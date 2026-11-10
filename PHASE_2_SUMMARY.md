@@ -90,3 +90,41 @@ Intermediate CI runs caught an OpenPDF text extractor compile error; the test wa
 - The browser job itself completed successfully in run **42784999436** on commit 084782c8bda9edf5ae88e320b44abe4b322cb35a: Spring Boot started against MySQL 8.4, Chromium installed, and the Playwright tenant-filter test passed. That run's backend suite had one warranty-claim fixture assertion failure; the fixture was corrected in 2eaddfc, and the latest backend suite now passes all 149 tests.
 - The 149-test suite includes the new warranty claim lifecycle, attachment service, CSV/XLSX/PDF export, branch-filter and H2 database concurrency tests.
 - Production V57/V58 preflight remains unexecuted because no production DB connection/secrets were available. No production rows were read or modified.
+
+
+## Further release-blocker continuation — 2026-11-10
+
+### Additional branch isolation changes
+
+- Added shared branch membership filtering to vendor invoice lists, service ticket lists and installation job lists. The filter is applied after existing role/assignment restrictions, so branch membership cannot broaden a user's existing scope.
+- Extended the branch integration fixture to cover branch A vs branch B for enquiries, leads, site surveys, quotations, orders, invoices, service requests, installation jobs, warehouses, inventory balances and inventory ledger rows.
+- Added branch analytics authorization assertions: the assigned branch is readable and a same-tenant but unassigned branch returns 404.
+- Branch test fixtures now run transactionally so temporary employee/role/branch data does not leak into other integration tests.
+
+### Endpoint security matrix
+
+- Generated `PHASE_2_ENDPOINT_MATRIX.md` from the 17 Spring MVC controller classes: 222 method-mapping declarations and 224 expanded route patterns (multi-path aliases included).
+- `EndpointAuthenticationMatrixTest` enumerates the runtime handler mapping and requires authentication for every non-public HTTP handler. It does not falsely claim that an authentication check proves endpoint-specific tenant CRUD isolation.
+- Endpoint-specific negative CRUD coverage remains incomplete and is itemized in the generated matrix.
+
+### Concurrent MySQL scheduler coverage
+
+- The MySQL 8.4 CI job now runs the integration sync, subscription expiry, SLA breach and warranty expiry concurrency tests against a separate migrated database.
+- Test fixtures now include tenant-owned integration connections, plans, customer profiles, orders, installation jobs and products to satisfy the V57/V58 composite relationships.
+- SLA evaluation uses a tenant-scoped pessimistic write query to prevent two concurrent scheduler workers from emitting duplicate SLA breach transitions for the same service request.
+- Run 42789991955 reported backend 154 tests passing and its dedicated MySQL scheduler step passing. Its separate browser step failed before the React login interaction stabilized; the UI test was adjusted and the latest-head browser result remains pending.
+
+### React two-tenant UI test
+
+- Added `frontend/e2e/tenant-react-ui.spec.ts`: creates a second tenant through the platform API, creates a tenant-B-only category/product, signs into tenant A using the real React login and Catalog > Products UI, verifies the foreign product is absent, and checks foreign product update/delete IDOR responses. It then signs into tenant B through React and verifies its own product is visible.
+- The test runs against the actual Vite frontend proxy and Spring Boot/MySQL application. It is not yet a complete browser workflow for every resource family or every filter/dropdown.
+
+### Production preflight and remediation evidence
+
+- Added `PHASE_2_PRODUCTION_PREFLIGHT_RUNBOOK.md` with backup/change-window, privilege, dispatch, artifact, failure and remediation-approval requirements.
+- The protected preflight workflow now retains its output artifact even on failure.
+- **Not executed against production:** no protected database credentials or production reviewer approval were available in this session. No production data was read or modified. MySQL CI is not a substitute for production preflight.
+
+### Current decision
+
+The new branch filters, controller-level warranty attachment test, MySQL scheduler suite and two-tenant browser test have been added. Do not approve production until the latest-head CI run is fully green, the endpoint-specific CRUD matrix is closed or formally accepted, and production V57/V58 preflight has two PASS markers plus recorded DBA/data-owner approval.
