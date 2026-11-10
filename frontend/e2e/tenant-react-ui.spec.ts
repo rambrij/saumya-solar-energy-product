@@ -47,7 +47,7 @@ test('React vendor workspace stays isolated when switching between two tenant ac
       method: 'POST', credentials: 'include',
       headers: { Authorization: 'Bearer ' + vendor.accessToken, 'X-CSRF-Token': vendor.csrfToken },
     });
-    return { tenantId: tenant.id, productId: product.id, productNameB };
+    return { tenantId: tenant.id, productId: product.id, categoryId: category.id, productNameB };
   }, { emailB, passwordB, suffix, productNameB });
 
   async function signIn(email: string, password: string) {
@@ -73,7 +73,7 @@ test('React vendor workspace stays isolated when switching between two tenant ac
   await expect(page.getByText('No matching records')).toBeVisible();
   await expect(page.getByText(fixture.productNameB, { exact: true })).toHaveCount(0);
 
-  const foreignAccess = await page.evaluate(async ({ tenantId, productId }) => {
+  const foreignAccess = await page.evaluate(async ({ tenantId, productId, categoryId }) => {
     const sessionResponse = await fetch('/api/v1/auth/login', { method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'admin@saumya.local', password: 'Admin@123' }) });
@@ -83,12 +83,12 @@ test('React vendor workspace stays isolated when switching between two tenant ac
     const rows = await list.json();
     const update = await fetch('/api/v1/products/' + productId, { method: 'PATCH', credentials: 'include',
       headers: { Authorization: 'Bearer ' + session.accessToken, 'Content-Type': 'application/json', 'X-CSRF-Token': session.csrfToken },
-      body: JSON.stringify({ name: 'cross tenant tamper', tenantId }) });
+      body: JSON.stringify({ categoryId, sku: 'FOREIGN-TAMPER', name: 'cross tenant tamper', price: 999, purchasePrice: 500, discountPercent: 0, taxPercent: 0, reorderLevel: 0, warrantyYears: 1, unitOfMeasure: 'PCS', serialized: false, active: true, tenantId }) });
     const remove = await fetch('/api/v1/products/' + productId, { method: 'DELETE', credentials: 'include',
       headers: { Authorization: 'Bearer ' + session.accessToken, 'X-CSRF-Token': session.csrfToken } });
     return { listStatus: list.status, containsForeign: rows.some((row: any) => row.id === productId),
       updateStatus: update.status, deleteStatus: remove.status };
-  }, { tenantId: fixture.tenantId, productId: fixture.productId });
+  }, { tenantId: fixture.tenantId, productId: fixture.productId, categoryId: fixture.categoryId });
   expect(foreignAccess.listStatus).toBe(200);
   expect(foreignAccess.containsForeign).toBe(false);
   expect([403, 404]).toContain(foreignAccess.updateStatus);
