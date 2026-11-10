@@ -111,7 +111,14 @@ class EndpointAuthenticationMatrixTest {
         String token = jwt.issue(leastPrivilege);
 
         Set<String> selfServiceReads = Set.of(
-                "/api/v1/me", "/api/v1/subscription/usage", "/api/v1/subscription/storage");
+                "/api/v1/me",
+                "/api/v1/subscription",
+                "/api/v1/subscription-plans",
+                "/api/v1/subscription/usage",
+                "/api/v1/subscription/storage",
+                "/api/v1/payment-gateways/availability",
+                "/api/v1/offline-sync/operations",
+                "/v3/api-docs.yaml");
         List<String> checked = new ArrayList<>();
         List<String> failures = new ArrayList<>();
         for (var entry : mappings.getHandlerMethods().entrySet()) {
