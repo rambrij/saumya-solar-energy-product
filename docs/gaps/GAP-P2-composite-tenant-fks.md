@@ -79,3 +79,13 @@ CI update (2026-11-10): workflow 42821756695 passed all four jobs, including 163
 
 
 CI inventory verification (2026-11-10): workflow `42828454430` passed the new read-only tenant schema/FK/unique-index inventory step on the disposable MySQL 8.4 migrated schema and uploaded the inventory artifact. This is CI schema evidence only; production-like/production data NULL-tenant and orphan preflight plus a full tenant-owned classification remain open.
+
+
+### V60 tenant-owned NOT NULL enforcement — 2026-11-10
+
+- The CI schema inventory (run 42842355967, fresh disposable MySQL 8.4) found nine tenant-owned tables whose tenant_id columns were still nullable despite zero NULL rows in that disposable dataset: customer_order, order_item, quotation, quotation_item, site_survey, lead_history, notification_delivery, integration_webhook_event and idempotency_record.
+- Added V60 to alter those nine tenant_id columns to NOT NULL. The corresponding JPA entities now declare @Column(nullable=false).
+- Extended the production V57/V58 preflight to fail closed on NULL tenant_id in all nine tables and to validate the mixed-scope app_user, role and audit_event tenant classification. V60 does not backfill or guess tenant ownership.
+- The MySQL 8.4 migration workflow now applies V60 after the V58 negative FK test and asserts all nine columns are NOT NULL. Latest-head CI is pending.
+- app_user, role and audit_event remain nullable because they mix platform and tenant rows; their NULL semantics are explicitly checked/documented. Tables without tenant_id are classified as platform-global, user-scoped through app_user, or join tables whose scope is inherited from parent rows.
+- This closes the schema-definition gap on the nine direct tenant-owned tables only. Production row counts and owner-approved classification still require the protected production preflight and DBA sign-off.
