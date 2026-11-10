@@ -962,8 +962,6 @@ public class FinanceService {
     public ServiceSlaPolicy saveSlaPolicy(SlaPolicyInput x, Principal p) {
         servicePermission(p);
         permission(p, "SERVICE_UPDATE");
-        if (p.roles() == null || !p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (x.resolutionMinutes() < x.responseMinutes())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Resolution SLA must be at least the response SLA");
         if (( x.businessStart() == null ) != ( x.businessEnd() == null ) || x.businessStart() != null && !x.businessEnd().isAfter(x.businessStart()))
@@ -1000,8 +998,6 @@ public class FinanceService {
     public ServiceRequest pauseSla(UUID id, String reason, Principal p) {
         servicePermission(p);
         permission(p, "SERVICE_UPDATE");
-        if (p.roles() == null || !p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (reason == null || reason.isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SLA pause reason is required");
         ServiceRequest t = ticket(id, p.tenantId());
@@ -1019,8 +1015,6 @@ public class FinanceService {
     public ServiceRequest resumeSla(UUID id, String reason, Principal p) {
         servicePermission(p);
         permission(p, "SERVICE_UPDATE");
-        if (p.roles() == null || !p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         ServiceRequest t = ticket(id, p.tenantId());
         if (t.getSlaPausedAt() == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "SLA is not paused");
         long seconds = Duration.between(t.getSlaPausedAt(), Instant.now()).getSeconds();
