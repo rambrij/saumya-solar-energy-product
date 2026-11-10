@@ -2128,7 +2128,7 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/invoices").header("Authorization", "Bearer " + accountantToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\"orderId\\":\\"" + UUID.randomUUID() + "\\"}"))
+                        .content("{\"orderId\":\"" + UUID.randomUUID() + "\"}"))
                 .andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/payments").header("Authorization", "Bearer " + accountantToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -2146,7 +2146,7 @@ class Release12TenantIntegrationTest {
         for (String token : List.of(inventoryToken, accountantToken, engineerToken)) {
             mvc.perform(post("/api/v1/exports").header("Authorization", "Bearer " + token)
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\\"reportType\\":\\"OPERATIONS\\",\\"format\\":\\"CSV\\"}"))
+                            .content("{\"reportType\":\"OPERATIONS\",\"format\":\"CSV\"}"))
                     .andExpect(status().isForbidden());
             mvc.perform(get("/api/v1/exports/" + UUID.randomUUID())
                             .header("Authorization", "Bearer " + token))
