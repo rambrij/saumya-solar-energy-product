@@ -60,4 +60,4 @@
 
 ## Status
 
-**Open** — explicit context is implemented in several schedulers and atomic tenant-qualified integration job claiming exists, but the complete async/scheduled worker inventory and context-leak tests are not proven.
+**PARTIAL — scheduled tenant context is implemented in the four identified tenant-aware schedulers and selected MySQL concurrency tests exist.** The full asynchronous/worker inventory and exception/thread-reuse context-leak coverage remain open.
