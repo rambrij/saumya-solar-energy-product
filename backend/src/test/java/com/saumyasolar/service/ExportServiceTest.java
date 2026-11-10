@@ -94,7 +94,10 @@ class ExportServiceTest {
         pending.setStatus("PENDING");
         when(jobs.findDistinctTenantIdsForRecovery(any())).thenReturn(java.util.List.of(tenant));
         when(jobs.findRecoverableByTenant(eq(tenant), any(), any(org.springframework.data.domain.Pageable.class)))
-                .thenReturn(java.util.List.of(pending));
+                .thenAnswer(invocation -> {
+                    assertEquals(tenant, com.saumyasolar.security.TenantExecutionContext.requireTenantId());
+                    return java.util.List.of(pending);
+                });
 
         service().recoverAndExpire();
 
@@ -152,6 +155,30 @@ class ExportServiceTest {
 
         verify(jobs).findByIdAndTenantIdAndRequestedBy(exportId, tenant, otherUser);
         verifyNoInteractions(storage);
+    }
+
+    @Test
+    void expiryCleanupRetainsStorageKeyWhenDeletionFailsForRetry() throws Exception {
+        UUID tenant = UUID.randomUUID();
+        ExportJob expired = new ExportJob();
+        expired.setId(UUID.randomUUID());
+        expired.setTenantId(tenant);
+        expired.setStatus("COMPLETED");
+        String key = tenant + "/exports/" + expired.getId() + ".csv";
+        expired.setStorageKey(key);
+        when(jobs.findDistinctTenantIdsForExpiry(any())).thenReturn(java.util.List.of(tenant));
+        when(jobs.findTop100ByTenantIdAndStatusAndExpiresAtBeforeOrderByExpiresAtAsc(
+                eq(tenant), eq("COMPLETED"), any())).thenReturn(java.util.List.of(expired));
+        doThrow(new java.io.IOException("storage temporarily unavailable"))
+                .when(storage).delete(any(), eq(key));
+
+        service().recoverAndExpire();
+
+        assertEquals("COMPLETED", expired.getStatus());
+        assertEquals(key, expired.getStorageKey());
+        verify(jobs, never()).save(expired);
+        assertThrows(IllegalStateException.class,
+                com.saumyasolar.security.TenantExecutionContext::requireTenantId);
     }
 
 }
