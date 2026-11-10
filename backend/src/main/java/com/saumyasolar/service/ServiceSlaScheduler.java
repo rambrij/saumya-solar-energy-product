@@ -4,6 +4,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.TenantRepository;
+import com.saumyasolar.security.TenantExecutionContext;
 
 @Component
 public class ServiceSlaScheduler {
@@ -18,7 +19,9 @@ public class ServiceSlaScheduler {
     @Scheduled(fixedDelayString = "${app.service.sla-check-interval-ms:60000}")
     public void evaluate() {
         for (Tenant tenant : tenants.findAll()) {
-            finance.evaluateSlaBreaches(tenant.getId());
+            try (var scope = TenantExecutionContext.open(tenant.getId())) {
+                finance.evaluateSlaBreaches(tenant.getId());
+            }
         }
     }
 }
