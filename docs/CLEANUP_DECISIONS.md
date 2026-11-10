@@ -89,9 +89,27 @@ Any later API, event, persisted-data or configuration contract change must be li
 - Static route inventory: `@RequestMapping`, `@GetMapping`, `@PostMapping`, `@PatchMapping`, `@PutMapping` and `@DeleteMapping` annotations in the API controllers listed in the traceability matrix.
 - Local clone/build execution was unavailable in this environment because outbound DNS/network access to GitHub failed. No build or test result is claimed from this inspection.
 
-### Later phases — required evidence before completion
+### Phase 1–4 verification evidence
 
-- Phase 1: path-specific reference scans, dependency tree, env/config reference scan, and external messaging-infrastructure/reference scan across the entire repository.
-- Phase 2: apply the existing sequence to a fresh MySQL 8.4 database; apply the single baseline to another fresh MySQL 8.4 database; dump both schemas; compare and justify every difference in `docs/CLEANUP_SCHEMA_DIFF.md`.
-- Phase 3: inspect all workflow trigger/condition/checkout refs and ensure only `cleanup/code-cleanup` remains where branch refs are used.
-- Phase 4: execute backend and frontend builds/tests, boot the application against a fresh DB using the baseline, and record exact commands/results here.
+**Full verification run:** GitHub Actions run `42878162886` — `success`  
+**Schema-equivalence run:** GitHub Actions run `42877702249` — `success`  
+**Resolved Maven dependency scan:** GitHub Actions run `42878486653` — scanner step passed; remaining jobs were running when this entry was prepared.
+
+| Area | Command / check | Result |
+|---|---|---|
+| Whole-repository external messaging scan | `bash scripts/audit/scan-external-messaging.sh` | PASS — all repository text files scanned, including README for banned infrastructure terms only; README was not used as a requirements or feature-validation source. |
+| Resolved Maven dependency graph | `mvn --batch-mode --no-transfer-progress dependency:tree -Dscope=test -DoutputType=text` (invoked by the scan script) | PASS — no matching external messaging libraries in the resolved graph (run 42878486653 scan step). |
+| Async execution inventory | `bash scripts/audit/scan-async-workers.sh | tee async-worker-inventory.txt` | PASS — artifact uploaded. |
+| Legacy authorization inventory | `bash scripts/audit/scan-legacy-authz.sh | tee legacy-authz-inventory.txt` | PASS — artifact uploaded. |
+| Permission catalogue drift | `python3 scripts/audit/check-permission-catalogue.py backend | tee permission-catalogue-drift.txt` | PASS. |
+| Backend build and full test suite | `cd backend && mvn --batch-mode --no-transfer-progress clean verify` | PASS — run 42878162886. |
+| Frontend tests and production build | `cd frontend && npm install && npm test && npm run build` | PASS — run 42878162886. |
+| MySQL migration equivalence | Historical V1–V63 from Git commit `467dc8278e13902a39c51d1c9d8d8e588db98f57` applied to a fresh MySQL 8.4 schema; baseline applied to a second fresh schema; schema-only `mysqldump` outputs compared with `diff -u`. | PASS — empty schema diff; artifact `cleanup-schema-equivalence`; run 42877702249. |
+| Exactly one Flyway migration | Recursive Git tree inspection of `backend/src/main/resources/db/migration/` | PASS — only `V1__baseline.sql`. |
+| MySQL scheduler concurrency | `mvn --batch-mode --no-transfer-progress -Dtest=TenantSchedulerConcurrencyIntegrationTest test` | PASS — 4 tests, 0 failures, 0 errors. |
+| Fresh database application startup | `java -jar target/platform-2.0.0.jar`; poll `curl --fail --silent http://127.0.0.1:8080/actuator/health` | PASS — Flyway applied the single V1 baseline; Hibernate schema validation passed; health returned UP. |
+| Tenant integrity preflight | `mysql ... solar < backend/src/test/resources/tenant-isolation-production-preflight.sql` | PASS — V57/V58 tenant integrity preflight. |
+| Browser tenant isolation | `cd frontend && npm run test:e2e` | PASS — browser-level tenant filter tampering tests. |
+| CI branch restrictions | Inspect both workflow files for trigger and checkout refs | PASS — only `cleanup/code-cleanup` appears as a branch target/ref. |
+
+**Remaining scope note:** no unproven dead-code or orphan-file removals were made. The traceability and removal inventories must continue to be used for any further deletion; documented CMS/blog gaps and export-family/filter parity remain open questions, not cleanup candidates.

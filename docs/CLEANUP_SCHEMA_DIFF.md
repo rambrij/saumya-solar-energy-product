@@ -20,7 +20,7 @@ The workflow normalizes `AUTO_INCREMENT` counters before comparison and fails on
 
 ## Result
 
-**PASS — schema diff is empty.** CI run `42877367240` applied historical V1–V63 and the consolidated baseline to separate fresh MySQL 8.4 databases. The schema dump comparison returned identical output. The same consolidated SQL blob is installed at `backend/src/main/resources/db/migration/V1__baseline.sql`.
+**PASS — schema diff is empty.** CI run `42877702249` applied historical V1–V63 and the consolidated baseline to separate fresh MySQL 8.4 databases. The schema dump comparison returned identical output. The same consolidated SQL blob is installed at `backend/src/main/resources/db/migration/V1__baseline.sql`.
 
 The baseline retains all historical schema and seed effects, including the notification idempotency index (historical V62) and tenant-scoped asynchronous export-job table (historical V63). No schema object was removed as part of consolidation.
 
