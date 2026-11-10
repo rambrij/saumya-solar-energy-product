@@ -44,7 +44,7 @@ All nine tenant-owned tables had zero NULL tenant_id rows in that disposable CI 
 
 Mixed-scope tables remain nullable by design:
 - app_user: platform users have no tenant; vendor/customer users must be tenant-bound.
-- role: platform roles have no tenant; vendor roles must be tenant-bound.
+- role: PLATFORM_SUPER_ADMIN, PLATFORM_SUPPORT and the shared CUSTOMER role are global; vendor roles must be tenant-bound.
 - audit_event: platform audit events may have no tenant; tenant audit events are tenant-bound.
 
 Tables without tenant_id are classified as:
@@ -52,7 +52,7 @@ Tables without tenant_id are classified as:
 - USER_SCOPED via app_user: mfa_challenge, password_reset_token, refresh_token.
 - JOIN_TABLE scope inherited from parents: role_permission and user_role.
 
-These classifications are grounded in current schema/entity usage but still require data-owner approval. The production preflight now rejects NULL tenant_id in the nine tenant-owned tables and rejects app_user/role rows whose tenant_id does not match their platform-vs-tenant identity classification. It must be executed against production before V60 rollout.
+These classifications are grounded in current schema/entity usage but still require data-owner approval. The production preflight now rejects NULL tenant_id in the nine tenant-owned tables and rejects app_user/role rows whose tenant_id does not match their platform-vs-tenant identity classification (including the global CUSTOMER role). It must be executed against production before V60 rollout.
 
 ## 5. Remaining schema proof and release gates
 
