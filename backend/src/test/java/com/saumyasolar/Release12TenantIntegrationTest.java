@@ -1705,6 +1705,12 @@ class Release12TenantIntegrationTest {
         mvc.perform(get("/api/v1/platform/tenants/export")
                         .header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/platform/tenants/export.xlsx")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/platform/tenants/export.pdf")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/service-requests/" + foreignTicket.getId() + "/attachments")
                         .header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isNotFound());
