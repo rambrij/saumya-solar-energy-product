@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -67,6 +68,7 @@ class EndpointAuthenticationMatrixTest {
     private static final Set<String> PUBLIC_EXACT = Set.of("/actuator/health", "/v3/api-docs");
 
     @Test
+    @Transactional
     void everyNonPublicHttpHandlerRequiresAuthentication() throws Exception {
         List<String> checked = new ArrayList<>();
         List<String> failures = new ArrayList<>();
@@ -105,6 +107,7 @@ class EndpointAuthenticationMatrixTest {
 
 
     @Test
+    @Transactional
     void explicitlyPublicMappingsRemainReachableWithoutBearerAuthentication() throws Exception {
         ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
         List<String> checked = new ArrayList<>();
@@ -136,6 +139,7 @@ class EndpointAuthenticationMatrixTest {
     }
 
     @Test
+    @Transactional
     void authenticatedLeastPrivilegeVendorCannotReadProtectedEndpointMappings() throws Exception {
         AppUser seededVendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
         Role emptyRole = new Role();
@@ -192,6 +196,7 @@ class EndpointAuthenticationMatrixTest {
 
 
     @Test
+    @Transactional
     void authenticatedZeroPermissionVendorIsDeniedEveryProtectedMutationMapping() throws Exception {
         AppUser seededVendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
         Role emptyRole = new Role();
