@@ -120,12 +120,13 @@ public class NotificationService {
         return true;
     }
 
-    void deliverBusinessNotification(
+    boolean deliverBusinessNotification(
             UUID userId, UUID tenantId, String eventType,
             String recipient, String subject, String body
     ) {
-        deliver(userId, tenantId, eventType, recipient, subject, body);
+        boolean emailDelivered = deliver(userId, tenantId, eventType, recipient, subject, body);
         sendConsentedChannels(userId, tenantId, eventType, subject, body);
+        return emailDelivered;
     }
     
     private boolean deliver(
