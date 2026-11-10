@@ -1,0 +1,98 @@
+# Cleanup Traceability
+
+**Repository:** `rambrij/saumya-solar-energy-product`  
+**Only target branch:** `cleanup/code-cleanup`  
+**Phase:** 0 — analysis only  
+**Baseline commit inspected:** `d4acfa8edb8e6828299f6a8abcbe3e9e46178afe`  
+**Requirements sources read in full:** `saumya-solar-energy-solution-requirements.md` (880 lines), `saumya-solar-production-ready-srs-hld.md` (1,388 lines), `IMPLEMENTATION_GAP_ANALYSIS.md` (1,560 lines).  
+**Validation-source exclusion:** `README.md` was not used.
+
+This matrix records the implementation paths present in the inspected tree. “Partial / not evidenced” is intentionally not interpreted as permission to remove a requirement. A missing implementation is a product gap, not dead code.
+
+## 1. Business requirements to implementation
+
+| Requirement area | Source reference | Backend implementation | Frontend implementation | SQL / configuration / tests |
+|---|---|---|---|---|
+| Platform administration and vendor lifecycle | Requirements §§1, 11; SRS §§9, 10.2, 10.15, 11.4, 12.5 | `api/Controller.java`, `api/EnterpriseSaasController.java`, `service/TenantAdminService.java`, `service/EnterpriseSaasService.java`, `domain/Tenant.java`, `repo/TenantRepository.java` | `main.tsx`, `RoleNavigation.tsx`, `EnterpriseSaasPanel.tsx` | Migration family V1, V10, V37–V39, V45–V48; `DataSeeder.java`; `EnterpriseSaasServiceTest.java` |
+| Identity, authentication, MFA, users, roles and permissions | SRS §§9, 10.1, 13.2–13.3, 15.1–15.3 | `api/Controller.java`, `security/AuthCookieService.java`, `security/JwtFilter.java`, `security/JwtService.java`, `security/SecurityConfig.java`, `security/AuthenticationRateLimitFilter.java`, `service/AuthLifecycleService.java`, `service/AuthenticationAuditService.java`, `domain/AppUser.java`, `domain/Role.java`, `domain/Permission.java` | `main.tsx`, `authenticatedFetch.ts`, `RoleManagementPanel.tsx`, `RoleNavigation.tsx` | V1–V7, V10, V13, V16, V24, V51–V56, V59, V61; `application.yml`; auth/security tests under `backend/src/test/java/com/saumyasolar/security` and `service`; frontend auth tests and `frontend/e2e/auth-session-security.spec.ts` |
+| Tenant resolution and isolation | Requirements §13; SRS §8, §14, §15.5, §20.1 | `security/TenantExecutionContext.java`, `security/Principal.java`, tenant-aware repository methods across `repo/`, tenant-aware services and controllers | `main.tsx`, `authenticatedFetch.ts`, role navigation (UX only; not an authorization boundary) | Tenant constraints and composite foreign keys in V37, V43, V57–V60; `schema-test.sql`, `tenant-isolation-v57.sql`, `tenant-isolation-v58.sql`, `tenant-isolation-production-preflight.sql`; `Release12TenantIntegrationTest.java`, `TenantExecutionContextTest.java`, tenant browser tests |
+| Public storefront, products, packages and enquiries | Requirements §§2, 5; SRS §§10.3–10.4, 11.1, 13.4–13.5 | `api/Controller.java`, `api/CatalogModels.java`, `service/CatalogAdminService.java`, `domain/Product.java`, `domain/ProductCategory.java`, `domain/SolarPackage.java`, `domain/PackageItem.java` | `PublicHome.tsx`, `PublicSiteHeader.tsx`, `main.tsx`, `PackageImageUpload.tsx` | V1, V5–V7, V16, V37, V57; `docker-compose.yml`, `application.yml`; public navigation and customer portal tests |
+| Customer registration, profile, addresses and portal | Requirements §3; SRS §§10.1, 10.3, 11.2, 13.2 | `api/Controller.java`, `api/CustomerAccountController.java`, `service/CustomerAccountService.java`, `domain/CustomerProfile.java`, `domain/CustomerAddress.java` | `main.tsx`, `PublicHome.tsx`, `authenticatedFetch.ts` | V1, V49; `CustomerAccountServiceTest.java`, `frontend/tests/customer-portal-copy.test.ts` |
+| CRM, enquiries, leads, assignment and activity | Requirements §5; SRS §10.3, §§11–13 | `api/Controller.java`, `domain/Enquiry.java`, `domain/SalesLead.java`, `domain/LeadHistory.java`, `repo/EnquiryRepository.java`, `repo/SalesLeadRepository.java`, `service/AppService.java` | `main.tsx`, `RecordEditor.tsx` | V1, V8, V37, V43, V50, V58; CRM/controller tests and tenant integration tests |
+| Site surveys and evidence | Requirements §§5, 9; SRS §§10.5, 12.1, 13.5 | `api/SurveyLifecycleController.java`, `api/SurveyAttachmentController.java`, `api/SurveyModels.java`, `service/SurveyLifecycleService.java`, `service/SurveyAttachmentService.java`, `domain/SiteSurvey.java`, `domain/SiteSurveyHistory.java`, `domain/SiteSurveyAttachment.java` | `main.tsx`, `OperationsPanel.tsx` | V27, V30, V35, V43, V58; `SurveyLifecycleIntegrationTest.java`, `SurveyAttachmentServiceTest.java` |
+| Quotations, approval, immutable revisions and PDFs | Requirements §6; SRS §§10.6, 12.2, 13.5 | `api/Controller.java`, `api/EnterpriseSaasController.java`, `service/QuotationRevisionService.java`, `service/ApprovalWorkflowService.java`, `domain/Quotation.java`, `domain/QuotationItem.java`, `domain/ApprovalWorkflow.java`, `domain/ApprovalInstance.java`, `domain/ApprovalDecision.java` | `main.tsx`, `RecordEditor.tsx`, `OperationsPanel.tsx` | V3, V9, V25–V27, V39, V53, V58; quotation and approval tests |
+| Orders, state transitions, idempotency and history | Requirements §7; SRS §§10.7, 12.1, 13.6 | `api/Controller.java`, `domain/CustomerOrder.java`, `domain/OrderItem.java`, `domain/OrderStatusHistory.java`, `domain/IdempotencyRecord.java`, corresponding repositories | `main.tsx`, `RecordEditor.tsx` | V1, V14, V26, V37, V43, V58; `Release12TenantIntegrationTest.java`, `Release3OperationsIntegrationTest.java` |
+| Inventory, warehouses, reservations, immutable ledger | Requirements §8; SRS §§10.8, 12.3, 13.6 | `api/Controller.java`, `api/EnterpriseSaasController.java`, `service/AppService.java`, `domain/Warehouse.java`, `domain/InventoryBalance.java`, `domain/InventoryReservation.java`, `domain/InventoryTransaction.java` | `main.tsx`, `OperationsPanel.tsx` | V1, V11–V14, V33–V34, V37, V43, V58; inventory and operations tests |
+| Installation, teams, schedules, checklists and commissioning | Requirements §9; SRS §§10.9, 12.1, 13.6 | `api/Controller.java`, `api/Phase2OperationsController.java`, `domain/InstallationJob.java`, `domain/InstallationTeam.java`, `domain/InstallationChecklistItem.java`, `domain/InstallationChecklistTemplate.java`, `domain/InstallationScheduleHistory.java` | `main.tsx`, `OperationsPanel.tsx` | V11–V12, V30, V37, V43, V58; operations and tenant integration tests |
+| Invoices, payments, refunds, gateway callbacks | Requirements §18; SRS §§10.10, 13.7, 17 | `api/FinanceController.java`, `api/PaymentGatewayController.java`, `api/PaymentGatewayWebhookController.java`, `service/FinanceService.java`, `service/PaymentGatewayCheckoutService.java`, `service/PaymentGatewayWebhookService.java`, `domain/Invoice.java`, `domain/InvoiceItem.java`, `domain/Payment.java`, `domain/Refund.java`, `domain/CreditNote.java` | `main.tsx`, `FinanceServicePanel.tsx` | V14, V18–V20, V25–V26, V37, V42–V43, V58; finance, webhook and tenant integration tests |
+| Warranty, service tickets, visits, SLA and private attachments | Requirements §10; SRS §10.11, §§12.4, 13.7 | `api/FinanceController.java`, `api/Phase2OperationsController.java`, `api/ServiceAttachmentController.java`, `api/ServiceCommentController.java`, `api/WarrantyClaimAttachmentController.java`, services and domain classes under `service/` and `domain/` | `main.tsx`, `FinanceServicePanel.tsx`, `OperationsPanel.tsx` | V18, V21–V22, V28, V31–V32, V36–V37, V43, V58; service, warranty and attachment tests |
+| Notifications and communications | Requirements §15; SRS §10.12, §§17–18 | `service/NotificationService.java`, `domain/NotificationDelivery.java`, `repo/NotificationDeliveryRepository.java`, `api/CustomerMessagingConsent.java` | Notification UI coverage is within `main.tsx` / role shell; dedicated inbox implementation is not established by the current file inventory | V23, V29, V37, V58; `NotificationServiceTest.java`; `docker-compose.yml` mail settings; background job inventory |
+| Reporting, dashboards and exports | Requirements §14; SRS §10.14, §§11–13 | `api/VendorAnalyticsController.java`, `api/BranchAnalyticsController.java`, `api/Phase2OperationsController.java`, `api/EnterpriseSaasController.java`, `service/VendorAnalyticsService.java`, `service/BranchAnalyticsService.java` | `VendorAnalyticsPanel.tsx`, `PlatformAnalyticsPanel.tsx`, `EnterpriseSaasPanel.tsx`, `main.tsx` | V17, V37, V43, V58; analytics and tenant export tests; release workflow |
+| CMS, blogs, banners, FAQs and published content | Requirements §16; SRS §§10.13, 11.1, 11.3, 13.8 | No dedicated CMS controller, blog domain entity, CMS service or blog repository appears in the inspected source tree | Public content is rendered by `PublicHome.tsx`; no CMS management panel is identified | No clearly attributable CMS/blog migration found in V1–V61; **required feature gap / keep** |
+| Integrations, webhooks, offline sync and secrets | SRS §§7, 10.12, 17–18 | `api/EnterpriseSaasController.java`, `api/OfflineSyncController.java`, `api/IntegrationAdapterCapabilitiesController.java`, `service/IntegrationManagementService.java`, `service/IntegrationSyncScheduler.java`, adapter and secret-provider classes; integration/offline domain and repository classes | `OfflineSyncPanel.tsx`, `EnterpriseSaasPanel.tsx` | V40–V44, V58, V61; `GenericHttpIntegrationAdapterTest.java`, `IntegrationManagementServiceTest.java`, `OfflineSyncServiceTest.java`; background job inventory |
+| Audit, observability, system health and administration | SRS §§10.15, 15–16, 20–22 | `api/EnterpriseSaasController.java`, `domain/AuditEvent.java`, `repo/AuditEventRepository.java`, `service/AuthenticationAuditService.java`, security and application classes | `EnterpriseSaasPanel.tsx`, `PlatformAnalyticsPanel.tsx`, `main.tsx` | V1, V17, V37, V44, V53, V59; `application.yml`; audit/security tests and workflows |
+
+## 2. API contract traceability
+
+The SRS §13 API tables are normative design references. Actual controller mappings are implemented primarily under `backend/src/main/java/com/saumyasolar/api/`. The actual route inventory must be taken from annotations, not inferred from the sample endpoint table.
+
+| SRS API group | SRS endpoints / contract family | Actual implementation mapping |
+|---|---|---|
+| Authentication | §13.2: register, login, refresh, logout, password recovery/reset, email verification, current user | `Controller.java` authentication mappings; `AuthCookieService.java`, `AuthLifecycleService.java`; actual MFA and CSRF routes are additional implemented routes |
+| Vendor / user / roles | §13.3: platform vendors, vendor profile, tenant users, permissions, custom roles | `Controller.java`, `EnterpriseSaasController.java`; role and tenant services |
+| Catalogue / packages | §13.4: products, categories, packages, public store catalogue | `Controller.java`, `CatalogAdminService.java`; actual route aliases include catalogue/product and package paths |
+| CRM / survey / quotation | §13.5: public enquiries, leads, assignments, site surveys, quotations, approval, customer decision, revisions | `Controller.java`, `SurveyLifecycleController.java`, `SurveyAttachmentController.java`; `QuotationRevisionService.java`, `ApprovalWorkflowService.java` |
+| Orders / inventory / installation | §13.6: order lifecycle/history, warehouse, stock transactions, installation teams/jobs/checklists/commissioning | `Controller.java`, `Phase2OperationsController.java`; corresponding domain/repository/service types |
+| Invoice / payment / service | §13.7: invoice, PDF, payment, refund, payment webhook, service request/visit/SLA | `FinanceController.java`, `PaymentGatewayController.java`, `PaymentGatewayWebhookController.java`, `ServiceAttachmentController.java`, `ServiceCommentController.java` |
+| Reporting / CMS / audit | §13.8: dashboards, reports, asynchronous exports, blogs, audit search | Analytics/report mappings in `VendorAnalyticsController.java`, `BranchAnalyticsController.java`, `Phase2OperationsController.java`, `EnterpriseSaasController.java`; CMS/blog endpoints not identified in current tree; audit mappings in `EnterpriseSaasController.java` |
+
+**Contract guardrail:** no route is to be deleted, renamed, consolidated or shimmed solely because its spelling differs from an SRS example. First reconcile actual mappings with the documented contract and frontend callers. Record any approved change in `CLEANUP_DECISIONS.md`.
+
+## 3. Screen traceability
+
+| SRS screen catalogue | Current frontend mapping | Notes |
+|---|---|---|
+| Public: Home, Products, Solar Packages, Calculator, Blog, About, Contact, Enquiry, Login/Register, Legal | `PublicHome.tsx`, `PublicSiteHeader.tsx`, `main.tsx`, `style.css` | Public shell and product/store content are present. Dedicated CMS-managed content and individual screen parity require validation; do not remove content routes/components on absence alone. |
+| Customer portal: dashboard, profile/addresses, enquiries, quotations, orders, invoices/receipts, payments, installations, warranties, service, documents, notifications | `main.tsx`, `CustomerAccountController.java` backend integration, `authenticatedFetch.ts` | Portal interactions are composed in the main application entry; customer-facing E2E and component tests are in `frontend/e2e/` and `frontend/tests/`. |
+| Vendor: dashboard, leads, customers, surveys, quotations, orders, catalogue, inventory, installation, finance, service, team/roles, reports, CMS, notifications, settings, audit | `main.tsx`, `RoleNavigation.tsx`, `RecordEditor.tsx`, `RoleManagementPanel.tsx`, `VendorAnalyticsPanel.tsx`, `OperationsPanel.tsx`, `FinanceServicePanel.tsx`, `EnterpriseSaasPanel.tsx`, `OfflineSyncPanel.tsx` | Navigation is role/permission-derived; backend authorization remains authoritative. |
+| Platform: dashboard, vendor onboarding, subscriptions, global templates/catalogue, platform users/support, feature config, audit/security, providers, job/integration monitoring, health/usage | `main.tsx`, `RoleNavigation.tsx`, `EnterpriseSaasPanel.tsx`, `PlatformAnalyticsPanel.tsx` | Feature-level parity is to be checked against the SRS; no screen is removable merely because the current panel composition is consolidated. |
+
+## 4. Database and migration traceability
+
+**Migration mechanism:** Flyway SQL migrations under `backend/src/main/resources/db/migration/`; current inventory is V1 through V61 (61 files). Application persistence is represented by JPA entities under `backend/src/main/java/com/saumyasolar/domain/` and repositories under `.../repo/`.
+
+| SRS database area | Entity / repository implementation | SQL implementation |
+|---|---|---|
+| Tenant, user, role, permission, global identity | `Tenant`, `AppUser`, `Role`, `Permission`; matching repositories | V1, V5, V10, V13, V16, V37, V51–V56, V59, V61 |
+| Customer, addresses, enquiries, leads and activity | `CustomerProfile`, `CustomerAddress`, `Enquiry`, `SalesLead`, `LeadHistory` | V1, V8, V37, V43, V49–V50, V58 |
+| Catalogue and packages | `ProductCategory`, `Product`, `SolarPackage`, `PackageItem` | V1, V5–V7, V16, V37, V57 |
+| Surveys, quotations and approval | `SiteSurvey`, survey attachments/history, `Quotation`, `QuotationItem`, approval entities | V3, V9, V25–V30, V35, V39, V58 |
+| Orders and inventory | `CustomerOrder`, `OrderItem`, `OrderStatusHistory`, `Warehouse`, `InventoryBalance`, `InventoryReservation`, `InventoryTransaction` | V1, V11–V14, V26, V33–V34, V37, V43, V58 |
+| Installation, warranty and service | installation entities, `Warranty`, `WarrantyClaim`, `ServiceRequest`, `ServiceVisit`, `ServiceSlaPolicy`, evidence entities | V11–V12, V18, V21–V22, V27–V28, V30–V32, V35–V36, V37, V43, V58 |
+| Finance and payments | `Invoice`, `InvoiceItem`, `Payment`, `Refund`, `CreditNote`, webhook entities | V14, V18–V20, V25–V26, V37, V42–V43, V58 |
+| Notifications, MFA and authentication controls | `NotificationDelivery`, `MfaChallenge`, refresh token and rate-limit persistence entities | V4, V23–V24, V29, V52–V53, V58–V60 |
+| SaaS, branches, integrations and offline sync | `TenantSubscription`, `SubscriptionPlan`, `Branch`, integration and offline sync entities | V37–V48, V58, V61 |
+| Tenant composite constraints and nullability | Tenant-qualified entity/repository relationships | V57, V58, V60; schema test/preflight SQL under `backend/src/test/resources/` |
+
+The exact table/column/constraint definition must be derived from the SQL itself during Phase 2; this matrix is not a substitute for the schema dump/diff.
+
+## 5. Configuration, delivery and tests
+
+| Concern | Implementation paths |
+|---|---|
+| Backend build/dependencies | `backend/pom.xml`, `backend/Dockerfile` |
+| Runtime properties | `backend/src/main/resources/application.yml` |
+| Test properties/schema | `backend/src/test/resources/application-test.yml`, `schema-test.sql`, tenant isolation SQL fixtures |
+| Local infrastructure | `docker-compose.yml` (MySQL, Mailpit, backend, frontend and private upload volumes) |
+| Frontend dependencies/build | `frontend/package.json`, `tsconfig.json`, `vite.config.ts`, `vitest.config.ts`, `playwright.config.ts`, `frontend/Dockerfile`, `frontend/nginx.conf` |
+| CI | `.github/workflows/release-validation.yml`, `.github/workflows/phase-2-production-preflight.yml` |
+| Auditing scripts | `scripts/audit/check-permission-catalogue.py`, `scripts/audit/scan-async-workers.sh`, `scripts/audit/scan-legacy-authz.sh` |
+| Tests | `backend/src/test/java/com/saumyasolar/`, `frontend/tests/`, `frontend/e2e/` |
+| Local startup helper | `start-clean.ps1` (usage/reference check still required before any removal) |
+
+## 6. Phase 0 disposition
+
+- No application source, dependency, environment property, script, test fixture or SQL file has been approved for deletion in Phase 0.
+- The 61 existing migrations are candidates for **consolidation**, not evidence of disposable schema objects. All schema effects must be retained in the baseline unless the SRS/HLD explicitly does not require them and the schema diff justifies the omission.
+- The SRS requires asynchronous behavior for notifications where practical, large exports and long-running reports, and defines tenant-aware background jobs/events. Those requirements must remain; the specific implementation choice is an open decision.
+- CMS/blog capability is required by both source documents but no dedicated backend CMS implementation is visible in the current tree. This is a gap to resolve, not a deletion candidate.
