@@ -6,6 +6,7 @@ import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.AuditEventRepository;
 import com.saumyasolar.repo.TenantSubscriptionRepository;
 import com.saumyasolar.repo.TenantRepository;
+import com.saumyasolar.security.TenantExecutionContext;
 import jakarta.transaction.Transactional;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -30,8 +31,9 @@ public class SubscriptionExpiryScheduler {
     public void expireSubscriptions() {
         Instant now = Instant.now();
         for (Tenant tenant : tenants.findAll()) {
+            try (var scope = TenantExecutionContext.open(tenant.getId())) {
             List<TenantSubscription> expired = subscriptions.findByTenantIdAndStatusInAndEndsAtBefore(
-                    tenant.getId(), List.of("TRIAL", "ACTIVE", "PAST_DUE"), now);
+                    TenantExecutionContext.requireTenantId(), List.of("TRIAL", "ACTIVE", "PAST_DUE"), now);
             for (TenantSubscription s : expired) {
             s.setStatus("EXPIRED");
             s.setUpdatedAt(now);
@@ -46,6 +48,7 @@ public class SubscriptionExpiryScheduler {
             event.setOutcome("SUCCESS");
             event.setCreatedAt(now);
             audits.save(event);
+            }
             }
         }
     }
