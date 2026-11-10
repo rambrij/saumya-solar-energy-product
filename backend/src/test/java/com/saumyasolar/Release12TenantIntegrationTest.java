@@ -1364,6 +1364,34 @@ class Release12TenantIntegrationTest {
     }
 
     @Test
+    void asynchronousExportStatusAndDownloadAreRestrictedToTheRequestingPrincipal() throws Exception {
+        String ownerToken = accessToken("admin@saumya.local", "Admin@123");
+        String created = mvc.perform(post("/api/v1/exports")
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reportType\":\"OPERATIONS\",\"format\":\"CSV\"}"))
+                .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
+        String exportId = json.readTree(created).get("id").asText();
+
+        AppUser secondExporter = createPermissionMatrixUser("export-second-requester", List.of("REPORT_EXPORT"));
+        String secondExporterToken = accessToken(secondExporter.getEmail(), "Matrix-Password-2026");
+        mvc.perform(get("/api/v1/exports/" + exportId).header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/exports/" + exportId).header("Authorization", "Bearer " + secondExporterToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/exports/" + exportId + "/download")
+                        .header("Authorization", "Bearer " + secondExporterToken))
+                .andExpect(status().isNotFound());
+
+        String customerToken = accessToken("customer@saumya.local", "Customer@123");
+        mvc.perform(get("/api/v1/exports/" + exportId).header("Authorization", "Bearer " + customerToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/exports/" + exportId + "/download")
+                        .header("Authorization", "Bearer " + customerToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void warrantyClaimListCreateAndDecisionAreTenantAndCustomerScoped() throws Exception {
         var customerA = createCustomer(vendorTenantId, "claim-customer-a");
         var customerB = createCustomer(vendorTenantId, "claim-customer-b");
