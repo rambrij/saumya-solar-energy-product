@@ -22,7 +22,7 @@ The status-before column means the state found at the start of the audit/remedia
 | UNVERIFIABLE | 2 | 0 |
 | **Total** | **18** | **18** |
 
-No NOT MET designation is used where an implementation exists but is incomplete; those are PARTIAL. The two initially UNVERIFIABLE database findings were upgraded to PARTIAL after directly inspecting V57/V58 and their preflight SQL. No item is MET because the newest remediation commit's CI run is still in progress; a previous branch head did pass all four release-validation jobs (workflow 42818724332).
+No NOT MET designation is used where an implementation exists but is incomplete; those are PARTIAL. The two initially UNVERIFIABLE database findings were upgraded to PARTIAL after directly inspecting V57/V58 and their preflight SQL. No item is MET because the complete end-to-end security requirements still have residual coverage gaps, even though run 42821337890 passed all four jobs and the newer run 42821756695 has passed backend/frontend/MySQL jobs. The latest browser security job remains in progress.
 
 ## 2. Requirement extraction and traceability matrix
 
