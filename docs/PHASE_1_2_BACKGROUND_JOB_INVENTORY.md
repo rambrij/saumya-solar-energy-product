@@ -20,17 +20,22 @@
 - `backend/src/main/java/com/saumyasolar/service/ServiceSlaScheduler.java`: explicit per-tenant scope.
 - `backend/src/main/java/com/saumyasolar/service/WarrantyExpiryScheduler.java`: explicit per-tenant scope.
 - `backend/src/main/java/com/saumyasolar/service/SubscriptionExpiryScheduler.java`: explicit per-tenant scope.
+- `backend/src/main/java/com/saumyasolar/service/NotificationService.java`: tenant-scoped notification retry and atomic claim.
+- `backend/src/main/java/com/saumyasolar/repo/NotificationDeliveryRepository.java`: `claimFailedDelivery(id, tenantId, now)` atomic tenant-qualified claim.
 - `backend/src/main/java/com/saumyasolar/service/AuthenticationRateLimitCleanup.java`: global expired-bucket cleanup.
 - `backend/src/test/java/com/saumyasolar/TenantSchedulerConcurrencyIntegrationTest.java`: four MySQL 8.4 integration tests for concurrent integration claims and scheduler behavior.
-- Latest code workflow `42821756695`: backend 163 tests passed, frontend build passed, MySQL migration validation passed; Spring Boot/browser job was still running at the time of inventory.
+- `backend/src/test/java/com/saumyasolar/security/TenantExecutionContextTest.java`: nested-scope, exception and single-thread executor reuse cleanup.
+- `backend/src/test/java/com/saumyasolar/service/NotificationServiceTest.java`: tenant context during retry and duplicate atomic-claim skip.
+- A source scan of all 41 files in `backend/src/main/java/com/saumyasolar/service/` found six `@Scheduled` methods/classes listed above and no `@Async`, `ExecutorService`, `ThreadPoolTaskExecutor`, `CompletableFuture` or `new Thread(...)` usage in that service package. This does not yet include all non-service components, event listeners, framework configuration or external queue consumers.
+- Workflow `42828934287` passed all four jobs, including 171 backend tests, MySQL 8.4 schema inventory and Playwright browser security tests.
 
 ## Remaining inventory work
 
-1. Complete a source-wide scan for executor submissions, application events with async listeners, export/report workers, notification delivery workers, and third-party queue consumers. The repository tree identifies the four scheduled tenant-aware components above; a reliable exhaustive `@Async`/executor symbol inventory is not established yet.
+1. Complete the remaining scan outside the service package: all backend Java packages, application event listeners, Spring executor configuration, export/report paths, and external queue consumers. The 41-file service-package scan found no `@Async` or executor submissions, but this is not yet a repository-wide proof.
 2. Added `TenantExecutionContextTest` nested exception and reused-single-thread cleanup cases; continue cancellation and all worker exit-path tests.
 3. Notification retries now use an atomic tenant-qualified claim. Add MySQL multi-instance duplicate-delivery tests and idempotency tests for every integration/notification adapter.
 4. Do not pass a tenant ID from a browser or untrusted payload directly into the context; resolve it from a trusted tenant row/job record first.
 
 ## Acceptance
 
-This inventory is a partial, evidence-based list, not a claim that no other asynchronous work exists. Phase 2 job-scoping cannot be marked MET until the source-wide worker inventory and context-cleanup tests are complete.
+This inventory is a partial, evidence-based list, not a claim that no other asynchronous work exists. Phase 2 job-scoping cannot be marked MET until the repository-wide worker inventory and all worker failure/cancellation/idempotency tests are complete.
