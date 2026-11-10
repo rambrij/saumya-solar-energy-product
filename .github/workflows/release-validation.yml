@@ -22,6 +22,8 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - name: Reject external messaging infrastructure references
+        run: bash scripts/audit/scan-external-messaging.sh
       - name: Scan repository asynchronous execution boundaries
         run: |
           bash scripts/audit/scan-async-workers.sh | tee async-worker-inventory.txt
