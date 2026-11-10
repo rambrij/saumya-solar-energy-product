@@ -187,15 +187,18 @@ class SurveyLifecycleIntegrationTest {
     }
 
     @Test
-    void serviceViewerWithoutAssignmentPermissionCannotReadAnotherEngineersSurvey() {
+    void nonDispatcherSurveyViewerCannotReadAnotherUsersSurveyButCanReadTheirAssignedSurvey() {
         SiteSurvey survey = surveys.findById(surveyId).orElseThrow();
         survey.setAssignedUserId(actorId);
         surveys.saveAndFlush(survey);
-        Principal otherEngineer = new Principal(UUID.randomUUID(), tenantId, "other-engineer@example.test",
-                "VENDOR", Set.of("CUSTOM_SERVICE_ROLE"), Set.of("SURVEY_VIEW", "SERVICE_VIEW"), 0);
+        Principal assignedEngineer = new Principal(actorId, tenantId, "assigned-engineer@example.test",
+                "VENDOR", Set.of("CUSTOM_SERVICE_ROLE"), Set.of("SURVEY_VIEW", "SURVEY_COMPLETE"), 0);
+        Principal otherSalesUser = new Principal(UUID.randomUUID(), tenantId, "other-sales@example.test",
+                "VENDOR", Set.of("CUSTOM_SALES_ROLE"), Set.of("SURVEY_VIEW", "SURVEY_COMPLETE"), 0);
 
+        assertEquals(surveyId, lifecycle.get(surveyId, assignedEngineer).getId());
         ResponseStatusException hidden = assertThrows(ResponseStatusException.class,
-                () -> lifecycle.get(surveyId, otherEngineer));
+                () -> lifecycle.get(surveyId, otherSalesUser));
 
         assertEquals(HttpStatus.NOT_FOUND, hidden.getStatusCode());
     }
