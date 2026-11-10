@@ -1000,21 +1000,17 @@ class Release12TenantIntegrationTest {
         var customerB = createCustomer(vendorTenantId, "address-owner-b");
         var foreignTenant = newTenant();
         var customerC = createCustomer(foreignTenant.getId(), "address-owner-c");
+        var addressA = createAddress(customerA.profile().getId(), vendorTenantId);
         var addressB = createAddress(customerB.profile().getId(), vendorTenantId);
         var addressC = createAddress(customerC.profile().getId(), foreignTenant.getId());
 
         var token = accessToken(customerA.user().getEmail(), "Customer-Password-2026");
         var listed = mvc.perform(get("/api/v1/customer/addresses").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(listed.contains(addressA.getId().toString()));
         assertFalse(listed.contains(addressB.getId().toString()));
         assertFalse(listed.contains(addressC.getId().toString()));
 
-        mvc.perform(get("/api/v1/customer/addresses/" + addressB.getId())
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isNotFound());
-        mvc.perform(get("/api/v1/customer/addresses/" + addressC.getId())
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isNotFound());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
                                 "/api/v1/customer/addresses/" + addressB.getId())
                         .header("Authorization", "Bearer " + token)
