@@ -35,7 +35,7 @@ jobs:
             fi
           done
           echo "Production database connection configuration is present."
-      - name: Run V57/V58 data-integrity checks only (no migration DDL)
+      - name: Run V57/V58/V60 tenant data-integrity checks only (no migration DDL)
         env:
           MYSQL_HOST: ${{ secrets.PROD_DB_HOST }}
           MYSQL_TCP_PORT: ${{ secrets.PROD_DB_PORT }}
