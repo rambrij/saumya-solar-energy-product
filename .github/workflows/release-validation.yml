@@ -349,6 +349,18 @@ jobs:
       - name: Package backend
         working-directory: backend
         run: mvn --batch-mode --no-transfer-progress clean package -DskipTests
+      - name: Run concurrent SLA, warranty and integration scheduler tests on MySQL 8.4
+        working-directory: backend
+        env:
+          PHASE2_MYSQL_IT_URL: jdbc:mysql://127.0.0.1:3306/solar_phase2_scheduler_it?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+          PHASE2_MYSQL_IT_USER: root
+          PHASE2_MYSQL_IT_PASSWORD: rootpass
+          JWT_SECRET: ci-only-secret-with-at-least-sixty-four-characters-for-hmac-sha256-signing-key
+          CORS_ORIGINS: http://localhost:5173
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass -e "CREATE DATABASE solar_phase2_scheduler_it"
+          mvn --batch-mode --no-transfer-progress -Dtest=TenantSchedulerConcurrencyIntegrationTest test
+
       - name: Start application and verify health
         working-directory: backend
         env:
