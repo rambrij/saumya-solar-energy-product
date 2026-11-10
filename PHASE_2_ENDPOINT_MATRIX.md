@@ -263,3 +263,25 @@
 6. For background jobs, run concurrent workers against MySQL 8.4 and assert state changes and side effects are tenant-scoped and idempotent.
 
 **Current gate:** The dynamic authentication test is broad, but the endpoint-specific CRUD matrix is not yet fully green. The remaining rows must be completed or explicitly deferred with release-owner acceptance before production approval.
+
+
+## Branch-assigned endpoint coverage added after initial inventory
+
+The shared branch filter is now applied to `FinanceService.listInvoices`, `FinanceService.listTickets` and `OperationsService.installations`. The branch integration test now exercises these in addition to the five CRM lists and inventory routes.
+
+| Branch-bearing resource | List endpoint | Expected membership behavior | Test evidence |
+|---|---|---|---|
+| Enquiries | `GET /api/v1/enquiries` | Assigned branch and null-branch legacy rows only | `Release12TenantIntegrationTest.branchAssignedMemberListsOnlyAssignedBranchEnquiriesLeadsSurveysQuotationsAndOrders` |
+| Leads | `GET /api/v1/leads` | Assigned branch after assigned-sales scope | Same test |
+| Site surveys | `GET /api/v1/surveys` | Assigned engineer and assigned branch | Same test |
+| Quotations | `GET /api/v1/quotations` | Assigned/created quotation and assigned branch | Same test |
+| Orders | `GET /api/v1/orders` | Orders from visible quotations and assigned branch | Same test |
+| Invoices | `GET /api/v1/invoices` | Assigned branch after finance permission | Same test |
+| Service requests | `GET /api/v1/service-requests` | Existing engineer/assignment scope intersected with branch membership | Same test |
+| Installation jobs | `GET /api/v1/installations` | Existing engineer/assignment scope intersected with branch membership | Same test |
+| Warehouses | `GET /api/v1/warehouses` | Only assigned branch warehouses plus legacy unassigned warehouses | Same test |
+| Inventory balances | `GET /api/v1/inventory/balances` | Rows only for visible warehouses | Same test |
+| Inventory ledger | `GET /api/v1/inventory/transactions` | Immutable rows only for visible warehouses | Same test |
+| Branch analytics | `GET /api/v1/branches/{branchId}/analytics` | Assigned branch allowed; another branch in same tenant returns 404 | Same test |
+
+The endpoint-specific CRUD matrix remains Partial. The dynamic handler test proves the authentication gate for non-public routes, not the full cross-tenant mutation matrix.
