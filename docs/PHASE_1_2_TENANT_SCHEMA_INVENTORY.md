@@ -28,9 +28,9 @@ The backend domain model includes the following tenant/business areas. The entit
 | CRM and sales | CustomerProfile, CustomerAddress, Enquiry, SalesLead, LeadHistory, SiteSurvey, SiteSurveyHistory, Quotation, QuotationItem | V58 covers many core links; customer address and all enquiry links need schema inventory |
 | Orders and inventory | CustomerOrder, OrderItem, OrderStatusHistory, Warehouse, InventoryBalance, InventoryReservation, InventoryTransaction | V58 covers core operational relationships; verify every nullable FK and tenant NOT NULL |
 | Installation and service | InstallationTeam, InstallationJob, InstallationChecklistTemplate, InstallationChecklistItem, InstallationScheduleHistory, EngineerProfile, ServiceRequest, ServiceVisit, ServiceEvent, ServiceSlaPolicy, ServiceAttachment, ServiceComment | V58 covers selected operational links; checklist template/SLA and all auxiliary links require explicit review |
-| Finance and warranty | Invoice, InvoiceItem, InvoiceSequence, Payment, PaymentWebhookEvent, PaymentGatewayWebhookEvent, Refund, CreditNote, Warranty, WarrantyClaim, WarrantyClaimAttachment | V58 covers major finance/service relationships; inspect sequence/webhook/provider/idempotency tables |
+| Finance and warranty | Invoice, InvoiceItem, InvoiceSequence, Payment, PaymentWebhookEvent, Refund, CreditNote, Warranty, WarrantyClaim, WarrantyClaimAttachment | V58 covers major finance/service relationships; inspect sequence/webhook/provider/idempotency tables |
 | Integrations and offline | IntegrationConnection, IntegrationSyncJob, IntegrationWebhookEvent, OfflineSyncOperation, OfflineSyncAttachment, IdempotencyRecord, IntegrationSecretReference | V58 covers secret reference and offline links; integration connection/job/webhook FKs and tenant nullability need review |
-| Audit and notifications | AuditEvent, NotificationDelivery, CustomerMessagingConsent | V58 covers selected actor/tenant relationships; verify event/consent ownership and retention tables |
+| Audit and notifications | AuditEvent, NotificationDelivery | V58 covers selected actor/tenant relationships; verify event/consent ownership and retention tables |
 
 ## 4. Known gaps to close
 
