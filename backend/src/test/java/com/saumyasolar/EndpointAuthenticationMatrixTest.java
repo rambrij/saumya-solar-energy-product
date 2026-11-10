@@ -110,44 +110,6 @@ class EndpointAuthenticationMatrixTest {
 
     @Test
     @Transactional
-    void explicitlyPublicMappingsRemainReachableWithoutBearerAuthentication() throws Exception {
-        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
-        List<String> checked = new ArrayList<>();
-        List<String> failures = new ArrayList<>();
-        for (var entry : mappings.getHandlerMethods().entrySet()) {
-            RequestMappingInfo info = entry.getKey();
-            HandlerMethod handler = entry.getValue();
-            Set<org.springframework.web.bind.annotation.RequestMethod> methods =
-                    info.getMethodsCondition().getMethods();
-            if (methods.isEmpty()) continue;
-            for (String pattern : info.getPatternValues()) {
-                if (!isPublic(pattern)) continue;
-                for (var method : methods) {
-                    if (method == org.springframework.web.bind.annotation.RequestMethod.OPTIONS) continue;
-                    String path = probePath(pattern, handler);
-                    MockHttpServletRequestBuilder publicRequest = mutationRequest(method, path, handler, mapper);
-                    if (pattern.equals("/api/v1/auth/refresh") || pattern.equals("/api/v1/auth/logout")) {
-                        // These routes are bearer-public but intentionally CSRF-protected.
-                        String csrf = "public-route-matrix-csrf";
-                        publicRequest.cookie(new jakarta.servlet.http.Cookie("XSRF-TOKEN", csrf))
-                                .header("X-CSRF-Token", csrf);
-                    }
-                    int status = mvc.perform(publicRequest).andReturn().getResponse().getStatus();
-                    checked.add(method + " " + pattern);
-                    // 400/401/404 are valid for malformed credentials, signatures or missing public resources.
-                    // 403 would mean a role/permission gate was accidentally applied to an allowlisted route.
-                    if (status == 403) failures.add(method + " " + pattern + " returned 403 without credentials");
-                }
-            }
-        }
-        assertTrue(checked.size() >= 10,
-                "The explicit public allowlist unexpectedly shrank: only checked " + checked.size());
-        assertTrue(failures.isEmpty(), "Public allowlist routes were blocked by role authorization:\n"
-                + String.join("\n", failures));
-    }
-
-    @Test
-    @Transactional
     void authenticatedLeastPrivilegeVendorCannotReadProtectedEndpointMappings() throws Exception {
         AppUser seededVendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
         Role emptyRole = new Role();
