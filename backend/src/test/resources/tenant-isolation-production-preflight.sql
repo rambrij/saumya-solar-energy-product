@@ -71,8 +71,8 @@ BEGIN
                                        OR (tenant_id IS NOT NULL AND account_type = 'PLATFORM')) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Tenant integrity blocked: app_user tenant_id does not match platform account_type';
     END IF;
-    IF EXISTS (SELECT 1 FROM role WHERE (tenant_id IS NULL AND name NOT IN ('PLATFORM_SUPER_ADMIN','PLATFORM_SUPPORT'))
-                                   OR (tenant_id IS NOT NULL AND name IN ('PLATFORM_SUPER_ADMIN','PLATFORM_SUPPORT'))) THEN
+    IF EXISTS (SELECT 1 FROM role WHERE (tenant_id IS NULL AND name NOT IN ('PLATFORM_SUPER_ADMIN','PLATFORM_SUPPORT','CUSTOMER'))
+                                   OR (tenant_id IS NOT NULL AND name IN ('PLATFORM_SUPER_ADMIN','PLATFORM_SUPPORT','CUSTOMER'))) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Tenant integrity blocked: role tenant_id does not match platform role classification';
     END IF;
     IF EXISTS (SELECT 1 FROM audit_event WHERE tenant_id IS NULL AND (actor_type IS NULL OR actor_type <> 'PLATFORM')) THEN
