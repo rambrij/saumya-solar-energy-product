@@ -73,3 +73,11 @@ Application-level route buckets have now been added for `/api/v1/public/{storeSl
 - The GitHub Actions full validation workflow was triggered for commit `1a79b56244af6aa23bd58f15f835766574eae908`; at report update time its run was still in progress. Do not mark this requirement MET until the backend job passes.
 - Application rate limits now also cover public enquiry/export/webhook routes; production ingress/WAF configuration and distributed concurrency verification remain Open.
 - No applied migration was changed and no schema migration was needed.
+
+
+## Additional concurrency verification — 2026-11-10
+
+- Added `AuthenticationRateLimitConcurrencyIntegrationTest.concurrentRequestsShareTheAtomicAccountBucketAcrossWorkerThreads`, using the actual MySQL-backed filter and a shared account bucket with parallel worker threads. It asserts the account bucket never allows more than the configured limit.
+- The SQL increment uses atomic UPDATE and handles concurrent first inserts with a duplicate-key retry. This is a shared-database concurrency test, not proof of independent-node behavior behind production ingress.
+- Test commit: `eb19f8bb` (assertion refinement: `c970dfaf`). Latest-head CI for subsequent branch commits is running; do not mark concurrency MET until it passes.
+- Remaining: validate real multi-instance deployment/DB isolation, proxy CIDRs and WAF limits; choose numeric thresholds and monitor rate-limit bucket contention.
