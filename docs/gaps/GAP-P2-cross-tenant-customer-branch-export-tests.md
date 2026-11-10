@@ -79,3 +79,11 @@ Still open: full customer resource family matrix, all branch CRUD/assignment ope
 - Extracted the assignment predicate into package-visible assertAssignedTicketAccess and reused it from ensureTicketAccess; closeTicket, pauseSla and resumeSla now call ensureTicketAccess before mutation. A SERVICE_ASSIGN dispatcher retains tenant-wide access; a non-dispatcher must be the ticket's assigned engineer.
 - Added regression cases in FinanceServiceAssignedVisitScopeTest for unassigned engineer denial, assigned engineer access and dispatcher access.
 - This closes the listed ticket mutation path only. Service engineer authorization across every endpoint, export and download remains open pending the complete endpoint/resource matrix and CI.
+
+
+### Branch lifecycle and permission-scope test expansion — 2026-11-10
+
+- Added an integration test that verifies branch-management denial for a sales employee and Vendor Admin create/list/update, member assign/list/remove, deactivate and reactivate operations.
+- Replaced role-name gates in service comments, offline service comments, survey review/reassignment and warranty evidence access with the corresponding fine-grained permissions. Assigned-service visibility remains constrained unless the principal has SERVICE_ASSIGN.
+- Existing customer negative tests still cover addresses, orders, invoices, service tickets, warranty claims and claim evidence; existing exports cover operations CSV/XLSX/PDF and invoice PDF. This is not yet every customer resource family, every branch mutation, every report/export, or every attachment family.
+- No claim is made that all export and file-download paths have been exhausted. The endpoint inventory remains the checklist and must be closed against every exposed download/attachment route.
