@@ -9,5 +9,8 @@ export default defineConfig({
     baseURL: process.env.E2E_BASE_URL || 'http://localhost:5173',
     browserName: 'chromium',
     headless: true,
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
   },
 });
