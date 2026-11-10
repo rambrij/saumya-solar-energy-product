@@ -3,10 +3,14 @@ package com.saumyasolar;
 import com.saumyasolar.domain.AppUser;
 import com.saumyasolar.domain.Role;
 import com.saumyasolar.domain.Quotation;
+import com.saumyasolar.domain.Enquiry;
+import com.saumyasolar.domain.SalesLead;
 import com.saumyasolar.repo.AppUserRepository;
 import com.saumyasolar.repo.RoleRepository;
 import com.saumyasolar.repo.PermissionRepository;
 import com.saumyasolar.repo.QuotationRepository;
+import com.saumyasolar.repo.EnquiryRepository;
+import com.saumyasolar.repo.SalesLeadRepository;
 import com.saumyasolar.security.JwtService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.mock.web.MockMultipartFile;
@@ -64,8 +68,12 @@ class EndpointAuthenticationMatrixTest {
     @Autowired RoleRepository roles;
     @Autowired PermissionRepository permissions;
     @Autowired QuotationRepository quotations;
+    @Autowired EnquiryRepository enquiries;
+    @Autowired SalesLeadRepository leads;
     private UUID revisionFixtureId;
     private UUID acceptedQuotationFixtureId;
+    private UUID enquiryFixtureId;
+    private UUID leadFixtureId;
     @Autowired JwtService jwt;
     @Autowired PasswordEncoder passwordEncoder;
 
@@ -179,6 +187,28 @@ class EndpointAuthenticationMatrixTest {
         quotations.saveAndFlush(acceptedQuotationFixture);
         acceptedQuotationFixtureId = acceptedQuotationFixture.getId();
 
+        Enquiry enquiryFixture = new Enquiry();
+        enquiryFixture.setId(UUID.randomUUID());
+        enquiryFixture.setTenantId(seededVendor.getTenantId());
+        enquiryFixture.setName("Endpoint matrix enquiry");
+        enquiryFixture.setEmail("matrix-enquiry-" + UUID.randomUUID() + "@example.test");
+        enquiryFixture.setPhone("9000000000");
+        enquiryFixture.setPropertyType("RESIDENTIAL");
+        enquiryFixture.setStatus("NEW");
+        enquiryFixture.setCreatedAt(Instant.now());
+        enquiries.saveAndFlush(enquiryFixture);
+        enquiryFixtureId = enquiryFixture.getId();
+
+        SalesLead leadFixture = new SalesLead();
+        leadFixture.setId(UUID.randomUUID());
+        leadFixture.setTenantId(seededVendor.getTenantId());
+        leadFixture.setEnquiryId(enquiryFixture.getId());
+        leadFixture.setStage("NEW");
+        leadFixture.setPriority("MEDIUM");
+        leadFixture.setCreatedAt(Instant.now());
+        leads.saveAndFlush(leadFixture);
+        leadFixtureId = leadFixture.getId();
+
         Map<String, String> tokens = Map.of(
                 "VENDOR", "Bearer " + jwt.issue(vendor),
                 "PLATFORM", "Bearer " + jwt.issue(platform),
@@ -241,6 +271,12 @@ class EndpointAuthenticationMatrixTest {
         }
         if ("VENDOR".equals(accountType) && pattern.contains("/quotations/") && pattern.contains("/convert-to-order")) {
             path = path.replace("00000000-0000-4000-8000-000000000001", acceptedQuotationFixtureId.toString());
+        }
+        if ("VENDOR".equals(accountType) && pattern.startsWith("/api/v1/enquiries/") && pattern.endsWith("/convert")) {
+            path = path.replace("00000000-0000-4000-8000-000000000001", enquiryFixtureId.toString());
+        }
+        if ("VENDOR".equals(accountType) && pattern.startsWith("/api/v1/leads/{id}")) {
+            path = path.replace("00000000-0000-4000-8000-000000000001", leadFixtureId.toString());
         }
         return path;
     }
