@@ -60,11 +60,13 @@
 
 ## Inventory artifact
 
-See `docs/PHASE_1_2_BACKGROUND_JOB_INVENTORY.md` for the current evidence-based inventory of the four tenant-aware scheduled jobs and the global authentication-rate-limit cleanup task. The document explicitly records the incomplete async/executor/export/notification worker scan.
+See `docs/PHASE_1_2_BACKGROUND_JOB_INVENTORY.md` for the evidence-based scheduled/worker inventory. `NotificationService.retryFailedDeliveries` now opens `TenantExecutionContext` for each persisted tenant-owned delivery and skips null-tenant records. `TenantExecutionContextTest` tests nested exception and single-thread executor reuse cleanup; `NotificationServiceTest` verifies notification retry sees the correct tenant context and clears it afterward. Commits `f11581a3`, `597ebb3f`, `7d65478e`, `df73efd3`, `ed0780af`.
+
+Still open: complete all `@Scheduled`, `@Async`, executor, queue, export and report worker discovery; add atomic tenant-qualified claim/idempotency to notification retries to prevent duplicate multi-instance sends; verify cancellation, retry and all failure paths.
 
 ## Status
 
-**PARTIAL — scheduled tenant context is implemented in the four identified tenant-aware schedulers and selected MySQL concurrency tests exist.** The full asynchronous/worker inventory and exception/thread-reuse context-leak coverage remain open. Latest-head workflow 42821756695 passed backend (163 tests), frontend build and MySQL validation; its Spring Boot/browser job remains in progress.
+**PARTIAL — scheduled tenant context is implemented in the four identified tenant-aware schedulers and selected MySQL concurrency tests exist.** The full asynchronous/worker inventory and exception/thread-reuse context-leak coverage remain open. Latest-head workflow 42826862684 for commit `7d65478e` is running; no passing result is claimed yet.
 
 
 Latest-head verification update (2026-11-10): workflow 42821756695 passed backend (163 tests), frontend production build and MySQL 8.4 migration validation; Spring Boot/browser Playwright job remains in progress.
