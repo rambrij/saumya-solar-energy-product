@@ -52,6 +52,48 @@ class NotificationServiceTest {
     }
 
     @Test
+    void scheduledRecoveryProcessesPersistedPendingNotificationAfterRestart() {
+        JavaMailSender sender = mock(JavaMailSender.class);
+        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        UUID tenantId = UUID.randomUUID();
+        NotificationDelivery record = new NotificationDelivery();
+        record.setId(UUID.randomUUID());
+        record.setTenantId(tenantId);
+        record.setUserId(UUID.randomUUID());
+        record.setChannel("EMAIL");
+        record.setRecipient("customer@example.test");
+        record.setSubject("Recovered notification");
+        record.setMessageBody("Persisted before event publication");
+        record.setStatus("PENDING");
+        record.setAttemptCount(0);
+        record.setCreatedAt(Instant.now().minusSeconds(120));
+        when(repository.findDistinctTenantIdsForPending(any())).thenReturn(java.util.List.of(tenantId));
+        when(repository.findTop50ByTenantIdAndStatusAndCreatedAtBeforeOrderByCreatedAtAsc(eq(tenantId), eq("PENDING"), any()))
+                .thenReturn(java.util.List.of(record));
+        when(repository.claimPendingDelivery(eq(record.getId()), eq(tenantId), any(), any())).thenReturn(1);
+        when(repository.findByIdAndTenantId(record.getId(), tenantId)).thenReturn(java.util.Optional.of(record));
+        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doAnswer(invocation -> {
+            assertEquals(tenantId, com.saumyasolar.security.TenantExecutionContext.requireTenantId());
+            return null;
+        }).when(sender).send(any(SimpleMailMessage.class));
+
+        NotificationService service = new NotificationService(
+                sender, repository, null, "no-reply@example.test", "http://localhost:3000",
+                "", "", "", "", publisher
+        );
+        service.retryFailedDeliveries();
+
+        verify(sender).send(any(SimpleMailMessage.class));
+        assertEquals("DELIVERED", record.getStatus());
+        assertNotNull(record.getSentAt());
+        verify(repository).claimPendingDelivery(eq(record.getId()), eq(tenantId), any(), any());
+        assertThrows(IllegalStateException.class,
+                com.saumyasolar.security.TenantExecutionContext::requireTenantId);
+    }
+
+    @Test
     void sendsAndRecordsPasswordResetEmail() {
         JavaMailSender sender = mock(JavaMailSender.class);
         NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);

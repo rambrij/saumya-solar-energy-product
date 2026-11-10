@@ -86,6 +86,24 @@ class ExportServiceTest {
     }
 
     @Test
+    void scheduledRecoveryRepublishesPersistedPendingExportJobs() {
+        UUID tenant = UUID.randomUUID();
+        ExportJob pending = new ExportJob();
+        pending.setId(UUID.randomUUID());
+        pending.setTenantId(tenant);
+        pending.setStatus("PENDING");
+        when(jobs.findDistinctTenantIdsForRecovery(any())).thenReturn(java.util.List.of(tenant));
+        when(jobs.findRecoverableByTenant(eq(tenant), any(), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(java.util.List.of(pending));
+
+        service().recoverAndExpire();
+
+        verify(events).publishEvent(argThat(event -> event instanceof ExportRequestedEvent requested
+                && pending.getId().equals(requested.exportId()) && tenant.equals(requested.tenantId())));
+        verify(jobs, never()).claim(any(), any(), any(), any());
+    }
+
+    @Test
     void statusLookupIsRestrictedToTheRequestingTenantAndUser() {
         UUID tenant = UUID.randomUUID(), user = UUID.randomUUID(), id = UUID.randomUUID();
         when(jobs.findByIdAndTenantIdAndRequestedBy(id, tenant, user)).thenReturn(Optional.empty());
