@@ -1159,7 +1159,9 @@ class Release12TenantIntegrationTest {
         mvc.perform(patch("/api/v1/products/" + product.getId())
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"Tampered foreign product\",\"price\":1}"))
+                        .content("""
+                                {"categoryId":"%s","sku":"TAMPERED","name":"Tampered foreign product","price":1,"purchasePrice":0,"discountPercent":0,"taxPercent":0,"reorderLevel":0}
+                                """.formatted(category.getId())))
                 .andExpect(status().isNotFound());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/products/" + product.getId())
                         .header("Authorization", "Bearer " + token))
@@ -1175,7 +1177,9 @@ class Release12TenantIntegrationTest {
         mvc.perform(patch("/api/v1/packages/" + solarPackage.getId())
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"Tampered foreign package\"}"))
+                        .content("""
+                                {"code":"TAMPERED","name":"Tampered foreign package","capacityKw":1,"packageType":"RESIDENTIAL","basePrice":1,"items":[{"productId":"%s","quantity":1}]}
+                                """.formatted(product.getId())))
                 .andExpect(status().isNotFound());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/packages/" + solarPackage.getId())
                         .header("Authorization", "Bearer " + token))
