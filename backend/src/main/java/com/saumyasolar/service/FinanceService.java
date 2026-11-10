@@ -50,6 +50,8 @@ public class FinanceService {
     private final NotificationService notifications;
     @Autowired(required = false)
     private IntegrationManagementService integrationManagement;
+    @Autowired(required = false)
+    private EnterpriseSaasService enterpriseSaas;
     
     public FinanceService(
             InvoiceRepository invoices,
@@ -350,7 +352,8 @@ public class FinanceService {
         }
         financeAccess(p);
         permission(p, "INVOICE_VIEW");
-        return invoices.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
+        List<Invoice> rows = invoices.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
+        return enterpriseSaas == null ? rows : enterpriseSaas.filterBranchRecords(rows, Invoice::getBranchId, p);
     }
     
     public List<InvoiceItem> invoiceLines(UUID id, Principal p) {
@@ -644,9 +647,9 @@ public class FinanceService {
         servicePermission(p);
         permission(p, "SERVICE_VIEW");
         List<ServiceRequest> all = tickets.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
-        if (p.permissions() != null && p.permissions().contains("SERVICE_ASSIGN"))
-            return all;
-        return all.stream().filter(t -> p.userId().equals(t.getAssignedEngineerId())).toList();
+        List<ServiceRequest> visible = p.permissions() != null && p.permissions().contains("SERVICE_ASSIGN")
+                ? all : all.stream().filter(t -> p.userId().equals(t.getAssignedEngineerId())).toList();
+        return enterpriseSaas == null ? visible : enterpriseSaas.filterBranchRecords(visible, ServiceRequest::getBranchId, p);
     }
     
     @Transactional
