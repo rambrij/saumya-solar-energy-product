@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test('browser requests cannot use forged tenant, customer or branch filters as authorization', async ({ page, baseURL }) => {
   if (!baseURL) throw new Error('E2E_API_BASE_URL is required');
 
-  await page.goto(baseURL + '/actuator/health');
+  await page.goto(baseURL);
   const session = await page.evaluate(async () => {
     const response = await fetch('/api/v1/auth/login', {
       method: 'POST',
