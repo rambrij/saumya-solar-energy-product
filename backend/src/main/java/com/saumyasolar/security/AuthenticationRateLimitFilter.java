@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
@@ -48,15 +49,9 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
             @Value("${app.auth.rate-limit.mfa-per-window:10}") int mfaLimit,
             @Value("${app.auth.rate-limit.window-seconds:60}") int windowSeconds,
             @Value("${app.jwt-secret}") String jwtSecret) {
-        this(jdbc, mapper, addressResolver, loginLimit, recoveryLimit, mfaLimit, windowSeconds, jwtSecret);
-    }
-
-    AuthenticationRateLimitFilter(JdbcTemplate jdbc, ObjectMapper mapper, ClientAddressResolver resolver,
-                                   int loginLimit, int recoveryLimit, int mfaLimit, int windowSeconds,
-                                   String jwtSecret) {
         this.jdbc = jdbc;
         this.mapper = mapper;
-        this.addressResolver = resolver;
+        this.addressResolver = addressResolver;
         this.loginLimit = Math.max(1, loginLimit);
         this.recoveryLimit = Math.max(1, recoveryLimit);
         this.mfaLimit = Math.max(1, mfaLimit);
@@ -65,6 +60,12 @@ public class AuthenticationRateLimitFilter extends OncePerRequestFilter {
             throw new IllegalArgumentException("JWT secret must be configured for account rate-limit hashing");
         }
         this.accountHmacKey = sha256(jwtSecret.getBytes(StandardCharsets.UTF_8));
+    }
+
+    AuthenticationRateLimitFilter(JdbcTemplate jdbc, ObjectMapper mapper, int loginLimit,
+                                   int recoveryLimit, int mfaLimit, int windowSeconds) {
+        this(jdbc, mapper, new ClientAddressResolver(""), loginLimit, recoveryLimit,
+                mfaLimit, windowSeconds, "test-only-rate-limit-hmac-secret");
     }
 
     private String requestPath(HttpServletRequest request) {
