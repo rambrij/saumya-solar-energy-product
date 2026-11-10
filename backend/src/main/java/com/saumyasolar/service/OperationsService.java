@@ -563,7 +563,7 @@ public class OperationsService {
         if (ids.size() != memberIds.size())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Duplicate team members are not allowed");
         for (UUID id : ids)
-            if (users.findById(id).filter(u -> t.equals(u.getTenantId()) && u.isEnabled() && u.getRoles().stream().anyMatch(r -> Set.of("SERVICE_ENGINEER", "INSTALLER", "TECHNICIAN", "OPERATIONS_MANAGER").contains(r.getName()))).isEmpty())
+            if (users.findByIdAndTenantId(id, t).filter(u -> u.isEnabled() && u.getRoles().stream().anyMatch(r -> Set.of("SERVICE_ENGINEER", "INSTALLER", "TECHNICIAN", "OPERATIONS_MANAGER").contains(r.getName()))).isEmpty())
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Every team member must be an enabled same-tenant installer or engineer");
     }
     
@@ -668,7 +668,7 @@ public class OperationsService {
         }
         if (!Set.of("MATERIAL_RESERVED", "INSTALLATION_SCHEDULED").contains(o.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Reserve order materials before scheduling installation");
-        if (users.findById(x.assignedEngineerId()).filter(u -> t.equals(u.getTenantId()) && u.isEnabled() && "VENDOR".equals(u.getAccountType()) && u.getRoles().stream().anyMatch(r -> Set.of("SERVICE_ENGINEER", "INSTALLER", "TECHNICIAN", "OPERATIONS_MANAGER", "VENDOR_ADMIN").contains(r.getName()))).isEmpty())
+        if (users.findByIdAndTenantId(x.assignedEngineerId(), t).filter(u -> u.isEnabled() && "VENDOR".equals(u.getAccountType()) && u.getRoles().stream().anyMatch(r -> Set.of("SERVICE_ENGINEER", "INSTALLER", "TECHNICIAN", "OPERATIONS_MANAGER", "VENDOR_ADMIN").contains(r.getName()))).isEmpty())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Engineer must be an enabled same-tenant installer");
         users.findForUpdate(x.assignedEngineerId(), t).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Engineer is not available in this tenant"));
         teams.findForUpdate(x.teamId(), t).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select an active team from this vendor"));

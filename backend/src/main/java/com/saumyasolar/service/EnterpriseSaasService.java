@@ -183,7 +183,7 @@ public class EnterpriseSaasService {
     public void assignUser(UUID branchId, UUID userId, Principal p) {
         UUID t = vendor(p, "BRANCH_MANAGE");
         branches.findByIdAndTenantId(branchId, t).filter(Branch::isActive).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Active branch not found"));
-        users.findById(userId).filter(u -> t.equals(u.getTenantId()) && u.isEnabled() && "VENDOR".equals(u.getAccountType())).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Enabled same-tenant vendor user not found"));
+        users.findByIdAndTenantId(userId, t).filter(u -> u.isEnabled() && "VENDOR".equals(u.getAccountType())).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Enabled same-tenant vendor user not found"));
         if (!memberships.existsByTenantIdAndBranchIdAndUserId(t, branchId, userId)) {
             BranchMembership m = new BranchMembership();
             m.setId(UUID.randomUUID());

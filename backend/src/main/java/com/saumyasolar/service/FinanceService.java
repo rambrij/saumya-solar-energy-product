@@ -590,7 +590,7 @@ public class FinanceService {
             cp = customers.findByIdAndTenantId(x.customerId(), tenant).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
         }
         if (x.installationId() != null) {
-            installations.findById(x.installationId()).filter(j -> tenant.equals(j.getTenantId()) && cp.getId().equals(j.getCustomerId())).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Installation not found"));
+            installations.findByIdAndTenantId(x.installationId(), tenant).filter(j -> cp.getId().equals(j.getCustomerId())).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Installation not found"));
         }
         Product product = x.productId() == null ? null : products.findByIdAndTenantId(x.productId(), tenant).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
         if (product != null && "CUSTOMER".equals(p.accountType())) {
@@ -658,7 +658,7 @@ public class FinanceService {
         permission(p, "SERVICE_ASSIGN");
         UUID tenant = p.tenantId();
         ServiceRequest t = ticket(id, tenant);
-        AppUser engineer = users.findById(x.engineerId()).filter(u -> tenant.equals(u.getTenantId()) && u.isEnabled() && u.getRoles().stream().anyMatch(r -> "SERVICE_ENGINEER".equals(r.getName()) || "TECHNICIAN".equals(r.getName()) || "INSTALLER".equals(r.getName()))).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Engineer must be an enabled same-tenant service engineer"));
+        AppUser engineer = users.findByIdAndTenantId(x.engineerId(), tenant).filter(u -> u.isEnabled() && u.getRoles().stream().anyMatch(r -> "SERVICE_ENGINEER".equals(r.getName()) || "TECHNICIAN".equals(r.getName()) || "INSTALLER".equals(r.getName()))).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Engineer must be an enabled same-tenant service engineer"));
         String old = t.getStatus();
         if (!Set.of("OPEN", "ASSIGNED", "VISIT_SCHEDULED").contains(old))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ticket cannot be assigned in its current state");
@@ -706,7 +706,7 @@ public class FinanceService {
         permission(p, "SERVICE_UPDATE");
         ServiceRequest t = ticket(id, p.tenantId());
         ensureTicketAccess(t, p);
-        ServiceVisit v = visits.findById(visitId).filter(a -> a.getTenantId().equals(p.tenantId()) && a.getServiceRequestId().equals(id)).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Visit not found"));
+        ServiceVisit v = visits.findByIdAndTenantIdAndServiceRequestId(visitId, p.tenantId(), id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Visit not found"));
         if (!v.getEngineerId().equals(p.userId()) && !(p.permissions() != null && p.permissions().contains("SERVICE_ASSIGN")) )
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (v.getStartedAt() != null)
