@@ -1401,3 +1401,10 @@ The production preflight script reads tenant-integrity relationships and fails c
 - Tenant row locking for SLA scheduler: `backend/src/main/java/com/saumyasolar/repo/ServiceRequestRepository.java` (`findForSlaEvaluationByTenantId`); concurrent SLA and warranty tests: `backend/src/test/java/com/saumyasolar/TenantSchedulerConcurrencyIntegrationTest.java:148-225`.
 - MySQL 8.4 scheduler CI step: `.github/workflows/release-validation.yml` (`Run concurrent SLA, warranty and integration scheduler tests on MySQL 8.4`).
 - React two-tenant browser test: `frontend/e2e/tenant-react-ui.spec.ts:3-120`; Playwright config: `frontend/playwright.config.ts`.
+
+
+#### Latest verification and preflight evidence
+
+- Run 42793775946 reports backend 154 tests / 0 failures / 0 errors, frontend typecheck/build PASS and MySQL migration validation PASS. Its MySQL application/browser job had not completed at report update.
+- Run 42793418195 completed the V57/V58 integrity preflight against the migrated MySQL CI database successfully, with the routine-cleanup EXIT trap in place. This is CI fixture data, not production.
+- The API filter-tampering browser test has passed. The React two-tenant UI browser test remains Partial: Chromium previously showed that the form did not issue the expected login request. The test now uses native form requestSubmit, clears fixture cookies/session storage before UI login and forces Vite's same-origin API proxy. Await a successful latest-head Playwright job before upgrading its status.
