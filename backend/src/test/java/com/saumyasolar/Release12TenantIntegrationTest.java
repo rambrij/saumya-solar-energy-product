@@ -19,6 +19,8 @@ import com.saumyasolar.domain.ServiceRequest;
 import com.saumyasolar.domain.InstallationJob;
 import com.saumyasolar.domain.Warranty;
 import com.saumyasolar.domain.WarrantyClaim;
+import com.saumyasolar.domain.WarrantyClaimAttachment;
+import com.saumyasolar.repo.WarrantyClaimAttachmentRepository;
 import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.repo.CustomerAddressRepository;
 import com.saumyasolar.repo.BranchRepository;
@@ -50,6 +52,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -64,7 +67,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
-@SpringBootTest
+@SpringBootTest(properties = "app.warranty.attachment-location=${java.io.tmpdir}/saumya-warranty-attachment-it")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class Release12TenantIntegrationTest {
@@ -116,6 +119,8 @@ class Release12TenantIntegrationTest {
     WarrantyRepository warranties;
     @Autowired
     WarrantyClaimRepository warrantyClaims;
+    @Autowired
+    WarrantyClaimAttachmentRepository warrantyClaimAttachments;
     
     UUID vendorTenantId;
     
@@ -1627,6 +1632,95 @@ class Release12TenantIntegrationTest {
         return tenants.save(tenant);
     }
     
+    @Test
+    void warrantyClaimAttachmentHttpUploadAndDownloadAreBoundToTenantAndParentClaim() throws Exception {
+        var customerA = createCustomer(vendorTenantId, "attachment-customer-a");
+        var customerB = createCustomer(vendorTenantId, "attachment-customer-b");
+        var foreignTenant = newTenant();
+        var foreignCustomer = createCustomer(foreignTenant.getId(), "attachment-foreign-customer");
+
+        Warranty warrantyA = new Warranty();
+        warrantyA.setId(UUID.randomUUID());
+        warrantyA.setTenantId(vendorTenantId);
+        warrantyA.setCustomerId(customerA.profile().getId());
+        warrantyA.setStatus("ACTIVE");
+        warrantyA.setStartDate(java.time.LocalDate.now().minusDays(1));
+        warrantyA.setEndDate(java.time.LocalDate.now().plusDays(30));
+        warranties.save(warrantyA);
+
+        Warranty warrantyB = new Warranty();
+        warrantyB.setId(UUID.randomUUID());
+        warrantyB.setTenantId(vendorTenantId);
+        warrantyB.setCustomerId(customerB.profile().getId());
+        warrantyB.setStatus("ACTIVE");
+        warrantyB.setStartDate(java.time.LocalDate.now().minusDays(1));
+        warrantyB.setEndDate(java.time.LocalDate.now().plusDays(30));
+        warranties.save(warrantyB);
+
+        Warranty foreignWarranty = new Warranty();
+        foreignWarranty.setId(UUID.randomUUID());
+        foreignWarranty.setTenantId(foreignTenant.getId());
+        foreignWarranty.setCustomerId(foreignCustomer.profile().getId());
+        foreignWarranty.setStatus("ACTIVE");
+        foreignWarranty.setStartDate(java.time.LocalDate.now().minusDays(1));
+        foreignWarranty.setEndDate(java.time.LocalDate.now().plusDays(30));
+        warranties.save(foreignWarranty);
+
+        WarrantyClaim claimA = warrantyClaim(vendorTenantId, customerA.profile().getId(), warrantyA.getId());
+        WarrantyClaim claimB = warrantyClaim(vendorTenantId, customerB.profile().getId(), warrantyB.getId());
+        WarrantyClaim foreignClaim = warrantyClaim(foreignTenant.getId(), foreignCustomer.profile().getId(), foreignWarranty.getId());
+        warrantyClaims.saveAllAndFlush(List.of(claimA, claimB, foreignClaim));
+
+        String vendorToken = accessToken("admin@saumya.local", "Admin@123");
+        byte[] pdf = "%PDF-1.7\nclaim evidence\n%%EOF".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        MockMultipartFile evidence = new MockMultipartFile("file", "claim-evidence.pdf", "application/pdf", pdf);
+        String uploaded = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/warranty-claims/" + claimA.getId() + "/attachments")
+                        .file(evidence)
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tenantId").value(vendorTenantId.toString()))
+                .andExpect(jsonPath("$.claimId").value(claimA.getId().toString()))
+                .andReturn().getResponse().getContentAsString();
+        UUID attachmentId = UUID.fromString(json.readTree(uploaded).get("id").asText());
+
+        mvc.perform(get("/api/v1/warranty-claims/" + claimA.getId() + "/attachments/" + attachmentId)
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .header().string("Content-Disposition", org.hamcrest.Matchers.containsString("claim-evidence.pdf")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(pdf));
+
+        mvc.perform(get("/api/v1/warranty-claims/" + claimB.getId() + "/attachments/" + attachmentId)
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/warranty-claims/" + foreignClaim.getId() + "/attachments/" + attachmentId)
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/warranty-claims/" + foreignClaim.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+
+        WarrantyClaimAttachment stored = warrantyClaimAttachments.findByIdAndTenantIdAndClaimId(
+                attachmentId, vendorTenantId, claimA.getId()).orElseThrow();
+        assertTrue(stored.getStorageKey().startsWith(vendorTenantId + "/warranty-claims/"));
+    }
+
+    private WarrantyClaim warrantyClaim(UUID tenantId, UUID customerId, UUID warrantyId) {
+        WarrantyClaim claim = new WarrantyClaim();
+        claim.setId(UUID.randomUUID());
+        claim.setTenantId(tenantId);
+        claim.setWarrantyId(warrantyId);
+        claim.setCustomerId(customerId);
+        claim.setClaimNumber("HTTP-CLAIM-" + UUID.randomUUID().toString().substring(0, 8));
+        claim.setSubject("Controller upload test");
+        claim.setDescription("Private evidence controller integration test");
+        claim.setStatus("SUBMITTED");
+        claim.setCreatedAt(Instant.now());
+        claim.setUpdatedAt(Instant.now());
+        return claim;
+    }
+
     @Test
     void customerCanPlaceProductOrderAndVendorMustAcceptIt() throws Exception {
         var email = "direct-order-" + UUID.randomUUID() + "@example.test";
