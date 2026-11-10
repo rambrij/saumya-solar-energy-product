@@ -1,5 +1,11 @@
 package com.saumyasolar;
 
+import com.saumyasolar.domain.AppUser;
+import com.saumyasolar.domain.Role;
+import com.saumyasolar.repo.AppUserRepository;
+import com.saumyasolar.repo.RoleRepository;
+import com.saumyasolar.security.JwtService;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -15,6 +21,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -32,6 +39,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class EndpointAuthenticationMatrixTest {
     @Autowired MockMvc mvc;
     @Autowired @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping mappings;
+    @Autowired AppUserRepository users;
+    @Autowired RoleRepository roles;
+    @Autowired JwtService jwt;
+    @Autowired PasswordEncoder passwordEncoder;
 
     private static final Pattern VARIABLE = Pattern.compile("\\{[^}]+}");
     private static final Set<String> PUBLIC_PREFIXES = Set.of(
@@ -75,6 +86,55 @@ class EndpointAuthenticationMatrixTest {
         assertTrue(checked.contains("GET /api/v1/exports/{exportId}/download"),
                 "Export download must be included in the authentication matrix");
         assertTrue(failures.isEmpty(), "Unauthenticated endpoint exposure:\\n" + String.join("\\n", failures));
+    }
+
+
+    @Test
+    void authenticatedLeastPrivilegeVendorCannotReadProtectedEndpointMappings() throws Exception {
+        AppUser seededVendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        Role emptyRole = new Role();
+        emptyRole.setId(UUID.randomUUID());
+        emptyRole.setTenantId(seededVendor.getTenantId());
+        emptyRole.setName("ENDPOINT_MATRIX_NO_PERMISSION_" + UUID.randomUUID().toString().replace("-", ""));
+        roles.saveAndFlush(emptyRole);
+
+        AppUser leastPrivilege = new AppUser();
+        leastPrivilege.setId(UUID.randomUUID());
+        leastPrivilege.setTenantId(seededVendor.getTenantId());
+        leastPrivilege.setName("Endpoint matrix least privilege");
+        leastPrivilege.setEmail("endpoint-matrix-" + UUID.randomUUID() + "@example.test");
+        leastPrivilege.setPasswordHash(passwordEncoder.encode("Endpoint-Matrix-Password-2026"));
+        leastPrivilege.setAccountType("VENDOR");
+        leastPrivilege.setEnabled(true);
+        leastPrivilege.getRoles().add(emptyRole);
+        users.saveAndFlush(leastPrivilege);
+        String token = jwt.issue(leastPrivilege);
+
+        Set<String> selfServiceReads = Set.of(
+                "/api/v1/me", "/api/v1/subscription/usage", "/api/v1/subscription/storage");
+        List<String> checked = new ArrayList<>();
+        List<String> failures = new ArrayList<>();
+        for (var entry : mappings.getHandlerMethods().entrySet()) {
+            RequestMappingInfo info = entry.getKey();
+            if (!info.getMethodsCondition().getMethods().contains(
+                    org.springframework.web.bind.annotation.RequestMethod.GET)) continue;
+            for (String pattern : info.getPatternValues()) {
+                if (isPublic(pattern) || selfServiceReads.contains(pattern)) continue;
+                String path = probePath(pattern);
+                int status = mvc.perform(request(HttpMethod.GET, path)
+                                .header("Authorization", "Bearer " + token))
+                        .andReturn().getResponse().getStatus();
+                checked.add("GET " + pattern);
+                if (status >= 200 && status < 300) {
+                    failures.add("GET " + pattern + " returned " + status
+                            + " for a vendor with no permissions");
+                }
+            }
+        }
+        assertTrue(checked.size() >= 70,
+                "The authenticated read matrix unexpectedly shrank: only checked " + checked.size());
+        assertTrue(failures.isEmpty(),
+                "Least-privilege authenticated reads were exposed:\\n" + String.join("\\n", failures));
     }
 
     private boolean isPublic(String pattern) {
