@@ -104,3 +104,10 @@ Still open: full customer resource family matrix, all branch CRUD/assignment ope
 - Foreign-tenant HTTP attachment access remains covered by Release12TenantIntegrationTest. A same-tenant cross-customer HTTP download/list test is still required before this route family can be marked exhaustive.
 
 - Latest CI run 42845389769 passed all four jobs and 188 backend tests, including branch lifecycle, customer payment receipt and same-tenant cross-customer service evidence tests.
+
+
+### Survey evidence authorization expansion — 2026-11-10
+
+- Survey attachment upload now requires SURVEY_COMPLETE for vendor principals; SURVEY_VIEW alone is read-only. SurveyLifecycleService enforces assigned-user scope for every non-customer role without SURVEY_ASSIGN.
+- Added regression tests for an assigned survey completer and a different sales user with SURVEY_VIEW/SURVEY_COMPLETE but no assignment permission. Customer-owned survey access remains governed by customer profile ownership.
+- Survey attachment HTTP route-level cross-customer cases remain part of the broader endpoint matrix; service-level upload/download and tenant isolation tests are not a substitute for that complete HTTP matrix.
