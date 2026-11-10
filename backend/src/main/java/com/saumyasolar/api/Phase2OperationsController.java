@@ -297,7 +297,6 @@ public class Phase2OperationsController {
         if (t == null) throw new IllegalArgumentException("tenantId is required");
         if (from != null && to != null && to.isBefore(from))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "to must not precede from");
-        UUID t = p.tenantId();
         Instant start = from == null ? Instant.EPOCH : from.atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
         Instant end = to == null ? Instant.now() : to.plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
         var orderRows = orders.findByTenantIdOrderByIdDesc(t).stream().filter(x -> x.getCreatedAt() != null && !x.getCreatedAt().isBefore(start) && x.getCreatedAt().isBefore(end)).toList();
