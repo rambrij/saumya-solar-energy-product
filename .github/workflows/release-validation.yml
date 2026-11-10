@@ -393,6 +393,11 @@ jobs:
           done
           cat /tmp/saumya-backend.log
           exit 1
+      - name: Execute V57 and V58 integrity preflight against migrated MySQL CI database
+        run: |
+          mysql --connect-timeout=15 --host=127.0.0.1 --port=3306 --user=root --password=rootpass solar_app_smoke \
+            < backend/src/test/resources/tenant-isolation-production-preflight.sql
+
       - name: Set up Node for browser security tests
         uses: actions/setup-node@v4
         with:
