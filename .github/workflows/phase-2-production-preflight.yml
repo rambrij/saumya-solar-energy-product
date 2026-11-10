@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: audit/phase-2-implementation-gap-analysis
+          ref: cleanup/code-cleanup
       - name: Install MySQL client
         run: sudo apt-get update && sudo apt-get install -y default-mysql-client
       - name: Validate required production connection secrets

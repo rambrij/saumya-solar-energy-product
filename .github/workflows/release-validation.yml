@@ -3,20 +3,10 @@ name: Release 1-4 and Phase 2 tenant-isolation validation (final verification)
 on:
   push:
     branches:
-      - feature/release-1-2-complete-implementation
-      - feature/release-3-operations
-      - feature/release-4-finance-and-service
-      - feature/phase-2-operations
-      - feature/phase-3-Enterprise-SaaS
-      - phase-1-commercial-mvp-remediation
-      - feature/subscription-and-ui-enhancements
-      - audit/implementation-gap-analysis
-      - audit/phase-2-implementation-gap-analysis
+      - cleanup/code-cleanup
   pull_request:
     branches:
-      - main
-      - feature/release-3-operations
-      - phase-1-commercial-mvp-implementation
+      - cleanup/code-cleanup
 
 permissions:
   contents: read
