@@ -11,7 +11,7 @@ SELECT
          ELSE (SELECT COUNT(*) FROM information_schema.COLUMNS c2
                WHERE c2.TABLE_SCHEMA = DATABASE()
                  AND c2.TABLE_NAME = t.TABLE_NAME
-                 AND c2.COLUMN_NAME = 'tenant_id') END AS tenant_column_count
+                 AND c2.COLUMN_NAME = 'tenant_id') END AS tenant_column_present
 FROM information_schema.TABLES t
 LEFT JOIN information_schema.COLUMNS c
   ON c.TABLE_SCHEMA = t.TABLE_SCHEMA
