@@ -1546,3 +1546,10 @@ The audit branch has received additional targeted corrections after the initial 
 - A repository async-worker scan script is wired into release-validation.yml and publishes its output as a CI artifact.
 
 These changes are deliberately not classified as full closure. The full 222-route authenticated role × HTTP verb × resource matrix remains incomplete; all remaining broad/role-name checks require a complete repository scan and an intentional-vs-defect decision; exhaustive customer/branch/export/download tests remain incomplete; the schema audit requires a reviewed production schema result; the worker scan artifact requires review and follow-through for every hit; and production data preflight has not been executed. Do not mark Phase 2 production-ready based on these targeted changes alone.
+
+
+### V60 tenant-owned NOT NULL enforcement — 2026-11-10
+
+- CI metadata inspection found nine tenant-owned tenant_id columns still nullable in the disposable MySQL schema; V60 now enforces NOT NULL for those nine and the entity mappings declare non-null.
+- The production preflight now checks those NULL cases and validates platform-vs-tenant classification for app_user, role and audit_event. The separate SELECT-only schema audit inventories every base table, FK, unique index and tenant_id null count.
+- This is schema-level implementation, not production-data proof. The production workflow still requires protected database secrets, a DBA-approved execution identity, and archived output reviewed by the data owner.
