@@ -27,7 +27,11 @@ const roleMenus:Record<string,NavigationGroup[]>={
  ]
 };
 export function getRoleNavigation(role:'platform'|'vendor'|'customer',permissions:string[]=[],roles:string[]=[]):NavigationGroup[]{
- return roleMenus[role].map(group=>({...group,items:group.items.filter(item=>(!item.permission||(Array.isArray(item.permission)?item.permission.some(p=>permissions.includes(p)):permissions.includes(item.permission)))&&(!item.allPermissions||item.allPermissions.every(p=>permissions.includes(p)))&&(!item.requiredRoles||item.requiredRoles.some(r=>roles.includes(r))))})).filter(group=>group.items.length>0);
+ // VENDOR_ADMIN is the tenant's full-access workspace role. Keep its standard
+ // navigation available when an older session was issued before permission
+ // claims were populated; backend endpoint authorization remains authoritative.
+ const isVendorAdmin=role==='vendor'&&roles.includes('VENDOR_ADMIN');
+ return roleMenus[role].map(group=>({...group,items:group.items.filter(item=>(!item.permission||isVendorAdmin||(Array.isArray(item.permission)?item.permission.some(p=>permissions.includes(p)):permissions.includes(item.permission)))&&(!item.allPermissions||item.allPermissions.every(p=>permissions.includes(p)))&&(!item.requiredRoles||item.requiredRoles.some(r=>roles.includes(r))))})).filter(group=>group.items.length>0);
 }
 export function getNavigationKeys(role:'platform'|'vendor'|'customer',permissions:string[]=[],roles:string[]=[]):string[]{
  return getRoleNavigation(role,permissions,roles).flatMap(group=>group.items.map(item=>item.key));
