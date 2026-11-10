@@ -58,9 +58,13 @@
 - Cross-tenant and thread-reuse tests pass on MySQL 8.4 and CI.
 - No job accepts an untrusted tenant ID from a browser or external payload without server-side validation.
 
+## Inventory artifact
+
+See `docs/PHASE_1_2_BACKGROUND_JOB_INVENTORY.md` for the current evidence-based inventory of the four tenant-aware scheduled jobs and the global authentication-rate-limit cleanup task. The document explicitly records the incomplete async/executor/export/notification worker scan.
+
 ## Status
 
-**PARTIAL — scheduled tenant context is implemented in the four identified tenant-aware schedulers and selected MySQL concurrency tests exist.** The full asynchronous/worker inventory and exception/thread-reuse context-leak coverage remain open.
+**PARTIAL — scheduled tenant context is implemented in the four identified tenant-aware schedulers and selected MySQL concurrency tests exist.** The full asynchronous/worker inventory and exception/thread-reuse context-leak coverage remain open. Latest-head workflow 42821756695 passed backend (163 tests), frontend build and MySQL validation; its Spring Boot/browser job remains in progress.
 
 
 Latest-head verification update (2026-11-10): workflow 42821756695 passed backend (163 tests), frontend production build and MySQL 8.4 migration validation; Spring Boot/browser Playwright job remains in progress.
