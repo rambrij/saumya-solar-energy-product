@@ -20,7 +20,7 @@ Use the CI run to validate SQL syntax, migration compatibility and the preflight
 
 ## Development-credential CI smoke preflight
 
-For this repository's non-production validation, `.github/workflows/release-validation.yml` provisions a fresh disposable MySQL 8.4 database using the same local development settings as `docker-compose.yml`: database `solar`, application user `solar`, password `solarpass`. The application starts with this least-purpose application account and the V57/V58 read-only integrity SQL is executed against that migrated CI database. The runner is ephemeral; these values are test fixtures only. They are not production credentials and must never be copied into the protected `production` GitHub environment. The separate `phase-2-production-preflight.yml` remains gated on real, protected production secrets and reviewer approval.
+For this repository's non-production validation, `.github/workflows/release-validation.yml` provisions a fresh disposable MySQL 8.4 database using the same local development settings as `docker-compose.yml`: database `solar`, application user `solar`, password `solarpass`. The application starts with this least-purpose application account and the V57/V58 relationship-integrity preflight is executed against that migrated CI database. The runner is ephemeral; these values are test fixtures only. They are not production credentials and must never be copied into the protected `production` GitHub environment. The separate `phase-2-production-preflight.yml` remains gated on real, protected production secrets and reviewer approval.
 
 ## Execution prerequisites
 
@@ -39,7 +39,8 @@ For this repository's non-production validation, `.github/workflows/release-vali
 4. Require both output markers:
    - `V57 catalogue tenant-integrity preflight: PASS`
    - `V58 operational tenant-integrity preflight: PASS`
-5. Record the run URL, run ID, database/schema identifier, execution timestamp, operator and reviewer approval in the change ticket. Do not record credentials.
+5. Review the tenant-schema-audit-output.txt result in full. Every base table must be classified as TENANT_OWNED, PLATFORM_GLOBAL or MIXED by the data owner. Every TENANT_OWNED table must show tenant_id IS_NULLABLE=NO and null_tenant_rows=0. Every table without tenant_id and every mixed-scope table must have a documented owner-approved rationale and tenant relationship. Reconcile every FK and unique index.
+6. Record the run URL, run ID, database/schema identifier, execution timestamp, operator, reviewer approval and archived audit artifact in the change ticket. Do not record credentials.
 
 ## Failure and remediation procedure
 
