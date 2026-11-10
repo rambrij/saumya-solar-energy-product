@@ -12,8 +12,8 @@ if not artifact.is_file():
 
 lines = artifact.read_text(encoding="utf-8").splitlines()
 base_header = next((i for i, line in enumerate(lines)
-                    if line.strip().split("\t")[:5] ==
-                    ["TABLE_NAME", "TOTAL_ROWS", "TENANT_ID_COLUMN", "NULL_TENANT_ROWS", "IS_NULLABLE"]), None)
+                    if line.strip().split("\t") ==
+                    ["TABLE_NAME", "ownership_classification", "tenant_id_definition", "estimated_rows"]), None)
 exact_header = next((i for i, line in enumerate(lines)
                      if line.strip().split("\t") ==
                      ["table_name", "total_rows", "null_tenant_rows", "column_is_nullable"]), None)
@@ -21,10 +21,9 @@ if base_header is None or exact_header is None:
     raise SystemExit("FAIL: schema audit output is missing the expected base-table or exact tenant count section")
 
 base_rows = []
-for line in lines[base_header + 1:]:
-    if not line.strip():
-        break
-    base_rows.append(line.split("\t"))
+for line in lines[base_header + 1:exact_header]:
+    if line.strip():
+        base_rows.append(line.split("\t"))
 
 exact_lines = [lines[exact_header]]
 for line in lines[exact_header + 1:]:
