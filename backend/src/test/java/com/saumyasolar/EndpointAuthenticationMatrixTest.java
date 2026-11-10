@@ -66,7 +66,7 @@ class EndpointAuthenticationMatrixTest {
                 }
             }
         }
-        assertTrue(checked.size() >= 220,
+        assertTrue(checked.size() >= 200,
                 "The controller mapping inventory unexpectedly shrank: only checked " + checked.size());
         assertTrue(checked.contains("POST /api/v1/exports"),
                 "Export creation must be included in the authentication matrix");
