@@ -97,6 +97,54 @@ class NotificationServiceTest {
         );
     }
 
+
+    @Test
+    void scheduledRetryProcessesEachTenantBatchInsideItsOwnContext() {
+        JavaMailSender sender = mock(JavaMailSender.class);
+        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
+        UUID tenantA = UUID.randomUUID();
+        UUID tenantB = UUID.randomUUID();
+        NotificationDelivery recordA = failedRecord(tenantA);
+        NotificationDelivery recordB = failedRecord(tenantB);
+        when(repository.findDistinctTenantIdsForRetry(eq("FAILED"), any()))
+                .thenReturn(java.util.List.of(tenantA, tenantB));
+        when(repository.findTop50ByTenantIdAndStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(eq(tenantA), eq("FAILED"), any()))
+                .thenReturn(java.util.List.of(recordA));
+        when(repository.findTop50ByTenantIdAndStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(eq(tenantB), eq("FAILED"), any()))
+                .thenReturn(java.util.List.of(recordB));
+        when(repository.claimFailedDelivery(any(), any(), any())).thenReturn(1);
+        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doAnswer(invocation -> {
+            NotificationDelivery delivery = invocation.getArgument(0);
+            assertEquals(delivery.getTenantId(), com.saumyasolar.security.TenantExecutionContext.requireTenantId());
+            return null;
+        }).when(sender).send(any(SimpleMailMessage.class));
+
+        new NotificationService(sender, repository, "no-reply@example.test", "http://localhost:3000")
+                .retryFailedDeliveries();
+
+        verify(sender, times(2)).send(any(SimpleMailMessage.class));
+        assertEquals("DELIVERED", recordA.getStatus());
+        assertEquals("DELIVERED", recordB.getStatus());
+        assertThrows(IllegalStateException.class,
+                com.saumyasolar.security.TenantExecutionContext::requireTenantId);
+    }
+
+    private static NotificationDelivery failedRecord(UUID tenantId) {
+        NotificationDelivery record = new NotificationDelivery();
+        record.setId(UUID.randomUUID());
+        record.setTenantId(tenantId);
+        record.setUserId(UUID.randomUUID());
+        record.setChannel("EMAIL");
+        record.setRecipient("customer@example.test");
+        record.setSubject("Retry test");
+        record.setMessageBody("Retry body");
+        record.setStatus("FAILED");
+        record.setAttemptCount(1);
+        record.setNextAttemptAt(Instant.now().minusSeconds(5));
+        return record;
+    }
+
     @Test
     void scheduledRetrySkipsDeliveryClaimedByAnotherWorker() {
         JavaMailSender sender = mock(JavaMailSender.class);
