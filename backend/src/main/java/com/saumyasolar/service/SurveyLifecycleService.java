@@ -51,14 +51,14 @@ public class SurveyLifecycleService {
     }
 
     private void requireReviewer(Principal actor) {
-        if (actor.roles() == null || actor.roles().stream().noneMatch(Set.of("VENDOR_ADMIN", "OPERATIONS_MANAGER", "SERVICE_MANAGER")::contains))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Survey review requires an authorized manager");
+        authorize(actor, "SURVEY_ASSIGN");
     }
     
     private SiteSurvey requireSurvey(UUID id, Principal actor) {
         SiteSurvey survey = surveys.findByIdAndTenantId(id, actor.tenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Survey not found"));
-        if (actor.roles() != null && actor.roles().stream().anyMatch(Set.of("SERVICE_ENGINEER", "TECHNICIAN", "INSTALLER")::contains)
+        if (actor.permissions() != null && actor.permissions().contains("SERVICE_VIEW")
+                && !actor.permissions().contains("SERVICE_ASSIGN")
                 && !actor.userId().equals(survey.getAssignedUserId()))
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Survey not found");
         return survey;
@@ -116,8 +116,7 @@ public class SurveyLifecycleService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Survey cannot be edited in status " + survey.getStatus());
         }
         if (input.assignedUserId() != null && !input.assignedUserId().equals(survey.getAssignedUserId())) {
-            if (actor.permissions() == null || !actor.permissions().contains("SURVEY_ASSIGN")
-                    || actor.roles() == null || actor.roles().stream().noneMatch(Set.of("VENDOR_ADMIN", "SALES_MANAGER", "OPERATIONS_MANAGER")::contains))
+            if (actor.permissions() == null || !actor.permissions().contains("SURVEY_ASSIGN"))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Survey reassignment requires SURVEY_ASSIGN");
         }
         if (input.assignedUserId() != null && users.findByIdAndTenantId(input.assignedUserId(), actor.tenantId())
