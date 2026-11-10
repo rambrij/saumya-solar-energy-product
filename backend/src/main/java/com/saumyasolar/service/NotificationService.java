@@ -198,43 +198,49 @@ public class NotificationService {
     @Scheduled(fixedDelayString = "${app.messaging.retry-interval-ms:60000}")
     public void retryFailedDeliveries() {
         for (NotificationDelivery record : deliveries.findTop50ByStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc("FAILED", Instant.now())) {
-            if (record.getAttemptCount() >= 5) continue;
-            record.setStatus("PENDING");
-            deliveries.save(record);
-            try {
-                if ("EMAIL".equals(record.getChannel())) {
-                    SimpleMailMessage message = new SimpleMailMessage();
-                    message.setFrom(from);
-                    message.setTo(record.getRecipient());
-                    message.setSubject(record.getSubject());
-                    message.setText(record.getMessageBody());
-                    mailSender.send(message);
-                } else {
-                    if (twilioSid.isBlank() || twilioToken.isBlank())
-                        throw new IllegalStateException("Messaging provider is not configured");
-                    String to = record.getRecipient();
-                    String sender = "SMS".equals(record.getChannel()) ? smsFrom : ( whatsappFrom.startsWith("whatsapp:") ? whatsappFrom : "whatsapp:" + whatsappFrom );
-                    String form = "To=" + encForm(to) + "&From=" + encForm(sender) + "&Body=" + encForm(record.getMessageBody());
-                    String auth = Base64.getEncoder().encodeToString(( twilioSid + ":" + twilioToken ).getBytes(StandardCharsets.UTF_8));
-                    HttpRequest request = HttpRequest.newBuilder(URI.create("https://api.twilio.com/2010-04-01/Accounts/" + twilioSid + "/Messages.json")).timeout(Duration.ofSeconds(10)).header("Authorization", "Basic " + auth).header("Content-Type", "application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(form)).build();
-                    HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-                    if (response.statusCode() < 200 || response.statusCode() >= 300)
-                        throw new IllegalStateException("Messaging provider returned HTTP " + response.statusCode());
-                }
-                record.setAttemptCount(record.getAttemptCount() + 1);
-                record.setStatus("DELIVERED");
-                record.setSentAt(Instant.now());
-                record.setNextAttemptAt(null);
-                record.setLastError(null);
-            } catch (Exception ex) {
-                int attempts = record.getAttemptCount() + 1;
-                record.setAttemptCount(attempts);
-                record.setStatus("FAILED");
-                record.setLastError("Delivery retry failed");
-                record.setNextAttemptAt(attempts >= 5 ? null : Instant.now().plusSeconds(Math.min(3600, 60L * ( 1L << Math.min(attempts, 5) ))));
+            if (record.getAttemptCount() >= 5 || record.getTenantId() == null) continue;
+            try (var scope = com.saumyasolar.security.TenantExecutionContext.open(record.getTenantId())) {
+                retryFailedDelivery(record);
             }
-            deliveries.save(record);
         }
+    }
+
+    private void retryFailedDelivery(NotificationDelivery record) {
+        record.setStatus("PENDING");
+        deliveries.save(record);
+        try {
+            if ("EMAIL".equals(record.getChannel())) {
+                SimpleMailMessage message = new SimpleMailMessage();
+                message.setFrom(from);
+                message.setTo(record.getRecipient());
+                message.setSubject(record.getSubject());
+                message.setText(record.getMessageBody());
+                mailSender.send(message);
+            } else {
+                if (twilioSid.isBlank() || twilioToken.isBlank())
+                    throw new IllegalStateException("Messaging provider is not configured");
+                String to = record.getRecipient();
+                String sender = "SMS".equals(record.getChannel()) ? smsFrom : ( whatsappFrom.startsWith("whatsapp:") ? whatsappFrom : "whatsapp:" + whatsappFrom );
+                String form = "To=" + encForm(to) + "&From=" + encForm(sender) + "&Body=" + encForm(record.getMessageBody());
+                String auth = Base64.getEncoder().encodeToString(( twilioSid + ":" + twilioToken ).getBytes(StandardCharsets.UTF_8));
+                HttpRequest request = HttpRequest.newBuilder(URI.create("https://api.twilio.com/2010-04-01/Accounts/" + twilioSid + "/Messages.json")).timeout(Duration.ofSeconds(10)).header("Authorization", "Basic " + auth).header("Content-Type", "application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(form)).build();
+                HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() < 200 || response.statusCode() >= 300)
+                    throw new IllegalStateException("Messaging provider returned HTTP " + response.statusCode());
+            }
+            record.setAttemptCount(record.getAttemptCount() + 1);
+            record.setStatus("DELIVERED");
+            record.setSentAt(Instant.now());
+            record.setNextAttemptAt(null);
+            record.setLastError(null);
+        } catch (Exception ex) {
+            int attempts = record.getAttemptCount() + 1;
+            record.setAttemptCount(attempts);
+            record.setStatus("FAILED");
+            record.setLastError("Delivery retry failed");
+            record.setNextAttemptAt(attempts >= 5 ? null : Instant.now().plusSeconds(Math.min(3600, 60L * ( 1L << Math.min(attempts, 5) ))));
+        }
+        deliveries.save(record);
     }
     
     private String encForm(String value) {
