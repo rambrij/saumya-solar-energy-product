@@ -57,7 +57,7 @@ class TenantSchedulerConcurrencyIntegrationTest {
 
         assertEquals("PROCESSING", jobs.findByIdAndTenantId(jobA.getId(), tenantA.getId()).orElseThrow().getStatus());
         assertEquals("QUEUED", jobs.findByIdAndTenantId(jobB.getId(), tenantB.getId()).orElseThrow().getStatus());
-        assertTrue(TenantExecutionContext.currentTenantId().isEmpty(),
+        assertThrows(IllegalStateException.class, TenantExecutionContext::requireTenantId,
                 "No tenant execution context may leak into the test thread");
     }
 
