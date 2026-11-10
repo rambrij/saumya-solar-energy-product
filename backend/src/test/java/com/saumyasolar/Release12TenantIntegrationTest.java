@@ -1547,6 +1547,63 @@ class Release12TenantIntegrationTest {
 
 
     @Test
+    void vendorBranchCrudAndMembershipAssignmentArePermissionAndTenantScoped() throws Exception {
+        var adminToken = accessToken("admin@saumya.local", "Admin@123");
+        var salesToken = accessToken("sales@saumya.local", "Sales@123");
+        var suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        var body = """
+                {"code":"BR-%s","name":"Branch %s","address":"Indore","phone":"9999999999","email":"branch-%s@example.test"}
+                """.formatted(suffix, suffix, suffix);
+        mvc.perform(post("/api/v1/branches").header("Authorization", "Bearer " + salesToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+
+        var created = mvc.perform(post("/api/v1/branches").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        UUID branchId = UUID.fromString(json.readTree(created).get("id").asText());
+        var list = mvc.perform(get("/api/v1/branches").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(list.contains(branchId.toString()));
+
+        var updateBody = """
+                {"code":"BR-UPD-%s","name":"Updated branch %s","address":"Updated address","phone":"8888888888","email":"updated-%s@example.test"}
+                """.formatted(suffix, suffix, suffix);
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/branches/" + branchId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(updateBody))
+                .andExpect(status().isOk());
+        assertEquals("Updated branch " + suffix,
+                branches.findByIdAndTenantId(branchId, vendorTenantId).orElseThrow().getName());
+
+        UUID employeeId = users.findByEmailIgnoreCase("sales@saumya.local").orElseThrow().getId();
+        mvc.perform(post("/api/v1/branches/" + branchId + "/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + employeeId + "\"}"))
+                .andExpect(status().isOk());
+        var members = mvc.perform(get("/api/v1/branches/" + branchId + "/users")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(members.contains(employeeId.toString()));
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                                "/api/v1/branches/" + branchId + "/users/" + employeeId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+        assertFalse(branchMemberships.existsByTenantIdAndBranchIdAndUserId(vendorTenantId, branchId, employeeId));
+
+        mvc.perform(post("/api/v1/branches/" + branchId + "/deactivate")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+        assertFalse(branches.findByIdAndTenantId(branchId, vendorTenantId).orElseThrow().isActive());
+        mvc.perform(post("/api/v1/branches/" + branchId + "/activate")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+        assertTrue(branches.findByIdAndTenantId(branchId, vendorTenantId).orElseThrow().isActive());
+    }
+
+    @Test
     void vendorCannotReadForeignSurveyOrDownloadForeignServiceEvidence() throws Exception {
         var foreignTenant = newTenant();
         var foreignCustomer = createCustomer(foreignTenant.getId(), "foreign-evidence-customer");
