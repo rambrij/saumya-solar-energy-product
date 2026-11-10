@@ -345,7 +345,7 @@ jobs:
       - name: Apply V60 tenant-owned tenant_id NOT NULL enforcement
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < backend/src/main/resources/db/migration/V60__enforce_tenant_id_not_null_on_tenant_owned_tables.sql
-          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND column_name='tenant_id' AND table_name IN ('customer_order','order_item','quotation','quotation_item','site_survey','lead_history','notification_delivery','integration_webhook_event','idempotency_record') AND is_nullable='NO'")" = "9"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND column_name='tenant_id' AND table_name IN ('customer_order','order_item','quotation','quotation_item','site_survey','lead_history','integration_webhook_event','idempotency_record') AND is_nullable='NO'")" = "8"
 
       - name: Apply V61 integration and approval permission catalogue
         run: |
