@@ -1402,6 +1402,14 @@ class Release12TenantIntegrationTest {
                                 """.formatted(foreignWarranty.getId())))
                 .andExpect(status().isNotFound());
 
+        mvc.perform(post("/api/v1/customer/warranty-claims")
+                        .header("Authorization", "Bearer " + customerAToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"warrantyId":"%s","subject":"Same-tenant customer tampering","description":"Attempt to claim another customer's warranty"}
+                                """.formatted(customerBWarranty.getId())))
+                .andExpect(status().isNotFound());
+
         var vendorToken = accessToken("admin@saumya.local", "Admin@123");
         String vendorClaims = mvc.perform(get("/api/v1/warranty-claims")
                         .header("Authorization", "Bearer " + vendorToken))
