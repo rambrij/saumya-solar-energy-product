@@ -4,6 +4,7 @@ import com.saumyasolar.domain.AppUser;
 import com.saumyasolar.domain.Role;
 import com.saumyasolar.repo.AppUserRepository;
 import com.saumyasolar.repo.RoleRepository;
+import com.saumyasolar.repo.PermissionRepository;
 import com.saumyasolar.security.JwtService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.mock.web.MockMultipartFile;
@@ -59,6 +60,7 @@ class EndpointAuthenticationMatrixTest {
     @Autowired @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping mappings;
     @Autowired AppUserRepository users;
     @Autowired RoleRepository roles;
+    @Autowired PermissionRepository permissions;
     @Autowired JwtService jwt;
     @Autowired PasswordEncoder passwordEncoder;
 
@@ -107,6 +109,91 @@ class EndpointAuthenticationMatrixTest {
         assertTrue(failures.isEmpty(), "Unauthenticated endpoint exposure:\\n" + String.join("\\n", failures));
     }
 
+
+
+    @Test
+    @Transactional
+    void applicableAccountWithAllCataloguedGrantsPassesEveryProtectedRoutePermissionGate() throws Exception {
+        AppUser seededVendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        Role allGrants = new Role();
+        allGrants.setId(UUID.randomUUID());
+        allGrants.setTenantId(seededVendor.getTenantId());
+        allGrants.setName("ENDPOINT_MATRIX_ALL_GRANTS_" + UUID.randomUUID().toString().replace("-", ""));
+        allGrants.getPermissions().addAll(permissions.findAll());
+        roles.saveAndFlush(allGrants);
+
+        AppUser vendor = new AppUser();
+        vendor.setId(UUID.randomUUID());
+        vendor.setTenantId(seededVendor.getTenantId());
+        vendor.setName("Endpoint matrix all-grants vendor");
+        vendor.setEmail("endpoint-all-grants-" + UUID.randomUUID() + "@example.test");
+        vendor.setPasswordHash(passwordEncoder.encode("Endpoint-Matrix-Password-2026"));
+        vendor.setAccountType("VENDOR");
+        vendor.setEnabled(true);
+        vendor.getRoles().add(allGrants);
+        users.saveAndFlush(vendor);
+
+        AppUser platform = users.findByEmailIgnoreCase("platform@saumya.local").orElseThrow();
+        AppUser customer = users.findByEmailIgnoreCase("customer@saumya.local").orElseThrow();
+        Map<String, String> tokens = Map.of(
+                "VENDOR", "Bearer " + jwt.issue(vendor),
+                "PLATFORM", "Bearer " + jwt.issue(platform),
+                "CUSTOMER", "Bearer " + jwt.issue(customer));
+
+        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+        List<String> checked = new ArrayList<>();
+        List<String> failures = new ArrayList<>();
+        for (var entry : mappings.getHandlerMethods().entrySet()) {
+            RequestMappingInfo info = entry.getKey();
+            HandlerMethod handler = entry.getValue();
+            Set<org.springframework.web.bind.annotation.RequestMethod> methods =
+                    info.getMethodsCondition().getMethods();
+            if (methods.isEmpty()) continue;
+            for (String pattern : info.getPatternValues()) {
+                if (isPublic(pattern)) continue;
+                String accountType = applicableAccountType(pattern);
+                String token = tokens.get(accountType);
+                String path = positiveProbePath(pattern, handler, accountType);
+                for (var method : methods) {
+                    if (method == org.springframework.web.bind.annotation.RequestMethod.OPTIONS
+                            || method == org.springframework.web.bind.annotation.RequestMethod.HEAD) continue;
+                    MockHttpServletRequestBuilder builder = mutationRequest(method, path, handler, mapper);
+                    int response = mvc.perform(builder.header("Authorization", token))
+                            .andReturn().getResponse().getStatus();
+                    checked.add(method + " " + pattern + " [" + accountType + "]");
+                    // A missing synthetic resource (404), invalid-but-authorized sample (400/422),
+                    // or valid business conflict (409/410) is acceptable here: the objective is
+                    // to prove the correct account type and a role carrying the complete permission
+                    // catalogue passed the authorization gate. Real resource ownership remains
+                    // covered by the fixture-backed tests in Release12TenantIntegrationTest.
+                    if (response == 401 || response == 403 || response >= 500) {
+                        failures.add(method + " " + pattern + " [" + accountType + "] returned "
+                                + response + " for the all-grants actor");
+                    }
+                }
+            }
+        }
+        assertTrue(checked.size() >= 207,
+                "The positive authorization-gate matrix unexpectedly shrank: only checked " + checked.size());
+        assertTrue(failures.isEmpty(),
+                "Applicable all-grants actors were denied or reached a server error:\n" + String.join("\n", failures));
+    }
+
+    private String applicableAccountType(String pattern) {
+        if (pattern.startsWith("/api/v1/platform/") || pattern.equals("/api/v1/tenants")) return "PLATFORM";
+        if (pattern.startsWith("/api/v1/customer/")) return "CUSTOMER";
+        return "VENDOR";
+    }
+
+    private String positiveProbePath(String pattern, HandlerMethod handler, String accountType) {
+        String path = probePath(pattern, handler);
+        // The first regex alternative is the platform-only tenants route. For a vendor
+        // positive probe, select the tenant-scoped users collection instead.
+        if ("VENDOR".equals(accountType) && pattern.startsWith("/api/v1/{type:")) {
+            path = path.replaceFirst("^/api/v1/tenants$", "/api/v1/users");
+        }
+        return path;
+    }
 
     @Test
     @Transactional
