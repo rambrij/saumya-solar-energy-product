@@ -5,6 +5,10 @@ DELIMITER $
 CREATE PROCEDURE assert_phase2_operational_tenant_integrity()
 BEGIN
     -- Legacy tenant columns were nullable in the original Release 2 DDL.
+    IF EXISTS (SELECT 1 FROM customer_profile c LEFT JOIN app_user u ON u.tenant_id=c.tenant_id AND u.id=c.user_id WHERE c.user_id IS NOT NULL AND u.id IS NULL) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='V58 blocked: customer profile user is missing or belongs to another tenant';
+    END IF;
+
     IF EXISTS (SELECT 1 FROM lead_history WHERE tenant_id IS NULL)
        OR EXISTS (SELECT 1 FROM site_survey WHERE tenant_id IS NULL)
        OR EXISTS (SELECT 1 FROM quotation WHERE tenant_id IS NULL)
@@ -255,6 +259,8 @@ ALTER TABLE offline_sync_attachment
     ADD CONSTRAINT fk_offline_attachment_operation_tenant FOREIGN KEY (tenant_id,operation_id) REFERENCES offline_sync_operation(tenant_id,id);
 ALTER TABLE integration_secret_reference
     ADD CONSTRAINT fk_secret_reference_connection_tenant FOREIGN KEY (tenant_id,integration_connection_id) REFERENCES integration_connection(tenant_id,id);
+ALTER TABLE customer_profile
+    ADD CONSTRAINT fk_customer_profile_user_tenant FOREIGN KEY (tenant_id,user_id) REFERENCES app_user(tenant_id,id);
 ALTER TABLE branch_user
     ADD CONSTRAINT fk_branch_user_user_tenant FOREIGN KEY (tenant_id,user_id) REFERENCES app_user(tenant_id,id);
 ALTER TABLE engineer_profile
