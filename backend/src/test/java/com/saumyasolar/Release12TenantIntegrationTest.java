@@ -1834,6 +1834,10 @@ class Release12TenantIntegrationTest {
                         .file(foreignSurveyUpload)
                         .header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/surveys/" + foreignSurvey.getId() + "/attachments/"
+                        + UUID.randomUUID())
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
     }
 
     private CustomerFixture createCustomer(UUID tenantId, String prefix) {
