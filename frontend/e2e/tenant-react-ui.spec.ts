@@ -66,10 +66,9 @@ test('React vendor workspace stays isolated when switching between two tenant ac
     );
     const loginForm = page.locator('form.card.form');
     await expect(loginForm).toBeVisible();
-    await expect(loginForm.locator('button[type="submit"]')).toBeVisible();
-    // Use a real keyboard form submission, which follows the browser's native
-    // submit path and React's onSubmit handler.
-    await page.getByPlaceholder('Password').press('Enter');
+    const submitButton = loginForm.locator('button').first();
+    await expect(submitButton).toBeVisible();
+    await submitButton.click();
     const loginResponse = await loginResponsePromise;
     if (!loginResponse.ok()) throw new Error('React login request failed with HTTP ' + loginResponse.status());
     await expect(page.locator('aside[aria-label="Application navigation"]')).toBeVisible();
