@@ -66,6 +66,13 @@ The source-level contract appears implemented, but latest-head browser verificat
 - Account lockout does not reveal account existence.
 - Latest-head frontend and backend tests pass.
 
+## Remediation update — 2026-11-10
+
+- Existing HttpOnly refresh cookie, CSRF double-submit, memory-only access token and generic lockout response are retained; no change was needed to avoid exposing lockout state.
+- Existing auth tests cover password lockout expiry, disabled users and refresh-family replay (`AuthLifecycleServiceTest`). Existing browser tests cover tenant filter tampering but do not establish the full session lifecycle.
+- Latest CI run 42818724332 passed backend tests, MySQL migration validation, Spring Boot health and frontend build. Newer changes are under workflow 42820915064 and are not yet verified.
+- Still open: browser tests for missing/mismatched CSRF, refresh-cookie attributes, concurrent tabs, logout and expired refresh; explicit 429 Retry-After UX assertions; production cookie/CORS settings. SRS does not require a 423 response; preserve generic 401 until product/security approves otherwise.
+
 ## Status
 
-**Open** — cookie/CSRF source implementation exists and appears aligned with the SRS; end-to-end proof and lockout/423 product decision remain open.
+**PARTIAL — implementation exists and prior CI passed; full latest-head browser session verification remains open.**
