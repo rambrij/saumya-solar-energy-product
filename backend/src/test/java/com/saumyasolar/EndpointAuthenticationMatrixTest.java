@@ -65,6 +65,7 @@ class EndpointAuthenticationMatrixTest {
     @Autowired PermissionRepository permissions;
     @Autowired QuotationRepository quotations;
     private UUID revisionFixtureId;
+    private UUID acceptedQuotationFixtureId;
     @Autowired JwtService jwt;
     @Autowired PasswordEncoder passwordEncoder;
 
@@ -161,6 +162,23 @@ class EndpointAuthenticationMatrixTest {
         quotations.saveAndFlush(revisionFixture);
         revisionFixtureId = revisionFixture.getId();
 
+        Quotation acceptedQuotationFixture = new Quotation();
+        acceptedQuotationFixture.setId(UUID.randomUUID());
+        acceptedQuotationFixture.setTenantId(seededVendor.getTenantId());
+        acceptedQuotationFixture.setQuoteGroupId(UUID.randomUUID());
+        acceptedQuotationFixture.setQuotationNumber("MATRIX-ACCEPTED-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8));
+        acceptedQuotationFixture.setRevision(1);
+        acceptedQuotationFixture.setStatus("ACCEPTED");
+        acceptedQuotationFixture.setSubtotal(BigDecimal.ONE);
+        acceptedQuotationFixture.setDiscountPercent(BigDecimal.ZERO);
+        acceptedQuotationFixture.setDiscountAmount(BigDecimal.ZERO);
+        acceptedQuotationFixture.setTaxAmount(BigDecimal.ZERO);
+        acceptedQuotationFixture.setGrandTotal(BigDecimal.ONE);
+        acceptedQuotationFixture.setCreatedBy(vendor.getId());
+        acceptedQuotationFixture.setCreatedAt(Instant.now());
+        quotations.saveAndFlush(acceptedQuotationFixture);
+        acceptedQuotationFixtureId = acceptedQuotationFixture.getId();
+
         Map<String, String> tokens = Map.of(
                 "VENDOR", "Bearer " + jwt.issue(vendor),
                 "PLATFORM", "Bearer " + jwt.issue(platform),
@@ -220,6 +238,9 @@ class EndpointAuthenticationMatrixTest {
         }
         if ("VENDOR".equals(accountType) && pattern.contains("/quotations/") && pattern.contains("/revisions")) {
             path = path.replace("00000000-0000-4000-8000-000000000001", revisionFixtureId.toString());
+        }
+        if ("VENDOR".equals(accountType) && pattern.contains("/quotations/") && pattern.contains("/convert-to-order")) {
+            path = path.replace("00000000-0000-4000-8000-000000000001", acceptedQuotationFixtureId.toString());
         }
         return path;
     }
