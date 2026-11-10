@@ -113,4 +113,47 @@ class AuthenticationRateLimitFilterTest {
         assertEquals(200, response.getStatus());
         assertNotNull(chain.getRequest());
     }
+    @Test
+    void publicEnquiryEndpointIsRateLimitedByItsOwnConfiguredBucket() throws Exception {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
+        when(jdbc.queryForObject(anyString(), eq(Integer.class), any(Object[].class))).thenReturn(2);
+        AuthenticationRateLimitFilter filter = new AuthenticationRateLimitFilter(
+                jdbc, new ObjectMapper(), new ClientAddressResolver(""),
+                10, 5, 10, 1, 20, 60, 60);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/public/vendor-one/enquiries");
+        request.setRemoteAddr("192.0.2.12");
+        request.setContentType("application/json");
+        request.setContent("{\"email\":\"customer@example.test\"}".getBytes(StandardCharsets.UTF_8));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertEquals(429, response.getStatus());
+        assertEquals("60", response.getHeader("Retry-After"));
+        verify(jdbc, times(1)).update(contains("auth_rate_limit_bucket"), any(Object[].class));
+    }
+
+    @Test
+    void exportAndWebhookEndpointsAreRateLimitedBySeparateBuckets() throws Exception {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
+        when(jdbc.queryForObject(anyString(), eq(Integer.class), any(Object[].class))).thenReturn(2);
+        AuthenticationRateLimitFilter filter = new AuthenticationRateLimitFilter(
+                jdbc, new ObjectMapper(), new ClientAddressResolver(""),
+                10, 5, 10, 30, 1, 1, 60);
+
+        MockHttpServletRequest export = new MockHttpServletRequest("GET", "/api/v1/platform/tenants/export.xlsx");
+        export.setRemoteAddr("192.0.2.13");
+        MockHttpServletResponse exportResponse = new MockHttpServletResponse();
+        filter.doFilter(export, exportResponse, new MockFilterChain());
+        assertEquals(429, exportResponse.getStatus());
+
+        MockHttpServletRequest webhook = new MockHttpServletRequest("POST", "/api/v1/payment-webhooks/provider-a");
+        webhook.setRemoteAddr("192.0.2.14");
+        MockHttpServletResponse webhookResponse = new MockHttpServletResponse();
+        filter.doFilter(webhook, webhookResponse, new MockFilterChain());
+        assertEquals(429, webhookResponse.getStatus());
+    }
+
 }
