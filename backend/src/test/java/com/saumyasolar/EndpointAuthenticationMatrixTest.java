@@ -5,6 +5,10 @@ import com.saumyasolar.domain.Role;
 import com.saumyasolar.repo.AppUserRepository;
 import com.saumyasolar.repo.RoleRepository;
 import com.saumyasolar.security.JwtService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.mock.web.MockPart;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +23,17 @@ import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -142,6 +157,231 @@ class EndpointAuthenticationMatrixTest {
                 "The authenticated read matrix unexpectedly shrank: only checked " + checked.size());
         assertTrue(failures.isEmpty(),
                 "Least-privilege authenticated reads were exposed:\\n" + String.join("\\n", failures));
+    }
+
+
+    @Test
+    void authenticatedZeroPermissionVendorIsDeniedEveryProtectedMutationMapping() throws Exception {
+        AppUser seededVendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        Role emptyRole = new Role();
+        emptyRole.setId(UUID.randomUUID());
+        emptyRole.setTenantId(seededVendor.getTenantId());
+        emptyRole.setName("ENDPOINT_MATRIX_MUTATION_DENY_" + UUID.randomUUID().toString().replace("-", ""));
+        roles.saveAndFlush(emptyRole);
+
+        AppUser leastPrivilege = new AppUser();
+        leastPrivilege.setId(UUID.randomUUID());
+        leastPrivilege.setTenantId(seededVendor.getTenantId());
+        leastPrivilege.setName("Endpoint matrix mutation denial");
+        leastPrivilege.setEmail("endpoint-mutation-" + UUID.randomUUID() + "@example.test");
+        leastPrivilege.setPasswordHash(passwordEncoder.encode("Endpoint-Matrix-Password-2026"));
+        leastPrivilege.setAccountType("VENDOR");
+        leastPrivilege.setEnabled(true);
+        leastPrivilege.getRoles().add(emptyRole);
+        users.saveAndFlush(leastPrivilege);
+        String token = jwt.issue(leastPrivilege);
+        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+
+        List<String> checked = new ArrayList<>();
+        List<String> failures = new ArrayList<>();
+        for (var entry : mappings.getHandlerMethods().entrySet()) {
+            RequestMappingInfo info = entry.getKey();
+            HandlerMethod handler = entry.getValue();
+            Set<org.springframework.web.bind.annotation.RequestMethod> methods =
+                    info.getMethodsCondition().getMethods();
+            for (String pattern : info.getPatternValues()) {
+                if (isPublic(pattern)) continue;
+                for (var method : methods) {
+                    if (method == org.springframework.web.bind.annotation.RequestMethod.GET
+                            || method == org.springframework.web.bind.annotation.RequestMethod.OPTIONS
+                            || method == org.springframework.web.bind.annotation.RequestMethod.HEAD) continue;
+                    String path = probePath(pattern, handler);
+                    MockHttpServletRequestBuilder builder = mutationRequest(method, path, handler, mapper);
+                    builder.header("Authorization", "Bearer " + token);
+                    int status = mvc.perform(builder).andReturn().getResponse().getStatus();
+                    checked.add(method + " " + pattern);
+                    if (status != 403 && status != 404) {
+                        failures.add(method + " " + pattern + " returned " + status
+                                + " (expected authorization denial 403 or non-disclosing 404)");
+                    }
+                }
+            }
+        }
+        assertTrue(checked.size() >= 100,
+                "The authenticated mutation matrix unexpectedly shrank: only checked " + checked.size());
+        assertTrue(failures.isEmpty(),
+                "Authenticated vendor mutation endpoints did not deny a user with no permissions:\n"
+                        + String.join("\n", failures));
+    }
+
+    private MockHttpServletRequestBuilder mutationRequest(
+            org.springframework.web.bind.annotation.RequestMethod method,
+            String path,
+            HandlerMethod handler,
+            ObjectMapper mapper
+    ) throws Exception {
+        boolean multipart = false;
+        for (var parameter : handler.getMethodParameters()) {
+            if (org.springframework.web.multipart.MultipartFile.class.isAssignableFrom(parameter.getParameterType())
+                    || (parameter.hasParameterAnnotation(org.springframework.web.bind.annotation.RequestPart.class)
+                    && org.springframework.web.multipart.MultipartFile.class.isAssignableFrom(parameter.getParameterType()))) {
+                multipart = true;
+            }
+        }
+        MockHttpServletRequestBuilder builder;
+        if (multipart) {
+            var upload = new MockMultipartFile("file", "matrix.txt", "text/plain",
+                    "authorization matrix probe".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            builder = org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(path).file(upload);
+        } else {
+            builder = request(HttpMethod.valueOf(method.name()), path);
+        }
+
+        for (var parameter : handler.getMethodParameters()) {
+            var body = parameter.getParameterAnnotation(org.springframework.web.bind.annotation.RequestBody.class);
+            if (body != null) {
+                Object sample = sampleValue(parameter.getParameterType(), parameter.getGenericParameterType(),
+                        parameter.getParameterName() == null ? "body" : parameter.getParameterName(),
+                        parameter.getParameterAnnotations());
+                builder.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(sample));
+                continue;
+            }
+            var part = parameter.getParameterAnnotation(org.springframework.web.bind.annotation.RequestPart.class);
+            if (part != null && !org.springframework.web.multipart.MultipartFile.class.isAssignableFrom(parameter.getParameterType())) {
+                String name = !part.name().isBlank() ? part.name() : part.value();
+                Object sample = sampleValue(parameter.getParameterType(), parameter.getGenericParameterType(),
+                        name, parameter.getParameterAnnotations());
+                if (builder instanceof org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder multipartBuilder) {
+                    multipartBuilder.part(new MockPart(name, mapper.writeValueAsBytes(sample)));
+                }
+                continue;
+            }
+            var requestParam = parameter.getParameterAnnotation(org.springframework.web.bind.annotation.RequestParam.class);
+            if (requestParam != null && requestParam.required() && requestParam.defaultValue().equals(
+                    org.springframework.web.bind.annotation.ValueConstants.DEFAULT_NONE)) {
+                String name = !requestParam.name().isBlank() ? requestParam.name()
+                        : !requestParam.value().isBlank() ? requestParam.value()
+                        : (parameter.getParameterName() == null ? "probe" : parameter.getParameterName());
+                builder.param(name, sampleString(name, parameter.getParameterAnnotations()));
+            }
+        }
+        return builder;
+    }
+
+    private String probePath(String pattern, HandlerMethod handler) {
+        Pattern variables = Pattern.compile("\\{([^}:]+)(?::([^}]+))?}");
+        Matcher matcher = variables.matcher(pattern);
+        StringBuffer result = new StringBuffer();
+        while (matcher.find()) {
+            String name = matcher.group(1);
+            String expression = matcher.group(2);
+            String value;
+            if (expression != null) {
+                if (expression.contains("|")) value = expression.split("\\|")[0];
+                else if (expression.contains("\\d") || expression.contains("[0-9]")) value = "1";
+                else value = "matrix";
+            } else {
+                value = pathVariableValue(name, handler);
+            }
+            matcher.appendReplacement(result, Matcher.quoteReplacement(value));
+        }
+        matcher.appendTail(result);
+        String path = result.toString().replace("**", "probe").replace("*", "probe");
+        return path.contains("?") ? path.substring(0, path.indexOf('?')) : path;
+    }
+
+    private String pathVariableValue(String name, HandlerMethod handler) {
+        for (var parameter : handler.getMethodParameters()) {
+            var annotation = parameter.getParameterAnnotation(org.springframework.web.bind.annotation.PathVariable.class);
+            if (annotation == null) continue;
+            String parameterName = !annotation.name().isBlank() ? annotation.name()
+                    : !annotation.value().isBlank() ? annotation.value()
+                    : parameter.getParameterName();
+            if (name.equals(parameterName) && parameter.getParameterType() == String.class) {
+                return sampleString(name, parameter.getParameterAnnotations());
+            }
+        }
+        return "00000000-0000-4000-8000-000000000001";
+    }
+
+    private Object sampleValue(Class<?> type, Type genericType, String name, Annotation[] annotations) {
+        if (type == String.class) return sampleString(name, annotations);
+        if (type == UUID.class) return UUID.fromString("00000000-0000-4000-8000-000000000001");
+        if (type == BigDecimal.class) return BigDecimal.ONE;
+        if (type == Integer.class || type == int.class || type == Long.class || type == long.class
+                || type == Short.class || type == short.class || type == Double.class || type == double.class
+                || type == Float.class || type == float.class) return 1;
+        if (type == Boolean.class || type == boolean.class) return true;
+        if (type == Instant.class) return Instant.parse("2030-01-01T00:00:00Z");
+        if (type == LocalDate.class) return LocalDate.of(2030, 1, 1);
+        if (type == LocalDateTime.class) return LocalDateTime.of(2030, 1, 1, 10, 0);
+        if (type == LocalTime.class) return LocalTime.of(10, 0);
+        if (type.isEnum()) return type.getEnumConstants()[0];
+        if (type == byte[].class) return new byte[] {1};
+        if (type.isArray()) return new Object[] {sampleValue(type.getComponentType(), null, name, new Annotation[0])};
+        if (Map.class.isAssignableFrom(type)) return Map.of();
+        if (Collection.class.isAssignableFrom(type)) {
+            if (!hasAnnotation(annotations, "NotEmpty")) return List.of();
+            Type elementType = genericType instanceof ParameterizedType parameterized
+                    ? parameterized.getActualTypeArguments()[0] : Object.class;
+            Class<?> elementClass = elementType instanceof Class<?> cls ? cls : Object.class;
+            return List.of(sampleValue(elementClass, elementType, name, new Annotation[0]));
+        }
+        if (type.isRecord()) {
+            Map<String, Object> values = new LinkedHashMap<>();
+            for (var component : type.getRecordComponents()) {
+                values.put(component.getName(), sampleValue(component.getType(), component.getGenericType(),
+                        component.getName(), component.getAnnotations()));
+            }
+            return values;
+        }
+        if (type == Object.class) return Map.of();
+        return null;
+    }
+
+    private boolean hasAnnotation(Annotation[] annotations, String simpleName) {
+        for (Annotation annotation : annotations) {
+            if (annotation.annotationType().getSimpleName().equals(simpleName)) return true;
+        }
+        return false;
+    }
+
+    private String sampleString(String name, Annotation[] annotations) {
+        String key = name == null ? "" : name.toLowerCase(java.util.Locale.ROOT);
+        for (Annotation annotation : annotations) {
+            if (annotation instanceof jakarta.validation.constraints.Pattern constraint) {
+                String expression = constraint.regexp();
+                if (expression.contains("|")) {
+                    String candidate = expression.replace("^", "").replace("$", "").split("\\|")[0];
+                    if (candidate.matches("[A-Za-z0-9_-]+")) return candidate;
+                }
+                if (expression.contains("\\d") || expression.contains("[0-9]")) return "9000000000";
+            }
+        }
+        if (key.contains("email")) return "matrix@example.test";
+        if (key.contains("password")) return "Matrix-Password-2026";
+        if (key.contains("phone")) return "9000000000";
+        if (key.contains("pincode") || key.contains("postal")) return "492001";
+        if (key.contains("timezone")) return "Asia/Kolkata";
+        if (key.contains("slug")) return "matrix-tenant";
+        if (key.contains("domain")) return "matrix.example.test";
+        if (key.contains("url") || key.contains("uri")) return "https://example.test/resource";
+        if (key.contains("direction")) return "INCREASE";
+        if (key.contains("decision")) return "ACCEPT";
+        if (key.contains("priority")) return "LOW";
+        if (key.contains("status")) return "ACTIVE";
+        if (key.contains("method")) return "CASH";
+        if (key.contains("format")) return "CSV";
+        if (key.contains("reporttype")) return "OPERATIONS";
+        if (key.contains("currency")) return "INR";
+        if (key.contains("reason")) return "Authorization matrix probe";
+        if (key.contains("description") || key.contains("notes") || key.contains("comment")) return "Authorization matrix probe";
+        if (key.contains("name") || key.contains("title") || key.contains("label")) return "Matrix Test";
+        if (key.contains("code") || key.contains("sku")) return "MATRIX-001";
+        if (key.contains("reference") || key.contains("key")) return "MATRIX-001";
+        if (key.contains("date")) return "2030-01-01";
+        return "MATRIX";
     }
 
     private boolean isPublic(String pattern) {
