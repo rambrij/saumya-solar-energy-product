@@ -90,3 +90,12 @@ Still open: inventory every Controller/secondary-controller mapping and service 
 - FinanceService.closeTicket, pauseSla and resumeSla now invoke the shared customer/assigned-engineer ticket access guard before changing ticket state.
 - The assignment predicate is covered by regression tests for unassigned engineer denial, assigned engineer access and tenant dispatcher access.
 - This is a targeted correction, not completion of the full role × endpoint × verb × resource matrix; legacy permission reconciliation and exhaustive role tests remain open.
+
+
+### Permission-based assignment guard remediation — 2026-11-10
+
+- Replaced role-name checks with the SRS permission contract in survey review (SURVEY_ASSIGN), survey reassignment (SURVEY_ASSIGN), and service dispatch paths (SERVICE_ASSIGN) used by offline service comments, service comments, and warranty-claim evidence.
+- Survey reads now apply assigned-engineer filtering based on SERVICE_VIEW without SERVICE_ASSIGN, including custom roles; standard role labels are no longer the enforcement condition for these paths.
+- Added regression tests for custom survey reviewer permissions, assigned survey visibility and warranty evidence dispatch permissions. A branch lifecycle integration test covers branch creation, listing, update, membership assign/remove and activation/deactivation, including denial for a sales employee without branch-management permission.
+- Added V59 because V53 grants AUDIT_VIEW to platform roles without inserting the permission code in its catalogue seed. V59 inserts the missing platform-only code and grants it to the two platform roles; the migration CI job now asserts the grant.
+- Remaining role-name checks must be classified one by one as either an intentional role-specific business rule or an authorization defect. This targeted pass does not prove every 222 endpoint against every role and HTTP verb. The complete matrix remains open pending an executable authenticated matrix and passing latest-head CI.
