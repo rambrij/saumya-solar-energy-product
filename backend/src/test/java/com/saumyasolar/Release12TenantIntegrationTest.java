@@ -1685,6 +1685,10 @@ class Release12TenantIntegrationTest {
                 {"code":"BR-UPD-%s","name":"Updated branch %s","address":"Updated address","phone":"8888888888","email":"updated-%s@example.test"}
                 """.formatted(suffix, suffix, suffix);
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/branches/" + branchId)
+                        .header("Authorization", "Bearer " + salesToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(updateBody))
+                .andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/branches/" + branchId)
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON).content(updateBody))
                 .andExpect(status().isOk());
@@ -1692,6 +1696,28 @@ class Release12TenantIntegrationTest {
                 branches.findByIdAndTenantId(branchId, vendorTenantId).orElseThrow().getName());
 
         UUID employeeId = users.findByEmailIgnoreCase("sales@saumya.local").orElseThrow().getId();
+        mvc.perform(post("/api/v1/branches/" + branchId + "/users")
+                        .header("Authorization", "Bearer " + salesToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + employeeId + "\"}"))
+                .andExpect(status().isForbidden());
+        var foreignTenantForMember = newTenant();
+        AppUser foreignEmployee = new AppUser();
+        foreignEmployee.setId(UUID.randomUUID());
+        foreignEmployee.setTenantId(foreignTenantForMember.getId());
+        foreignEmployee.setName("Foreign branch employee");
+        foreignEmployee.setEmail("foreign-branch-employee-" + UUID.randomUUID() + "@example.test");
+        foreignEmployee.setPasswordHash(passwordEncoder.encode("Foreign-Employee-Password-2026"));
+        foreignEmployee.setAccountType("VENDOR");
+        foreignEmployee.setEnabled(true);
+        users.saveAndFlush(foreignEmployee);
+        mvc.perform(post("/api/v1/branches/" + branchId + "/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + foreignEmployee.getId() + "\"}"))
+                .andExpect(status().isNotFound());
+        assertFalse(branchMemberships.existsByTenantIdAndBranchIdAndUserId(
+                vendorTenantId, branchId, foreignEmployee.getId()));
         mvc.perform(post("/api/v1/branches/" + branchId + "/users")
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
