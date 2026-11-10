@@ -7,6 +7,8 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockFilterChain;
 
+import java.nio.charset.StandardCharsets;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -30,6 +32,70 @@ class AuthenticationRateLimitFilterTest {
         assertEquals("60", response.getHeader("Retry-After"));
         assertTrue(response.getContentAsString().contains("Too many authentication attempts"));
         assertNull(chain.getRequest());
+    }
+
+    @Test
+    void loginAppliesIndependentIpAndAccountBucketsAndReplaysRequestBody() throws Exception {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
+        when(jdbc.queryForObject(anyString(), eq(Integer.class), any(Object[].class))).thenReturn(1);
+        AuthenticationRateLimitFilter filter =
+                new AuthenticationRateLimitFilter(jdbc, new ObjectMapper(), 10, 5, 10, 60);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/auth/login");
+        request.setRemoteAddr("192.0.2.10");
+        request.setContentType("application/json");
+        request.setContent("{\"email\":\" Ram@Example.Test \",\"password\":\"not-persisted\"}"
+                .getBytes(StandardCharsets.UTF_8));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        filter.doFilter(request, response, chain);
+
+        assertEquals(200, response.getStatus());
+        assertNotNull(chain.getRequest());
+        assertEquals("{\"email\":\" Ram@Example.Test \",\"password\":\"not-persisted\"}",
+                new String(chain.getRequest().getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+        verify(jdbc, times(2)).update(contains("auth_rate_limit_bucket"), any(Object[].class));
+        verify(jdbc, times(2)).queryForObject(contains("auth_rate_limit_bucket"), eq(Integer.class), any(Object[].class));
+    }
+
+    @Test
+    void recoveryAndLoginAccountBucketsDoNotPersistRawIdentifiers() throws Exception {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
+        when(jdbc.queryForObject(anyString(), eq(Integer.class), any(Object[].class))).thenReturn(1);
+        AuthenticationRateLimitFilter filter =
+                new AuthenticationRateLimitFilter(jdbc, new ObjectMapper(), 10, 5, 10, 60);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/auth/forgot-password");
+        request.setRemoteAddr("192.0.2.11");
+        request.setContentType("application/json");
+        request.setContent("{\"email\":\"person@example.test\"}".getBytes(StandardCharsets.UTF_8));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        org.mockito.ArgumentCaptor<Object[]> args = org.mockito.ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc, times(2)).update(contains("auth_rate_limit_bucket"), args.capture());
+        for (Object[] values : args.getAllValues()) {
+            for (Object value : values) {
+                assertFalse(value instanceof String text && text.contains("person@example.test"));
+            }
+        }
+    }
+
+    @Test
+    void oversizedAuthenticationBodyIsRejectedWithoutReadingUnboundedInput() throws Exception {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        AuthenticationRateLimitFilter filter =
+                new AuthenticationRateLimitFilter(jdbc, new ObjectMapper(), 10, 5, 10, 60);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/auth/login");
+        request.setContent(new byte[16 * 1024 + 1]);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertEquals(400, response.getStatus());
+        verifyNoInteractions(jdbc);
     }
 
     @Test
