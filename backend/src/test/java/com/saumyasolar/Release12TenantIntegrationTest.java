@@ -20,7 +20,17 @@ import com.saumyasolar.domain.InstallationJob;
 import com.saumyasolar.domain.Warranty;
 import com.saumyasolar.domain.WarrantyClaim;
 import com.saumyasolar.domain.WarrantyClaimAttachment;
+import com.saumyasolar.domain.BranchMembership;
+import com.saumyasolar.domain.Role;
+import com.saumyasolar.domain.Permission;
+import com.saumyasolar.domain.Enquiry;
+import com.saumyasolar.domain.SalesLead;
+import com.saumyasolar.domain.SiteSurvey;
 import com.saumyasolar.repo.WarrantyClaimAttachmentRepository;
+import com.saumyasolar.repo.BranchMembershipRepository;
+import com.saumyasolar.repo.PermissionRepository;
+import com.saumyasolar.repo.EnquiryRepository;
+import com.saumyasolar.repo.SalesLeadRepository;
 import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.repo.CustomerAddressRepository;
 import com.saumyasolar.repo.BranchRepository;
@@ -121,6 +131,10 @@ class Release12TenantIntegrationTest {
     WarrantyClaimRepository warrantyClaims;
     @Autowired
     WarrantyClaimAttachmentRepository warrantyClaimAttachments;
+    @Autowired BranchMembershipRepository branchMemberships;
+    @Autowired PermissionRepository permissions;
+    @Autowired EnquiryRepository enquiryRecords;
+    @Autowired SalesLeadRepository salesLeadRecords;
     
     UUID vendorTenantId;
     
@@ -1719,6 +1733,169 @@ class Release12TenantIntegrationTest {
         claim.setCreatedAt(Instant.now());
         claim.setUpdatedAt(Instant.now());
         return claim;
+    }
+
+    @Test
+    void branchAssignedMemberListsOnlyAssignedBranchEnquiriesLeadsSurveysQuotationsAndOrders() throws Exception {
+        Branch branchA = branch(vendorTenantId, "BR-A-" + UUID.randomUUID().toString().substring(0, 6));
+        Branch branchB = branch(vendorTenantId, "BR-B-" + UUID.randomUUID().toString().substring(0, 6));
+        branches.saveAllAndFlush(List.of(branchA, branchB));
+
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setTenantId(vendorTenantId);
+        role.setName("BRANCH_SCOPE_TEST_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10));
+        for (String code : List.of("LEAD_VIEW", "SURVEY_VIEW", "QUOTATION_VIEW", "ORDER_VIEW", "BRANCH_MANAGE")) {
+            Permission permission = permissions.findByCode(code).orElseThrow();
+            role.getPermissions().add(permission);
+        }
+        roles.saveAndFlush(role);
+
+        AppUser member = new AppUser();
+        member.setId(UUID.randomUUID());
+        member.setTenantId(vendorTenantId);
+        member.setName("Branch Assigned Member");
+        member.setEmail("branch-member-" + UUID.randomUUID() + "@example.test");
+        member.setPasswordHash(passwordEncoder.encode("Branch-Member-Password-2026"));
+        member.setAccountType("VENDOR");
+        member.setEnabled(true);
+        member.getRoles().add(role);
+        users.saveAndFlush(member);
+
+        BranchMembership membership = new BranchMembership();
+        membership.setId(UUID.randomUUID());
+        membership.setTenantId(vendorTenantId);
+        membership.setBranchId(branchA.getId());
+        membership.setUserId(member.getId());
+        membership.setCreatedAt(Instant.now());
+        branchMemberships.saveAndFlush(membership);
+
+        Enquiry enquiryA = enquiry(vendorTenantId, branchA.getId(), "A");
+        Enquiry enquiryB = enquiry(vendorTenantId, branchB.getId(), "B");
+        enquiryRecords.saveAllAndFlush(List.of(enquiryA, enquiryB));
+
+        SalesLead leadA = lead(vendorTenantId, branchA.getId(), member.getId(), enquiryA.getId());
+        SalesLead leadB = lead(vendorTenantId, branchB.getId(), member.getId(), enquiryB.getId());
+        salesLeadRecords.saveAllAndFlush(List.of(leadA, leadB));
+
+        SiteSurvey surveyA = survey(vendorTenantId, branchA.getId(), member.getId(), leadA.getId());
+        SiteSurvey surveyB = survey(vendorTenantId, branchB.getId(), member.getId(), leadB.getId());
+        surveys.saveAllAndFlush(List.of(surveyA, surveyB));
+
+        Quotation quoteA = quotation(vendorTenantId, branchA.getId(), member.getId(), leadA.getId());
+        Quotation quoteB = quotation(vendorTenantId, branchB.getId(), member.getId(), leadB.getId());
+        quotations.saveAllAndFlush(List.of(quoteA, quoteB));
+
+        CustomerOrder orderA = order(vendorTenantId, branchA.getId(), quoteA.getId());
+        CustomerOrder orderB = order(vendorTenantId, branchB.getId(), quoteB.getId());
+        customerOrders.saveAllAndFlush(List.of(orderA, orderB));
+
+        String token = accessToken(member.getEmail(), "Branch-Member-Password-2026");
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/enquiries").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), enquiryA.getId(), enquiryB.getId());
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/leads").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), leadA.getId(), leadB.getId());
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/surveys").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), surveyA.getId(), surveyB.getId());
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/quotations").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), quoteA.getId(), quoteB.getId());
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/orders").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), orderA.getId(), orderB.getId());
+    }
+
+    private Branch branch(UUID tenantId, String code) {
+        Branch branch = new Branch();
+        branch.setId(UUID.randomUUID());
+        branch.setTenantId(tenantId);
+        branch.setCode(code);
+        branch.setName(code);
+        branch.setActive(true);
+        branch.setCreatedAt(Instant.now());
+        branch.setUpdatedAt(Instant.now());
+        return branch;
+    }
+
+    private Enquiry enquiry(UUID tenantId, UUID branchId, String suffix) {
+        Enquiry row = new Enquiry();
+        row.setId(UUID.randomUUID());
+        row.setTenantId(tenantId);
+        row.setBranchId(branchId);
+        row.setName("Branch enquiry " + suffix);
+        row.setEmail("branch-" + suffix + "-" + UUID.randomUUID() + "@example.test");
+        row.setPhone("900000000" + suffix);
+        row.setPropertyType("RESIDENTIAL");
+        row.setStatus("NEW");
+        row.setCreatedAt(Instant.now());
+        return row;
+    }
+
+    private SalesLead lead(UUID tenantId, UUID branchId, UUID assignedUserId, UUID enquiryId) {
+        SalesLead row = new SalesLead();
+        row.setId(UUID.randomUUID());
+        row.setTenantId(tenantId);
+        row.setBranchId(branchId);
+        row.setEnquiryId(enquiryId);
+        row.setAssignedUserId(assignedUserId);
+        row.setStage("NEW");
+        row.setPriority("MEDIUM");
+        row.setCreatedAt(Instant.now());
+        return row;
+    }
+
+    private SiteSurvey survey(UUID tenantId, UUID branchId, UUID assignedUserId, UUID leadId) {
+        SiteSurvey row = new SiteSurvey();
+        row.setId(UUID.randomUUID());
+        row.setTenantId(tenantId);
+        row.setBranchId(branchId);
+        row.setLeadId(leadId);
+        row.setAssignedUserId(assignedUserId);
+        row.setScheduledAt(Instant.now().plusSeconds(3600));
+        row.setStatus("SCHEDULED");
+        return row;
+    }
+
+    private Quotation quotation(UUID tenantId, UUID branchId, UUID createdBy, UUID leadId) {
+        Quotation row = new Quotation();
+        row.setId(UUID.randomUUID());
+        row.setTenantId(tenantId);
+        row.setBranchId(branchId);
+        row.setQuotationNumber("BR-Q-" + UUID.randomUUID().toString().substring(0, 8));
+        row.setRevision(1);
+        row.setLeadId(leadId);
+        row.setCreatedBy(createdBy);
+        row.setStatus("DRAFT");
+        row.setSubtotal(BigDecimal.ZERO);
+        row.setDiscountPercent(BigDecimal.ZERO);
+        row.setDiscountAmount(BigDecimal.ZERO);
+        row.setTaxAmount(BigDecimal.ZERO);
+        row.setGrandTotal(BigDecimal.ZERO);
+        row.setCreatedAt(Instant.now());
+        return row;
+    }
+
+    private CustomerOrder order(UUID tenantId, UUID branchId, UUID quotationId) {
+        CustomerOrder row = new CustomerOrder();
+        row.setId(UUID.randomUUID());
+        row.setTenantId(tenantId);
+        row.setBranchId(branchId);
+        row.setQuotationId(quotationId);
+        row.setOrderNumber("BR-O-" + UUID.randomUUID().toString().substring(0, 8));
+        row.setStatus("DRAFT");
+        row.setSubtotal(BigDecimal.ZERO);
+        row.setDiscountPercent(BigDecimal.ZERO);
+        row.setDiscountAmount(BigDecimal.ZERO);
+        row.setTaxTotal(BigDecimal.ZERO);
+        row.setTotal(BigDecimal.ZERO);
+        row.setCreatedAt(Instant.now());
+        return row;
+    }
+
+    private void assertBranchListContainsOnly(String response, UUID expectedId, UUID excludedId) throws Exception {
+        JsonNode rows = json.readTree(response);
+        assertTrue(rows.isArray());
+        assertTrue(java.util.stream.StreamSupport.stream(rows.spliterator(), false)
+                .anyMatch(row -> expectedId.toString().equals(row.path("id").asText())));
+        assertFalse(response.contains(excludedId.toString()));
     }
 
     @Test
