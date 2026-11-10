@@ -10,6 +10,7 @@
 | `ServiceSlaScheduler.evaluate` | `@Scheduled(fixedDelayString)` | Trusted active tenant enumeration | Opens tenant scope in try-with-resources | SLA evaluation called inside tenant scope | PARTIAL — MySQL concurrency test covers selected behavior; exception/thread-reuse cleanup not isolated in a dedicated test |
 | `WarrantyExpiryScheduler.evaluateWarrantyExpiry` | `@Scheduled(cron)` | Trusted active tenant enumeration | Opens tenant scope in try-with-resources | Expiry query/update scoped to tenant | PARTIAL — MySQL concurrency test covers selected behavior; exception/thread-reuse cleanup not isolated in a dedicated test |
 | `SubscriptionExpiryScheduler.expireSubscriptions` | `@Scheduled(cron)` | Trusted active tenant enumeration | Opens tenant scope in try-with-resources | Expiry query/update scoped to tenant | PARTIAL — MySQL concurrency test covers selected behavior; exception/thread-reuse cleanup not isolated in a dedicated test |
+| `NotificationService.retryFailedDeliveries` | `@Scheduled(fixedDelayString)` | Tenant ID on persisted `NotificationDelivery` record | Opens `TenantExecutionContext` per record; null tenant rows are skipped | Atomic `claimFailedDelivery(id, tenantId, now)` update prevents two instances claiming the same FAILED row; retry persists final state | PARTIAL — tenant context and atomic claim implemented; provider retry/idempotency and multi-instance failure recovery still need integration tests |
 | `AuthenticationRateLimitCleanup.removeExpiredBuckets` | `@Scheduled(cron)` | Global authentication abuse buckets; no tenant-owned business rows | No tenant context required | Deletes expired global rate-limit buckets only | MET for its stated global cleanup purpose; no tenant data is read or mutated |
 
 ## Evidence and tests
@@ -26,8 +27,8 @@
 ## Remaining inventory work
 
 1. Complete a source-wide scan for executor submissions, application events with async listeners, export/report workers, notification delivery workers, and third-party queue consumers. The repository tree identifies the four scheduled tenant-aware components above; a reliable exhaustive `@Async`/executor symbol inventory is not established yet.
-2. Add dedicated nested-scope, exception, cancellation and reused-thread tests proving the ThreadLocal is restored/cleared on every exit path.
-3. Add duplicate delivery/retry/idempotency tests for integration sync adapters and any discovered asynchronous worker.
+2. Added `TenantExecutionContextTest` nested exception and reused-single-thread cleanup cases; continue cancellation and all worker exit-path tests.
+3. Notification retries now use an atomic tenant-qualified claim. Add MySQL multi-instance duplicate-delivery tests and idempotency tests for every integration/notification adapter.
 4. Do not pass a tenant ID from a browser or untrusted payload directly into the context; resolve it from a trusted tenant row/job record first.
 
 ## Acceptance
