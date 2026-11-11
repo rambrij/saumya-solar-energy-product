@@ -9,13 +9,11 @@ permissions:
 jobs:
   production-preflight:
     name: Production tenant-integrity and schema preflight
-    if: github.ref == 'refs/heads/audit/phase-2-implementation-gap-analysis'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: audit/phase-2-implementation-gap-analysis
       - name: Install MySQL client
         run: sudo apt-get update && sudo apt-get install -y default-mysql-client
       - name: Validate required production connection secrets
@@ -36,7 +34,7 @@ jobs:
             fi
           done
           echo "Production database connection configuration is present."
-      - name: Run V57/V58/V60 tenant data-integrity checks only (no migration DDL)
+      - name: Run tenant data-integrity checks only (no migration DDL)
         env:
           MYSQL_HOST: ${{ secrets.PROD_DB_HOST }}
           MYSQL_TCP_PORT: ${{ secrets.PROD_DB_PORT }}
@@ -56,14 +54,14 @@ jobs:
           mysql_status=${PIPESTATUS[0]}
           set -e
           if [ "$mysql_status" -ne 0 ]; then
-            echo "V57/V58 production preflight FAILED (exit $mysql_status). Preserve the artifact and remediate only after reviewing the reported relationship."
+            echo "tenant data-integrity preflight FAILED (exit $mysql_status). Preserve the artifact and remediate only after reviewing the reported relationship."
             exit "$mysql_status"
           fi
-          echo "V57/V58 production data-integrity preflight completed successfully." | tee -a phase2-production-preflight-output.txt
+          echo "Tenant data-integrity preflight completed successfully." | tee -a phase2-production-preflight-output.txt
       - name: Require every tenant-integrity preflight PASS marker
         run: |
           set -euo pipefail
-          for marker in             "V57 catalogue tenant-integrity preflight: PASS"             "V58 operational tenant-integrity preflight: PASS"             "V60 tenant-owned tenant_id NOT NULL preflight: PASS"; do
+          for marker in             "Catalogue tenant-integrity preflight: PASS"             "Operational tenant-integrity preflight: PASS"             "Tenant-owned tenant_id NOT NULL preflight: PASS"; do
             if ! grep -Fq "$marker" phase2-production-preflight-output.txt; then
               echo "::error::Missing mandatory production preflight marker: $marker"
               exit 1
