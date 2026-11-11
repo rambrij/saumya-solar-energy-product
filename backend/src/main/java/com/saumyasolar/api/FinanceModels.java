@@ -32,7 +32,6 @@ public final class FinanceModels {
             @NotNull UUID paymentId, @NotNull @DecimalMin("0.01") BigDecimal amount,
             @NotBlank @Size(max = 500) String reason, @Size(max = 160) String idempotencyKey
     ) {
-        public RefundCreate(UUID paymentId, BigDecimal amount, String reason) { this(paymentId, amount, reason, null); }
     }
     
     public record WebhookEvent(
