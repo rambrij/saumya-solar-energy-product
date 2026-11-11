@@ -141,6 +141,7 @@ public class PaymentGatewayWebhookService {
                 .map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         if (processed.compareTo(payment.getAmount()) >= 0) payment.setStatus("REFUNDED");
         else if (processed.signum() > 0 || reserved.signum() > 0) payment.setStatus("PARTIALLY_REFUNDED");
+        else if (Set.of("PARTIALLY_REFUNDED", "REFUNDED").contains(payment.getStatus())) payment.setStatus("CONFIRMED");
         payments.save(payment);
         Invoice invoice = invoices.findForUpdate(payment.getInvoiceId(), payment.getTenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found"));
