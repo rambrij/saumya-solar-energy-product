@@ -137,7 +137,24 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
         payload.put("amount", amount.toPlainString());
         payload.put("currency", currency);
         payload.put("status", status);
-        if (providerRefundReference != null) payload.put("providerRefundReference", providerRefundReference);
+        GatewayPaymentStatus current = payments.get(providerReference);
+        if (current != null) {
+            String paymentStatus = switch (status) {
+                case "PAYMENT_CAPTURED" -> "CONFIRMED";
+                case "PAYMENT_FAILED" -> "FAILED";
+                case "PAYMENT_CANCELLED" -> "CANCELLED";
+                default -> current.status();
+            };
+            payments.put(providerReference, new GatewayPaymentStatus(providerReference, paymentStatus,
+                    current.amount(), current.currency()));
+        }
+        if (providerRefundReference != null) {
+            String refundStatus = "REFUND_PROCESSED".equals(status) ? "PROCESSED"
+                    : "REFUND_FAILED".equals(status) ? "FAILED" : "PENDING";
+            refunds.replaceAll((key, value) -> value.providerRefundReference().equals(providerRefundReference)
+                    ? new GatewayRefund(providerRefundReference, refundStatus) : value);
+            payload.put("providerRefundReference", providerRefundReference);
+        }
         payload.put("tenantId", tenantId);
         return mapper.writeValueAsString(payload);
     }
