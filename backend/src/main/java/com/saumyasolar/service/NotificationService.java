@@ -39,6 +39,7 @@ public class NotificationService {
     private final String twilioSid, twilioToken, smsFrom, whatsappFrom;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     private final ApplicationEventPublisher eventPublisher;
+    private final UserNotificationService inbox;
     
     public NotificationService(
             JavaMailSender mailSender,
@@ -49,6 +50,15 @@ public class NotificationService {
         this(mailSender, deliveries, null, from, publicBaseUrl, "", "", "", "", null);
     }
     
+    public NotificationService(
+            JavaMailSender mailSender, NotificationDeliveryRepository deliveries, CustomerProfileRepository customers,
+            String from, String publicBaseUrl, String twilioSid, String twilioToken,
+            String smsFrom, String whatsappFrom, ApplicationEventPublisher eventPublisher
+    ) {
+        this(mailSender, deliveries, customers, from, publicBaseUrl, twilioSid, twilioToken,
+                smsFrom, whatsappFrom, eventPublisher, null);
+    }
+
     @Autowired
     public NotificationService(
             JavaMailSender mailSender, NotificationDeliveryRepository deliveries, CustomerProfileRepository customers,
@@ -58,7 +68,8 @@ public class NotificationService {
             @Value("${app.messaging.twilio-auth-token:}") String twilioToken,
             @Value("${app.messaging.sms-from:}") String smsFrom,
             @Value("${app.messaging.whatsapp-from:}") String whatsappFrom,
-            ApplicationEventPublisher eventPublisher
+            ApplicationEventPublisher eventPublisher,
+            UserNotificationService inbox
     ) {
         this.mailSender = mailSender;
         this.deliveries = deliveries;
@@ -70,6 +81,7 @@ public class NotificationService {
         this.smsFrom = smsFrom;
         this.whatsappFrom = whatsappFrom;
         this.eventPublisher = eventPublisher;
+        this.inbox = inbox;
     }
     
     public boolean sendPasswordReset(UUID userId, UUID tenantId, String recipient, String displayName, String token) {
@@ -98,10 +110,11 @@ public class NotificationService {
             UUID userId, UUID tenantId, String eventType,
             String recipient, String subject, String body
     ) {
+        if (tenantId == null) throw new IllegalArgumentException("Business notifications require a tenant");
+        if (inbox != null) inbox.createBusinessNotification(userId, tenantId, eventType, subject, body);
         if (eventPublisher == null) {
             return deliverBusinessNotification(userId, tenantId, eventType, recipient, subject, body);
         }
-        if (tenantId == null) throw new IllegalArgumentException("Business notifications require a tenant");
 
         UUID emailId = queueDelivery(userId, tenantId, eventType, "EMAIL", recipient, subject, body);
         List<UUID> queuedIds = new java.util.ArrayList<>();
