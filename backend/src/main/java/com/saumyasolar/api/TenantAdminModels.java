@@ -12,8 +12,9 @@ public final class TenantAdminModels {
                                        @NotBlank @Size(max=500) String reason) {}
     public record TenantRow(
             UUID id,String name,String slug,String administratorName,String administratorEmail,
-            String status,Instant createdAt,Instant updatedAt,Instant verifiedAt,Instant activatedAt,
-            Instant suspendedAt,Instant closedAt,String lifecycleReason
+            String status,Instant createdAt,Instant updatedAt,Instant verifiedAt,UUID verifiedBy,
+            Instant activatedAt,UUID activatedBy,Instant suspendedAt,UUID suspendedBy,
+            Instant closedAt,UUID closedBy,String lifecycleReason
     ) {}
     public record TenantPage(
             long total,int page,int size,int totalPages,long active,long inactive,long suspended,
