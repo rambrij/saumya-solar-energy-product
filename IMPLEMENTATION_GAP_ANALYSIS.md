@@ -1915,3 +1915,39 @@ The requested remaining role/resource scenarios are verified by the passing run.
 - Changed the Operations Orders tab visibility and order-list fetch to use `ORDER_VIEW`, so read-only order viewers are not incorrectly hidden behind `ORDER_CREATE`. Reservation release controls are hidden without `INVENTORY_RESERVE`.
 - Added tenant lifecycle timestamps and last lifecycle reason to the platform tenant detail view.
 - CI before these follow-up commits: backend tests, frontend build and V1–V3 MySQL migration checks passed; browser E2E failed because its fixture attempted login while the tenant was still PENDING. The updated head must run the full workflow before acceptance.
+
+
+---
+
+## Phase 4 finance/provider implementation assessment — 2026-11-11
+
+**Implementation branch:** `audit/phase-4-finance-provider-impl`  
+**Base:** `audit/phase-3-implementation-gap-analysis`
+
+### Source references and implementation plan
+
+| Phase 4 item | Business requirement reference | SRS/HLD reference | Existing state at Phase 3 base | Planned change / current outcome |
+|---|---|---|---|---|
+| GST rules and statutory invoice snapshots | §§6–7, 8 (GST/tax configuration, quotation taxes, invoice generation) | §§3, 10.10 FIN-001–FIN-003, 14.2–14.3, 19, 26 item 4 | PARTIAL: tax/GSTIN/CGST/SGST/IGST snapshots and PDF exist; statutory treatment is not approved | Preserve immutable issued-invoice snapshots; implement only approved configurable tax rules after accounting decisions. Not implemented in this pass. |
+| Invoice numbering | §§6–7 (quotation/order/invoice generation) | §10.10 FIN-002; §14.3 unique tenant invoice number; §26 item 4 | PARTIAL: tenant invoice sequence exists; legal series/fiscal policy unresolved | Make approved fiscal-year/series/branch rules configurable and concurrency-safe; do not invent a statutory format. Not implemented in this pass. |
+| Provider adapter and registry | §15 (providers behind interfaces); §20 roadmap payment gateway | §§10.10 FIN-004–FIN-005, 17 payment-gateway adapter, 26 item 5 | PARTIAL: adapter/registry and pending checkout foundation exist; no live provider | Retain and extend existing ports; register deterministic mock by dev/test configuration only. Source inspection and code change blocked. |
+| Signed provider webhooks | §§7, 18 (payment updates/audit) | §§10.10 FIN-005/FIN-007, 13.7 webhook route, 18 idempotent tenant-aware jobs | PARTIAL/FOUNDATION: signed and deduplicated webhook processing is recorded as implemented in Phase 2 audit | Extend event types for capture/failure/refund outcomes; retain signature verification, idempotency and tenant binding. Not verified or changed in this pass. |
+| Settlement reconciliation | §§7, 14, 18 (payment tracking and audit) | §§17–18 (provider adapter, payment reconciliation job, idempotency/observability) | MISSING/PARTIAL: Phase 3 gap analysis says real settlement reconciliation is not enabled | Add tenant-scoped reconciliation records, deterministic mock settlement reports, mismatch classification and replay-safe processing. Not implemented in this pass. |
+| Provider refunds | §7 (cancel/refund where permitted); §12 accountant financial permissions | §§8.4, 10.10, 13.7, 20.7 and §26 item 12 | PARTIAL: manual refunds and authorization exist; provider-side execution is not enabled | Add adapter refund initiation/status and immutable provider refund event records without changing existing authorization. Refund policy and thresholds remain open. Not implemented in this pass. |
+| Hosted checkout result and payment/refund visibility | §§2–3 customer order/payment/invoice portal | §§10.10 FIN-006, 12.1–12.4, 13.7 | PARTIAL: customer checkout entry point and payment views exist; real hosted checkout disabled | Add safe result/status UI; browser redirect is informational only and cannot mark a payment paid. Not implemented in this pass. |
+
+### Work closed in this pass
+
+- Created the Phase 4 branch from the exact existing Phase 3 base.
+- Added `docs/CLEANUP_DECISIONS.md` with fixed safety decisions and ten explicit business/accounting/provider open questions.
+- No live provider SDK, credentials, network calls or payment endpoints were added.
+
+### Remaining work — not closed
+
+All runtime Phase 4 implementation items remain open: GST-rule approval and implementation, approved invoice numbering, mock adapter lifecycle, profile-gated mock simulators, expanded webhook events, settlement reconciliation, provider refund lifecycle, hosted checkout result UI, payment/refund visibility, database migrations, audit/tenant-isolation tests and complete CI validation.
+
+Real-provider integration status: **pending provider selection; adapter and mock complete** is the intended Phase 4 acceptance wording only after the mock adapter lifecycle is actually implemented and verified. It is **not** claimed complete by this assessment.
+
+### Verification status
+
+No baseline or post-change backend/frontend test suite was run. No build or migration validation was run. The GitHub connector session did not provide a repository checkout/tree API, and a network clone could not resolve GitHub. Consequently, code-level state beyond the existing gap-analysis evidence could not be independently inspected, and no runtime Phase 4 acceptance criterion is marked Met. Do not treat Phase 4 as implemented or release-ready.
