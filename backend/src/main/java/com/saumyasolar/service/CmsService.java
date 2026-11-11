@@ -46,9 +46,9 @@ public class CmsService {
     @Transactional
     public CmsContent create(ContentInput input, Principal actor) {
         UUID tenantId = requireVendor(actor, "CMS_CREATE");
+        validateInput(input);
         String type = normalizeType(input.type());
         String slug = normalizeSlug(input.slug());
-        validateInput(input);
         if (contents.existsByTenantIdAndTypeAndSlug(tenantId, type, slug))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "A content item already uses this slug");
         Instant now = Instant.now();
@@ -274,6 +274,7 @@ public class CmsService {
     private void validateInput(ContentInput input) {
         if (input == null || input.title() == null || input.title().isBlank() || input.title().length() > 180
                 || input.body() == null || input.body().isBlank() || input.body().length() > 100000
+                || input.body().matches("(?is).*<\\s*(script|iframe|object|embed|style|form)\\b.*")
                 || (input.seoTitle() != null && input.seoTitle().length() > 180)
                 || (input.seoDescription() != null && input.seoDescription().length() > 320))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CMS content fields are invalid");
