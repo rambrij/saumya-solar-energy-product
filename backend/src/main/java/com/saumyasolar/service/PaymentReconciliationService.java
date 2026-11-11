@@ -71,6 +71,7 @@ public class PaymentReconciliationService {
         report.setMismatchCount(0);
         report.setStatus("PROCESSING");
         report.setPayloadHash(payloadHash);
+        report.setCreatedBy(actor.userId());
         report.setCreatedAt(Instant.now());
         reports.saveAndFlush(report);
 
