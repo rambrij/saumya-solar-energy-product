@@ -23,6 +23,7 @@ public class PaymentReconciliationReport {
     Integer mismatchCount;
     @Column(length = 24) String status;
     @Column(length = 64) String payloadHash;
+    UUID createdBy;
     Instant createdAt;
     Instant processedAt;
 }
