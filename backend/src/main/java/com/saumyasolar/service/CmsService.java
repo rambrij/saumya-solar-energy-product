@@ -292,7 +292,9 @@ public class CmsService {
             URI uri = URI.create(image);
             if (uri.isAbsolute() && !"https".equalsIgnoreCase(uri.getScheme()))
                 throw new IllegalArgumentException();
-            if (image.startsWith("//") || image.toLowerCase(Locale.ROOT).startsWith("javascript:"))
+            if (!uri.isAbsolute() && !image.matches("^/uploads/[A-Za-z0-9._/-]+$"))
+                throw new IllegalArgumentException();
+            if (image.startsWith("//") || image.contains("..") || image.toLowerCase(Locale.ROOT).startsWith("javascript:"))
                 throw new IllegalArgumentException();
             return image;
         } catch (IllegalArgumentException ex) {
