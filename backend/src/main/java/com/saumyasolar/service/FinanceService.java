@@ -155,10 +155,11 @@ public class FinanceService {
         financeAccess(p);
         permission(p, "INVOICE_CREATE");
         Set<String> eligible = Set.of("CONFIRMED", "PAYMENT_PENDING", "PAYMENT_PARTIAL", "PAID", "MATERIAL_RESERVED", "INSTALLATION_SCHEDULED", "INSTALLATION_IN_PROGRESS", "INSTALLED", "COMMISSIONED", "CLOSED");
-        return orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
+        List<CustomerOrder> rows = orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
                 .filter(o -> eligible.contains(o.getStatus()))
                 .filter(o -> invoices.findByOrderIdAndTenantId(o.getId(), p.tenantId()).isEmpty())
                 .toList();
+        return enterpriseSaas == null ? rows : enterpriseSaas.filterBranchRecords(rows, CustomerOrder::getBranchId, p);
     }
     
     @Transactional
@@ -167,6 +168,7 @@ public class FinanceService {
         permission(p, "INVOICE_CREATE");
         permission(p, "INVOICE_CREATE");
         CustomerOrder order = orders.findForUpdate(input.orderId(), tenant).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+        if (enterpriseSaas != null) enterpriseSaas.assertBranchAccess(order.getBranchId(), p);
         if (!Set.of("CONFIRMED", "PAYMENT_PENDING", "PAYMENT_PARTIAL", "PAID", "MATERIAL_RESERVED", "INSTALLATION_SCHEDULED", "INSTALLATION_IN_PROGRESS", "INSTALLED", "COMMISSIONED", "CLOSED").contains(order.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "An invoice can only be issued for a confirmed order milestone");
         var existing = invoices.findByOrderIdAndTenantId(order.getId(), tenant);
@@ -255,6 +257,7 @@ public class FinanceService {
         Invoice invoice = new Invoice();
         invoice.setId(UUID.randomUUID());
         invoice.setTenantId(tenant);
+        invoice.setBranchId(order.getBranchId());
         invoice.setOrderId(order.getId());
         invoice.setFiscalYear(fy);
         invoice.setInvoiceNumber(( t.getInvoicePrefix() == null ? "INV" : t.getInvoicePrefix() ) + "-" + fy + "-" + String.format(Locale.ROOT, "%06d", sequence));
