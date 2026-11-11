@@ -2,6 +2,9 @@ package com.saumyasolar.service;
 
 import com.saumyasolar.domain.NotificationDelivery;
 import com.saumyasolar.repo.NotificationDeliveryRepository;
+import com.saumyasolar.repo.NotificationOutboxRepository;
+import com.saumyasolar.domain.NotificationOutbox;
+import org.springframework.transaction.annotation.Transactional;
 import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.domain.CustomerProfile;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +39,7 @@ public class NotificationService {
     private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
     private final JavaMailSender mailSender;
     private final NotificationDeliveryRepository deliveries;
+    private final NotificationOutboxRepository outbox;
     private final String from;
     private final String publicBaseUrl;
     private final CustomerProfileRepository customers;
@@ -50,7 +54,7 @@ public class NotificationService {
             String from,
             String publicBaseUrl
     ) {
-        this(mailSender, deliveries, null, from, publicBaseUrl, "", "", "", "", null);
+        this(mailSender, deliveries, null, from, publicBaseUrl, "", "", "", "", null, null);
     }
     
     public NotificationService(
@@ -59,7 +63,7 @@ public class NotificationService {
             String smsFrom, String whatsappFrom, ApplicationEventPublisher eventPublisher
     ) {
         this(mailSender, deliveries, customers, from, publicBaseUrl, twilioSid, twilioToken,
-                smsFrom, whatsappFrom, eventPublisher, null);
+                smsFrom, whatsappFrom, eventPublisher, null, null);
     }
 
     @Autowired
@@ -72,10 +76,12 @@ public class NotificationService {
             @Value("${app.messaging.sms-from:}") String smsFrom,
             @Value("${app.messaging.whatsapp-from:}") String whatsappFrom,
             ApplicationEventPublisher eventPublisher,
-            UserNotificationService inbox
+            UserNotificationService inbox,
+            NotificationOutboxRepository outbox
     ) {
         this.mailSender = mailSender;
         this.deliveries = deliveries;
+        this.outbox = outbox;
         this.customers = customers;
         this.from = from;
         this.publicBaseUrl = publicBaseUrl.replaceAll("/+$", "");
@@ -109,6 +115,7 @@ public class NotificationService {
      * Queues a tenant-scoped business notification for asynchronous delivery.
      * Authentication recovery and MFA messages deliberately remain synchronous.
      */
+    @Transactional
     public boolean sendBusinessNotification(
             UUID userId, UUID tenantId, String eventType,
             String recipient, String subject, String body
@@ -169,6 +176,12 @@ public class NotificationService {
         record.setAttemptCount(0);
         record.setCreatedAt(Instant.now());
         deliveries.save(record);
+        if (outbox != null) {
+            NotificationOutbox item = new NotificationOutbox();
+            item.setId(UUID.randomUUID()); item.setTenantId(tenantId); item.setDeliveryId(record.getId());
+            item.setStatus("PENDING"); item.setAttemptCount(0); item.setCreatedAt(Instant.now()); item.setUpdatedAt(Instant.now());
+            outbox.save(item);
+        }
         return record.getId();
     }
 
@@ -180,11 +193,11 @@ public class NotificationService {
                 .filter(CustomerProfile::isActive).orElse(null);
         if (customer == null || customer.getPhone() == null
                 || !customer.getPhone().matches("^\\+[1-9][0-9]{7,14}$")) return;
-        if (customer.isSmsConsent() && !smsFrom.isBlank()) {
+        if (customer.isSmsConsent()) {
             UUID id = queueDelivery(userId, tenantId, eventType, "SMS", customer.getPhone(), eventType, body);
             if (id != null) queuedIds.add(id);
         }
-        if (customer.isWhatsappConsent() && !whatsappFrom.isBlank()) {
+        if (customer.isWhatsappConsent()) {
             String to = "whatsapp:" + customer.getPhone();
             String message = (subject == null ? eventType : subject) + "\n" + body;
             UUID id = queueDelivery(userId, tenantId, eventType, "WHATSAPP", to, eventType, message);
@@ -238,21 +251,10 @@ public class NotificationService {
         deliveries.save(record);
     }
 
-    private void sendProviderDelivery(NotificationDelivery record) throws Exception {
-        if (twilioSid.isBlank() || twilioToken.isBlank()) throw new IllegalStateException("Messaging provider is not configured");
-        String sender = "SMS".equals(record.getChannel()) ? smsFrom
-                : (whatsappFrom.startsWith("whatsapp:") ? whatsappFrom : "whatsapp:" + whatsappFrom);
-        String form = "To=" + encForm(record.getRecipient()) + "&From=" + encForm(sender)
-                + "&Body=" + encForm(record.getMessageBody());
-        String auth = Base64.getEncoder().encodeToString((twilioSid + ":" + twilioToken).getBytes(StandardCharsets.UTF_8));
-        HttpRequest request = HttpRequest.newBuilder(URI.create(
-                "https://api.twilio.com/2010-04-01/Accounts/" + twilioSid + "/Messages.json"))
-                .timeout(Duration.ofSeconds(10)).header("Authorization", "Basic " + auth)
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .POST(HttpRequest.BodyPublishers.ofString(form)).build();
-        HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() < 200 || response.statusCode() >= 300)
-            throw new IllegalStateException("Messaging provider returned HTTP " + response.statusCode());
+    /** Deterministic mock SMS/WhatsApp adapter. This method performs no network I/O. */
+    private void sendProviderDelivery(NotificationDelivery record) {
+        if (!"SMS".equals(record.getChannel()) && !"WHATSAPP".equals(record.getChannel())) throw new IllegalArgumentException("Unsupported mock channel");
+        if (record.getMessageBody() != null && record.getMessageBody().contains("[[MOCK_FAIL]]")) throw new IllegalStateException("Mock provider simulated transient failure");
     }
 
     private boolean deliver(
@@ -299,65 +301,8 @@ public class NotificationService {
     }
     
     private void sendConsentedChannels(UUID userId, UUID tenantId, String eventType, String subject, String body) {
-        if (customers == null || userId == null || tenantId == null || twilioSid.isBlank() || twilioToken.isBlank())
-            return;
-        CustomerProfile customer = customers.findByTenantIdAndUserId(tenantId, userId).filter(CustomerProfile::isActive).orElse(null);
-        if (customer == null || customer.getPhone() == null || !customer.getPhone().matches("^\\+[1-9][0-9]{7,14}$"))
-            return;
-        if (customer.isSmsConsent() && !smsFrom.isBlank())
-            sendProviderMessage(tenantId, userId, eventType, "SMS", customer.getPhone(), smsFrom, body);
-        if (customer.isWhatsappConsent() && !whatsappFrom.isBlank())
-            sendProviderMessage(tenantId, userId, eventType, "WHATSAPP", "whatsapp:" + customer.getPhone(), whatsappFrom.startsWith("whatsapp:") ? whatsappFrom : "whatsapp:" + whatsappFrom, subject + "\n" + body);
+        // Synchronous provider sends are disabled. Business channels are persisted and dispatched asynchronously.
     }
-    
-    private void sendProviderMessage(
-            UUID tenantId,
-            UUID userId,
-            String eventType,
-            String channel,
-            String to,
-            String from,
-            String body
-    ) {
-        NotificationDelivery record = new NotificationDelivery();
-        record.setId(UUID.randomUUID());
-        record.setTenantId(tenantId);
-        record.setUserId(userId);
-        record.setEventType(eventType);
-        record.setChannel(channel);
-        record.setRecipient(to);
-        record.setSubject(eventType);
-        record.setMessageBody(body);
-        record.setStatus("PENDING");
-        record.setAttemptCount(0);
-        record.setCreatedAt(Instant.now());
-        record.setIdempotencyKey(UUID.nameUUIDFromBytes(( tenantId + ":" + userId + ":" + eventType + ":" + channel + ":" + body ).getBytes(StandardCharsets.UTF_8)).toString());
-        if (deliveries.existsByTenantIdAndIdempotencyKey(tenantId, record.getIdempotencyKey())) return;
-        deliveries.save(record);
-        try {
-            String form = "To=" + encForm(to) + "&From=" + encForm(from) + "&Body=" + encForm(body);
-            String auth = Base64.getEncoder().encodeToString(( twilioSid + ":" + twilioToken ).getBytes(StandardCharsets.UTF_8));
-            HttpRequest request = HttpRequest.newBuilder(URI.create("https://api.twilio.com/2010-04-01/Accounts/" + twilioSid + "/Messages.json")).timeout(Duration.ofSeconds(10))
-                    .header("Authorization", "Basic " + auth).header("Content-Type", "application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(form)).build();
-            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-            record.setAttemptCount(1);
-            if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                record.setStatus("DELIVERED");
-                record.setSentAt(Instant.now());
-            } else {
-                record.setStatus("FAILED");
-                record.setNextAttemptAt(Instant.now().plusSeconds(60));
-                record.setLastError("Messaging provider returned HTTP " + response.statusCode());
-            }
-        } catch (Exception ex) {
-            record.setAttemptCount(1);
-            record.setStatus("FAILED");
-            record.setNextAttemptAt(Instant.now().plusSeconds(60));
-            record.setLastError("Messaging provider request failed");
-        }
-        deliveries.save(record);
-    }
-    
     @Scheduled(fixedDelayString = "${app.messaging.retry-interval-ms:60000}")
     public void retryFailedDeliveries() {
         Instant now = Instant.now();
