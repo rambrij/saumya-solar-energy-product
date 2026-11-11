@@ -49,7 +49,7 @@ public class ExportService {
         requireExportPermission(p);
         String type=reportType==null?"":reportType.trim().toUpperCase(Locale.ROOT);
         String output=format==null?"":format.trim().toUpperCase(Locale.ROOT);
-        if (!"OPERATIONS".equals(type)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Unsupported report type");
+        if (!Set.of("OPERATIONS","SALES","INSTALLATIONS","SERVICE","INVENTORY","FINANCE").contains(type)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Unsupported report type");
         if (!Set.of("CSV","XLSX","PDF").contains(output)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Format must be CSV, XLSX or PDF");
         if (from!=null && to!=null && to.isBefore(from)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"to must not precede from");
         Instant now=Instant.now(); ExportJob job=new ExportJob();
@@ -81,7 +81,8 @@ public class ExportService {
         if (job==null || !"PROCESSING".equals(job.getStatus())) return;
         String key=null;
         try {
-            Map<String,Object> report=reports.operationsReportForTenant(tenantId,job.getFromDate(),job.getToDate());
+            Map<String,Object> fullReport=reports.operationsReportForTenant(tenantId,job.getFromDate(),job.getToDate());
+            Map<String,Object> report=selectReport(job.getReportType(),fullReport);
             FilePayload file=render(report,job);
             key=storage.putReplacing(root,"exports",tenantId,id+"."+file.extension(),file.bytes(),file.contentType());
             job.setStorageKey(key); job.setContentType(file.contentType()); job.setFileSize((long)file.bytes().length);
@@ -97,33 +98,83 @@ public class ExportService {
     private FilePayload render(Map<String,Object> report, ExportJob job) throws Exception {
         return switch(job.getFormat()) { case "CSV" -> csv(report); case "XLSX" -> xlsx(report); case "PDF" -> pdf(report,job); default -> throw new IllegalArgumentException("Unsupported format"); };
     }
+    private Map<String,Object> selectReport(String type, Map<String,Object> full) {
+        Map<String,Object> out=new LinkedHashMap<>();
+        out.put("from",full.get("from")); out.put("to",full.get("to"));
+        switch(type) {
+            case "SALES" -> { copy(full,out,"orders","orderValue","leads","salesOrders"); }
+            case "INSTALLATIONS" -> { copy(full,out,"installations","installationsCompleted","installationDetails"); }
+            case "SERVICE" -> { copy(full,out,"serviceTickets","serviceOpen","serviceTicketDetails"); }
+            case "INVENTORY" -> { copy(full,out,"inventoryTransactions","inventoryMovementDetails"); }
+            case "FINANCE" -> { copy(full,out,"invoices","invoicedAmount","paymentsReceived","invoiceDetails","paymentDetails"); }
+            default -> out.putAll(full);
+        }
+        out.put("reportType",type);
+        return out;
+    }
+    private void copy(Map<String,Object> source,Map<String,Object> target,String... keys) {
+        for(String key:keys) if(source.containsKey(key)) target.put(key,source.get(key));
+    }
+
     private FilePayload csv(Map<String,Object> report) {
-        StringBuilder out=new StringBuilder("Metric,Value\\r\\n");
-        report.forEach((k,v)->out.append(cell(k)).append(',').append(cell(v)).append("\\r\\n"));
+        StringBuilder out=new StringBuilder("Report,").append(cell(report.getOrDefault("reportType","OPERATIONS"))).append("\\r\\n");
+        out.append("Metric,Value\\r\\n");
+        for(var entry:report.entrySet()) {
+            if(entry.getValue() instanceof List<?> rows && !rows.isEmpty() && rows.get(0) instanceof Map<?,?> first) {
+                out.append("\\r\\n").append(cell(entry.getKey())).append("\\r\\n");
+                List<?> keys=new ArrayList<>(first.keySet());
+                out.append(keys.stream().map(this::cell).collect(java.util.stream.Collectors.joining(","))).append("\\r\\n");
+                for(Object item:rows) if(item instanceof Map<?,?> row)
+                    out.append(keys.stream().map(key->cell(row.get(key))).collect(java.util.stream.Collectors.joining(","))).append("\\r\\n");
+            } else if(!(entry.getValue() instanceof List<?>)) {
+                out.append(cell(entry.getKey())).append(',').append(cell(entry.getValue())).append("\\r\\n");
+            }
+        }
         return new FilePayload(out.toString().getBytes(StandardCharsets.UTF_8),"text/csv; charset=UTF-8","csv");
     }
     private String cell(Object value) {
         String s=value==null?"":String.valueOf(value);
-        if (!(value instanceof Number) && s.matches("^[\\s]*[=+\\-@].*")) s="'"+s;
-        if (s.contains(",") || s.contains("\\\"") || s.contains("\\n") || s.contains("\\r")) return "\\\""+s.replace("\\\"","\\\"\\\"")+"\\\"";
+        if (!(value instanceof Number) && s.matches("^[\\\\s]*[=+\\\\-@].*")) s="'"+s;
+        if (s.contains(",") || s.contains("\\\"") || s.contains("\\n") || s.contains("\\r"))
+            return "\\\""+s.replace("\\\"","\\\"\\\"")+"\\\"";
         return s;
     }
     private FilePayload xlsx(Map<String,Object> report) throws Exception {
         try(ByteArrayOutputStream out=new ByteArrayOutputStream(); XSSFWorkbook wb=new XSSFWorkbook()) {
-            var sheet=wb.createSheet("Operations"); var header=sheet.createRow(0);
-            header.createCell(0).setCellValue("Metric"); header.createCell(1).setCellValue("Value"); int row=1;
-            for(var entry:report.entrySet()){var cells=sheet.createRow(row++);cells.createCell(0).setCellValue(entry.getKey());cells.createCell(1).setCellValue(entry.getValue()==null?"":String.valueOf(entry.getValue()));}
-            sheet.setColumnWidth(0,24*256);sheet.setColumnWidth(1,32*256);wb.write(out);
+            var summary=wb.createSheet("Summary");var header=summary.createRow(0);
+            header.createCell(0).setCellValue("Metric");header.createCell(1).setCellValue("Value");int row=1;
+            for(var entry:report.entrySet()) {
+                if(entry.getValue() instanceof List<?> rows && !rows.isEmpty() && rows.get(0) instanceof Map<?,?> first) {
+                    String sheetName=entry.getKey().replaceAll("[\\\\[\\\\]\\\\*?/\\\\\\\\:]","_");
+                    var sheet=wb.createSheet(sheetName.substring(0,Math.min(31,sheetName.length())));
+                    List<?> keys=new ArrayList<>(first.keySet());var h=sheet.createRow(0);
+                    for(int i=0;i<keys.size();i++)h.createCell(i).setCellValue(String.valueOf(keys.get(i)));
+                    int line=1;for(Object item:rows)if(item instanceof Map<?,?> values){var data=sheet.createRow(line++);for(int i=0;i<keys.size();i++){Object value=values.get(keys.get(i));data.createCell(i).setCellValue(value==null?"":String.valueOf(value));}}
+                    for(int i=0;i<keys.size();i++)sheet.autoSizeColumn(i);
+                } else if(!(entry.getValue() instanceof List<?>)) {
+                    var data=summary.createRow(row++);data.createCell(0).setCellValue(entry.getKey());data.createCell(1).setCellValue(entry.getValue()==null?"":String.valueOf(entry.getValue()));
+                }
+            }
+            summary.autoSizeColumn(0);summary.autoSizeColumn(1);wb.write(out);
             return new FilePayload(out.toByteArray(),"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","xlsx");
         }
     }
     private FilePayload pdf(Map<String,Object> report, ExportJob job) throws Exception {
         try(ByteArrayOutputStream out=new ByteArrayOutputStream()) {
-            Document doc=new Document();PdfWriter.getInstance(doc,out);doc.open();doc.add(new Paragraph("Soumya Solar — Operations Report"));
+            Document doc=new Document();PdfWriter.getInstance(doc,out);doc.open();
+            doc.add(new Paragraph("Saumya Solar — "+job.getReportType()+" Report"));
             doc.add(new Paragraph("Period: "+(job.getFromDate()==null?"Beginning":job.getFromDate())+" to "+(job.getToDate()==null?"Today":job.getToDate())));
-            PdfPTable table=new PdfPTable(2);table.setWidthPercentage(100);table.addCell("Metric");table.addCell("Value");
-            for(var entry:report.entrySet()){table.addCell(entry.getKey());table.addCell(entry.getValue()==null?"":String.valueOf(entry.getValue()));}
-            doc.add(table);doc.close();return new FilePayload(out.toByteArray(),"application/pdf","pdf");
+            PdfPTable summary=new PdfPTable(2);summary.setWidthPercentage(100);summary.addCell("Metric");summary.addCell("Value");
+            for(var entry:report.entrySet()) if(!(entry.getValue() instanceof List<?>)){summary.addCell(entry.getKey());summary.addCell(entry.getValue()==null?"":String.valueOf(entry.getValue()));}
+            doc.add(summary);
+            for(var entry:report.entrySet()) if(entry.getValue() instanceof List<?> rows && !rows.isEmpty() && rows.get(0) instanceof Map<?,?> first) {
+                doc.add(new Paragraph(entry.getKey()));
+                List<?> keys=new ArrayList<>(first.keySet());PdfPTable table=new PdfPTable(Math.max(1,keys.size()));table.setWidthPercentage(100);
+                for(Object key:keys)table.addCell(String.valueOf(key));
+                for(Object item:rows)if(item instanceof Map<?,?> values)for(Object key:keys)table.addCell(values.get(key)==null?"":String.valueOf(values.get(key)));
+                doc.add(table);
+            }
+            doc.close();return new FilePayload(out.toByteArray(),"application/pdf","pdf");
         }
     }
 
