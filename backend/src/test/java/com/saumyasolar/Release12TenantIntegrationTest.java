@@ -2335,7 +2335,7 @@ class Release12TenantIntegrationTest {
         role.setId(UUID.randomUUID());
         role.setTenantId(vendorTenantId);
         role.setName("BRANCH_SCOPE_TEST_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10));
-        for (String code : List.of("LEAD_VIEW", "LEAD_UPDATE", "SURVEY_VIEW", "SURVEY_COMPLETE", "QUOTATION_VIEW", "ORDER_VIEW", "BRANCH_MANAGE", "INVOICE_VIEW", "INVOICE_CREATE", "INVOICE_VOID", "PAYMENT_VIEW", "PAYMENT_REFUND", "SERVICE_VIEW", "SERVICE_ASSIGN", "SERVICE_CLOSE", "INSTALLATION_VIEW", "INSTALLATION_ASSIGN", "INSTALLATION_UPDATE", "INVENTORY_VIEW")) {
+        for (String code : List.of("LEAD_VIEW", "LEAD_UPDATE", "SURVEY_VIEW", "SURVEY_COMPLETE", "QUOTATION_VIEW", "ORDER_VIEW", "BRANCH_MANAGE", "INVOICE_VIEW", "INVOICE_CREATE", "INVOICE_VOID", "PAYMENT_VIEW", "PAYMENT_REFUND", "SERVICE_VIEW", "SERVICE_ASSIGN", "SERVICE_UPDATE", "SERVICE_CLOSE", "INSTALLATION_VIEW", "INSTALLATION_ASSIGN", "INSTALLATION_UPDATE", "INVENTORY_VIEW")) {
             Permission permission = permissions.findByCode(code).orElseThrow();
             role.getPermissions().add(permission);
         }
@@ -2417,12 +2417,58 @@ class Release12TenantIntegrationTest {
         serviceRequests.saveAllAndFlush(List.of(ticketA, ticketB));
         assertBranchListContainsOnly(mvc.perform(get("/api/v1/service-requests?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), ticketA.getId(), ticketB.getId());
+        mvc.perform(get("/api/v1/service-requests/" + ticketA.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/service-requests/" + ticketB.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        MockMultipartFile branchEvidence = new MockMultipartFile("file", "branch-evidence.pdf", "application/pdf",
+                "%PDF-1.7\\nbranch evidence\\n%%EOF".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/service-requests/" + ticketB.getId() + "/attachments")
+                        .file(branchEvidence).header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        assertTrue(serviceAttachmentRecords.findByTenantIdAndServiceRequestIdOrderByCreatedAtAsc(
+                vendorTenantId, ticketB.getId()).isEmpty());
 
         InstallationJob installationA = branchInstallation(vendorTenantId, branchA.getId(), orderA.getId(), branchCustomer.profile().getId(), member.getId());
         InstallationJob installationB = branchInstallation(vendorTenantId, branchB.getId(), orderB.getId(), branchCustomer.profile().getId(), member.getId());
         installationJobs.saveAllAndFlush(List.of(installationA, installationB));
         assertBranchListContainsOnly(mvc.perform(get("/api/v1/installations?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), installationA.getId(), installationB.getId());
+
+        com.saumyasolar.domain.InstallationChecklistItem checklistA = new com.saumyasolar.domain.InstallationChecklistItem();
+        checklistA.setId(UUID.randomUUID());
+        checklistA.setTenantId(vendorTenantId);
+        checklistA.setInstallationId(installationA.getId());
+        checklistA.setCode("BRANCH_A_CHECK");
+        checklistA.setTitle("Branch A safety check");
+        checklistA.setMandatory(true);
+        com.saumyasolar.domain.InstallationChecklistItem checklistB = new com.saumyasolar.domain.InstallationChecklistItem();
+        checklistB.setId(UUID.randomUUID());
+        checklistB.setTenantId(vendorTenantId);
+        checklistB.setInstallationId(installationB.getId());
+        checklistB.setCode("BRANCH_B_CHECK");
+        checklistB.setTitle("Branch B safety check");
+        checklistB.setMandatory(true);
+        checklistItems.saveAllAndFlush(List.of(checklistA, checklistB));
+        mvc.perform(get("/api/v1/installations/" + installationA.getId() + "/checklist")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/installations/" + installationB.getId() + "/checklist")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(patch("/api/v1/installations/" + installationA.getId() + "/checklist/" + checklistA.getId())
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"completed\":true,\"evidenceUrl\":\"branch-a.pdf\",\"notes\":\"checked\"}"))
+                .andExpect(status().isOk());
+        assertTrue(checklistItems.findById(checklistA.getId()).orElseThrow().isCompleted());
+        mvc.perform(patch("/api/v1/installations/" + installationB.getId() + "/checklist/" + checklistB.getId())
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"completed\":true,\"evidenceUrl\":\"branch-b.pdf\",\"notes\":\"unauthorized\"}"))
+                .andExpect(status().isNotFound());
+        assertFalse(checklistItems.findById(checklistB.getId()).orElseThrow().isCompleted());
 
         mvc.perform(get("/api/v1/branches/" + branchA.getId() + "/analytics")
                         .header("Authorization", "Bearer " + token))
