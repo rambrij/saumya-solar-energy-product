@@ -16,8 +16,8 @@ public class Refund {
     UUID tenantId;
     UUID paymentId;
     BigDecimal amount;
-    String reason;
-    String status;
+    @Column(length = 500) String reason;
+    @Column(length = 24) String status;
     UUID recordedBy;
     @Column(length = 60) String provider;
     @Column(length = 150) String providerRefundReference;
