@@ -117,8 +117,8 @@ public class ExportService {
     }
 
     private FilePayload csv(Map<String,Object> report) {
-        StringBuilder out=new StringBuilder("Report,").append(cell(report.getOrDefault("reportType","OPERATIONS"))).append("\r\n");
-        out.append("Metric,Value\r\n");
+        StringBuilder out=new StringBuilder("Metric,Value\r\n");
+        out.append("reportType,").append(cell(report.getOrDefault("reportType","OPERATIONS"))).append("\r\n");
         for(var entry:report.entrySet()) {
             if(entry.getValue() instanceof List<?> rows && !rows.isEmpty() && rows.get(0) instanceof Map<?,?> first) {
                 out.append("\r\n").append(cell(entry.getKey())).append("\r\n");
