@@ -28,6 +28,7 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
     private final ObjectMapper mapper;
     private final byte[] signingSecret;
     private final String checkoutOutcome;
+    private final String frontendBaseUrl;
     private final Map<String, GatewayPaymentStatus> payments = new ConcurrentHashMap<>();
     private final Map<String, GatewayRefund> refunds = new ConcurrentHashMap<>();
     private final Map<String, String> outcomes = new ConcurrentHashMap<>();
@@ -35,7 +36,8 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
     public MockPaymentGatewayAdapter(
             ObjectMapper mapper,
             @Value("${app.payment.mock.signing-secret:}") String signingSecret,
-            @Value("${app.payment.mock.checkout-outcome:PENDING}") String checkoutOutcome
+            @Value("${app.payment.mock.checkout-outcome:PENDING}") String checkoutOutcome,
+            @Value("${app.payment.mock.frontend-base-url:http://localhost:3000}") String frontendBaseUrl
     ) {
         this.mapper = mapper;
         if (signingSecret == null || signingSecret.length() < 32) {
@@ -46,6 +48,10 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
             throw new IllegalStateException("app.payment.mock.checkout-outcome must be SUCCESS, FAILURE, PENDING or CANCELLED");
         }
         this.checkoutOutcome = checkoutOutcome;
+        if (frontendBaseUrl == null || !frontendBaseUrl.startsWith("http://") && !frontendBaseUrl.startsWith("https://")) {
+            throw new IllegalStateException("app.payment.mock.frontend-base-url must be an absolute HTTP URL");
+        }
+        this.frontendBaseUrl = frontendBaseUrl.replaceAll("/+$", "");
     }
 
     @Override
@@ -65,7 +71,7 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
         GatewayPaymentStatus status = new GatewayPaymentStatus(reference, "PENDING", amount, currency);
         payments.putIfAbsent(reference, status);
         outcomes.putIfAbsent(reference, checkoutOutcome);
-        return new GatewayPayment(reference, "https://mock-checkout.saumyasolar.invalid/session/" + reference, outcomes.get(reference));
+        return new GatewayPayment(reference, frontendBaseUrl + "/?mockCheckoutPaymentId=" + metadata.get("paymentId"), outcomes.get(reference));
     }
 
     @Override
