@@ -34,4 +34,4 @@ The following are intentionally unresolved. Keep the existing behavior and make 
 
 ### Verification limitation
 
-This record is a decision log, not evidence that Phase 4 code has been implemented or tested. The GitHub connector available in this session can read and write individual files but does not expose a repository checkout, directory-tree listing, or local command execution. A network clone was also unavailable. Therefore source-code inspection, baseline test execution, implementation, and post-change verification must not be inferred from this document.
+This record is a decision log, not evidence that Phase 4 code has been implemented or tested. The connected GitHub account has repository push/admin permissions and the GitHub API successfully exposed the branch tree and source files. A local `git clone` attempt still failed because this execution environment could not resolve `github.com`; no local Maven/npm command execution is available through the GitHub connector. Finance source files and the recursive tree were inspected remotely, and CI was enabled for this branch. No runtime Phase 4 feature implementation or passing test result is claimed.
