@@ -2146,7 +2146,7 @@ The following status supersedes the initial audit baseline above.
 
 | Requirement | Current status | Implementation/evidence |
 |---|---|---|
-| Transactional outbox | IMPLEMENTED | V12 `notification_outbox`; `NotificationService.sendBusinessNotification` writes delivery + outbox transactionally; event-driven bypass removed |
+| Transactional outbox | IMPLEMENTED | V12 `notification_outbox`; V14 tenant-matched composite FKs; `NotificationService.sendBusinessNotification` writes delivery + outbox transactionally; event-driven bypass removed |
 | In-app inbox | IMPLEMENTED | Existing Phase 5 inbox retained; projection now participates in business transaction |
 | Email adapter | IMPLEMENTED (local only) | `MailpitEmailNotificationAdapter` uses local Mailpit SMTP and Message-ID idempotency lookup |
 | SMS/WhatsApp provider abstraction | IMPLEMENTED (mock) | `NotificationChannelAdapter`, registry, deterministic `MockMessagingNotificationAdapter` |
