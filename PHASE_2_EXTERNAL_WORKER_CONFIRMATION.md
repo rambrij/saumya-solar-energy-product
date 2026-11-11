@@ -92,7 +92,7 @@ The repository audit session inspected the provider accounts exposed through the
 - **Two `@Async` application listeners:** business notification delivery and export event processing.
 - **One bounded `ThreadPoolTaskExecutor`** for application events.
 - **Two startup runners:** DataSeeder and PlatformAdminBootstrap; both are configuration/property gated and must remain disabled in production unless explicitly approved.
-- **No checked-in broker/managed-queue client or separate worker implementation** for Kafka, RabbitMQ/AMQP, JMS, SQS/SNS/EventBridge, Python/Go/Ruby task workers, BullMQ/Agenda/node-cron, or separate Docker worker containers. The browser-side `setTimeout` in the export panel is UI polling, not a server-side worker.
+- **No checked-in third-party queue client or separate worker implementation** for the application source/deployment configuration; Python/Go/Ruby task workers, BullMQ/Agenda/node-cron workers, and separate Docker worker containers were also not found in the repository scan. The browser-side `setTimeout` used by export status polling is UI behavior, not a server worker.
 - The integration sync queue is database-backed and dispatched by the checked-in scheduler. The CI inventory remains a source/config scan, not a production cloud control-plane export.
 
 ### Connected workspace refresh performed during this audit
