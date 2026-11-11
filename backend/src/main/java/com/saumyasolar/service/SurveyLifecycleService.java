@@ -28,12 +28,14 @@ public class SurveyLifecycleService {
     private final AppUserRepository users;
     private final CustomerProfileRepository customers;
     private final NotificationService notifications;
+    private final EnterpriseSaasService enterpriseSaas;
     
     public SurveyLifecycleService(
             SiteSurveyRepository surveys,
             SiteSurveyHistoryRepository history,
             SalesLeadRepository leads,
-            AppUserRepository users, CustomerProfileRepository customers, NotificationService notifications
+            AppUserRepository users, CustomerProfileRepository customers,
+            NotificationService notifications, EnterpriseSaasService enterpriseSaas
     ) {
         this.surveys = surveys;
         this.history = history;
@@ -41,6 +43,7 @@ public class SurveyLifecycleService {
         this.users = users;
         this.customers = customers;
         this.notifications = notifications;
+        this.enterpriseSaas = enterpriseSaas;
     }
     
     private void authorize(Principal actor, String permission) {
@@ -57,10 +60,15 @@ public class SurveyLifecycleService {
     private SiteSurvey requireSurvey(UUID id, Principal actor) {
         SiteSurvey survey = surveys.findByIdAndTenantId(id, actor.tenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Survey not found"));
-        if (!"CUSTOMER".equals(actor.accountType())
-                && (actor.permissions() == null || !actor.permissions().contains("SURVEY_ASSIGN"))
-                && !actor.userId().equals(survey.getAssignedUserId()))
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Survey not found");
+        if (!"CUSTOMER".equals(actor.accountType())) {
+            if ((actor.permissions() == null || !actor.permissions().contains("SURVEY_ASSIGN"))
+                    && !actor.userId().equals(survey.getAssignedUserId()))
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Survey not found");
+            // Engineer assignment does not override the vendor employee's branch membership.
+            // A survey in another branch must remain hidden even when its assignedUserId is
+            // forged or stale and happens to match the caller.
+            enterpriseSaas.assertBranchAccess(survey.getBranchId(), actor);
+        }
         return survey;
     }
     
