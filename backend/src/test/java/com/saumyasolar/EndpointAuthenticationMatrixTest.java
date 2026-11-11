@@ -297,10 +297,15 @@ class EndpointAuthenticationMatrixTest {
                 // proven independently by VendorAnalyticsServiceTest; do not execute its SQL
                 // against the H2 authorization-matrix database.
                 if ("VENDOR".equals(accountType) && pattern.startsWith("/api/v1/vendor/analytics/")) {
-                    evidence.add(new String[] {"GET", pattern, handler.getBeanType().getSimpleName(),
-                            handler.getMethod().getName(), "VENDOR_ALL_CATALOGUED_GRANTS",
-                            "VENDOR_ADMIN + REPORT_VIEW + BRANCH_MANAGE; focused service test",
-                            "DELEGATED_TO_VENDOR_ANALYTICS_SERVICE_TEST", "DELEGATED"});
+                    for (var method : methods) {
+                        if (method == org.springframework.web.bind.annotation.RequestMethod.OPTIONS
+                                || method == org.springframework.web.bind.annotation.RequestMethod.HEAD) continue;
+                        checked.add(method + " " + pattern + " [" + accountType + "]");
+                        evidence.add(new String[] {method.name(), pattern, handler.getBeanType().getSimpleName(),
+                                handler.getMethod().getName(), "VENDOR_ALL_CATALOGUED_GRANTS",
+                                "VENDOR_ADMIN + REPORT_VIEW + BRANCH_MANAGE; focused service test",
+                                "DELEGATED_TO_VENDOR_ANALYTICS_SERVICE_TEST", "DELEGATED"});
+                    }
                     continue;
                 }
                 for (var method : methods) {
