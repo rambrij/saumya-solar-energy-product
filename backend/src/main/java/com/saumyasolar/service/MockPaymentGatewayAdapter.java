@@ -111,8 +111,7 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
 
     @Override
     public GatewayRefund refund(String providerReference, BigDecimal amount, String idempotencyKey, String reason) {
-        GatewayPaymentStatus payment = fetchStatus(providerReference);
-        if (amount == null || amount.signum() <= 0 || amount.compareTo(payment.amount()) > 0
+        if (providerReference == null || providerReference.isBlank() || amount == null || amount.signum() <= 0
                 || idempotencyKey == null || idempotencyKey.isBlank() || reason == null || reason.isBlank()) {
             throw new IllegalArgumentException("Invalid mock refund request");
         }
@@ -154,9 +153,7 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
     }
 
     public String checkoutOutcome(String providerReference) {
-        String outcome = outcomes.get(providerReference);
-        if (outcome == null) throw new IllegalArgumentException("Unknown mock payment reference");
-        return outcome;
+        return outcomes.getOrDefault(providerReference, checkoutOutcome);
     }
 
     public GatewayRefund refundStatus(String providerRefundReference) {
