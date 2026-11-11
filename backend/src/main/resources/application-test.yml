@@ -1,5 +1,6 @@
 app:
   messaging:
+    provider: mock
     mock:
       enabled: true
       webhook-secret: test-only-mock-notification-webhook-secret
