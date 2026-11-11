@@ -159,6 +159,24 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
         return mapper.writeValueAsString(payload);
     }
 
+    private String tenantFor(String providerReference) {
+        String tenant = tenants.get(providerReference);
+        if (tenant == null) throw new IllegalArgumentException("Unknown mock payment reference");
+        return tenant;
+    }
+
+    public String checkoutOutcome(String providerReference) {
+        String outcome = outcomes.get(providerReference);
+        if (outcome == null) throw new IllegalArgumentException("Unknown mock payment reference");
+        return outcome;
+    }
+
+    public GatewayRefund refundStatus(String providerRefundReference) {
+        return refunds.values().stream()
+                .filter(refund -> refund.providerRefundReference().equals(providerRefundReference))
+                .findFirst().orElseThrow(() -> new IllegalArgumentException("Unknown mock refund reference"));
+    }
+
     public String sign(String rawPayload) {
         return HexFormat.of().formatHex(hmac(rawPayload));
     }
