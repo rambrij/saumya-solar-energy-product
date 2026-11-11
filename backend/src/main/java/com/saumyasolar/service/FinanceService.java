@@ -346,7 +346,10 @@ public class FinanceService {
             CustomerProfile cp = customer(p);
             if (!orders.findByIdAndTenantId(i.getOrderId(), p.tenantId()).map(o -> cp.getId().equals(o.getCustomerId())).orElse(false))
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        } else financeAccess(p);
+        } else {
+            financeAccess(p);
+            assertInvoiceBranchAccess(i, p);
+        }
         permission(p, "INVOICE_VIEW");
         return creditNotes.findByTenantIdAndInvoiceIdOrderByCreatedAtDesc(p.tenantId(), invoiceId);
     }
@@ -465,7 +468,12 @@ public class FinanceService {
         }
         financeAccess(p);
         permission(p, "PAYMENT_VIEW");
-        return payments.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
+        List<Payment> rows = payments.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
+        if (enterpriseSaas == null || p.roles() != null && p.roles().contains("VENDOR_ADMIN")) return rows;
+        Set<UUID> visibleInvoiceIds = enterpriseSaas.filterBranchRecords(
+                invoices.findByTenantIdOrderByCreatedAtDesc(p.tenantId()), Invoice::getBranchId, p)
+                .stream().map(Invoice::getId).collect(java.util.stream.Collectors.toSet());
+        return rows.stream().filter(payment -> visibleInvoiceIds.contains(payment.getInvoiceId())).toList();
     }
     
     @Transactional
@@ -1024,7 +1032,15 @@ public class FinanceService {
     public List<Refund> listRefunds(Principal p) {
         financeAccess(p);
         permission(p, "PAYMENT_REFUND");
-        return refunds.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
+        List<Refund> rows = refunds.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
+        if (enterpriseSaas == null || p.roles() != null && p.roles().contains("VENDOR_ADMIN")) return rows;
+        Set<UUID> visibleInvoiceIds = enterpriseSaas.filterBranchRecords(
+                invoices.findByTenantIdOrderByCreatedAtDesc(p.tenantId()), Invoice::getBranchId, p)
+                .stream().map(Invoice::getId).collect(java.util.stream.Collectors.toSet());
+        Set<UUID> visiblePaymentIds = payments.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream()
+                .filter(payment -> visibleInvoiceIds.contains(payment.getInvoiceId()))
+                .map(Payment::getId).collect(java.util.stream.Collectors.toSet());
+        return rows.stream().filter(refund -> visiblePaymentIds.contains(refund.getPaymentId())).toList();
     }
     
     @Transactional
