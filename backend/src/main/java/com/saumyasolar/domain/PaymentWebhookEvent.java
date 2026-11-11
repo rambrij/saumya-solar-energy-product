@@ -14,11 +14,11 @@ import java.util.UUID;
 public class PaymentWebhookEvent {
     @Id UUID id;
     UUID tenantId;
-    String provider;
+    @Column(length = 60) String provider;
     @Column(name = "event_id") String eventId;
-    String payloadHash;
-    String processingStatus;
-    String providerRefundReference;
+    @Column(length = 64) String payloadHash;
+    @Column(length = 24) String processingStatus;
+    @Column(length = 150) String providerRefundReference;
     Instant receivedAt;
     Instant processedAt;
 }
