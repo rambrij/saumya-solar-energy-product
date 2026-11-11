@@ -327,3 +327,109 @@ The following branch-head evidence was inspected after the initial inventory:
 - The release-validation workflow contains references to async-worker and legacy-authorization audit scripts. These are verification steps, not evidence of application runtime compatibility code; do not remove them solely because their names contain "legacy".
 
 These findings do not authorize a code/config/CI deletion in Phase 0. Full repository-wide reference search and fresh CI evidence remain mandatory before marking the external transport scan complete.
+
+
+---
+
+# Cleanup implementation record — Phases 1–4
+
+**Date:** 2026-11-12  
+**Branch:** `cleanup/final-code-cleanup`  
+**Base:** `audit/implementation-gap-analysis`
+
+This section supersedes the Phase 0 pending statements above. The Phase 0 findings remain as the initial snapshot and are not the final implementation status.
+
+## Full reference inventory completed
+
+| Inventory | Evidence |
+|---|---|
+| Required specifications | Full text and heading maps for the business requirements, SRS/HLD and implementation gap analysis are recorded in `docs/CLEANUP_TRACEABILITY.md`. |
+| Backend source | Recursive Git tree review: 353 files across API, config, domain, repository, security, service, resource and test areas. |
+| Frontend source | Recursive Git tree review: 48 files across source, component tests, E2E suites, public assets and build configuration. |
+| Documentation | Recursive docs tree review: 20 files, plus root-level requirements, SRS/HLD and implementation analysis documents. |
+| CI/workflows | Both workflow files were inspected. Release validation now filters only `main` and `cleanup/final-code-cleanup`; production preflight runs only for `main`. |
+| Scripts | All four original audit scripts were inspected. The worker scan was generalized and a repository-wide external transport assertion was added. |
+| REST API mappings | Spring mapping annotations were inventoried across all API controller classes and recorded in `CLEANUP_TRACEABILITY.md`. |
+| Frontend screens/callers | Screen component and API-family mapping is in `CLEANUP_TRACEABILITY.md`; the settings-alias caller search identified the only consumer of the undocumented aliases. |
+| Database | Original V1 contained 74 tables; V2–V14 added ten tables plus required columns, constraints, indexes, triggers and seed/grant operations. The consolidated baseline now defines 84 tables. |
+
+The source inventory is evidence of what exists in the repository. It is not a blanket assertion that every line of application code has been proven dead-code free. No domain feature, DTO, dependency, environment property, test fixture, or application service has been deleted without positive source/reference evidence.
+
+## Conflicts and resolutions
+
+| Documents / sections | Conflict | Resolution |
+|---|---|---|
+| Business requirements §15; SRS/HLD §§10.12, 17–18 | Notification processing must be asynchronous and include persisted attempts, retry/dead-letter behavior and pluggable channels. | Preserved the transactional database outbox, notification delivery/inbox, Mailpit email adapter, deterministic SMS/WhatsApp mock adapter, provider interface, background dispatcher and tenant-scoped retry/monitoring. No replacement transport was introduced. |
+| SRS/HLD §§17–18 | Integration jobs and other background tasks must remain observable and tenant scoped. | Preserved database-backed `IntegrationSyncJob`, `IntegrationSyncScheduler`, offline sync, scheduled jobs and bounded in-process application event execution. |
+| SRS/HLD §13 vs controller aliases | `GET /settings` and `PATCH /settings/discount-threshold` were undocumented aliases; SRS describes the vendor/tenant settings contract but not these short aliases. | Kept the documented tenant settings functionality and removed only the undocumented aliases. Frontend calls now use `/tenant/settings` and `/tenant/settings/discount-threshold`. |
+| SRS/HLD §§14, 20–23 vs old migration chain | One clean-install schema is required; the old tree had 14 active Flyway files. | Folded every original migration SQL operation into one V1 baseline. Schema equivalence is enforced by the CI MySQL 8.4 diff job; no deployed Flyway history conversion is provided. |
+| User CI branch rule vs workflow triggers | Release validation previously triggered on audit-only branch names. | Release-validation push and PR branch filters now contain exactly `main` and `cleanup/final-code-cleanup`. The separate production preflight is manually dispatched and constrained to `main`; no audit branch binding remains. |
+
+## Removals and consolidation inventory
+
+The listed SQL files were removed as separate active Flyway migration files only after their SQL was incorporated into `V1__baseline.sql`. These are migration-file consolidations, not feature removals.
+
+| Path | Why the standalone path is no longer needed | Evidence / disposition |
+|---|---|---|
+| `backend/src/main/java/com/saumyasolar/api/Controller.java` (two alias mappings) | The short settings paths were undocumented compatibility aliases. | Targeted mapping/caller search found the only consumer in `frontend/src/main.tsx`; updated it to the canonical paths. SRS/HLD §13 does not list the aliases. Underlying tenant settings behavior is retained. |
+| `backend/src/main/resources/db/migration/V2__phase3_reservation_expiry.sql` | Standalone migration no longer required after consolidation. | Reservation expiry columns, release metadata, index, status-history actor column and append-only triggers are included in V1. |
+| `backend/src/main/resources/db/migration/V3__phase3_order_policy_and_tenant_lifecycle.sql` | Standalone migration no longer required after consolidation. | Tenant lifecycle metadata, data initialization, persisted order-transition policy, default transitions and permission catalogue row are included in V1. |
+| `backend/src/main/resources/db/migration/V4__phase3_order_policy_permission_grant.sql` | Standalone grant migration no longer required after consolidation. | Vendor administrator order-policy permission grant is included in V1 seed/reference DML. |
+| `backend/src/main/resources/db/migration/V5__phase4_finance_provider_reconciliation.sql` | Standalone finance extension no longer required after consolidation. | Nullable payment timestamp, tenant-scoped webhook provider fields/keys, refund provider/idempotency fields, reconciliation tables and tenant FKs are included in V1. |
+| `backend/src/main/resources/db/migration/V6__phase5_cms_content_revisions.sql` | Standalone CMS extension no longer required after consolidation. | CMS content/revision tables, revision pointer FKs, supporting indexes and immutable revision triggers are included in V1. |
+| `backend/src/main/resources/db/migration/V7__phase5_user_notification_inbox.sql` | Standalone inbox migration no longer required after consolidation. | Tenant/user-scoped `user_notification` table and inbox indexes are included in V1. |
+| `backend/src/main/resources/db/migration/V8__phase5_notification_view_permission.sql` | Standalone permission migration no longer required after consolidation. | `NOTIFICATION_VIEW` catalogue row and supported built-in vendor-role grants are included in V1 seed DML. |
+| `backend/src/main/resources/db/migration/V9__phase5_platform_analytics_indexes.sql` | Standalone analytics index migration no longer required after consolidation. | Customer-order created-at and tenant-subscription status indexes are included in V1. |
+| `backend/src/main/resources/db/migration/V10__phase5_typed_platform_settings.sql` | Standalone platform settings migration no longer required after consolidation. | Typed `platform_setting` table, actor FK and type/version checks are included in V1. |
+| `backend/src/main/resources/db/migration/V11__phase5_operational_analytics_indexes.sql` | Standalone operations index migration no longer required after consolidation. | Installation, service, invoice and order tenant/assignee/date indexes are included in V1. |
+| `backend/src/main/resources/db/migration/V12__phase6_notification_outbox_preferences_provider_events.sql` | Standalone notification outbox extension no longer required after consolidation. | Outbox, preference and provider-event tables, status check update and indexes are included in V1. |
+| `backend/src/main/resources/db/migration/V13__phase6_provider_accepted_delivery_status.sql` | Standalone delivery-status extension no longer required after consolidation. | `SENT` status in the notification delivery status check is included in V1. |
+| `backend/src/main/resources/db/migration/V14__phase6_enforce_tenant_bound_notification_references.sql` | Standalone tenant-FK hardening migration no longer required after consolidation. | Delivery tenant/id unique key and composite tenant-matched foreign keys for outbox and provider-event references are included in V1. |
+| `.github/workflows/release-validation.yml` (old audit-only trigger entries and historical 63-file migration-history procedure) | Old trigger names and migration-history procedure did not match the requested branch policy or current 14-file active chain. | Replaced triggers with the two requested branches and replaced the historical 63-file procedure with a 14-migration old-chain vs one-baseline MySQL comparison. Verification steps for build, tests, tenant authorization, startup and browser security remain. |
+| `.github/workflows/phase-2-production-preflight.yml` (hard-coded audit branch condition/checkout ref) | Branch-bound preflight pointed only to an old audit branch. | Removed hard-coded checkout ref and constrained the manual production preflight to `main`; protected secrets, data-integrity checks and evidence manifest remain. |
+| `scripts/audit/scan-async-workers.sh` (retired product-specific transport signatures) | The worker inventory should detect current in-process async/scheduled execution, not retain old transport product signatures. | Generalized the scan for event publishers, schedulers, executors and generic queue-client methods. Added the separate whole-repository transport assertion below. |
+
+### Items intentionally retained
+
+No external queue product dependency, SDK, service, environment variable or producer/consumer was present in the inspected Maven manifest or Compose file, so none was deleted from those locations. No unused Maven/npm dependency or application property was positively proven by the performed reference inventory. All required notification, integration, offline sync, exports, event listeners, schedulers, security controls, tenant restrictions, domain services and their tests remain.
+
+The `TwilioMessagingNotificationAdapter` is a network-disabled fail-closed placeholder, not a live provider transport. It remains as a replaceable adapter seam; mock SMS/WhatsApp remains deterministic and active only in dev/test configuration. Real provider selection is still open.
+
+## Contract Changes
+
+| Old | New | Reason | Document reference |
+|---|---|---|---|
+| `GET /api/v1/settings` | `GET /api/v1/tenant/settings` | Removed undocumented alias; frontend uses canonical path. | SRS/HLD §13.3; tenant/vendor settings |
+| `PATCH /api/v1/settings/discount-threshold` | `PATCH /api/v1/tenant/settings/discount-threshold` | Removed undocumented alias; method, request body, authorization and business behavior remain unchanged. | SRS/HLD §13.3 and vendor settings module |
+| Flyway V1–V14 for fresh installs | Single `V1__baseline.sql` for fresh installs | The product has no production deployment; preserve all schema/seed semantics while reducing clean-install migration chain to one file. | SRS/HLD §§14, 22–23 |
+| Release validation branch filters (audit-only branches) | Only `main` and `cleanup/final-code-cleanup` | Follow explicit requested branch policy. | User cleanup instruction, Phase 3 |
+
+No documented business workflow, documented versioned REST API, authorization rule, tenant ownership rule, message event, or notification channel was intentionally removed.
+
+## Open Questions
+
+1. **External infrastructure inventory:** Repository scanning cannot establish that separately configured cloud queues, cron triggers, managed workers, or environment overrides do not exist outside Git. Infrastructure owner should provide current exports/sign-off for the actual target deployment account. The source documents do not identify a production deployment for this repository.
+2. **Provider selection:** SMS/WhatsApp currently uses a deterministic dev/test mock and the reserved real-provider adapter fails closed. Select and approve a live provider separately before any real outbound integration is implemented.
+3. **Notification policy:** Existing NOT-OQ decisions remain open for SLA escalation thresholds/targets/cadence, mandatory notification categories, consent evidence/retention, provider callback contract, retry/redrive policy, notification retention and platform-wide monitoring. Cleanup did not invent those policies.
+4. **Manual local build availability:** The local clone was attempted with the user's permission, but this execution host still returned a DNS resolution failure for `github.com`. Maven/npm/MySQL commands were therefore not run locally. GitHub Actions is the available build/test/DB verification path.
+5. **Baseline schema result:** The exact MySQL 8.4 old-chain vs baseline comparison is pending a successful CI run on the current branch head. Any non-empty diff must be explained and approved against the requirements before the schema is marked equivalent.
+6. **Branch-policy interpretation:** The explicit release-validation rule has been applied exactly as written. The production preflight remains manual and is restricted to `main` so it cannot run against an audit/feature branch with production secrets.
+
+## Verification
+
+| Check | Command / evidence | Current result |
+|---|---|---|
+| Base branch ancestry | GitHub compare `audit/implementation-gap-analysis...cleanup/final-code-cleanup` | PASS — branch is based directly on the requested base and is ahead; no base divergence was reported at the ancestry check. |
+| Active migrations | GitHub tree listing of `backend/src/main/resources/db/migration` | PASS — exactly one active file, `V1__baseline.sql`. |
+| Consolidated SQL inventory | Source parser over all original 14 migration files; original statement order retained within DML | PASS — 84 tables, 14 table alters, 6 standalone indexes, 8 triggers, 67 DML statements, zero unclassified statements. |
+| Runtime API route caller cleanup | Mapping and reference searches for both settings aliases | PASS — canonical frontend paths and canonical backend mappings are aligned. |
+| Workflow branch references | Inspected both workflow files | PASS — release-validation branches are exactly `main` and `cleanup/final-code-cleanup`; production preflight condition is `main`. |
+| External transport source/dependency/compose scan | Manifest, Compose, worker inventory and repository-wide assertion added to CI | PENDING — definitive whole-tree result requires the workflow step to pass. |
+| Old-chain vs single-baseline schema diff | `mysql-migrations` CI job: old 14-migration chain vs consolidated V1 on MySQL 8.4 | PENDING — no equivalence claim until CI success and artifact review. |
+| Backend build/tests | `mvn --batch-mode --no-transfer-progress clean verify` in workflow | PENDING branch-head CI result. |
+| Frontend tests/build | `npm test` and `npm run build` in workflow | PENDING branch-head CI result. |
+| Fresh database application startup | Spring Boot health check against clean MySQL 8.4 schema in workflow | PENDING branch-head CI result. |
+| Browser security regression | Playwright E2E in workflow against fresh MySQL-backed app | PENDING branch-head CI result. |
+| Local clone | `git clone --branch cleanup/final-code-cleanup --single-branch https://github.com/rambrij/saumya-solar-energy-product.git` | BLOCKED — DNS lookup for `github.com` failed in this execution environment despite user authorization. |
+
+CI run results, schema diff artifact identifier, job test counts and final commit SHA will be added here after a successful workflow run on the final branch head. A queued, cancelled or earlier-head run is not accepted as verification.
