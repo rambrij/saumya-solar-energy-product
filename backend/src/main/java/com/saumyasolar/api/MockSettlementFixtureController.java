@@ -14,6 +14,7 @@ import java.util.*;
 
 @RestController
 @Profile({"dev", "test"})
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(prefix = "app.payment.mock", name = "enabled", havingValue = "true")
 @RequestMapping("/api/v1/payment-gateways/mock")
 public class MockSettlementFixtureController {
     private final PaymentRepository payments;
