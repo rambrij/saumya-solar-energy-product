@@ -32,7 +32,6 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
     private final Map<String, GatewayPaymentStatus> payments = new ConcurrentHashMap<>();
     private final Map<String, GatewayRefund> refunds = new ConcurrentHashMap<>();
     private final Map<String, String> outcomes = new ConcurrentHashMap<>();
-    private final Map<String, String> tenants = new ConcurrentHashMap<>();
 
     public MockPaymentGatewayAdapter(
             ObjectMapper mapper,
@@ -73,7 +72,6 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
         GatewayPaymentStatus status = new GatewayPaymentStatus(reference, "PENDING", amount, currency);
         payments.putIfAbsent(reference, status);
         outcomes.putIfAbsent(reference, checkoutOutcome);
-        tenants.putIfAbsent(reference, metadata.get("tenantId"));
         return new GatewayPayment(reference, frontendBaseUrl + "/?mockCheckoutPaymentId=" + metadata.get("paymentId"), outcomes.get(reference));
     }
 
@@ -153,12 +151,6 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
         }
         payload.put("tenantId", tenantId);
         return mapper.writeValueAsString(payload);
-    }
-
-    private String tenantFor(String providerReference) {
-        String tenant = tenants.get(providerReference);
-        if (tenant == null) throw new IllegalArgumentException("Unknown mock payment reference");
-        return tenant;
     }
 
     public String checkoutOutcome(String providerReference) {
