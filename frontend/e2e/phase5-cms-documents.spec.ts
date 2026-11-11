@@ -16,7 +16,7 @@ test('published CMS page and blog render publicly and uploaded media is served',
   const headers={Authorization:'Bearer '+vendor.accessToken,'Content-Type':'application/json'};
   const suffix=Date.now().toString();
   const slug='phase5-e2e-'+suffix;
-  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l1sAAAAASUVORK5CYII=','base64');
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC','base64');
   const media=await page.request.post('/api/v1/cms/media',{headers:{Authorization:'Bearer '+vendor.accessToken},multipart:{file:{name:'phase5.png',mimeType:'image/png',buffer:png}}});
   expect(media.ok()).toBeTruthy();
   const image=await media.json();
