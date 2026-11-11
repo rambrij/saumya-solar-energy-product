@@ -25,7 +25,7 @@ public class PlatformBusinessAnalyticsService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform Super Admin analytics access required");
         Instant end = to == null ? Instant.now() : to;
         Instant start = from == null ? end.minus(Duration.ofDays(30)) : from;
-        if (end.isBefore(start) || Duration.between(start, end).toDays() > 366)
+        if (end.isBefore(start) || Duration.between(start, end).compareTo(Duration.ofDays(366)) > 0)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Analytics date range must be valid and no longer than 366 days");
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("from", Timestamp.from(start)).addValue("to", Timestamp.from(end));
