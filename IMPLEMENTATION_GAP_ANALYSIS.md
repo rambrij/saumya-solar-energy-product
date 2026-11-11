@@ -1942,15 +1942,15 @@ The requested remaining role/resource scenarios are verified by the passing run.
 - Added `docs/CLEANUP_DECISIONS.md` with fixed safety decisions and ten explicit business/accounting/provider open questions.
 - No live provider SDK, credentials, network calls or payment endpoints were added.
 
-### Remaining work — not closed
+### Initial assessment at branch creation — superseded by current delivery below
 
-All runtime Phase 4 implementation items remain open: GST-rule approval and implementation, approved invoice numbering, mock adapter lifecycle, profile-gated mock simulators, expanded webhook events, settlement reconciliation, provider refund lifecycle, hosted checkout result UI, payment/refund visibility, database migrations, audit/tenant-isolation tests and complete CI validation.
+At the initial inspection, the following runtime Phase 4 items were outstanding: GST-rule approval and implementation, approved invoice numbering, mock adapter lifecycle, profile-gated mock simulators, expanded webhook events, settlement reconciliation, provider refund lifecycle, hosted checkout result UI, payment/refund visibility, database migrations, audit/tenant-isolation tests and complete CI validation.
 
-Real-provider integration status: **pending provider selection; adapter and mock complete** is the intended Phase 4 acceptance wording only after the mock adapter lifecycle is actually implemented and verified. It is **not** claimed complete by this assessment.
+At that initial inspection, real-provider integration was pending provider selection and the mock adapter had not yet been implemented. The current delivery and verification status is recorded in the later section below.
 
-### Verification status
+### Verification status at initial assessment
 
-No baseline or post-change backend/frontend test suite was run. No build or migration validation was run. The GitHub connector session did not provide a repository checkout/tree API, and a network clone could not resolve GitHub. Consequently, code-level state beyond the existing gap-analysis evidence could not be independently inspected, and no runtime Phase 4 acceptance criterion is marked Met. Do not treat Phase 4 as implemented or release-ready.
+At the initial documentation-only checkpoint, runtime tests and migration validation had not been run, and local Git clone was blocked by DNS resolution. Subsequent code implementation and GitHub Actions verification are documented in the current delivery section below.
 
 
 ---
@@ -1987,11 +1987,9 @@ The Phase 4 delivery requested for this branch is a deterministic, profile-gated
 7. **GST/numbering:** keep existing fiscal sequence and invoice snapshots; do not hard-code unapproved tax rates, place-of-supply, reverse charge, IRN/e-invoice or statutory series. Implement configurable approved rules only after the named decision owners approve them.
 8. **Tests:** add adapter unit tests, webhook signature/idempotency/tenant tests, refund state tests, reconciliation mismatch/replay tests, production-profile exclusion tests and customer checkout result UI tests.
 
-### Current implementation completion
+### Initial implementation completion status
 
-No runtime Phase 4 feature is marked complete by this inspection. The code-level state above is confirmed from source, but this session did not have a working local clone/command environment to safely edit and execute the application test suites. Documentation and CI-branch wiring are the only changes committed so far.
-
-**Real-provider integration:** pending provider selection. **Mock adapter:** not yet complete. Do not use the acceptance wording "adapter and mock complete" until the mock lifecycle and its tests are implemented and verified.
+At the time of this source inspection, runtime Phase 4 features had not yet been implemented. This historical status is superseded by the current delivery and verification section at the end of this document.
 
 
 ---
