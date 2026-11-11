@@ -96,6 +96,10 @@ public class CmsService {
         validateInput(input);
         String type = normalizeType(input.type());
         String slug = normalizeSlug(input.slug());
+        if (content.getPublishedRevisionId() != null
+                && (!content.getType().equals(type) || !content.getSlug().equals(slug)))
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Content type and slug cannot change while a published revision is live; archive and create a new item");
         if (contents.existsByTenantIdAndTypeAndSlugAndIdNot(tenantId, type, slug, id))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "A content item already uses this slug");
         String beforeStatus = content.getStatus();
