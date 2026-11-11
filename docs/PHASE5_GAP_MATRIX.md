@@ -100,8 +100,8 @@ The first implementation vertical slices are committed on this branch. This is a
 
 ### Initial implementation commits
 
-CMS and inbox backend/UI, migrations V6–V8, aggregate platform analytics, tests, and CI migration updates are committed on this same branch. Use the branch commit history and the latest GitHub Actions run as the authoritative implementation and validation record.
+CMS and inbox backend/UI, migrations V6–V9, aggregate platform analytics, tests, and CI migration updates are committed on this same branch. Use the branch commit history and the latest GitHub Actions run as the authoritative implementation and validation record.
 
 ### Known validation issues observed and corrective work
 
-Earlier intermediate CI runs identified (a) the new inbox endpoints being accessible to a zero-permission vendor, (b) an ambiguous CMS test label selector, and (c) the release-validation migration-count assertion being hard-coded to five migrations. Corrective commits added `NOTIFICATION_VIEW` checks and role grants, narrowed the test selector, and extended clean-install migration validation to V6–V8. These intermediate failed runs are not final acceptance; the latest full workflow must pass.
+Earlier intermediate CI runs identified (a) the new inbox endpoints being accessible to a zero-permission vendor, (b) an ambiguous CMS test label selector, and (c) the release-validation migration-count assertion being hard-coded to five migrations. Corrective commits added `NOTIFICATION_VIEW` checks and role grants, narrowed the test selector, and extended clean-install migration validation to V6–V9. These intermediate failed runs are not final acceptance; the latest full workflow must pass.
