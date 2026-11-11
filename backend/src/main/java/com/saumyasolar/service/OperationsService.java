@@ -570,8 +570,8 @@ public class OperationsService {
             AuditEvent event=new AuditEvent(); event.setId(UUID.randomUUID()); event.setTenantId(t); event.setActorId(p.userId());
             event.setActorType("USER"); event.setAction("ORDER_TRANSITION_POLICY_UPDATED"); event.setEntityType("ORDER_TRANSITION_POLICY");
             event.setEntityId(from+"->"+to); event.setOutcome("SUCCESS");
-            event.setBeforeJson("{\\"enabled\\":"+wasEnabled+",\\"requiredPermission\\":\\""+baseline.permission()+"\\"}");
-            event.setAfterJson("{\\"enabled\\":"+toggle.enabled()+",\\"requiredPermission\\":\\""+baseline.permission()+"\\"}");
+            event.setBeforeJson("{\"enabled\":"+wasEnabled+",\"requiredPermission\":\""+baseline.permission()+"\"}");
+            event.setAfterJson("{\"enabled\":"+toggle.enabled()+",\"requiredPermission\":\""+baseline.permission()+"\"}");
             event.setReason("Vendor order transition policy changed"); event.setCreatedAt(Instant.now()); audits.save(event);
         }
         return transitionPolicy(p);
