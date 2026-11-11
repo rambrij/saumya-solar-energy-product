@@ -594,6 +594,7 @@ public class FinanceService {
         record.setId(UUID.randomUUID());
         record.setTenantId(pay.getTenantId());
         record.setProvider(key);
+        record.setProviderReference(event.paymentReference());
         record.setEventId(event.eventId());
         record.setPayloadHash(HexFormat.of().formatHex(hash(raw)));
         record.setProcessingStatus("RECEIVED");
