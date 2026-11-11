@@ -119,6 +119,12 @@ jobs:
           exec docker exec -i "$MYSQL_SERVICE_CONTAINER" mysql --default-character-set=utf8mb4 --local-infile=1 "$@"
           MYSQL_WRAPPER
           chmod +x /usr/local/bin/mysql
+          cat > /usr/local/bin/mysqldump <<'MYSQLDUMP_WRAPPER'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec docker exec "$MYSQL_SERVICE_CONTAINER" mysqldump --default-character-set=utf8mb4 "$@"
+          MYSQLDUMP_WRAPPER
+          chmod +x /usr/local/bin/mysqldump
       - name: Restore the pre-cleanup migration chain for schema comparison
         run: |
           set -euo pipefail
