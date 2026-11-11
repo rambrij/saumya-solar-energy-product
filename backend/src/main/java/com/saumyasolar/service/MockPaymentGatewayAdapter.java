@@ -30,6 +30,7 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
     private final String checkoutOutcome;
     private final Map<String, GatewayPaymentStatus> payments = new ConcurrentHashMap<>();
     private final Map<String, GatewayRefund> refunds = new ConcurrentHashMap<>();
+    private final Map<String, String> outcomes = new ConcurrentHashMap<>();
 
     public MockPaymentGatewayAdapter(
             ObjectMapper mapper,
@@ -63,7 +64,8 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
         String reference = "mock_pay_" + sha256(metadata.get("tenantId") + ":" + metadata.get("idempotencyKey")).substring(0, 32);
         GatewayPaymentStatus status = new GatewayPaymentStatus(reference, "PENDING", amount, currency);
         payments.putIfAbsent(reference, status);
-        return new GatewayPayment(reference, "https://mock-checkout.saumyasolar.invalid/session/" + reference, checkoutOutcome);
+        outcomes.putIfAbsent(reference, checkoutOutcome);
+        return new GatewayPayment(reference, "https://mock-checkout.saumyasolar.invalid/session/" + reference, outcomes.get(reference));
     }
 
     @Override
@@ -96,6 +98,10 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
     public GatewayPaymentStatus fetchStatus(String providerReference) {
         GatewayPaymentStatus status = payments.get(providerReference);
         if (status == null) throw new IllegalArgumentException("Unknown mock payment reference");
+        String outcome = outcomes.get(providerReference);
+        if ("SUCCESS".equals(outcome)) return new GatewayPaymentStatus(providerReference, "CONFIRMED", status.amount(), status.currency());
+        if ("FAILURE".equals(outcome)) return new GatewayPaymentStatus(providerReference, "FAILED", status.amount(), status.currency());
+        if ("CANCELLED".equals(outcome)) return new GatewayPaymentStatus(providerReference, "CANCELLED", status.amount(), status.currency());
         return status;
     }
 
@@ -126,6 +132,11 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
         payload.put("status", status);
         if (providerRefundReference != null) payload.put("providerRefundReference", providerRefundReference);
         return mapper.writeValueAsString(payload);
+    }
+
+    public String checkoutOutcome(String providerReference) {
+        if (!outcomes.containsKey(providerReference)) throw new IllegalArgumentException("Unknown mock payment reference");
+        return outcomes.get(providerReference);
     }
 
     public String sign(String rawPayload) {
