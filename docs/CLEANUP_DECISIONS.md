@@ -32,8 +32,6 @@ The following are intentionally unresolved. Keep the existing behavior and make 
 | FIN-OQ-09 | Which roles may initiate, approve and execute refunds, and is maker-checker approval required above a threshold? | Business/security owner | Do not broaden existing finance permissions or invent approval thresholds. |
 | FIN-OQ-10 | What retention, privacy, and evidence requirements apply to invoice snapshots, provider events, reconciliation files and refund events? | Legal/privacy and accounting | Preserve auditable references; final retention/deletion policy requires approval. |
 
-#
-7. **Unused symbols/dependencies attestation:** The full file/tree, endpoint, caller and configuration inventories were reviewed, but no exhaustive compiler-assisted dead-code/symbol reachability or Maven/npm dependency-usage report was produced because local clone DNS was unavailable. No unproven dependency, class, config property or fixture was removed. A strict zero-unused-code attestation would require a separate full dependency/symbol audit; uncertain candidates were preserved.
 
 ## Verification limitation
 
@@ -417,6 +415,7 @@ No documented business workflow, documented versioned REST API, authorization ru
 4. **Manual local build availability:** The local clone was attempted with the user's permission, but this execution host still returned a DNS resolution failure for `github.com`. Maven/npm/MySQL commands were therefore not run locally. GitHub Actions is the available build/test/DB verification path.
 5. **Baseline schema result:** PASS on final branch-head CI run 43089380154. The old V1–V14 chain and consolidated V1 produce identical MySQL 8.4 schema dumps; artifact 13888520692 contains a 63-byte PASS result and no diff. No schema deviation required justification.
 6. **Branch-policy interpretation:** The explicit release-validation rule has been applied exactly as written. The production preflight remains manual and is restricted to `main` so it cannot run against an audit/feature branch with production secrets.
+7. **Unused symbols/dependencies attestation:** The full file/tree, endpoint, caller and configuration inventories were reviewed, but no exhaustive compiler-assisted dead-code/symbol reachability or Maven/npm dependency-usage report was produced because local clone DNS was unavailable. No unproven dependency, class, config property or fixture was removed. A strict zero-unused-code attestation would require a separate full dependency/symbol audit; uncertain candidates were preserved.
 
 ## Verification
 
