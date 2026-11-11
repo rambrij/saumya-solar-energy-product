@@ -82,6 +82,7 @@ public class PaymentGatewayWebhookService {
         record.setId(UUID.randomUUID());
         record.setTenantId(payment.getTenantId());
         record.setProvider(code);
+        record.setProviderReference(event.providerReference());
         record.setEventId(event.eventId());
         record.setPayloadHash(hash(raw));
         record.setProcessingStatus("RECEIVED");
