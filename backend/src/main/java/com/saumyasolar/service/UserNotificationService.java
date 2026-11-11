@@ -24,7 +24,7 @@ public class UserNotificationService {
         this.users = users;
     }
 
-    @Transactional
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     public void createBusinessNotification(UUID userId, UUID tenantId, String eventType, String title, String body) {
         if (userId == null) return;
         if (tenantId == null || users.findByIdAndTenantId(userId, tenantId)
