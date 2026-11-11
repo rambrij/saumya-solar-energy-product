@@ -312,3 +312,18 @@ This section supersedes the initial audit's statement that Phase 6 runtime work 
 | CI branch policy | Pending Phase 3 workflow audit/change | NOT RUN |
 
 No command is marked successful unless its output was observed. GitHub Actions must provide build, test, MySQL and browser verification evidence after implementation commits.
+
+
+### Phase 0 repository evidence addendum
+
+The following branch-head evidence was inspected after the initial inventory:
+
+- `backend/pom.xml` declares Spring Web, Security, Data JPA, Validation, Mail, Actuator, Flyway, OpenAPI, JWT, PDF/XLSX, MySQL and test dependencies. No Kafka, RabbitMQ, AMQP, JMS, SQS, SNS or EventBridge client dependency is declared in this manifest. This does not prove the absence of transitive or frontend/other build dependencies.
+- Root `docker-compose.yml` defines MySQL, Mailpit, backend and frontend services; no dedicated broker service is present in the inspected file.
+- `docs/PHASE_1_2_BACKGROUND_JOB_INVENTORY.md` records database-backed `IntegrationSyncJob` and `notification_outbox` processing, seven scheduled jobs, two in-process async listeners and a bounded executor. It also records that the static worker scan found no checked-in Kafka/RabbitMQ/AMQP/JMS/SQS/SNS/EventBridge producer/consumer clients on the documented audit checkpoint. This is supporting historical evidence, not a substitute for a fresh scan on this target branch.
+- The notification outbox, provider adapters, preferences and tenant-bound references are required functionality under business requirements §15 and SRS/HLD §§10.12, 17–18. These must remain. Only a proven external broker transport/configuration may be removed.
+- `.github/workflows/release-validation.yml` currently has audit-only push and pull-request branch filters (Phase 2, 3, 4 and 6 audit branches). Its migration job also contains historical migration application/equivalence steps. Both are planned Phase 2/3 work, not Phase 0 changes.
+- `.github/workflows/phase-2-production-preflight.yml` currently contains an `if` condition and checkout ref for `audit/phase-2-implementation-gap-analysis`. This is an additional stale branch-specific workflow reference to assess in Phase 3.
+- The release-validation workflow contains references to async-worker and legacy-authorization audit scripts. These are verification steps, not evidence of application runtime compatibility code; do not remove them solely because their names contain "legacy".
+
+These findings do not authorize a code/config/CI deletion in Phase 0. Full repository-wide reference search and fresh CI evidence remain mandatory before marking the broker scan complete.
