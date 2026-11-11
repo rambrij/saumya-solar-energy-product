@@ -496,7 +496,7 @@ public class FinanceService {
                 throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Payment gateway adapter is not configured");
             if (x.idempotencyKey() == null || !x.idempotencyKey().matches("[A-Za-z0-9._:-]{8,160}"))
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A valid Idempotency-Key is required for provider refunds");
-            Optional<Refund> previous = refunds.findByTenantIdAndIdempotencyKey(p.tenantId(), x.idempotencyKey());
+            Optional<Refund> previous = refunds.findByTenantIdAndPaymentIdAndIdempotencyKey(p.tenantId(), pay.getId(), x.idempotencyKey());
             if (previous.isPresent()) {
                 Refund existing = previous.get();
                 if (!existing.getPaymentId().equals(pay.getId()) || existing.getAmount().compareTo(x.amount()) != 0
