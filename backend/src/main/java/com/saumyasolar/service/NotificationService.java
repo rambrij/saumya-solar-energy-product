@@ -249,6 +249,16 @@ public class NotificationService {
         deliveries.save(record);
     }
 
+    public void processOutboxDelivery(UUID deliveryId, UUID tenantId) {
+        var record=deliveries.findByIdAndTenantId(deliveryId,tenantId).orElse(null); if(record==null)return;
+        if("FAILED".equals(record.getStatus())) {
+            Instant now=Instant.now(); if(record.getAttemptCount()>=5){record.setStatus("DEAD_LETTER");record.setNextAttemptAt(null);deliveries.save(record);return;}
+            if(record.getNextAttemptAt()!=null&&record.getNextAttemptAt().isAfter(now))return;
+            if(deliveries.claimFailedDelivery(deliveryId,tenantId,now)!=1)return;
+            retryFailedDelivery(record); return;
+        }
+        if("PENDING".equals(record.getStatus())) processPendingDelivery(deliveryId,tenantId);
+    }
     /** Deterministic mock SMS/WhatsApp adapter. This method performs no network I/O. */
     private void sendProviderDelivery(NotificationDelivery record) {
         if (!"SMS".equals(record.getChannel()) && !"WHATSAPP".equals(record.getChannel())) throw new IllegalArgumentException("Unsupported mock channel");
