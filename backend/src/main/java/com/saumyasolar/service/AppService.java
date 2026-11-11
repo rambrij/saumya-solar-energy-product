@@ -864,7 +864,8 @@ public class AppService {
     @Transactional
     public Quotation action(UUID id, String action, Principal p) {
         if (p.tenantId() == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-        var q = quotes.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
+        var q = quotes.findByIdAndTenantId(id, p.tenantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Quotation not found"));
         if ("CUSTOMER".equals(p.accountType())) {
             var c = customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
                     .filter(x -> p.userId().equals(x.getUserId())).findFirst().orElseThrow();
