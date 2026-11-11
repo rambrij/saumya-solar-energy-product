@@ -32,7 +32,7 @@ public class NotificationOutboxDispatcher {
           try { var delivery=deliveries.findByIdAndTenantId(row.getDeliveryId(),tenantId).orElseThrow();
             var preference=delivery.getUserId()==null?java.util.Optional.<com.saumyasolar.domain.NotificationPreference>empty():preferences.findByTenantIdAndUserIdAndChannel(tenantId,delivery.getUserId(),delivery.getChannel());
             if(preference.isPresent() && (!preference.get().isEnabled() || (("SMS".equals(delivery.getChannel()) || "WHATSAPP".equals(delivery.getChannel())) && !preference.get().isConsented()))) { delivery.setStatus("SUPPRESSED"); deliveries.save(delivery); row.setStatus("SUCCEEDED"); row.setLastError(null); row.setUpdatedAt(Instant.now()); outbox.save(row); continue; }
-            service.processPendingDelivery(row.getDeliveryId(),tenantId);
+            service.processOutboxDelivery(row.getDeliveryId(),tenantId);
             delivery=deliveries.findByIdAndTenantId(row.getDeliveryId(),tenantId).orElseThrow();
             row.setStatus("DELIVERED".equals(delivery.getStatus())?"SUCCEEDED":"DEAD_LETTER".equals(delivery.getStatus())?"DEAD_LETTER":"RETRY");
             row.setAttemptCount(delivery.getAttemptCount()); row.setNextAttemptAt(delivery.getNextAttemptAt()!=null?delivery.getNextAttemptAt():("PENDING".equals(delivery.getStatus())?Instant.now().plusSeconds(30):null)); row.setLastError(delivery.getLastError());
