@@ -12,7 +12,6 @@ import com.saumyasolar.security.Principal;
 import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -98,6 +97,7 @@ public class CmsService {
         String slug = normalizeSlug(input.slug());
         if (contents.existsByTenantIdAndTypeAndSlugAndIdNot(tenantId, type, slug, id))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "A content item already uses this slug");
+        String beforeStatus = content.getStatus();
         CmsContentRevision previous = currentRevision(content);
         int nextRevision = previous.getRevisionNumber() + 1;
         CmsContentRevision revision = revision(content, input, actor.userId(), nextRevision, Instant.now());
@@ -111,7 +111,7 @@ public class CmsService {
         content.setUpdatedAt(Instant.now());
         contents.save(content);
         audit(actor, tenantId, "CMS_CONTENT_UPDATED", content,
-                Map.of("status", previousStatus(content), "revision", previous.getRevisionNumber()),
+                Map.of("status", beforeStatus, "revision", previous.getRevisionNumber()),
                 Map.of("status", "DRAFT", "revision", nextRevision));
         return content;
     }
@@ -184,7 +184,8 @@ public class CmsService {
         var tenant = tenants.findBySlug(storeSlug)
                 .filter(row -> "ACTIVE".equals(row.getStatus()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
-        var result = contents.findByTenantIdAndTypeOrderByUpdatedAtDesc(tenant.getId(), normalizeType(type),
+        var result = contents.findByTenantIdAndTypeAndPublishedRevisionIdIsNotNullAndStatusNotOrderByPublishedAtDesc(
+                tenant.getId(), normalizeType(type), "ARCHIVED",
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "publishedAt")));
         return result.map(this::publicViewIfPublished);
     }
@@ -300,10 +301,6 @@ public class CmsService {
 
     private String trim(String value) {
         return value == null || value.isBlank() ? null : value.trim();
-    }
-
-    private String previousStatus(CmsContent content) {
-        return content.getStatus();
     }
 
     private void audit(Principal actor, UUID tenantId, String action, CmsContent content, Object before, Object after) {
