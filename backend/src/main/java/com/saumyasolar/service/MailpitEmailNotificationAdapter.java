@@ -19,7 +19,7 @@ import java.util.UUID;
 public class MailpitEmailNotificationAdapter implements NotificationChannelAdapter {
  private final JavaMailSender sender; private final String from; private final String baseUrl; private final HttpClient http; private final ObjectMapper mapper;
  public MailpitEmailNotificationAdapter(JavaMailSender sender,@Value("${app.mail.from:no-reply@saumya.local}") String from,@Value("${app.mailpit.base-url:http://mailpit:8025}") String baseUrl,ObjectMapper mapper){this.sender=sender;this.from=from;this.baseUrl=baseUrl.replaceAll("/+$","");this.mapper=mapper;this.http=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();}
- public String channel(){return "EMAIL";} public String providerCode(){return "MAILPIT";}
+ public boolean supports(String channel){return "EMAIL".equals(channel);} public String providerCode(){return "MAILPIT";}
  public void dispatch(NotificationDelivery d) throws Exception {
   String key=d.getIdempotencyKey()==null?d.getId().toString():d.getIdempotencyKey();
   if(alreadyCaptured(key))return;
