@@ -82,10 +82,7 @@ public class PaymentReconciliationService {
                     actor.tenantId(), code, row.providerReference()).orElse(null);
             String outcome;
             String details = null;
-            if (!seen.add(row.providerReference())) {
-                outcome = "DUPLICATE";
-                details = "Provider reference occurs more than once in this report";
-            } else if (payment == null || !visibleToActor(payment, actor)) {
+            if (payment == null || !visibleToActor(payment, actor)) {
                 outcome = "MISSING_PAYMENT";
                 details = "No tenant/branch-visible payment matches this provider reference";
             } else if (!payment.getCurrency().equalsIgnoreCase(row.currency())
@@ -95,6 +92,9 @@ public class PaymentReconciliationService {
             } else if (payment.getAmount().compareTo(row.amount()) != 0) {
                 outcome = "AMOUNT_MISMATCH";
                 details = "Settlement amount does not match the recorded payment";
+            } else if (!seen.add(row.providerReference())) {
+                outcome = "DUPLICATE";
+                details = "Provider reference occurs more than once in this report";
             } else if (!Set.of("CONFIRMED", "PARTIALLY_REFUNDED", "REFUNDED").contains(payment.getStatus())) {
                 outcome = "PAYMENT_NOT_CAPTURED";
                 details = "Payment is not in a captured state";
