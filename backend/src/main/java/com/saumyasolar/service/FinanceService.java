@@ -577,42 +577,49 @@ public class FinanceService {
     public Map<String, Object> webhook(String provider, String raw, String signature, WebhookEvent event) {
         if (!validSignature(raw, signature))
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid payment webhook signature");
+        if (event == null || event.eventId() == null || event.eventId().isBlank()
+                || event.paymentReference() == null || event.paymentReference().isBlank()
+                || event.amount() == null || event.amount().signum() <= 0)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid payment webhook payload");
         String key = provider.toUpperCase(Locale.ROOT);
-        var duplicate = webhookEvents.findByProviderAndEventId(key, event.eventId());
+        Payment pay = payments.findByProviderAndProviderReference(key, event.paymentReference()).orElse(null);
+        if (pay == null) return Map.of("accepted", false, "matched", false, "retryable", true);
+        if (pay.getAmount().compareTo(event.amount()) != 0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Webhook amount does not match the recorded provider payment");
+        var duplicate = webhookEvents.findByTenantIdAndProviderAndEventId(pay.getTenantId(), key, event.eventId());
         if (duplicate.isPresent()) return Map.of("accepted", true, "duplicate", true);
         PaymentWebhookEvent record = new PaymentWebhookEvent();
         record.setId(UUID.randomUUID());
+        record.setTenantId(pay.getTenantId());
         record.setProvider(key);
         record.setEventId(event.eventId());
         record.setPayloadHash(HexFormat.of().formatHex(hash(raw)));
         record.setProcessingStatus("RECEIVED");
         record.setReceivedAt(Instant.now());
         webhookEvents.saveAndFlush(record);
-        Payment pay = payments.findByProviderAndProviderReference(key, event.paymentReference()).orElse(null);
-        if (pay == null) {
-            record.setProcessingStatus("UNMATCHED");
-            record.setProcessedAt(Instant.now());
-            webhookEvents.save(record);
-            return Map.of("accepted", true, "matched", false);
+        if ("SUCCEEDED".equals(event.status())) {
+            pay.setStatus("CONFIRMED");
+            pay.setPaidAt(Instant.now());
+        } else if ("FAILED".equals(event.status()) && "PENDING".equals(pay.getStatus())) {
+            pay.setStatus("FAILED");
         }
-        if (pay.getAmount().compareTo(event.amount()) != 0)
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Webhook amount does not match the recorded provider payment");
-        if ("SUCCEEDED".equals(event.status())) pay.setStatus("CONFIRMED");
-        else if ("FAILED".equals(event.status()) && "PENDING".equals(pay.getStatus())) pay.setStatus("FAILED");
         payments.save(pay);
-        accountingEvent("PAYMENT", pay.getId().toString(), "UPSERT", Map.of("invoiceId", pay.getInvoiceId().toString(), "amount", pay.getAmount(), "currency", pay.getCurrency(), "status", pay.getStatus()), new Principal(null, pay.getTenantId(), "system@saumya.internal", "SYSTEM", Set.of(), Set.of(), 0));
+        accountingEvent("PAYMENT", pay.getId().toString(), "UPSERT",
+                Map.of("invoiceId", pay.getInvoiceId().toString(), "amount", pay.getAmount(),
+                        "currency", pay.getCurrency(), "status", pay.getStatus()),
+                new Principal(null, pay.getTenantId(), "system@saumya.internal", "SYSTEM", Set.of(), Set.of(), 0));
         Invoice i = invoice(pay.getInvoiceId(), pay.getTenantId());
-        if ("CONFIRMED".equals(pay.getStatus())) {
-            BigDecimal total = payments.findByTenantIdAndInvoiceId(pay.getTenantId(), i.getId()).stream().filter(v -> "CONFIRMED".equals(v.getStatus())).map(Payment::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-            i.setStatus(total.compareTo(i.getGrandTotal()) >= 0 ? "PAID" : "PARTIALLY_PAID");
-            invoices.save(i);
-        }
+        BigDecimal total = payments.findByTenantIdAndInvoiceId(pay.getTenantId(), i.getId()).stream()
+                .filter(v -> Set.of("CONFIRMED", "PARTIALLY_REFUNDED").contains(v.getStatus()))
+                .map(Payment::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        i.setStatus(total.compareTo(i.getGrandTotal()) >= 0 ? "PAID" : total.signum() > 0 ? "PARTIALLY_PAID" : "ISSUED");
+        invoices.save(i);
         record.setProcessingStatus("PROCESSED");
         record.setProcessedAt(Instant.now());
         webhookEvents.save(record);
         return Map.of("accepted", true, "matched", true, "duplicate", false);
     }
-    
+
     private byte[] hash(String raw) {
         try {
             return MessageDigest.getInstance("SHA-256").digest(raw.getBytes(StandardCharsets.UTF_8));
