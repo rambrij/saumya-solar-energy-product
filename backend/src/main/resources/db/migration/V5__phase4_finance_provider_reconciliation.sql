@@ -5,7 +5,8 @@ ALTER TABLE payment
 
 ALTER TABLE payment_webhook_event
     ADD COLUMN tenant_id BINARY(16) NOT NULL AFTER id,
-    ADD COLUMN provider_refund_reference VARCHAR(150) NULL AFTER processing_status,
+    ADD COLUMN event_type VARCHAR(32) NOT NULL AFTER processing_status,
+    ADD COLUMN provider_refund_reference VARCHAR(150) NULL AFTER event_type,
     DROP INDEX uq_payment_webhook_provider_event,
     ADD CONSTRAINT fk_payment_webhook_tenant FOREIGN KEY(tenant_id) REFERENCES tenant(id),
     ADD UNIQUE KEY uq_payment_webhook_tenant_provider_event(tenant_id, provider, event_id),
