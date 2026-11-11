@@ -108,10 +108,6 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
     public GatewayPaymentStatus fetchStatus(String providerReference) {
         GatewayPaymentStatus status = payments.get(providerReference);
         if (status == null) throw new IllegalArgumentException("Unknown mock payment reference");
-        String outcome = outcomes.get(providerReference);
-        if ("SUCCESS".equals(outcome)) return new GatewayPaymentStatus(providerReference, "CONFIRMED", status.amount(), status.currency());
-        if ("FAILURE".equals(outcome)) return new GatewayPaymentStatus(providerReference, "FAILED", status.amount(), status.currency());
-        if ("CANCELLED".equals(outcome)) return new GatewayPaymentStatus(providerReference, "CANCELLED", status.amount(), status.currency());
         return status;
     }
 
