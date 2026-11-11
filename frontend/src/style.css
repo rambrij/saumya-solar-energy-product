@@ -496,3 +496,26 @@ main:has(>.role-app){max-width:none;margin:0;padding:0}
 .brand-logo-button{display:inline-flex;align-items:center;justify-content:center;padding:0;border:0;background:transparent;cursor:pointer;line-height:0}
 .brand-logo-button:focus-visible,.brand-logo-link:focus-visible{outline:2px solid #0b6b4b;outline-offset:4px;border-radius:4px}
 .brand-logo-link{display:inline-flex;align-items:center;line-height:0}
+
+
+/* Phase 5 public CMS and settings layouts */
+.cms-public-banners{display:grid;gap:1rem}
+.cms-public-banner{display:grid;grid-template-columns:minmax(180px,32%) 1fr;gap:1.5rem;align-items:center;padding:1.5rem;border-radius:16px;background:var(--surface,#f5f8f6)}
+.cms-public-banner img{width:100%;max-height:220px;object-fit:cover;border-radius:12px}
+.cms-public-banner p,.cms-public-body{white-space:pre-wrap;line-height:1.75}
+.cms-public-card{display:grid;grid-template-columns:minmax(160px,28%) 1fr;gap:1.25rem;padding:1.25rem 0;border-bottom:1px solid var(--border,#dce5df)}
+.cms-public-card img,.cms-public-detail img{width:100%;max-height:360px;object-fit:cover;border-radius:12px}
+.cms-public-card h2 a{color:inherit;text-decoration:none}
+.cms-public-detail{max-width:900px;margin-inline:auto}
+.cms-public-detail article{display:grid;gap:1rem}
+.cms-public-detail .cms-public-body{white-space:pre-wrap;line-height:1.8}
+.cms-media-preview{display:block;max-width:min(100%,480px);max-height:280px;object-fit:contain;border:1px solid var(--border,#dce5df);border-radius:10px;margin:.75rem 0}
+.settings-grid{display:grid;gap:1rem}
+.platform-setting-row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(260px,1fr);gap:1rem;align-items:center;padding:1rem 0;border-bottom:1px solid var(--border,#dce5df)}
+.platform-setting-row h3{margin:0 0 .35rem}
+.platform-setting-row small{display:block;color:var(--muted,#65756b);overflow-wrap:anywhere}
+.platform-setting-editor{display:flex;gap:.75rem;align-items:center}
+.platform-setting-editor input,.platform-setting-editor select,.platform-setting-editor textarea{min-width:0;flex:1}
+.analytics-operational-report{margin-top:1.25rem}
+.analytics-export-centre{margin-top:1.25rem}
+@media(max-width:700px){.cms-public-banner,.cms-public-card,.platform-setting-row{grid-template-columns:1fr}.platform-setting-editor{align-items:stretch;flex-direction:column}.cms-public-banner img{max-height:180px}}
