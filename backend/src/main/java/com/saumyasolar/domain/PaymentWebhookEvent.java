@@ -18,6 +18,7 @@ public class PaymentWebhookEvent {
     @Column(name = "event_id", length = 180) String eventId;
     @Column(length = 64) String payloadHash;
     @Column(length = 24) String processingStatus;
+    @Column(length = 32) String eventType;
     @Column(length = 150) String providerRefundReference;
     Instant receivedAt;
     Instant processedAt;
