@@ -201,3 +201,14 @@ Implemented in this branch (runtime verification pending):
 - Integration job monitoring is tenant-scoped and read-only; manual retry/redrive API, provider configuration administration and platform-wide cross-tenant dashboard remain deferred pending role/scope approval.
 - The mock webhook endpoint is a test contract only. Do not expose it as a production provider callback endpoint.
 - NOT-OQ-01 through NOT-OQ-10 remain open. SLA escalation policy is not implemented because thresholds, targets and cadence are unspecified.
+
+### Additional Phase 6 deferred decisions
+
+| ID | Open question | Decision owner | Implementation consequence |
+|---|---|---|---|
+| NOT-OQ-11 | What notification template catalogue, locale fallback, approved variables, versioning and vendor/platform editing permissions are required? | Product and security owners | The current delivery flow uses existing event subject/body; template administration and platform defaults are deferred rather than inventing a template language or exposing unsafe variables. |
+| NOT-OQ-12 | Which roles may manually redrive DEAD_LETTER notification and integration jobs, and should redrive reset attempts or create a new linked execution record? | Operations/security owner | Monitoring is read-only. No retry/redrive mutation API is exposed until least-privilege permission and audit semantics are approved. |
+| NOT-OQ-13 | Should platform operations have cross-tenant provider health/backlog visibility, and which fields may be visible? | Product/security/privacy owner | Current monitoring endpoints are tenant-scoped; tenant-wide outbox/integration monitoring is restricted to the vendor administrator. Platform cross-tenant dashboard is deferred. |
+| NOT-OQ-14 | Which existing integration providers/adapters are approved for each integration type, and should their mock adapters be profile-selected independently? | Product/integration owner | Existing IntegrationSyncScheduler and adapters are retained. No new real integration provider is selected or contacted by this phase. |
+
+These are explicit deferrals, not silently completed features. Phase 6 remains PARTIAL until the above decisions are made and the corresponding UI/workflows are implemented or explicitly excluded by product approval.
