@@ -1707,8 +1707,9 @@ Run `42967893781` passed every job on commit `10287b76fc75e6bbf21eaee65f70d048b0
 ## Phase 2 remaining-acceptance verification — 2026-11-11 (branch-head audit)
 
 **Audit target:** `audit/phase-2-implementation-gap-analysis`  
-**Audited branch HEAD:** `3cdd7b29ee9b8b5ccbed55b07f345a838fbad00d`  
-**Latest-head CI:** [run 42969622428](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42969622428) — completed successfully on the exact audited HEAD.  
+**Audited application-code HEAD:** `3cdd7b29ee9b8b5ccbed55b07f345a838fbad00d`  
+**Audit documentation commit:** `eaad88e83670fb6dbdaac451033f9fe634c00748` (documentation-only; no application source/test/schema changes)  
+**Latest application-code CI:** [run 42969622428](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42969622428) — completed successfully on the exact audited application-code HEAD. The subsequent audit commit changes only `IMPLEMENTATION_GAP_ANALYSIS.md`; no application code changed after this CI run.  
 **Scope:** Phase 2 operations and the outstanding Phase 2 tenant-isolation/data-integrity acceptance gates. The business requirements document is authoritative for phase placement; the SRS/HLD is authoritative for technical behavior.
 
 ### Verified status table
@@ -1729,7 +1730,7 @@ Run `42967893781` passed every job on commit `10287b76fc75e6bbf21eaee65f70d048b0
 | Production tenant NULL counts, FK/index reconciliation and DBA/data-owner approval | SRS/HLD §8.3, §14.3, §21.5, §22 | UNVERIFIED / BLOCKED | `PHASE_2_PRODUCTION_DATA_SIGNOFF.md` remains blank. No production database was queried. Production counts, classification of every base table, V57/V58/V60 output, backup/change ticket and DBA/data-owner/security/release-owner approvals are not available. |
 | Checked-in scheduler, executor, listener and worker inventory | SRS/HLD §18, §8.4 | MET for checked-in source/config at audited HEAD | Run 42969622428 uploaded `phase2-async-worker-inventory` (ID 13832289015); the CI scan ran on the audited HEAD. This does not establish the state of external production control planes. |
 | External production workers, queues and schedules | SRS/HLD §18, §22 | UNVERIFIED / BLOCKED | `PHASE_2_EXTERNAL_WORKER_CONFIRMATION.md` is still unsigned. Connected provider workspaces previously inspected do not target this repository; AWS/target Kubernetes/actual production PaaS and vendor retry/queue registrations have not been reconciled by the infrastructure owner. |
-| Latest-head backend, frontend, migration, startup and browser CI | SRS/HLD §21, §22, §25 | MET | Run 42969622428 passed all four jobs on audited HEAD. Backend Maven: 218 tests, 0 failures/errors/skips, BUILD SUCCESS. Frontend typecheck/component tests/build passed. MySQL 8.4 migration/schema job passed. Spring Boot/MySQL scheduler/browser job passed. |
+| Latest-head backend, frontend, migration, startup and browser CI | SRS/HLD §21, §22, §25 | MET | Run 42969622428 passed all four jobs on the audited application-code HEAD; the later documentation-only commit did not alter application code. Backend Maven: 218 tests, 0 failures/errors/skips, BUILD SUCCESS. Frontend typecheck/component tests/build passed. MySQL 8.4 migration/schema job passed. Spring Boot/MySQL scheduler/browser job passed. |
 
 ### What this verification pass changed
 
