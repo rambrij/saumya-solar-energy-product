@@ -70,6 +70,7 @@ app:
     from: ${MAIL_FROM:no-reply@saumya.local}
   public-base-url: ${PUBLIC_BASE_URL:http://localhost:3000}
   messaging:
+    provider: ${NOTIFICATION_MESSAGING_PROVIDER:mock}
     mock:
       enabled: false
       webhook-secret: ${MOCK_NOTIFICATION_WEBHOOK_SECRET:local-mock-notification-secret-change-me}
