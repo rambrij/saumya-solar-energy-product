@@ -18,7 +18,7 @@ describe('Platform settings panel',()=>{
   render(<PlatformSettingsPanel s={{accessToken:'test-token',user:{permissions:['PLATFORM_MANAGE']}}} as any/>);
   expect(await screen.findByDisplayValue('INR')).toBeTruthy();
   fireEvent.change(screen.getByLabelText('Default currency'),{target:{value:'USD'}});
-  fireEvent.click(screen.getAllByRole('button',{name:'Save'})[0]);
+  fireEvent.click(screen.getByLabelText('Default currency').closest('.platform-setting-row')!.querySelector('button')!);
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(call=>String(call[0]).includes('/platform/settings/PLATFORM_DEFAULT_CURRENCY')&&call[1]?.method==='PUT')).toBe(true));
   const call=vi.mocked(fetch).mock.calls.find(call=>String(call[0]).includes('/platform/settings/PLATFORM_DEFAULT_CURRENCY'))!;
   expect(JSON.parse(String(call[1]?.body))).toEqual({value:'USD',expectedVersion:0});
