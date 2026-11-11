@@ -85,7 +85,7 @@ def route_patterns(cell: str) -> list[str]:
     return routes
 
 def read_static_matrix() -> tuple[dict[tuple[str, str], str], set[tuple[str, str]]]:
-    policies: dict[tuple[str, str], str] = {}
+    policies: dict[tuple[str, str], dict[str, str]] = {}
     declarations: set[tuple[str, str]] = set()
     if not matrix_path.is_file():
         warnings.append(f"static endpoint matrix not found at {matrix_path}")
@@ -111,13 +111,13 @@ def read_static_matrix() -> tuple[dict[tuple[str, str], str], set[tuple[str, str
             for route in route_patterns(cells[2]):
                 identity = (method, route)
                 declarations.add(identity)
-                policies[identity] = policy
+                policies[identity] = {"policy": policy, "evidence": cells[8]}
         elif in_exports and len(cells) >= 4 and cells[0].upper() in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
             method, route = cells[0].upper(), cells[1].strip().strip(chr(96))
             if route.startswith("/"):
                 identity = (method, route)
                 declarations.add(identity)
-                policies[identity] = cells[2]
+                policies[identity] = {"policy": cells[2], "evidence": cells[3]}
     return policies, declarations
 
 auth_rows = read_rows(FILES["authentication"])
@@ -184,7 +184,8 @@ output = root / "runtime-route-authorization-reconciliation.csv"
 with output.open("w", newline="", encoding="utf-8") as handle:
     fields = ["http_method", "route_pattern", "handler_class", "handler_method", "classification",
               "anonymous_evidence", "positive_gate_evidence", "zero_permission_evidence",
-              "matrix_policy", "matrix_match", "evidence_strength"]
+              "matrix_policy", "matrix_evidence", "test_references", "test_reference_status",
+              "matrix_match", "evidence_strength"]
     writer = csv.DictWriter(handle, fieldnames=fields)
     writer.writeheader()
     for identity in sorted(runtime_keys):
@@ -192,6 +193,28 @@ with output.open("w", newline="", encoding="utf-8") as handle:
         auth = auth_by_key[identity]
         pos = positive_by_key.get(identity)
         neg = get_by_key.get(identity) if method == "GET" else mutation_by_key.get(identity)
+        matrix_record = policies.get(identity, {})
+        matrix_evidence = matrix_record.get("evidence", "")
+        test_refs = re.findall(r"\\b([A-Za-z0-9_]+Test)\\.([A-Za-z0-9_]+)\\b", matrix_evidence)
+        verified_refs = []
+        unresolved_refs = []
+        for test_class, test_method in test_refs:
+            candidates = list((repo_root / "backend" / "src" / "test" / "java").rglob(test_class + ".java"))
+            if any(re.search(r"\\b" + re.escape(test_method) + r"\\s*\\(", candidate.read_text(encoding="utf-8")) for candidate in candidates):
+                verified_refs.append(test_class + "." + test_method)
+            else:
+                unresolved_refs.append(test_class + "." + test_method)
+        if unresolved_refs:
+            test_reference_status = "UNRESOLVED_REFERENCE"
+            failures.append(f"{method} {route}: matrix references missing test method(s): {unresolved_refs}")
+        elif verified_refs:
+            test_reference_status = "VERIFIED_TEST_METHOD_REFERENCE"
+        elif test_refs:
+            test_reference_status = "TEST_REFERENCE_UNVERIFIED"
+        elif matrix_evidence:
+            test_reference_status = "GENERIC_OR_GATE_ONLY_EVIDENCE"
+        else:
+            test_reference_status = "MISSING_MATRIX_EVIDENCE"
         if auth["actor"] == "PUBLIC_ALLOWLIST":
             classification = "PUBLIC"
             negative_result = "PUBLIC_EXEMPT"
@@ -214,7 +237,10 @@ with output.open("w", newline="", encoding="utf-8") as handle:
             "anonymous_evidence": auth["result"] + ":" + auth["actual"],
             "positive_gate_evidence": "MISSING" if pos is None else pos["result"] + ":" + pos["actual"],
             "zero_permission_evidence": negative_result,
-            "matrix_policy": policies.get(identity, ""),
+            "matrix_policy": matrix_record.get("policy", ""),
+            "matrix_evidence": matrix_evidence,
+            "test_references": ";".join(verified_refs + unresolved_refs),
+            "test_reference_status": test_reference_status,
             "matrix_match": "YES" if identity in matrix_keys else "NO",
             "evidence_strength": strength,
         })
