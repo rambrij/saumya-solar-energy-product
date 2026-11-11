@@ -64,6 +64,8 @@ app:
       mfa-per-window: ${AUTH_MFA_RATE_LIMIT:10}
       window-seconds: ${AUTH_RATE_LIMIT_WINDOW_SECONDS:60}
       cleanup-cron: ${AUTH_RATE_LIMIT_CLEANUP_CRON:0 17 3 * * *}
+  mailpit:
+    base-url: ${MAILPIT_BASE_URL:http://mailpit:8025}
   mail:
     from: ${MAIL_FROM:no-reply@saumya.local}
   public-base-url: ${PUBLIC_BASE_URL:http://localhost:3000}
