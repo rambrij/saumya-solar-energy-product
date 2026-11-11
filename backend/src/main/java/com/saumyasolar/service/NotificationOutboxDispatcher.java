@@ -24,7 +24,7 @@ public class NotificationOutboxDispatcher {
     Instant now=Instant.now();
     for(UUID tenantId:outbox.findDueTenantIds(now)) {
       try(var scope=TenantExecutionContext.open(tenantId)) {
-        List<NotificationOutbox> rows=outbox.findTop50ByTenantIdAndStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(tenantId,List.of("PENDING","RETRY"),now);
+        List<NotificationOutbox> rows=outbox.findDueByTenant(tenantId,List.of("PENDING","RETRY"),now);
         for(NotificationOutbox row:rows) {
           if(outbox.claim(row.getId(),tenantId,Instant.now())!=1) continue;
           try { service.processPendingDelivery(row.getDeliveryId(),tenantId);
