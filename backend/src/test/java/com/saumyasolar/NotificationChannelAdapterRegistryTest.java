@@ -19,7 +19,7 @@ class NotificationChannelAdapterRegistryTest {
         verify(mockMessaging).dispatch(delivery);verify(twilio,never()).dispatch(any());verify(mailpit,never()).dispatch(any());
     }
 
-    @Test void twilioPropertySelectsReservedAdapterButCannotMakeNetworkCalls() {
+    @Test void twilioPropertySelectsReservedAdapterButCannotMakeNetworkCalls() throws Exception {
         var mockMessaging=mock(NotificationChannelAdapter.class);var twilio= new TwilioMessagingNotificationAdapter();
         when(mockMessaging.supports("SMS")).thenReturn(true);when(mockMessaging.providerCode()).thenReturn("MOCK-MESSAGING");
         var registry=new NotificationChannelAdapterRegistry(List.of(mockMessaging,twilio),"twilio");
