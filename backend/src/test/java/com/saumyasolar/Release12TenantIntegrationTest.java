@@ -2414,6 +2414,10 @@ class Release12TenantIntegrationTest {
 
         ServiceRequest ticketA = branchTicket(vendorTenantId, branchA.getId(), branchCustomer.profile().getId());
         ServiceRequest ticketB = branchTicket(vendorTenantId, branchB.getId(), branchCustomer.profile().getId());
+        ticketA.setAssignedEngineerId(member.getId());
+        ticketB.setAssignedEngineerId(member.getId());
+        ticketA.setStatus("ASSIGNED");
+        ticketB.setStatus("ASSIGNED");
         serviceRequests.saveAllAndFlush(List.of(ticketA, ticketB));
         assertBranchListContainsOnly(mvc.perform(get("/api/v1/service-requests?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), ticketA.getId(), ticketB.getId());
@@ -2431,6 +2435,19 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isNotFound());
         assertTrue(serviceAttachmentRecords.findByTenantIdAndServiceRequestIdOrderByCreatedAtAsc(
                 vendorTenantId, ticketB.getId()).isEmpty());
+        mvc.perform(post("/api/v1/service-requests/" + ticketA.getId() + "/visits")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"engineerId\":\"" + member.getId() + "\",\"scheduledAt\":\"" + Instant.now().plusSeconds(7200) + "\",\"reason\":\"branch A visit\"}"))
+                .andExpect(status().isOk());
+        assertEquals(1, serviceVisitRecords.findByTenantIdAndServiceRequestIdOrderByScheduledAtAsc(
+                vendorTenantId, ticketA.getId()).size());
+        mvc.perform(post("/api/v1/service-requests/" + ticketB.getId() + "/visits")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"engineerId\":\"" + member.getId() + "\",\"scheduledAt\":\"" + Instant.now().plusSeconds(10800) + "\",\"reason\":\"branch B unauthorized visit\"}"))
+                .andExpect(status().isNotFound());
+        assertTrue(serviceVisitRecords.findByTenantIdAndServiceRequestIdOrderByScheduledAtAsc(
+                vendorTenantId, ticketB.getId()).isEmpty());
+        assertEquals("ASSIGNED", serviceRequests.findById(ticketB.getId()).orElseThrow().getStatus());
 
         InstallationJob installationA = branchInstallation(vendorTenantId, branchA.getId(), orderA.getId(), branchCustomer.profile().getId(), member.getId());
         InstallationJob installationB = branchInstallation(vendorTenantId, branchB.getId(), orderB.getId(), branchCustomer.profile().getId(), member.getId());
