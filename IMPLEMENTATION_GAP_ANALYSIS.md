@@ -1758,3 +1758,27 @@ The remaining code/test gaps are deliberately **not** marked complete. In partic
 ### Release decision
 
 **Phase 2 remains NOT APPROVED for production.** Latest-head CI is green, but role/resource/verb evidence, exhaustive customer/branch/download reconciliation, production database sign-off and external infrastructure worker confirmation are not complete. No production preflight should be run until the protected workflow, DBA-approved identity, production change window and backup approval are in place.
+
+
+---
+
+## Runtime route reconciliation and adapter-only payment test update — 2026-11-11
+
+**Branch:** `audit/phase-2-implementation-gap-analysis`  
+**Current code/documentation head at this update:** `59488148a0a46316b5fb9fa8c23f82b21296259a`
+
+### Implemented in this pass
+
+- `scripts/audit/assert-endpoint-authorization-evidence.py` now joins the exact HTTP method + Spring route pattern across anonymous, applicable-account positive-gate, zero-permission GET and zero-permission mutation evidence. It detects duplicate/missing/failed/unknown rows and writes `runtime-route-authorization-reconciliation.csv` with one row per runtime mapping.
+- The reconciliation includes the endpoint matrix's declared policy and evidence text, and verifies explicit `*Test.methodName` references against the checked-in test source.
+- `PHASE_2_ENDPOINT_MATRIX.md` was corrected to remove stale report-export routes, list the current asynchronous `/api/v1/exports` routes, correct attachment route trailing slashes, and repair the type-dispatch route row.
+- `EndpointAuthenticationMatrixTest.authenticatedZeroPermissionVendorIsDeniedEveryProtectedMutationMapping` no longer classifies the read-only `GET /api/v1/offline-sync/operations` mapping as mutation evidence.
+- `PaymentGatewayCheckoutServiceTest.createsPendingCheckoutThroughMockAdapterOnlyWithoutContactingARealProvider` exercises a Mockito-only adapter, verifies a pending record, and makes no real provider/network call. Live payment, capture, settlement and refund operations are not enabled.
+
+### Verification and remaining gate
+
+Run [42979515204](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42979515204) reported **219 backend tests passed with zero failures/errors/skips**. Its endpoint-evidence validator correctly failed because the old static matrix still contained 12 stale/malformed mappings and the mutation evidence included one GET row. Those findings were corrected in subsequent commits; the rerun for the corrected branch head is in progress and must pass before this reconciliation is accepted.
+
+**Route-specific CRUD status remains PARTIAL / NOT MET.** The runtime reconciliation proves each current mapping is represented in the dynamic authentication and broad account/permission-gate evidence, records whether its static matrix evidence points to a real test method, and distinguishes a 404 probe from a focused test. It does not manufacture fixture-backed positive and negative CRUD coverage for every named role/resource/verb. Rows whose evidence is only `ACCOUNT_PERMISSION_GATE_ONLY`, `NON_DISCLOSING_NOT_FOUND_PROBE`, or a generic test-family reference still require resource-backed tests with real same-tenant/foreign-tenant or assigned/unassigned fixtures and unchanged-state assertions for denied mutations. No test has been weakened to obtain a pass.
+
+**Release status:** Phase 2 production acceptance remains blocked until the generated runtime reconciliation passes and the remaining fixture-backed CRUD gaps are closed or explicitly accepted by the release owner.
