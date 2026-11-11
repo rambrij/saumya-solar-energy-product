@@ -30,9 +30,11 @@ CREATE TABLE payment_reconciliation_report(
   mismatch_count INT NOT NULL DEFAULT 0,
   status VARCHAR(24) NOT NULL,
   payload_hash VARCHAR(64) NOT NULL,
+  created_by BINARY(16) NOT NULL,
   created_at TIMESTAMP(6) NOT NULL,
   processed_at TIMESTAMP(6) NULL,
   CONSTRAINT fk_payment_reconciliation_tenant FOREIGN KEY(tenant_id) REFERENCES tenant(id),
+  CONSTRAINT fk_payment_reconciliation_created_by FOREIGN KEY(tenant_id,created_by) REFERENCES app_user(tenant_id,id),
   CONSTRAINT uq_payment_reconciliation_report UNIQUE(tenant_id,provider,report_reference),
   CONSTRAINT uq_payment_reconciliation_tenant_id UNIQUE(tenant_id,id),
   INDEX ix_payment_reconciliation_tenant_created(tenant_id,created_at)
