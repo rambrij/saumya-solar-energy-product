@@ -76,6 +76,43 @@ class PaymentGatewayWebhookServiceTest {
         verify(events, never()).saveAndFlush(any());
     }
 
+    @Test
+    void processesRefundWebhookAndRecalculatesPaymentBalance() {
+        UUID tenant = UUID.randomUUID(), paymentId = UUID.randomUUID(), invoiceId = UUID.randomUUID();
+        Payment payment = payment(tenant, paymentId, invoiceId);
+        payment.setStatus("CONFIRMED");
+        Refund refund = new Refund();
+        refund.setId(UUID.randomUUID()); refund.setTenantId(tenant); refund.setPaymentId(paymentId);
+        refund.setAmount(new BigDecimal("25.00")); refund.setStatus("PENDING");
+        refund.setProvider("MOCK_GATEWAY"); refund.setProviderRefundReference("refund-ref");
+        PaymentGatewayAdapter adapter = mock(PaymentGatewayAdapter.class);
+        when(adapter.providerCode()).thenReturn("MOCK_GATEWAY");
+        when(adapter.verifyWebhook("refund-payload", "sig")).thenReturn(true);
+        when(adapter.parseWebhook("refund-payload")).thenReturn(new PaymentGatewayAdapter.GatewayWebhookEvent(
+                "evt-refund", "provider-ref", new BigDecimal("25.00"), "INR", "REFUND_PROCESSED",
+                "refund-ref", tenant.toString()));
+        PaymentRepository payments = mock(PaymentRepository.class);
+        when(payments.findByTenantIdAndProviderAndProviderReference(tenant, "MOCK_GATEWAY", "provider-ref")).thenReturn(Optional.of(payment));
+        when(payments.findByTenantIdAndInvoiceId(tenant, invoiceId)).thenReturn(List.of(payment));
+        Invoice invoice = invoice(tenant, invoiceId);
+        InvoiceRepository invoices = mock(InvoiceRepository.class);
+        when(invoices.findForUpdate(invoiceId, tenant)).thenReturn(Optional.of(invoice));
+        RefundRepository refunds = mock(RefundRepository.class);
+        when(refunds.findByTenantIdAndProviderAndProviderRefundReference(tenant, "MOCK_GATEWAY", "refund-ref")).thenReturn(Optional.of(refund));
+        when(refunds.findByTenantIdAndPaymentId(tenant, paymentId)).thenReturn(List.of(refund));
+        PaymentWebhookEventRepository events = mock(PaymentWebhookEventRepository.class);
+        when(events.findByTenantIdAndProviderAndEventId(tenant, "MOCK_GATEWAY", "evt-refund")).thenReturn(Optional.empty());
+        PaymentGatewayWebhookService service = new PaymentGatewayWebhookService(
+                new PaymentGatewayRegistry(List.of(adapter)), payments, events, invoices, refunds,
+                mock(AuditEventRepository.class), new ObjectMapper());
+
+        service.accept("MOCK_GATEWAY", "refund-payload", "sig");
+
+        assertEquals("PROCESSED", refund.getStatus());
+        assertEquals("PARTIALLY_REFUNDED", payment.getStatus());
+        assertEquals("PARTIALLY_PAID", invoice.getStatus());
+    }
+
     private Payment payment(UUID tenant, UUID id, UUID invoiceId) {
         Payment payment = new Payment();
         payment.setId(id); payment.setTenantId(tenant); payment.setInvoiceId(invoiceId);
