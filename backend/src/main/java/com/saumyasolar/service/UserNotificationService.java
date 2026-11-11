@@ -7,7 +7,7 @@ import com.saumyasolar.repo.NotificationPreferenceRepository;
 import com.saumyasolar.domain.NotificationPreference;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.saumyasolar.security.Principal;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -32,7 +32,7 @@ public class UserNotificationService {
         this.preferences = preferences;
     }
 
-    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    @Transactional
     public void createBusinessNotification(UUID userId, UUID tenantId, String eventType, String title, String body) {
         if (userId == null) return;
         if (tenantId == null || users.findByIdAndTenantId(userId, tenantId)
