@@ -51,6 +51,16 @@ jobs:
       - name: Compile and test
         working-directory: backend
         run: mvn --batch-mode --no-transfer-progress clean verify
+      - name: Validate complete runtime endpoint authorization evidence
+        run: python3 scripts/audit/assert-endpoint-authorization-evidence.py backend/target/phase2-endpoint-evidence
+      - name: Upload runtime endpoint authorization evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-endpoint-authorization-evidence
+          path: backend/target/phase2-endpoint-evidence/*.csv
+          if-no-files-found: warn
+          retention-days: 30
 
   frontend:
     name: Frontend typecheck and production build
