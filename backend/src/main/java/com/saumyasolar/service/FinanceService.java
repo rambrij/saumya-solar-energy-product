@@ -52,6 +52,8 @@ public class FinanceService {
     private IntegrationManagementService integrationManagement;
     @Autowired(required = false)
     private EnterpriseSaasService enterpriseSaas;
+    @Autowired(required = false)
+    private PaymentGatewayRegistry paymentGateways;
     
     public FinanceService(
             InvoiceRepository invoices,
@@ -485,11 +487,57 @@ public class FinanceService {
         permission(p, "PAYMENT_REFUND");
         if (x.amount() == null || x.amount().signum() <= 0 || x.reason() == null || x.reason().isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A positive refund amount and reason are required");
-        Payment pay = payments.findForUpdate(x.paymentId(), p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+        Payment pay = payments.findForUpdate(x.paymentId(), p.tenantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
         assertInvoiceBranchAccess(invoice(pay.getInvoiceId(), p.tenantId()), p);
+        List<Refund> prior = refunds.findByTenantIdAndPaymentId(p.tenantId(), pay.getId());
+        if ("GATEWAY".equals(pay.getSource())) {
+            if (paymentGateways == null)
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Payment gateway adapter is not configured");
+            if (x.idempotencyKey() == null || !x.idempotencyKey().matches("[A-Za-z0-9._:-]{8,160}"))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A valid Idempotency-Key is required for provider refunds");
+            Optional<Refund> previous = refunds.findByTenantIdAndIdempotencyKey(p.tenantId(), x.idempotencyKey());
+            if (previous.isPresent()) {
+                Refund existing = previous.get();
+                if (!existing.getPaymentId().equals(pay.getId()) || existing.getAmount().compareTo(x.amount()) != 0)
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency-Key was already used for another refund");
+                return existing;
+            }
+            BigDecimal reserved = prior.stream().filter(r -> Set.of("RECORDED", "PENDING", "PROCESSED").contains(r.getStatus()))
+                    .map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (reserved.add(x.amount()).compareTo(pay.getAmount()) > 0)
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Refund exceeds the unrefunded payment amount");
+            PaymentGatewayAdapter.GatewayRefund gatewayRefund;
+            try {
+                gatewayRefund = paymentGateways.require(pay.getProvider())
+                        .refund(pay.getProviderReference(), x.amount(), x.idempotencyKey(), x.reason().trim());
+            } catch (Exception ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Payment provider could not initiate refund");
+            }
+            if (gatewayRefund == null || gatewayRefund.providerRefundReference() == null
+                    || gatewayRefund.providerRefundReference().isBlank())
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Payment provider returned an invalid refund reference");
+            Refund saved = new Refund();
+            saved.setId(UUID.randomUUID());
+            saved.setTenantId(p.tenantId());
+            saved.setPaymentId(pay.getId());
+            saved.setAmount(x.amount());
+            saved.setReason(x.reason().trim());
+            saved.setStatus("PENDING");
+            saved.setRecordedBy(p.userId());
+            saved.setProvider(pay.getProvider());
+            saved.setProviderRefundReference(gatewayRefund.providerRefundReference());
+            saved.setIdempotencyKey(x.idempotencyKey());
+            saved.setCreatedAt(Instant.now());
+            Refund result = refunds.save(saved);
+            accountingEvent("REFUND", result.getId().toString(), "UPSERT",
+                    Map.of("paymentId", pay.getId().toString(), "amount", result.getAmount(), "status", result.getStatus()), p);
+            return result;
+        }
         if (!"MANUAL".equals(pay.getSource()))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Gateway refunds require a configured provider refund adapter; no gateway is configured");
-        BigDecimal refunded = refunds.findByTenantIdAndPaymentId(p.tenantId(), pay.getId()).stream().filter(r -> "RECORDED".equals(r.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Unsupported payment source for refund");
+        BigDecimal refunded = prior.stream().filter(r -> "RECORDED".equals(r.getStatus()))
+                .map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         if (refunded.add(x.amount()).compareTo(pay.getAmount()) > 0)
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Refund exceeds the unrefunded payment amount");
         Refund r = new Refund();
@@ -508,10 +556,11 @@ public class FinanceService {
         BigDecimal net = netPaid(p.tenantId(), invoice.getId());
         invoice.setStatus(net.compareTo(invoice.getGrandTotal()) >= 0 ? "PAID" : net.signum() > 0 ? "PARTIALLY_PAID" : "ISSUED");
         invoices.save(invoice);
-        accountingEvent("REFUND", saved.getId().toString(), "UPSERT", Map.of("paymentId", pay.getId().toString(), "amount", saved.getAmount(), "status", saved.getStatus()), p);
+        accountingEvent("REFUND", saved.getId().toString(), "UPSERT",
+                Map.of("paymentId", pay.getId().toString(), "amount", saved.getAmount(), "status", saved.getStatus()), p);
         return saved;
     }
-    
+
     private boolean validSignature(String raw, String signature) {
         if (webhookSecret == null || webhookSecret.isBlank() || signature == null) return false;
         try {
