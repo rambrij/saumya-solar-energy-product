@@ -3,6 +3,9 @@ package com.saumyasolar.service;
 import com.saumyasolar.domain.UserNotification;
 import com.saumyasolar.repo.AppUserRepository;
 import com.saumyasolar.repo.UserNotificationRepository;
+import com.saumyasolar.repo.NotificationPreferenceRepository;
+import com.saumyasolar.domain.NotificationPreference;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.saumyasolar.security.Principal;
 import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
@@ -18,10 +21,15 @@ import java.util.UUID;
 public class UserNotificationService {
     private final UserNotificationRepository notifications;
     private final AppUserRepository users;
+    private final NotificationPreferenceRepository preferences;
 
-    public UserNotificationService(UserNotificationRepository notifications, AppUserRepository users) {
+    public UserNotificationService(UserNotificationRepository notifications, AppUserRepository users) { this(notifications,users,null); }
+
+    @Autowired
+    public UserNotificationService(UserNotificationRepository notifications, AppUserRepository users, NotificationPreferenceRepository preferences) {
         this.notifications = notifications;
         this.users = users;
+        this.preferences = preferences;
     }
 
     @Transactional(Transactional.TxType.REQUIRES_NEW)
@@ -29,6 +37,7 @@ public class UserNotificationService {
         if (userId == null) return;
         if (tenantId == null || users.findByIdAndTenantId(userId, tenantId)
                 .filter(user -> user.isEnabled()).isEmpty()) return;
+        if (preferences != null && preferences.findByTenantIdAndUserIdAndChannel(tenantId,userId,"IN_APP").filter(p -> !p.isEnabled()).isPresent()) return;
         String safeEvent = eventType == null ? "BUSINESS_EVENT" : eventType.trim();
         String safeTitle = title == null || title.isBlank() ? safeEvent : title.trim();
         String safeBody = body == null ? "" : body.trim();
