@@ -60,6 +60,15 @@ jobs:
             exit "$mysql_status"
           fi
           echo "V57/V58 production data-integrity preflight completed successfully." | tee -a phase2-production-preflight-output.txt
+      - name: Require every tenant-integrity preflight PASS marker
+        run: |
+          set -euo pipefail
+          for marker in             "V57 catalogue tenant-integrity preflight: PASS"             "V58 operational tenant-integrity preflight: PASS"             "V60 tenant-owned tenant_id NOT NULL preflight: PASS"; do
+            if ! grep -Fq "$marker" phase2-production-preflight-output.txt; then
+              echo "::error::Missing mandatory production preflight marker: $marker"
+              exit 1
+            fi
+          done
       - name: Run full tenant schema and NOT NULL audit with read-only account
         env:
           MYSQL_HOST: ${{ secrets.PROD_DB_HOST }}
@@ -71,6 +80,24 @@ jobs:
           set -euo pipefail
           mysql --connect-timeout=15 --host="$MYSQL_HOST" --port="$MYSQL_TCP_PORT" --user="$MYSQL_USER" "$MYSQL_DATABASE" \
             < docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql | tee tenant-schema-audit-output.txt
+      - name: Create tamper-evident evidence manifest
+        if: always()
+        run: |
+          set -euo pipefail
+          {
+            echo "workflow_run_id=$GITHUB_RUN_ID"
+            echo "workflow_run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "commit_sha=$GITHUB_SHA"
+            echo "checked_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "phase2_preflight_sql_sha256=$(sha256sum backend/src/test/resources/tenant-isolation-production-preflight.sql | awk '{print $1}')"
+            echo "tenant_schema_audit_sql_sha256=$(sha256sum docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql | awk '{print $1}')"
+            if [ -f phase2-production-preflight-output.txt ]; then
+              echo "preflight_output_sha256=$(sha256sum phase2-production-preflight-output.txt | awk '{print $1}')"
+            fi
+            if [ -f tenant-schema-audit-output.txt ]; then
+              echo "schema_audit_output_sha256=$(sha256sum tenant-schema-audit-output.txt | awk '{print $1}')"
+            fi
+          } > phase2-production-evidence-manifest.txt
       - name: Preserve preflight evidence for remediation review
         if: always()
         uses: actions/upload-artifact@v4
@@ -79,5 +106,6 @@ jobs:
           path: |
             phase2-production-preflight-output.txt
             tenant-schema-audit-output.txt
+            phase2-production-evidence-manifest.txt
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 90
