@@ -541,8 +541,13 @@ public class OperationsService {
     @Transactional
     public List<PolicyRule> updateTransitionPolicy(TransitionPolicyUpdate input, Principal p) {
         UUID t=tenant(p); permission(p,"ORDER_POLICY_MANAGE");
+        if(input==null||input.transitions()==null||input.transitions().isEmpty())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"At least one order transition policy entry is required");
         Set<String> seen=new HashSet<>();
         for (PolicyToggle toggle:input.transitions()) {
+            if(toggle==null||toggle.fromStatus()==null||toggle.fromStatus().isBlank()||toggle.fromStatus().length()>40
+                    ||toggle.toStatus()==null||toggle.toStatus().isBlank()||toggle.toStatus().length()>40)
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Transition source and target statuses are required and must be at most 40 characters");
             String from=toggle.fromStatus().trim().toUpperCase(Locale.ROOT);
             String to=toggle.toStatus().trim().toUpperCase(Locale.ROOT);
             String key=from+"->"+to;

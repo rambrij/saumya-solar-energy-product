@@ -776,7 +776,7 @@ public class Controller {
     List<com.saumyasolar.api.OrderPolicyModels.PolicyRule> orderTransitionPolicy(Authentication a) { return operations.transitionPolicy(p(a)); }
 
     @PutMapping("/orders/transition-policy")
-    List<com.saumyasolar.api.OrderPolicyModels.PolicyRule> updateOrderTransitionPolicy(@Valid @RequestBody TransitionPolicyUpdate x,Authentication a) { return operations.updateTransitionPolicy(x,p(a)); }
+    List<com.saumyasolar.api.OrderPolicyModels.PolicyRule> updateOrderTransitionPolicy(@RequestBody TransitionPolicyUpdate x,Authentication a) { return operations.updateTransitionPolicy(x,p(a)); }
 
     @PostMapping("/orders/{id}/reserve")
     List<com.saumyasolar.domain.InventoryReservation> reserveOrder(
