@@ -341,6 +341,7 @@ class EndpointAuthenticationMatrixTest {
                 || pattern.startsWith("/api/v1/tenants/")) return "PLATFORM";
         if (pattern.startsWith("/api/v1/customer/")
                 || pattern.equals("/api/v1/service-requests/{id}/confirm")
+                || pattern.endsWith("/service-requests/{id}/reopen")
                 || pattern.contains("/quotations/{id}/{action:")) return "CUSTOMER";
         return "VENDOR";
     }
