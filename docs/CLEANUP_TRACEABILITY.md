@@ -185,11 +185,11 @@ The Git tree API returned the following checked-in inventory on this branch (gen
 |---|---:|
 | Backend (Java, resources, tests, Maven descriptor, Dockerfile) | 353 |
 | Frontend (source, tests, E2E, package/build config, public assets, Dockerfile) | 48 |
-| Docs (excluding root-level source-of-truth/analysis docs counted separately) | 20 |
+| Docs (excluding root-level source-of-truth/analysis docs counted separately) | 22 |
 | GitHub workflows | 2 |
-| Scripts | 4 |
+| Scripts | 5 |
 
-All backend files are organized under `api/`, `config/`, `domain/`, `repo/`, `security/`, `service/`, `resources/`, and `test/`; the recursive tree inventory was reviewed. The 48 frontend files are grouped as `src/`, `tests/`, `e2e/`, and `public/`. The 4 scripts are the two audit shell/Python pairs. Root files additionally include Docker Compose, the three source documents, existing analysis matrices, and the development start script.
+All backend files are organized under `api/`, `config/`, `domain/`, `repo/`, `security/`, `service/`, `resources/`, and `test/`; the recursive tree inventory was reviewed. The 48 frontend files are grouped as `src/`, `tests/`, `e2e/`, and `public/`. The five scripts are the two original audit shell/Python pairs plus the new repository-wide external transport assertion. Root files additionally include Docker Compose, the three source documents, existing analysis matrices, and the development start script.
 
 ## Phase 0 usage-search findings and removal candidate
 
