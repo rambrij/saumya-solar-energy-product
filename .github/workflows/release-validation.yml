@@ -142,7 +142,7 @@ jobs:
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V5__phase4_finance_provider_reconciliation.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='phase3_clean_install' AND table_name IN ('payment_reconciliation_report','payment_reconciliation_line')")" = "2"
-          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='phase3_clean_install' AND table_name='payment_webhook_event' AND column_name IN ('tenant_id','provider_refund_reference')")" = "2"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='phase3_clean_install' AND table_name='payment_webhook_event' AND column_name IN ('tenant_id','provider_refund_reference','event_type')")" = "3"
 
       - name: Verify additive V2 permission migration
         run: |
