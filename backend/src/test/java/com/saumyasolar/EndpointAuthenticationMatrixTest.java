@@ -33,6 +33,10 @@ import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -93,28 +97,47 @@ class EndpointAuthenticationMatrixTest {
     void everyNonPublicHttpHandlerRequiresAuthentication() throws Exception {
         List<String> checked = new ArrayList<>();
         List<String> failures = new ArrayList<>();
+        List<String[]> evidence = new ArrayList<>();
+        int totalMappings = 0;
+        int publicMappings = 0;
         for (var entry : mappings.getHandlerMethods().entrySet()) {
             RequestMappingInfo info = entry.getKey();
+            HandlerMethod handler = entry.getValue();
             Set<String> patterns = info.getPatternValues();
             Set<org.springframework.web.bind.annotation.RequestMethod> methods =
                     info.getMethodsCondition().getMethods();
             if (methods.isEmpty()) continue;
             for (String pattern : patterns) {
-                if (isPublic(pattern)) continue;
-                String path = probePath(pattern);
                 for (var method : methods) {
                     if (method == org.springframework.web.bind.annotation.RequestMethod.OPTIONS) continue;
+                    totalMappings++;
+                    if (isPublic(pattern)) {
+                        publicMappings++;
+                        evidence.add(new String[] {method.name(), pattern, handler.getBeanType().getSimpleName(),
+                                handler.getMethod().getName(), "PUBLIC_ALLOWLIST", "explicit public exception",
+                                "NOT_PROBED", "EXEMPT"});
+                        continue;
+                    }
+                    String path = probePath(pattern);
                     HttpMethod httpMethod = HttpMethod.valueOf(method.name());
                     MockHttpServletRequestBuilder request = request(httpMethod, path);
                     int status = mvc.perform(request).andReturn().getResponse().getStatus();
                     checked.add(method + " " + pattern);
-                    if (status != 401 && status != 403) {
+                    boolean passed = status == 401 || status == 403;
+                    evidence.add(new String[] {method.name(), pattern, handler.getBeanType().getSimpleName(),
+                            handler.getMethod().getName(), "ANONYMOUS", "401 or 403", String.valueOf(status),
+                            passed ? "PASS" : "FAIL"});
+                    if (!passed) {
                         failures.add(method + " " + pattern + " returned " + status
                                 + " (expected 401/403 without credentials)");
                     }
                 }
             }
         }
+        writeEndpointEvidence("authentication-and-public-exceptions", evidence);
+        assertTrue(totalMappings >= 222,
+                "The runtime HTTP mapping inventory unexpectedly shrank: only " + totalMappings);
+        assertTrue(publicMappings > 0, "The explicit public endpoint inventory unexpectedly became empty");
         assertTrue(checked.size() >= 207,
                 "The controller mapping inventory unexpectedly shrank: only checked " + checked.size());
         assertTrue(checked.contains("POST /api/v1/exports"),
@@ -257,6 +280,7 @@ class EndpointAuthenticationMatrixTest {
         ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
         List<String> checked = new ArrayList<>();
         List<String> failures = new ArrayList<>();
+        List<String[]> evidence = new ArrayList<>();
         for (var entry : mappings.getHandlerMethods().entrySet()) {
             RequestMappingInfo info = entry.getKey();
             HandlerMethod handler = entry.getValue();
@@ -276,18 +300,20 @@ class EndpointAuthenticationMatrixTest {
                     int response = probeResult.getResponse().getStatus();
                     String responseBody = probeResult.getResponse().getContentAsString();
                     checked.add(method + " " + pattern + " [" + accountType + "]");
-                    // A missing synthetic resource (404), invalid-but-authorized sample (400/422),
-                    // or valid business conflict (409/410) is acceptable here: the objective is
-                    // to prove the correct account type and a role carrying the complete permission
-                    // catalogue passed the authorization gate. Real resource ownership remains
-                    // covered by the fixture-backed tests in Release12TenantIntegrationTest.
-                    if (response == 401 || response == 403 || response >= 500) {
+                    // An authorized 4xx such as a missing synthetic resource is acceptable here;
+                    // 401/403 indicate an authorization-gate failure and 5xx indicates a defect.
+                    boolean passed = response != 401 && response != 403 && response < 500;
+                    evidence.add(new String[] {method.name(), pattern, handler.getBeanType().getSimpleName(),
+                            handler.getMethod().getName(), accountType + "_ALL_CATALOGUED_GRANTS",
+                            "not 401/403/5xx", String.valueOf(response), passed ? "PASS" : "FAIL"});
+                    if (!passed) {
                         failures.add(method + " " + pattern + " [" + accountType + "] returned "
                                 + response + " for the all-grants actor; response=" + responseBody);
                     }
                 }
             }
         }
+        writeEndpointEvidence("positive-applicable-account-gates", evidence);
         assertTrue(checked.size() >= 207,
                 "The positive authorization-gate matrix unexpectedly shrank: only checked " + checked.size());
         assertTrue(failures.isEmpty(),
@@ -362,23 +388,36 @@ class EndpointAuthenticationMatrixTest {
                 "/v3/api-docs.yaml");
         List<String> checked = new ArrayList<>();
         List<String> failures = new ArrayList<>();
+        List<String[]> evidence = new ArrayList<>();
         for (var entry : mappings.getHandlerMethods().entrySet()) {
             RequestMappingInfo info = entry.getKey();
+            HandlerMethod handler = entry.getValue();
             if (!info.getMethodsCondition().getMethods().contains(
                     org.springframework.web.bind.annotation.RequestMethod.GET)) continue;
             for (String pattern : info.getPatternValues()) {
-                if (isPublic(pattern) || selfServiceReads.contains(pattern)) continue;
+                if (isPublic(pattern)) continue;
+                if (selfServiceReads.contains(pattern)) {
+                    evidence.add(new String[] {"GET", pattern, handler.getBeanType().getSimpleName(),
+                            handler.getMethod().getName(), "VENDOR_ZERO_PERMISSION", "self-service exception",
+                            "NOT_PROBED", "EXEMPT"});
+                    continue;
+                }
                 String path = probePath(pattern);
                 int status = mvc.perform(request(HttpMethod.GET, path)
                                 .header("Authorization", "Bearer " + token))
                         .andReturn().getResponse().getStatus();
                 checked.add("GET " + pattern);
-                if (status >= 200 && status < 300) {
+                boolean denied = status == 403 || status == 404;
+                evidence.add(new String[] {"GET", pattern, handler.getBeanType().getSimpleName(),
+                        handler.getMethod().getName(), "VENDOR_ZERO_PERMISSION", "403 or non-disclosing 404",
+                        String.valueOf(status), denied ? "PASS" : "FAIL"});
+                if (!denied) {
                     failures.add("GET " + pattern + " returned " + status
-                            + " for a vendor with no permissions");
+                            + " for a vendor with no permissions (expected 403/404)");
                 }
             }
         }
+        writeEndpointEvidence("negative-vendor-get", evidence);
         assertTrue(checked.size() >= 83,
                 "The authenticated read matrix unexpectedly shrank: only checked " + checked.size());
         assertTrue(failures.isEmpty(),
@@ -411,6 +450,7 @@ class EndpointAuthenticationMatrixTest {
 
         List<String> checked = new ArrayList<>();
         List<String> failures = new ArrayList<>();
+        List<String[]> evidence = new ArrayList<>();
         int forbiddenResponses = 0;
         int nonDisclosingNotFoundResponses = 0;
         for (var entry : mappings.getHandlerMethods().entrySet()) {
@@ -424,7 +464,13 @@ class EndpointAuthenticationMatrixTest {
                     // These routes intentionally delegate authorization to an existing resource's
                     // owner/assignment policy; dedicated tests provide real resource fixtures.
                     if (pattern.startsWith("/api/v1/quotations/{id}/{action:")
-                            || pattern.equals("/api/v1/offline-sync/operations")) continue;
+                            || pattern.equals("/api/v1/offline-sync/operations")) {
+                        evidence.add(new String[] {method.name(), pattern, handler.getBeanType().getSimpleName(),
+                                handler.getMethod().getName(), "VENDOR_ZERO_PERMISSION",
+                                "resource-delegated; see dedicated owner/assignment integration test",
+                                "NOT_PROBED", "DELEGATED"});
+                        continue;
+                    }
                     if (method == org.springframework.web.bind.annotation.RequestMethod.GET
                             || method == org.springframework.web.bind.annotation.RequestMethod.OPTIONS
                             || method == org.springframework.web.bind.annotation.RequestMethod.HEAD) continue;
@@ -432,6 +478,10 @@ class EndpointAuthenticationMatrixTest {
                     MockHttpServletRequestBuilder builder = mutationRequest(method, path, handler, mapper);
                     builder.header("Authorization", "Bearer " + token);
                     int status = mvc.perform(builder).andReturn().getResponse().getStatus();
+                    boolean denied = status == 403 || status == 404;
+                    evidence.add(new String[] {method.name(), pattern, handler.getBeanType().getSimpleName(),
+                            handler.getMethod().getName(), "VENDOR_ZERO_PERMISSION",
+                            "403 or non-disclosing 404", String.valueOf(status), denied ? "PASS" : "FAIL"});
                     try {
                         UUID leakedTenant = com.saumyasolar.security.TenantExecutionContext.requireTenantId();
                         failures.add(method + " " + pattern + " leaked tenant context " + leakedTenant
@@ -449,6 +499,7 @@ class EndpointAuthenticationMatrixTest {
                 }
             }
         }
+        writeEndpointEvidence("negative-vendor-mutations", evidence);
         assertTrue(checked.size() >= 115,
                 "The authenticated mutation matrix unexpectedly shrank: only checked " + checked.size());
         assertTrue(forbiddenResponses >= 50,
@@ -690,6 +741,28 @@ class EndpointAuthenticationMatrixTest {
         if (key.contains("reference") || key.contains("key")) return "MATRIX-001";
         if (key.contains("date")) return "2030-01-01";
         return "MATRIX";
+    }
+
+    private void writeEndpointEvidence(String name, List<String[]> rows) throws IOException {
+        Path directory = Path.of("target", "phase2-endpoint-evidence");
+        Files.createDirectories(directory);
+        Path output = directory.resolve(name + ".csv");
+        try (var writer = Files.newBufferedWriter(output, StandardCharsets.UTF_8)) {
+            writer.write("http_method,route_pattern,handler_class,handler_method,actor,expected,actual,result");
+            writer.newLine();
+            for (String[] row : rows) {
+                for (int index = 0; index < row.length; index++) {
+                    if (index > 0) writer.write(',');
+                    writer.write(csvCell(row[index]));
+                }
+                writer.newLine();
+            }
+        }
+    }
+
+    private String csvCell(String value) {
+        String safe = value == null ? "" : value;
+        return "\"" + safe.replace("\"", "\"\"") + "\"";
     }
 
     private boolean isPublic(String pattern) {
