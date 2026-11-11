@@ -20,7 +20,7 @@ const roleMenus:Record<string,NavigationGroup[]>={
   {label:'Website & Content',items:[{key:'cms',label:'CMS & Blog',permission:'CMS_VIEW'}]},
   {label:'Insights',items:[{key:'analytics',label:'Analytics',requiredRoles:['VENDOR_ADMIN']}]},
   {label:'Business Operations',items:[{key:'operations',label:'Inventory & Operations',permission:['INVENTORY_VIEW','INSTALLATION_VIEW']},{key:'finance-service',label:'Finance & Service',permission:['INVOICE_VIEW','SERVICE_VIEW']},{key:'offline-sync',label:'Offline Business Sync',permission:['INVENTORY_VIEW','ORDER_VIEW','CUSTOMER_VIEW']}]},
-  {label:'Account',items:[{key:'notifications',label:'Notifications'},{key:'subscription',label:'My Subscription',requiredRoles:['VENDOR_ADMIN']},{key:'settings',label:'Settings',permission:'QUOTATION_APPROVE_DISCOUNT',requiredRoles:['VENDOR_ADMIN']}]}
+  {label:'Account',items:[{key:'notifications',label:'Notifications',permission:'NOTIFICATION_VIEW'},{key:'subscription',label:'My Subscription',requiredRoles:['VENDOR_ADMIN']},{key:'settings',label:'Settings',permission:'QUOTATION_APPROVE_DISCOUNT',requiredRoles:['VENDOR_ADMIN']}]}
  ],
  customer:[
   {label:'Dashboard',singleLink:true,items:[{key:'dashboard',label:'Dashboard'}]},
