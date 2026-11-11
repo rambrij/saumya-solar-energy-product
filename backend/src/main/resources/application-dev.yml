@@ -1,4 +1,8 @@
 app:
+  messaging:
+    mock:
+      enabled: true
+      webhook-secret: dev-only-mock-notification-webhook-secret
   payment:
     mock:
       enabled: ${MOCK_PAYMENT_ENABLED:true}
