@@ -27,16 +27,6 @@ public class PaymentGatewayCheckoutService {
     private final com.fasterxml.jackson.databind.ObjectMapper mapper;
     private final boolean mockEnabled;
     
-    public PaymentGatewayCheckoutService(
-            InvoiceRepository invoices, PaymentRepository payments, RefundRepository refunds,
-            CustomerProfileRepository customers, CustomerOrderRepository orders,
-            IntegrationConnectionRepository connections, PaymentGatewayRegistry adapters,
-            EnterpriseSaasService entitlements, AuditEventRepository audits,
-            com.fasterxml.jackson.databind.ObjectMapper mapper
-    ) {
-        this(invoices, payments, refunds, customers, orders, connections, adapters, entitlements, audits, mapper, false);
-    }
-
     @org.springframework.beans.factory.annotation.Autowired
     public PaymentGatewayCheckoutService(
             InvoiceRepository invoices,
