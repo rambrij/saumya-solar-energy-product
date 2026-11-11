@@ -3,3 +3,4 @@ app:
     mock:
       enabled: true
       signing-secret: test-only-mock-payment-signing-secret-32-chars
+      checkout-outcome: ${MOCK_PAYMENT_CHECKOUT_OUTCOME:PENDING}
