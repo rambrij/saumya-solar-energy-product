@@ -1,6 +1,6 @@
 # Flyway schema equivalence — cleanup baseline
 
-**Status:** Awaiting branch-head GitHub Actions result  
+**Schema comparison status:** PASS on MySQL 8.4; full workflow later failed on an outdated tenant-audit count assertion (subsequently updated)  
 **Old schema source:** `audit/implementation-gap-analysis` active Flyway V1–V14 chain  
 **New schema source:** `backend/src/main/resources/db/migration/V1__baseline.sql`  
 **Database engine:** MySQL 8.4  
@@ -33,9 +33,9 @@ The 84 tables include the original 74-table baseline plus ten tables introduced 
 
 ## Result
 
-**Pending CI result**
+**PASS — identical schema.** GitHub Actions run [43087397175](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/43087397175), head `0e0a7bc45554ac57e1d69c35ee4b81ec784f126e`, completed both migration-chain applications and produced artifact [cleanup-schema-equivalence, artifact 13887136820](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/43087397175). The downloaded `schema-diff.txt` contains `PASS: old V1-V14 schema and the single baseline are identical.` No schema differences were found; no deviations from the source documents were required.
 
-No schema equivalence claim is made until a successful MySQL 8.4 GitHub Actions run on the final branch HEAD is observed. After that run, this section will record its run URL, commit SHA, artifact name and the actual diff result. Any non-empty diff must be investigated and each accepted difference justified against the SRS/HLD before this document can be marked equivalent.
+The overall `mysql-migrations` job subsequently failed at the tenant-schema inventory assertion because `scripts/audit/assert-tenant-schema-audit.py` still expected the pre-cleanup 74-table shape. The post-cleanup schema actually has 84 base tables, 74 tenant_id-bearing tables, 68 NOT NULL tenant_id columns, and six mixed-scope nullable tenant_id columns. The validator has been updated to those observed values in a follow-up commit; the full workflow must be rerun on the latest branch head before overall verification is complete.
 
 ## Data and seed behavior
 
