@@ -4,3 +4,6 @@ CREATE TABLE IF NOT EXISTS auth_rate_limit_bucket (
     request_count INTEGER NOT NULL,
     updated_at TIMESTAMP(6) NOT NULL
 );
+
+-- MySQL DATE_FORMAT compatibility for VendorAnalyticsService.trends integration probes.
+CREATE ALIAS IF NOT EXISTS DATE_FORMAT FOR "com.saumyasolar.MySqlDateFormatFunction.format";
