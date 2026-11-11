@@ -194,7 +194,7 @@ public class NotificationService {
         try {
             adapters.dispatch(record);
             record.setAttemptCount(record.getAttemptCount() + 1);
-            record.setStatus("DELIVERED");
+            record.setStatus(("SMS".equals(record.getChannel()) || "WHATSAPP".equals(record.getChannel())) ? "SENT" : "DELIVERED");
             record.setSentAt(Instant.now());
             record.setNextAttemptAt(null);
             record.setLastError(null);
