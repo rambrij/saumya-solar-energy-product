@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useState} from 'react';
-import {authenticatedFetch,sessionForToken,type AuthSession} from './authenticatedFetch';
+import {authenticatedFetch,type AuthSession} from './authenticatedFetch';
 const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
 type Props={s:{accessToken:string;user:{permissions:string[]}};error:(message:string)=>void};
 export default function CmsManagementPanel({s,error}:Props){
