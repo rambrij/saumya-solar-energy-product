@@ -88,7 +88,7 @@ class EndpointAuthenticationMatrixTest {
     private static final Pattern VARIABLE = Pattern.compile("\\{[^}]+}");
     private static final Set<String> PUBLIC_PREFIXES = Set.of(
             "/api/v1/auth/", "/api/v1/public/", "/api/v1/payment-webhooks/",
-            "/api/v1/payment-gateway-webhooks/", "/uploads/", "/swagger-ui/", "/v3/api-docs/"
+            "/api/v1/payment-gateway-webhooks/", "/api/v1/notification-webhooks/", "/uploads/", "/swagger-ui/", "/v3/api-docs/"
     );
     private static final Set<String> PUBLIC_EXACT = Set.of(
             "/actuator/health", "/v3/api-docs", "/swagger-ui.html");

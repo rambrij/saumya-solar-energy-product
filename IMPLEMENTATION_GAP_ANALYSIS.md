@@ -1915,3 +1915,251 @@ The requested remaining role/resource scenarios are verified by the passing run.
 - Changed the Operations Orders tab visibility and order-list fetch to use `ORDER_VIEW`, so read-only order viewers are not incorrectly hidden behind `ORDER_CREATE`. Reservation release controls are hidden without `INVENTORY_RESERVE`.
 - Added tenant lifecycle timestamps and last lifecycle reason to the platform tenant detail view.
 - CI before these follow-up commits: backend tests, frontend build and V1–V3 MySQL migration checks passed; browser E2E failed because its fixture attempted login while the tenant was still PENDING. The updated head must run the full workflow before acceptance.
+
+
+---
+
+## Phase 4 finance/provider implementation assessment — 2026-11-11
+
+**Implementation branch:** `audit/phase-4-finance-provider-impl`  
+**Base:** `audit/phase-3-implementation-gap-analysis`
+
+### Source references and implementation plan
+
+| Phase 4 item | Business requirement reference | SRS/HLD reference | Existing state at Phase 3 base | Planned change / current outcome |
+|---|---|---|---|---|
+| GST rules and statutory invoice snapshots | §§6–7, 8 (GST/tax configuration, quotation taxes, invoice generation) | §§3, 10.10 FIN-001–FIN-003, 14.2–14.3, 19, 26 item 4 | PARTIAL: tax/GSTIN/CGST/SGST/IGST snapshots and PDF exist; statutory treatment is not approved | Preserve immutable issued-invoice snapshots; implement only approved configurable tax rules after accounting decisions. Not implemented in this pass. |
+| Invoice numbering | §§6–7 (quotation/order/invoice generation) | §10.10 FIN-002; §14.3 unique tenant invoice number; §26 item 4 | PARTIAL: tenant invoice sequence exists; legal series/fiscal policy unresolved | Make approved fiscal-year/series/branch rules configurable and concurrency-safe; do not invent a statutory format. Not implemented in this pass. |
+| Provider adapter and registry | §15 (providers behind interfaces); §20 roadmap payment gateway | §§10.10 FIN-004–FIN-005, 17 payment-gateway adapter, 26 item 5 | PARTIAL: adapter/registry and pending checkout foundation exist; no live provider | Retain and extend existing ports; register deterministic mock by dev/test configuration only. Source inspection and code change blocked. |
+| Signed provider webhooks | §§7, 18 (payment updates/audit) | §§10.10 FIN-005/FIN-007, 13.7 webhook route, 18 idempotent tenant-aware jobs | PARTIAL/FOUNDATION: signed and deduplicated webhook processing is recorded as implemented in Phase 2 audit | Extend event types for capture/failure/refund outcomes; retain signature verification, idempotency and tenant binding. Not verified or changed in this pass. |
+| Settlement reconciliation | §§7, 14, 18 (payment tracking and audit) | §§17–18 (provider adapter, payment reconciliation job, idempotency/observability) | MISSING/PARTIAL: Phase 3 gap analysis says real settlement reconciliation is not enabled | Add tenant-scoped reconciliation records, deterministic mock settlement reports, mismatch classification and replay-safe processing. Not implemented in this pass. |
+| Provider refunds | §7 (cancel/refund where permitted); §12 accountant financial permissions | §§8.4, 10.10, 13.7, 20.7 and §26 item 12 | PARTIAL: manual refunds and authorization exist; provider-side execution is not enabled | Add adapter refund initiation/status and immutable provider refund event records without changing existing authorization. Refund policy and thresholds remain open. Not implemented in this pass. |
+| Hosted checkout result and payment/refund visibility | §§2–3 customer order/payment/invoice portal | §§10.10 FIN-006, 12.1–12.4, 13.7 | PARTIAL: customer checkout entry point and payment views exist; real hosted checkout disabled | Add safe result/status UI; browser redirect is informational only and cannot mark a payment paid. Not implemented in this pass. |
+
+### Work closed in this pass
+
+- Created the Phase 4 branch from the exact existing Phase 3 base.
+- Added `docs/CLEANUP_DECISIONS.md` with fixed safety decisions and ten explicit business/accounting/provider open questions.
+- No live provider SDK, credentials, network calls or payment endpoints were added.
+
+### Initial assessment at branch creation — superseded by current delivery below
+
+At the initial inspection, the following runtime Phase 4 items were outstanding: GST-rule approval and implementation, approved invoice numbering, mock adapter lifecycle, profile-gated mock simulators, expanded webhook events, settlement reconciliation, provider refund lifecycle, hosted checkout result UI, payment/refund visibility, database migrations, audit/tenant-isolation tests and complete CI validation.
+
+At that initial inspection, real-provider integration was pending provider selection and the mock adapter had not yet been implemented. The current delivery and verification status is recorded in the later section below.
+
+### Verification status at initial assessment
+
+At the initial documentation-only checkpoint, runtime tests and migration validation had not been run, and local Git clone was blocked by DNS resolution. Subsequent code implementation and GitHub Actions verification are documented in the current delivery section below.
+
+
+---
+
+## Phase 4 repository code inspection — 2026-11-11
+
+### Scope clarification
+
+The business roadmap places payment gateway integration in **Phase 3** (business requirements, Phase 3: Enterprise SaaS), while the SRS/HLD describes gateway callbacks in FIN-004/FIN-005 and lists payment gateway in its Phase 2 roadmap. The higher-priority business roadmap controls phase placement. The user's Phase 4 instruction explicitly authorizes finance/provider work now, but this is a scope re-baseline for this branch, not evidence that the original roadmap placed gateway in Phase 4. Existing gateway foundations are preserved.
+
+The Phase 4 delivery requested for this branch is a deterministic, profile-gated **mock adapter**. A real gateway must not be connected. Its future integration remains pending provider selection and commercial/security approval.
+
+### Confirmed code state from branch inspection
+
+| Area | Verified source state | Phase 4 gap |
+|---|---|---|
+| Finance/invoices | `FinanceService.createInvoice` snapshots customer/vendor identity, line prices, HSN, taxable values, tax totals and GST components. `InvoiceSequence` is tenant/fiscal-year scoped with a pessimistic lookup lock. | Tax treatment is still accepted from invoice input (including `UNSPECIFIED`); no approved GST rules, immutable statutory rule/version snapshot, or approved series policy. |
+| Payment adapter/registry | `PaymentGatewayAdapter` exposes create, signature verification, parse, fetch status and refund. `PaymentGatewayRegistry` registers adapter beans. | No mock adapter implementation is present in the branch tree. Registry is not selected by a configured mock provider. |
+| Checkout | `PaymentGatewayCheckoutService` enforces invoice tenant/customer ownership, invoice open status, feature entitlement, tenant integration connection, idempotency key, HTTPS checkout URL and audit event. | Checkout currently depends on an ACTIVE tenant integration connection; no dev/test-only mock integration/session lifecycle or deterministic success/failure/pending/cancelled outcome. |
+| Webhooks | `PaymentGatewayWebhookService` verifies adapter signatures, parses events, deduplicates provider/event ID and updates pending payment to confirmed/failed. | Event model accepts only SUCCEEDED/FAILED. It has no capture/refund processed/refund failed lifecycle, no tenant field on webhook event record, and no settlement reconciliation. |
+| Refunds | `FinanceService.refund` checks PAYMENT_REFUND, tenant payment lock, branch access, amount and mandatory reason. | It explicitly rejects non-MANUAL payments; adapter refund port is not called and provider refund event records are absent. |
+| Database | Baseline schema already contains tenant/fiscal-year invoice sequence, invoice/item snapshots, payment idempotency, payment webhook event uniqueness, and manual refund records with tenant-qualified payment FK. | No settlement/reconciliation table, provider refund event table, tax-rule version snapshot columns/structure or checkout outcome evidence. Existing webhook event uniqueness is provider/event, not tenant/provider/event. |
+| Customer frontend | `main.tsx` loads customer invoices, payments and gateway availability; it starts checkout and redirects to the returned URL. Customer invoice and payment lists already exist. | No mock checkout-result route/page; no explicit pending/failed/cancelled/refund state explanation or provider refund visibility beyond current payment ledger. |
+| Tests | Existing checkout tests cover no-adapter failure and a generic pending adapter response. Existing finance integration test covers signed, duplicate and invalid-signature unmatched webhook events. | No mock provider lifecycle, profile isolation, refund webhook, settlement mismatch, tenant-aware event replay, or browser result-page tests. |
+
+### Phase 4 implementation plan and status
+
+1. **Mock adapter and configuration:** implement a deterministic mock provider bean; select it using explicit dev/test configuration; never load mock endpoints, webhook simulators or fixture routes in production.
+2. **Checkout lifecycle:** provide deterministic success, failure, pending and cancelled sessions; persist the resulting provider-neutral payment state; never accept a browser redirect as payment confirmation.
+3. **Webhook lifecycle:** extend provider-neutral event semantics for capture, failure, refund processed and refund failed; keep HMAC verification, idempotency and tenant-scoped payment matching; ensure an invalid/mismatched event cannot leave a permanently consumed idempotency key.
+4. **Provider refunds:** call the adapter only after the existing refund permission, branch, reason and outstanding amount checks; preserve pending/processed/failed provider state as auditable records. Do not invent approval thresholds.
+5. **Settlement reconciliation:** persist tenant-scoped report and line/event outcomes; implement deterministic mock report fixtures with matched, missing, amount/currency mismatch and duplicate rows; make processing replay-safe.
+6. **Frontend:** add a safe hosted checkout result view and payment/refund status display; refresh authoritative API state after return; do not infer paid state from URL parameters.
+7. **GST/numbering:** keep existing fiscal sequence and invoice snapshots; do not hard-code unapproved tax rates, place-of-supply, reverse charge, IRN/e-invoice or statutory series. Implement configurable approved rules only after the named decision owners approve them.
+8. **Tests:** add adapter unit tests, webhook signature/idempotency/tenant tests, refund state tests, reconciliation mismatch/replay tests, production-profile exclusion tests and customer checkout result UI tests.
+
+### Initial implementation completion status
+
+At the time of this source inspection, runtime Phase 4 features had not yet been implemented. This historical status is superseded by the current delivery and verification section at the end of this document.
+
+
+---
+
+## Phase 4 finance/provider implementation — current delivery
+
+**Branch:** `audit/phase-4-finance-provider-impl`  
+**Scope:** deterministic mock provider only; no live gateway or credentials.
+
+| Gap | Implementation delivered | Status |
+|---|---|---|
+| Mock adapter/configuration | `MockPaymentGatewayAdapter` registered by the existing registry; explicit `app.payment.mock.enabled`, checkout outcome, HMAC secret and frontend return URL. Adapter and simulators are profile-gated to dev/test and conditional on explicit enablement. | Implemented |
+| Checkout lifecycle | Tenant/idempotency-derived mock provider reference; success/failure/pending/cancelled outcomes; persisted provider-neutral payment remains PENDING until a signed event is accepted; localhost HTTP is allowed only for the dev/test mock return URL. | Implemented |
+| Webhook lifecycle | Tenant metadata is required inside the signed payload; HMAC-SHA256 verification; tenant/provider/event idempotency; payment capture/failure/cancellation and refund processed/failed events; event type, provider reference, tenant and payload hash are persisted. Unmatched and amount/currency/refund mismatches are not marked processed or consumed. | Implemented |
+| Provider refunds | Existing PAYMENT_REFUND, tenant lock, branch access, captured-payment, reason and outstanding-balance checks remain authoritative. Provider initiation requires an Idempotency-Key and creates a PENDING refund; only a verified provider refund event moves it to PROCESSED/FAILED. No maker-checker threshold was invented. | Implemented |
+| Settlement reconciliation | Tenant-owned report and line records; creator identity; payload hash and report-reference replay protection; MATCHED, MISSING_PAYMENT, AMOUNT_MISMATCH, CURRENCY_MISMATCH, DUPLICATE and PAYMENT_NOT_CAPTURED outcomes. Dev/test fixture emits deliberate mismatch rows. | Implemented |
+| Frontend | Customer checkout-result view loads payment state from authenticated APIs, never from redirect query parameters; customer and finance views show refund status; finance provider-refund action supplies an idempotency key. | Implemented |
+| GST/invoice numbering | Existing invoice tax snapshots and tenant/fiscal-year locked sequence retained. No unapproved GST rates, place-of-supply, reverse-charge, IRN/e-invoice or statutory series were invented. | Approval-dependent; unchanged |
+| Real payment provider | No real SDK, credentials, API calls or provider-specific finance logic introduced. | **pending provider selection; adapter and mock complete** |
+
+### Phase 4 schema
+
+Added `V5__phase4_finance_provider_reconciliation.sql` after the existing Phase 3 migrations. The V1 baseline remains unchanged. V5 allows pending payments to have a null `paid_at`, makes webhook event identity tenant-scoped and stores event type/provider references, adds provider-refund state/idempotency fields, and creates tenant-scoped reconciliation report/line tables with composite tenant foreign keys.
+
+### Phase 4 tests added
+
+- `MockPaymentGatewayAdapterTest`: deterministic checkout references/outcomes, HMAC signatures, tenant metadata, payment and refund status transitions, dev/test profile boundary.
+- `PaymentGatewayCheckoutServiceTest`: configured mock selection without a tenant live-provider connection.
+- `PaymentGatewayWebhookServiceTest`: signature rejection, tenant-bound capture, duplicate replay, cross-tenant reference rejection, amount mismatch, refund processing and invoice balance recalculation.
+- `PaymentReconciliationServiceTest`: matched/missing/amount/currency/duplicate classification, report replay and conflicting report-reference rejection.
+- `customer-portal-copy.test.ts`: redirect is not proof of payment; authenticated payment status and customer refund visibility.
+- Finance panel static regression coverage: provider refund idempotency header and refund-state visibility.
+- Existing unmatched-webhook regression expectation updated: unmatched signed events remain retryable and do not consume an event key.
+
+### Verification
+
+The Phase 4 GitHub Actions workflow validates frontend tests/typecheck/build, MySQL 8.4 migrations including V5, Spring Boot startup/schema validation, backend tests, runtime endpoint authorization evidence and browser-level tenant filter tampering. Runtime implementation commit `24c1e88` passed all four jobs. Documentation-only commit `e6de31a` also passed all four jobs. Verified results: 238 backend tests passed; 24 frontend tests passed; V5 migration on MySQL 8.4 passed; Spring Boot startup against MySQL 8.4 passed; runtime endpoint authorization evidence and browser-level tenant filter tampering tests passed.
+
+
+---
+
+## Phase 5 audit baseline — 2026-11-11
+
+**Branch:** `audit/phase-4-finance-provider-impl`  
+**Phase 4 verification:** GitHub Actions run [43025279559](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/43025279559), head `d3a0f7656767d82a70f7f6dbedac5647d043aa31`, event `push`, completed with conclusion `success`. Four jobs completed successfully: frontend typecheck/build, Spring Boot + MySQL 8.4 startup and browser tenant-filter tests, MySQL 8.4 migration validation (including V5), and backend compile/tests plus runtime authorization evidence. This verifies the Phase 4 branch checkpoint; it is not a merge-to-main claim or production deployment sign-off.
+
+### Source-of-truth requirements reviewed
+
+Read the complete business requirements (`saumya-solar-energy-solution-requirements.md`), technical SRS/HLD (`saumya-solar-production-ready-srs-hld.md`) and current implementation gap analysis. Phase 5 scope is grounded in CMS/blog, customer documents and notifications, role management, platform/tenant settings and expanded analytics/reporting. The detailed audit and target acceptance matrix is in `docs/PHASE5_GAP_MATRIX.md`.
+
+### Branch-head source findings
+
+| Area | Branch-head evidence | Audit conclusion |
+|---|---|---|
+| CMS/blog | No CMS domain, repository, service, controller, migration or authoring UI found. Public home content remains partly static. | Absent; needs tenant-owned content, immutable revisions, workflow, SEO and published-only public read. |
+| Notifications | `NotificationService`, `NotificationDelivery` and delivery retry exist for email/SMS/WhatsApp. No inbox/read-state domain or API found. | Delivery exists; user-facing in-app inbox is absent and must be separate from provider delivery attempts. |
+| Roles | `RoleManagementPanel`, `/roles`, `/permissions` and `AuthLifecycleService` custom-role CRUD/assignment exist. Service checks tenant, reserved names and vendor permission allowlist and audits role changes. | Existing feature must be verified/hardened, not duplicated. Add negative tests and only add missing Phase 5 permission codes after seeder/migration reconciliation. |
+| Platform settings | Tenant branding/contact fields, discount-threshold update and a platform settings placeholder exist. No complete allow-listed platform settings API/storage workflow found. | Partial; preserve existing tenant fields and secret-provider boundary. |
+| Customer documents | Customer invoices, quotations, payments and private service evidence flows exist. No unified customer document centre found. | Partial; compose existing owner-checked sources and download services; do not duplicate binary storage. |
+| Analytics | Vendor analytics has date/branch/category/product breakdowns, trends and rankings. Platform analytics currently reports tenant resource usage. | Partial; fill only missing operational report families and platform aggregate KPIs, reusing export infrastructure. |
+
+### Implementation status and guardrail
+
+This checkpoint records the audit and gap matrix only. It does not claim Phase 5 runtime implementation or test completion. No production data was accessed, no backfill or compatibility shim was added, and no new branch was created. Continue implementation on this same branch in additive, tested vertical slices. Do not mark a requirement complete until backend, frontend, migration, authorization/tenant tests and CI evidence exist.
+
+
+### Phase 5 initial implementation progress — 2026-11-11
+
+The audit-first matrix is in `docs/PHASE5_GAP_MATRIX.md`. Initial vertical slices now exist on this branch:
+
+- CMS: tenant-scoped content and immutable revisions, DRAFT/REVIEW/PUBLISHED/ARCHIVED service lifecycle, rollback-as-new-revision, public published-revision APIs, slug uniqueness, safe body/image validation and audit events; V6 schema migration and vendor authoring panel.
+- Inbox: a separate user-owned `user_notification` projection, unread/read APIs and frontend panel; existing delivery retry remains in `notification_delivery`. V7 schema and V8 `NOTIFICATION_VIEW` permission grant are additive.
+- Customer documents: a customer workspace aggregation over existing invoice, quotation, payment receipt and service attachment views/download routes; no binary duplication.
+- Platform analytics: aggregate-only platform overview API/UI for tenant lifecycle, date-bounded order totals/value and subscription status counts; existing tenant resource-usage report retained.
+- Roles: existing custom-role editor and service are reused; the inbox permission is included in the vendor custom-role allowlist and system-role grants.
+
+**Not complete:** platform settings persistence/API remains intentionally deferred pending approval of the exact safe typed keys; CMS public storefront integration/media upload/preview and full lifecycle E2E remain; unified customer documents remain a frontend aggregation rather than a backend aggregate API; vendor report/export coverage remains partial. The latest full release-validation workflow must pass before any Phase 5 slice is declared complete. Intermediate CI runs failed on inbox authorization, an ambiguous CMS test selector and the old V1–V5 migration-count assertion; corrective commits have been made and the latest workflow is the release gate.
+
+
+### Phase 5 follow-up implementation — 2026-11-11
+
+The Phase 5 gap matrix is maintained in docs/PHASE5_GAP_MATRIX.md. Beyond the initial CMS/inbox/customer-document/platform-analytics slices, the latest implementation adds:
+
+- A finite typed platform settings API and PlatformSettingsPanel. The six supported non-secret keys are platform default currency, time zone, language, support email, support phone and public banner message. Platform Super Admin + PLATFORM_MANAGE is required; values are validated, updates require expectedVersion and are audited. V10 is additive.
+- Public CMS rendering for PAGE and BLOG detail routes, blog listing, BANNER and TESTIMONIAL sections. Authenticated media upload reuses the existing image validator/storage service and returns safe app-relative paths; authoring includes upload and preview.
+- Vendor operational analytics at /api/v1/vendor/analytics/operations: installation/service status, low stock, outstanding invoices and employee performance with tenant/date/branch/employee filters.
+- Existing async export infrastructure now supports OPERATIONS, SALES, INSTALLATIONS, SERVICE, INVENTORY and FINANCE in CSV/XLSX/PDF with private owner-scoped downloads and expiry. Report projections contain operational fields, not customer contact details.
+- Playwright E2E coverage for CMS upload/publish/public render and cross-customer invoice list/download denial. V11 adds operational report indexes. Release validation applies V1–V11 on MySQL 8.4.
+
+**Still pending acceptance:** latest full release-validation must pass. Additional MySQL-backed tests are required for report payment/status semantics, settings optimistic conflicts/audit persistence, CMS concurrent revision/publish behavior and all customer document families. The role × endpoint evidence for the new CMS/settings/export APIs must be reconciled before Phase 5 is closed. This branch is not declared Phase 5 complete while the latest workflow is queued, in progress or failed.
+
+
+---
+
+## Phase 6 notifications and integrations — branch audit baseline (2026-11-11)
+
+**Branch:** `audit/phase-6-notifications-integrations`  
+**Base:** `audit/phase-4-finance-provider-impl`
+
+The Phase 6 audit reuses the existing Phase 5 inbox and integration synchronization infrastructure. It does not treat the inbox as a delivery queue, nor payment webhooks as notification-provider delivery events.
+
+| Requirement | Status | Evidence / gap |
+|---|---|---|
+| Notification delivery persistence | PARTIAL | `NotificationDelivery` and repository persist channel, attempt count, status, next-attempt time, provider message ID and last error |
+| In-app inbox/read state | IMPLEMENTED (Phase 5) | `UserNotification`, `UserNotificationService` and V7/V8; retain and extend |
+| Transactional outbox | MISSING | No dedicated outbox and transactional enqueue boundary established |
+| Integration job state/scheduler | PARTIAL | `IntegrationSyncJob` and `IntegrationSyncScheduler` already support tenant-scoped claim, retry and dead-letter states |
+| Notification provider adapter ports | MISSING | SMTP and Twilio-specific network calls remain in `NotificationService` |
+| Mock-only adapter selection | MISSING / BLOCKING | Current inspected notification service can make direct SMTP/Twilio requests; Phase 6 requires mock adapters and no real provider calls |
+| Notification retry/dead-letter | PARTIAL | Five-attempt retry/backoff exists; explicit terminal dead-letter and safe redrive/monitoring remain unverified |
+| Integration retry monitoring | PARTIAL | Persisted job status/error/attempt data exists; admin API/UI and authorization evidence remain unverified |
+| Per-user/per-channel preferences and consent | PARTIAL | Customer SMS/WhatsApp consent flags exist; full preference model and UI absent/unverified |
+| Provider delivery webhook/event state | MISSING / NOT PROVEN | No notification provider event ledger and signature-verified delivery callback path established |
+| SLA escalation | PARTIAL / POLICY BLOCKED | Service SLA breach evaluation exists; escalation thresholds, targets and cadence are not specified |
+| Notification preferences UI and delivery status UI | MISSING / PARTIAL | Phase 5 inbox exists; preferences and channel-delivery status are not established |
+| Phase 6 tests | PARTIAL | Added preference consent, mock adapter, webhook signature/replay/tenant binding and outbox dispatch/suppression tests; full backend CI, MySQL 8.4 migration, Spring Boot startup and browser evidence must pass on final branch HEAD |
+
+### Phase 6 implementation status
+
+**Phase 6 is not complete.** The branch creation and source audit are complete; runtime implementation, migrations, frontend changes, targeted tests and CI evidence are outstanding. Do not mark the Phase 6 gap as done until each row is implemented and verified.
+
+Blocking policy decisions are recorded as NOT-OQ-01 through NOT-OQ-10 in `docs/CLEANUP_DECISIONS.md`. In particular, notification SLA escalation thresholds/targets, mandatory-vs-optional event preferences, consent evidence, provider callback contract, retention, retry policy and admin visibility must not be invented.
+
+No new provider SDK, credentials, live messaging call, migration, data backfill or compatibility shim was added in this audit checkpoint.
+### Phase 6 implementation update — partial (2026-11-11)
+
+| Requirement | Current status | Implementation evidence / remaining gate |
+|---|---|---|
+| Transactional outbox | PARTIAL | V12 `notification_outbox`; NotificationService enqueue transaction; outbox scheduler. Verify commit rollback and concurrent dispatch tests in CI. |
+| Existing inbox reuse | IMPLEMENTED | Phase 5 UserNotification retained; IN_APP preference checked before creation. |
+| Mailpit email adapter | PARTIAL | Mailpit adapter and local compose service; verify local app profile and CI tests. |
+| SMS/WhatsApp mock adapters | IMPLEMENTED (mock only) | Deterministic adapter; no real network provider. |
+| Retry/backoff/dead-letter | PARTIAL | Existing attempt/backoff retained and DEAD_LETTER status added; dispatcher/retry concurrency needs integration tests. |
+| Provider webhook/event ledger | PARTIAL | HMAC-verified mock callback, provider event persistence and replay hash check; automated signature/tenant/replay tests still required. |
+| Preferences and consent | PARTIAL | Tenant/user/channel preference API and UI; SMS/WhatsApp explicit consent; consent evidence lifecycle and mandatory categories remain open. |
+| Delivery/outbox/integration monitoring APIs | PARTIAL | Tenant-scoped read APIs; platform-wide view and manual redrive not included. |
+| Frontend preferences and delivery status | PARTIAL | NotificationInboxPanel extended; browser tests and full design/role review pending. |
+| SLA escalation | DEFERRED | No approved thresholds, targets or cadence; see NOT-OQ-01 and NOT-OQ-02. |
+| Phase 6 full verification | NOT VERIFIED | Branch-head full CI and migration/startup/browser evidence pending. |
+
+**Phase 6 remains PARTIAL, not done.** Do not merge/release until build, backend/frontend tests, V12 migration validation, webhook/tenant/idempotency tests and browser verification pass. Open policy decisions remain in `docs/CLEANUP_DECISIONS.md`.
+### Phase 6 latest implementation checkpoint
+
+- V12 is the Phase 6 notification outbox/preferences/provider-event schema migration. The release-validation workflow now includes V12 on its clean MySQL 8.4 path.
+- Mailpit is the only email transport. Its deterministic Message-ID is searched through the local Mailpit API before resend, allowing retries to recognize a previously captured email. SMS/WhatsApp use mock-only adapters; mock delivery webhooks are dev/test profile-only.
+- Adapter selection is through the notification channel adapter registry. The mock messaging adapter is disabled by default and enabled only in dev/test configuration.
+- Vendor self-delivery visibility remains separate from tenant-wide operations monitoring: outbox and integration job monitoring require VENDOR_ADMIN; integration error details are not returned verbatim.
+- Current phase status remains PARTIAL until final branch-head CI is green. SLA escalation, notification template administration, manual redrive and platform cross-tenant provider monitoring remain deferred under NOT-OQ-01/02 and NOT-OQ-11/14.
+---
+
+## Phase 6 notifications and integrations — implementation status (2026-11-11)
+
+The following status supersedes the initial audit baseline above.
+
+| Requirement | Current status | Implementation/evidence |
+|---|---|---|
+| Transactional outbox | IMPLEMENTED | V12 `notification_outbox`; V14 tenant-matched composite FKs; `NotificationService.sendBusinessNotification` writes delivery + outbox transactionally; event-driven bypass removed |
+| In-app inbox | IMPLEMENTED | Existing Phase 5 inbox retained; projection now participates in business transaction |
+| Email adapter | IMPLEMENTED (local only) | `MailpitEmailNotificationAdapter` uses local Mailpit SMTP and Message-ID idempotency lookup |
+| SMS/WhatsApp provider abstraction | IMPLEMENTED (mock) | `NotificationChannelAdapter`, registry, deterministic `MockMessagingNotificationAdapter` |
+| Twilio swap point | IMPLEMENTED (fail-closed seam) | `app.messaging.provider=mock|twilio`; reserved Twilio adapter makes no network calls and fails closed |
+| Retry/backoff/dead-letter | IMPLEMENTED | Single outbox dispatch path; five attempts, bounded exponential backoff, dead-letter; stale processing recovery |
+| Provider callback/event ledger | IMPLEMENTED (mock only) | Dev/test HMAC webhook, unique provider event ID, payload-hash replay validation, tenant-bound delivery and outbox update |
+| User/channel preferences and consent | IMPLEMENTED (conservative opt-in) | V12 preference table/API; explicit SMS/WhatsApp consent; dispatcher suppresses missing/withdrawn consent |
+| Delivery/outbox/integration monitoring | IMPLEMENTED | Existing tenant-scoped operations APIs and Notifications UI |
+| Frontend preference and delivery status | IMPLEMENTED | Existing inbox panel extended/corrected; frontend consent test added |
+| SLA escalation policy | DEFERRED — Open Questions | Thresholds, target matrix and cadence are not defined in requirements |
+| Real Twilio provider integration | OUT OF SCOPE | Explicit no-real-provider rule; adapter seam fails closed |
+| Phase 6 automated tests | ADDED, EXECUTION PENDING | Backend and frontend test sources added/updated; workflow includes MySQL V13 check |
+
+### Phase 6 acceptance gate
+
+**Implementation status: code changes applied; verification not yet confirmed.** Maven full verify, frontend tests/build, MySQL 8.4 Flyway validation and Playwright browser tests must pass in GitHub Actions before Phase 6 can be marked fully complete. SLA escalation and live Twilio remain deferred as documented open questions/out-of-scope decisions.

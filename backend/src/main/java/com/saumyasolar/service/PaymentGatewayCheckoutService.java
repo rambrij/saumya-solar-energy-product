@@ -25,7 +25,9 @@ public class PaymentGatewayCheckoutService {
     private final EnterpriseSaasService entitlements;
     private final AuditEventRepository audits;
     private final com.fasterxml.jackson.databind.ObjectMapper mapper;
+    private final boolean mockEnabled;
     
+    @org.springframework.beans.factory.annotation.Autowired
     public PaymentGatewayCheckoutService(
             InvoiceRepository invoices,
             PaymentRepository payments,
@@ -36,7 +38,8 @@ public class PaymentGatewayCheckoutService {
             PaymentGatewayRegistry adapters,
             EnterpriseSaasService entitlements,
             AuditEventRepository audits,
-            com.fasterxml.jackson.databind.ObjectMapper mapper
+            com.fasterxml.jackson.databind.ObjectMapper mapper,
+            @org.springframework.beans.factory.annotation.Value("${app.payment.mock.enabled:false}") boolean mockEnabled
     ) {
         this.invoices = invoices;
         this.payments = payments;
@@ -48,6 +51,7 @@ public class PaymentGatewayCheckoutService {
         this.entitlements = entitlements;
         this.audits = audits;
         this.mapper = mapper;
+        this.mockEnabled = mockEnabled;
     }
     
     public Map<String, Object> availability(Principal actor) {
@@ -55,6 +59,10 @@ public class PaymentGatewayCheckoutService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         List<String> available = connections.findByTenantIdAndIntegrationTypeAndStatus(actor.tenantId(), "PAYMENT_GATEWAY", "ACTIVE")
                 .stream().map(IntegrationConnection::getProviderCode).filter(code -> adapters.find(code).isPresent()).distinct().toList();
+        if (mockEnabled && adapters.find("MOCK_GATEWAY").isPresent()) {
+            available = new java.util.ArrayList<>(available);
+            available.add("MOCK_GATEWAY");
+        }
         return Map.of("available", !available.isEmpty(), "providers", available);
     }
     
@@ -70,27 +78,35 @@ public class PaymentGatewayCheckoutService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Invoice is not open for online payment");
         entitlements.assertFeatureEnabled(actor.tenantId(), "paymentGateway");
         List<IntegrationConnection> active = connections.findByTenantIdAndIntegrationTypeAndStatus(actor.tenantId(), "PAYMENT_GATEWAY", "ACTIVE");
-        if (active.isEmpty())
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No active payment gateway connection is configured for this tenant");
-        IntegrationConnection connection;
-        if (providerCode == null || providerCode.isBlank()) {
-            if (active.size() != 1)
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "providerCode is required when multiple payment gateways are configured");
-            connection = active.get(0);
-        } else
-            connection = active.stream().filter(x -> x.getProviderCode().equalsIgnoreCase(providerCode.trim())).findFirst()
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Active payment gateway connection not found"));
+        String selectedProvider;
+        boolean useMock = mockEnabled && adapters.find("MOCK_GATEWAY").isPresent()
+                && (providerCode == null || providerCode.isBlank() || "MOCK_GATEWAY".equalsIgnoreCase(providerCode));
+        if (useMock) {
+            selectedProvider = "MOCK_GATEWAY";
+        } else {
+            if (active.isEmpty())
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "No active payment gateway connection is configured for this tenant");
+            if (providerCode == null || providerCode.isBlank()) {
+                if (active.size() != 1)
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "providerCode is required when multiple payment gateways are configured");
+                selectedProvider = active.get(0).getProviderCode();
+            } else {
+                selectedProvider = active.stream().map(IntegrationConnection::getProviderCode)
+                        .filter(code -> code.equalsIgnoreCase(providerCode.trim())).findFirst()
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Active payment gateway connection not found"));
+            }
+        }
         Optional<Payment> previous = payments.findByTenantIdAndIdempotencyKey(actor.tenantId(), idempotencyKey);
         if (previous.isPresent()) {
             Payment p = previous.get();
-            if (!invoiceId.equals(p.getInvoiceId()) || !connection.getProviderCode().equalsIgnoreCase(p.getProvider()))
+            if (!invoiceId.equals(p.getInvoiceId()) || !selectedProvider.equalsIgnoreCase(p.getProvider()))
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency-Key was already used for another payment");
             return view(p);
         }
         BigDecimal outstanding = invoice.getGrandTotal().subtract(netPaid(actor.tenantId(), invoiceId));
         if (outstanding.signum() <= 0)
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Invoice has no outstanding balance");
-        PaymentGatewayAdapter adapter = adapters.require(connection.getProviderCode());
+        PaymentGatewayAdapter adapter = adapters.require(selectedProvider);
         UUID paymentId = UUID.nameUUIDFromBytes(( actor.tenantId() + ":" + idempotencyKey ).getBytes(StandardCharsets.UTF_8));
         Map<String, String> metadata = Map.of(
                 "tenantId", actor.tenantId().toString(), "invoiceId", invoiceId.toString(),
@@ -104,8 +120,12 @@ public class PaymentGatewayCheckoutService {
         } catch (Exception ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Payment provider could not create checkout");
         }
+        boolean localMockCheckout = "MOCK_GATEWAY".equalsIgnoreCase(selectedProvider) && mockEnabled
+                && gateway != null && gateway.checkoutUrl() != null
+                && (gateway.checkoutUrl().startsWith("http://localhost:")
+                    || gateway.checkoutUrl().startsWith("http://127.0.0.1:"));
         if (gateway == null || gateway.providerReference() == null || gateway.providerReference().isBlank()
-                || gateway.checkoutUrl() == null || !gateway.checkoutUrl().startsWith("https://"))
+                || gateway.checkoutUrl() == null || (!gateway.checkoutUrl().startsWith("https://") && !localMockCheckout))
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Payment provider returned an invalid checkout response");
         Payment payment = new Payment();
         payment.setId(paymentId);
@@ -117,7 +137,7 @@ public class PaymentGatewayCheckoutService {
         payment.setMethod("ONLINE");
         payment.setSource("GATEWAY");
         payment.setStatus("PENDING");
-        payment.setProvider(connection.getProviderCode());
+        payment.setProvider(selectedProvider);
         payment.setProviderReference(gateway.providerReference());
         payment.setCheckoutUrl(gateway.checkoutUrl());
         payment.setIdempotencyKey(idempotencyKey);
@@ -135,7 +155,7 @@ public class PaymentGatewayCheckoutService {
         audit.setOutcome("SUCCESS");
         try {
             audit.setAfterJson(mapper.writeValueAsString(Map.of(
-                    "providerCode", connection.getProviderCode(),
+                    "providerCode", selectedProvider,
                     "invoiceId", invoiceId.toString(), "amount", outstanding.toPlainString(),
                     "currency", invoice.getCurrency()
             )));
@@ -151,6 +171,7 @@ public class PaymentGatewayCheckoutService {
         if ("VENDOR".equals(actor.accountType())) {
             if (actor.permissions() == null || !actor.permissions().contains("PAYMENT_RECORD"))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Finance permission required");
+            entitlements.assertBranchAccess(invoice.getBranchId(), actor);
             return;
         }
         if (!"CUSTOMER".equals(actor.accountType())) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
@@ -165,9 +186,9 @@ public class PaymentGatewayCheckoutService {
     private BigDecimal netPaid(UUID tenantId, UUID invoiceId) {
         BigDecimal total = BigDecimal.ZERO;
         for (Payment payment : payments.findByTenantIdAndInvoiceId(tenantId, invoiceId)) {
-            if (!Set.of("CONFIRMED", "PARTIALLY_REFUNDED").contains(payment.getStatus())) continue;
+            if (!Set.of("CONFIRMED", "PARTIALLY_REFUNDED", "REFUNDED").contains(payment.getStatus())) continue;
             BigDecimal refunded = refunds.findByTenantIdAndPaymentId(tenantId, payment.getId()).stream()
-                    .filter(r -> "RECORDED".equals(r.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+                    .filter(r -> Set.of("RECORDED", "PROCESSED").contains(r.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
             total = total.add(payment.getAmount().subtract(refunded));
         }
         return total;

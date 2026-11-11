@@ -150,15 +150,15 @@ class Release4FinanceServiceAndPlatformTest {
     }
     
     @Test
-    void signedPaymentWebhookIsAuthenticatedAndDuplicateEventsAreIdempotent() throws Exception {
+    void signedUnmatchedPaymentWebhookIsRetryableAndInvalidSignatureIsRejected() throws Exception {
         String raw = "{\"eventId\":\"evt-release4-test-1\",\"paymentReference\":\"unmatched-provider-ref\",\"amount\":100.00,\"status\":\"SUCCEEDED\"}";
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec("test-webhook-secret".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
         String signature = HexFormat.of().formatHex(mac.doFinal(raw.getBytes(StandardCharsets.UTF_8)));
         mvc.perform(post("/api/v1/payment-webhooks/test-provider").header("X-Payment-Signature", signature).contentType(MediaType.APPLICATION_JSON).content(raw))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.accepted").value(true)).andExpect(jsonPath("$.matched").value(false));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.accepted").value(false)).andExpect(jsonPath("$.matched").value(false)).andExpect(jsonPath("$.retryable").value(true));
         mvc.perform(post("/api/v1/payment-webhooks/test-provider").header("X-Payment-Signature", signature).contentType(MediaType.APPLICATION_JSON).content(raw))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.duplicate").value(true));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.accepted").value(false)).andExpect(jsonPath("$.retryable").value(true));
         mvc.perform(post("/api/v1/payment-webhooks/test-provider").header("X-Payment-Signature", "invalid").contentType(MediaType.APPLICATION_JSON).content(raw))
                 .andExpect(status().isUnauthorized());
     }

@@ -422,7 +422,7 @@ CREATE TABLE notification_delivery (
   message_body TEXT NULL,
   CONSTRAINT fk_notification_delivery_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(id),
   CONSTRAINT fk_notification_delivery_user FOREIGN KEY (user_id) REFERENCES app_user(id),
-  CONSTRAINT chk_notification_delivery_status CHECK (status IN ('PENDING', 'DELIVERED', 'FAILED')),
+  CONSTRAINT chk_notification_delivery_status CHECK (status IN (_utf8mb4'PENDING', _utf8mb4'DELIVERED', _utf8mb4'FAILED')),
   INDEX ix_notification_delivery_tenant_created (tenant_id, created_at),
   INDEX ix_notification_delivery_status_created (status, created_at),
   KEY ix_notification_retry (status,next_attempt_at),

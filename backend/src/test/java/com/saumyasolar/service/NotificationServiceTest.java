@@ -1,322 +1,121 @@
 package com.saumyasolar.service;
 
-import com.saumyasolar.domain.NotificationDelivery;
-import com.saumyasolar.domain.CustomerProfile;
-import com.saumyasolar.repo.CustomerProfileRepository;
-import com.saumyasolar.repo.NotificationDeliveryRepository;
+import com.saumyasolar.domain.*;
+import com.saumyasolar.repo.*;
 import org.junit.jupiter.api.Test;
-import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.context.ApplicationEventPublisher;
-
-import java.util.UUID;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
 import java.time.Instant;
-
-import org.mockito.ArgumentCaptor;
-
+import java.util.Optional;
+import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class NotificationServiceTest {
-
-    @Test
-    void persistsPendingNotificationBeforePublishingItsEvent() {
-        JavaMailSender sender = mock(JavaMailSender.class);
-        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
-        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        java.util.concurrent.atomic.AtomicReference<NotificationDelivery> persisted =
-                new java.util.concurrent.atomic.AtomicReference<>();
-        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> {
-            NotificationDelivery record = invocation.getArgument(0);
-            persisted.set(record);
-            return record;
-        });
-        when(repository.findById(any())).thenAnswer(invocation -> java.util.Optional.ofNullable(persisted.get()));
-        NotificationService service = new NotificationService(
-                sender, repository, null, "no-reply@example.test", "http://localhost:3000",
-                "", "", "", "", publisher
-        );
-        UUID tenantId = UUID.randomUUID();
-        boolean accepted = service.sendBusinessNotification(
-                UUID.randomUUID(), tenantId, "QUOTATION_SENT",
-                "customer@example.test", "Your quotation", "Quotation details"
-        );
-        assertTrue(accepted);
-        ArgumentCaptor<NotificationDelivery> saved = ArgumentCaptor.forClass(NotificationDelivery.class);
-        verify(repository).save(saved.capture());
-        assertEquals("PENDING", saved.getValue().getStatus());
-        assertEquals(tenantId, saved.getValue().getTenantId());
-        verify(publisher).publishEvent(any(BusinessNotificationRequestedEvent.class));
-        verifyNoInteractions(sender);
+    private NotificationService service(JavaMailSender mail, NotificationDeliveryRepository deliveries,
+            CustomerProfileRepository customers, NotificationOutboxRepository outbox,
+            NotificationChannelAdapterRegistry adapters, NotificationPreferenceRepository preferences,
+            UserNotificationService inbox) {
+        return new NotificationService(mail, deliveries, customers, outbox, adapters, preferences,
+                inbox, "no-reply@saumya.local", "http://localhost:3000");
     }
 
-    @Test
-    void scheduledRecoveryProcessesPersistedPendingNotificationAfterRestart() {
-        JavaMailSender sender = mock(JavaMailSender.class);
-        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
-        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        UUID tenantId = UUID.randomUUID();
-        NotificationDelivery record = new NotificationDelivery();
-        record.setId(UUID.randomUUID());
-        record.setTenantId(tenantId);
-        record.setUserId(UUID.randomUUID());
-        record.setChannel("EMAIL");
-        record.setRecipient("customer@example.test");
-        record.setSubject("Recovered notification");
-        record.setMessageBody("Persisted before event publication");
-        record.setStatus("PENDING");
-        record.setAttemptCount(0);
-        record.setCreatedAt(Instant.now().minusSeconds(120));
-        when(repository.findDistinctTenantIdsForPending(any())).thenReturn(java.util.List.of(tenantId));
-        when(repository.findTop50ByTenantIdAndStatusAndCreatedAtBeforeOrderByCreatedAtAsc(eq(tenantId), eq("PENDING"), any()))
-                .thenReturn(java.util.List.of(record));
-        when(repository.claimPendingDelivery(eq(record.getId()), eq(tenantId), any(), any())).thenReturn(1);
-        when(repository.findByIdAndTenantId(record.getId(), tenantId)).thenReturn(java.util.Optional.of(record));
-        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        doAnswer(invocation -> {
-            assertEquals(tenantId, com.saumyasolar.security.TenantExecutionContext.requireTenantId());
-            return null;
-        }).when(sender).send(any(SimpleMailMessage.class));
-
-        NotificationService service = new NotificationService(
-                sender, repository, null, "no-reply@example.test", "http://localhost:3000",
-                "", "", "", "", publisher
-        );
-        service.retryFailedDeliveries();
-
-        verify(sender).send(any(SimpleMailMessage.class));
-        assertEquals("DELIVERED", record.getStatus());
-        assertNotNull(record.getSentAt());
-        verify(repository).claimPendingDelivery(eq(record.getId()), eq(tenantId), any(), any());
-        assertThrows(IllegalStateException.class,
-                com.saumyasolar.security.TenantExecutionContext::requireTenantId);
+    @Test void persistsDeliveryAndOutboxTogetherWithoutSendingInBusinessTransaction() {
+        var mail=mock(JavaMailSender.class);var deliveries=mock(NotificationDeliveryRepository.class);
+        var outbox=mock(NotificationOutboxRepository.class);var customers=mock(CustomerProfileRepository.class);
+        var adapters=mock(NotificationChannelAdapterRegistry.class);var preferences=mock(NotificationPreferenceRepository.class);
+        var inbox=mock(UserNotificationService.class);
+        when(deliveries.existsByTenantIdAndIdempotencyKey(any(),anyString())).thenReturn(false);
+        UUID tenant=UUID.randomUUID(),user=UUID.randomUUID();
+        assertTrue(service(mail,deliveries,customers,outbox,adapters,preferences,inbox)
+                .sendBusinessNotification(user,tenant,"ORDER_CONFIRMED","customer@example.test","Order confirmed","Your order is confirmed"));
+        var delivery=org.mockito.ArgumentCaptor.forClass(NotificationDelivery.class);
+        var item=org.mockito.ArgumentCaptor.forClass(NotificationOutbox.class);
+        verify(deliveries).save(delivery.capture());verify(outbox).save(item.capture());
+        assertEquals("PENDING",delivery.getValue().getStatus());
+        assertEquals("PENDING",item.getValue().getStatus());
+        assertEquals(tenant,item.getValue().getTenantId());
+        assertEquals(delivery.getValue().getId(),item.getValue().getDeliveryId());
+        verifyNoInteractions(mail,adapters);
     }
 
-
-    @Test
-    void queuedWhatsappNotificationUsesARealLineBreak() {
-        JavaMailSender sender = mock(JavaMailSender.class);
-        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
-        CustomerProfileRepository customers = mock(CustomerProfileRepository.class);
-        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
-        UUID tenantId = UUID.randomUUID();
-        UUID userId = UUID.randomUUID();
-        CustomerProfile customer = new CustomerProfile();
-        customer.setTenantId(tenantId);
-        customer.setUserId(userId);
-        customer.setPhone("+919876543210");
-        customer.setWhatsappConsent(true);
-        Map<UUID, NotificationDelivery> persisted = new HashMap<>();
-        when(customers.findByTenantIdAndUserId(tenantId, userId)).thenReturn(Optional.of(customer));
-        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> {
-            NotificationDelivery record = invocation.getArgument(0);
-            persisted.put(record.getId(), record);
-            return record;
-        });
-        when(repository.findById(any())).thenAnswer(invocation ->
-                Optional.ofNullable(persisted.get(invocation.getArgument(0))));
-        NotificationService service = new NotificationService(
-                sender, repository, customers, "no-reply@example.test", "http://localhost:3000",
-                "account", "token", "", "whatsapp:+15550000000", publisher
-        );
-
-        assertTrue(service.sendBusinessNotification(
-                userId, tenantId, "QUOTATION_SENT", "customer@example.test",
-                "Your quotation", "Quotation details"
-        ));
-
-        NotificationDelivery whatsapp = persisted.values().stream()
-                .filter(record -> "WHATSAPP".equals(record.getChannel()))
-                .findFirst().orElseThrow();
-        assertEquals("Your quotation\nQuotation details", whatsapp.getMessageBody());
-        verify(publisher, times(2)).publishEvent(any(BusinessNotificationRequestedEvent.class));
-        verifyNoInteractions(sender);
+    @Test void duplicateBusinessMessageDoesNotCreateAnotherOutboxRow() {
+        var deliveries=mock(NotificationDeliveryRepository.class);var outbox=mock(NotificationOutboxRepository.class);
+        when(deliveries.existsByTenantIdAndIdempotencyKey(any(),anyString())).thenReturn(true);
+        var svc=service(mock(JavaMailSender.class),deliveries,mock(CustomerProfileRepository.class),outbox,
+                mock(NotificationChannelAdapterRegistry.class),mock(NotificationPreferenceRepository.class),mock(UserNotificationService.class));
+        assertFalse(svc.sendBusinessNotification(UUID.randomUUID(),UUID.randomUUID(),"ORDER_CONFIRMED",
+                "customer@example.test","Order confirmed","Same payload"));
+        verify(deliveries,never()).save(any());verifyNoInteractions(outbox);
     }
 
-    @Test
-    void sendsAndRecordsPasswordResetEmail() {
-        JavaMailSender sender = mock(JavaMailSender.class);
-        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
-        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        NotificationService service = new NotificationService(sender, repository, "no-reply@example.test", "http://localhost:3000");
-        
-        boolean sent = service.sendPasswordReset(
-                UUID.randomUUID(), UUID.randomUUID(),
-                "customer@example.test", "Solar Customer", "random-one-time-token"
-        );
-        
-        assertTrue(sent);
-        verify(sender).send(any(SimpleMailMessage.class));
-        verify(repository, times(2)).save(any(NotificationDelivery.class));
-    }
-    
-    @Test
-    void recordsFailedSmtpDeliveryWithoutThrowingToCaller() {
-        JavaMailSender sender = mock(JavaMailSender.class);
-        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
-        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        doThrow(new MailSendException("SMTP unavailable")).when(sender).send(any(SimpleMailMessage.class));
-        NotificationService service = new NotificationService(sender, repository, "no-reply@example.test", "http://localhost:3000");
-        
-        boolean sent = service.sendBusinessNotification(
-                UUID.randomUUID(), UUID.randomUUID(),
-                "QUOTE_SENT", "customer@example.test", "Your quotation", "Quotation details"
-        );
-        
-        assertFalse(sent);
-        ArgumentCaptor<NotificationDelivery> saved = ArgumentCaptor.forClass(NotificationDelivery.class);
-        verify(repository, times(2)).save(saved.capture());
-        NotificationDelivery failed = saved.getAllValues().get(1);
-        assertEquals("FAILED", failed.getStatus());
-        assertEquals(1, failed.getAttemptCount());
-        assertNotNull(failed.getNextAttemptAt());
-        assertTrue(failed.getNextAttemptAt().isAfter(Instant.now()));
-    }
-    @Test
-    void scheduledRetryRunsInsideTheDeliveryTenantContextAndClearsItAfterward() {
-        JavaMailSender sender = mock(JavaMailSender.class);
-        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
-        UUID tenantId = UUID.randomUUID();
-        NotificationDelivery record = new NotificationDelivery();
-        record.setId(UUID.randomUUID());
-        record.setTenantId(tenantId);
-        record.setUserId(UUID.randomUUID());
-        record.setChannel("EMAIL");
-        record.setRecipient("customer@example.test");
-        record.setSubject("Retry test");
-        record.setMessageBody(tenantId.toString());
-        record.setStatus("FAILED");
-        record.setAttemptCount(1);
-        record.setNextAttemptAt(Instant.now().minusSeconds(5));
-        when(repository.findDistinctTenantIdsForRetry(eq("FAILED"), any()))
-                .thenReturn(java.util.List.of(tenantId));
-        when(repository.findTop50ByTenantIdAndStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(eq(tenantId), eq("FAILED"), any()))
-                .thenReturn(java.util.List.of(record));
-        when(repository.claimFailedDelivery(eq(record.getId()), eq(tenantId), any())).thenReturn(1);
-        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        doAnswer(invocation -> {
-            assertEquals(tenantId, com.saumyasolar.security.TenantExecutionContext.requireTenantId());
-            return null;
-        }).when(sender).send(any(SimpleMailMessage.class));
-
-        NotificationService service = new NotificationService(
-                sender, repository, "no-reply@example.test", "http://localhost:3000"
-        );
-        service.retryFailedDeliveries();
-
-        verify(sender).send(any(SimpleMailMessage.class));
-        assertEquals("DELIVERED", record.getStatus());
-        assertThrows(
-                IllegalStateException.class,
-                com.saumyasolar.security.TenantExecutionContext::requireTenantId
-        );
+    @Test void smsAndWhatsappAreNotQueuedWithoutPersistedExplicitConsent() {
+        var deliveries=mock(NotificationDeliveryRepository.class);var customers=mock(CustomerProfileRepository.class);
+        var prefs=mock(NotificationPreferenceRepository.class);var outbox=mock(NotificationOutboxRepository.class);
+        when(deliveries.existsByTenantIdAndIdempotencyKey(any(),anyString())).thenReturn(false);
+        UUID tenant=UUID.randomUUID(),user=UUID.randomUUID();var customer=new CustomerProfile();
+        customer.setTenantId(tenant);customer.setUserId(user);customer.setPhone("+919876543210");
+        when(customers.findByTenantIdAndUserId(tenant,user)).thenReturn(Optional.of(customer));
+        var svc=service(mock(JavaMailSender.class),deliveries,customers,outbox,
+                mock(NotificationChannelAdapterRegistry.class),prefs,mock(UserNotificationService.class));
+        assertTrue(svc.sendBusinessNotification(user,tenant,"ORDER_CONFIRMED","customer@example.test","Order","Body"));
+        var captured=org.mockito.ArgumentCaptor.forClass(NotificationDelivery.class);
+        verify(deliveries).save(captured.capture());
+        assertEquals("EMAIL",captured.getValue().getChannel());
+        verify(deliveries,times(1)).save(any(NotificationDelivery.class));
+        verify(outbox,times(1)).save(any(NotificationOutbox.class));
     }
 
-
-    @Test
-    void scheduledRetryProcessesEachTenantBatchInsideItsOwnContext() {
-        JavaMailSender sender = mock(JavaMailSender.class);
-        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
-        UUID tenantA = UUID.randomUUID();
-        UUID tenantB = UUID.randomUUID();
-        NotificationDelivery recordA = failedRecord(tenantA);
-        NotificationDelivery recordB = failedRecord(tenantB);
-        when(repository.findDistinctTenantIdsForRetry(eq("FAILED"), any()))
-                .thenReturn(java.util.List.of(tenantA, tenantB));
-        when(repository.findTop50ByTenantIdAndStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(eq(tenantA), eq("FAILED"), any()))
-                .thenReturn(java.util.List.of(recordA));
-        when(repository.findTop50ByTenantIdAndStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(eq(tenantB), eq("FAILED"), any()))
-                .thenReturn(java.util.List.of(recordB));
-        when(repository.claimFailedDelivery(any(), any(), any())).thenReturn(1);
-        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        doAnswer(invocation -> {
-            SimpleMailMessage message = invocation.getArgument(0);
-            assertEquals(message.getText(), com.saumyasolar.security.TenantExecutionContext.requireTenantId().toString());
-            return null;
-        }).when(sender).send(any(SimpleMailMessage.class));
-
-        new NotificationService(sender, repository, "no-reply@example.test", "http://localhost:3000")
-                .retryFailedDeliveries();
-
-        verify(sender, times(2)).send(any(SimpleMailMessage.class));
-        assertEquals("DELIVERED", recordA.getStatus());
-        assertEquals("DELIVERED", recordB.getStatus());
-        assertThrows(IllegalStateException.class,
-                com.saumyasolar.security.TenantExecutionContext::requireTenantId);
+    @Test void consentedSmsIsQueuedOnlyWhenPreferenceIsEnabledAndConsented() {
+        var deliveries=mock(NotificationDeliveryRepository.class);var customers=mock(CustomerProfileRepository.class);
+        var prefs=mock(NotificationPreferenceRepository.class);var outbox=mock(NotificationOutboxRepository.class);
+        when(deliveries.existsByTenantIdAndIdempotencyKey(any(),anyString())).thenReturn(false);
+        UUID tenant=UUID.randomUUID(),user=UUID.randomUUID();var customer=new CustomerProfile();
+        customer.setTenantId(tenant);customer.setUserId(user);customer.setPhone("+919876543210");
+        when(customers.findByTenantIdAndUserId(tenant,user)).thenReturn(Optional.of(customer));
+        var consent=new NotificationPreference();consent.setEnabled(true);consent.setConsented(true);
+        when(prefs.findByTenantIdAndUserIdAndChannel(tenant,user,"SMS")).thenReturn(Optional.of(consent));
+        var svc=service(mock(JavaMailSender.class),deliveries,customers,outbox,
+                mock(NotificationChannelAdapterRegistry.class),prefs,mock(UserNotificationService.class));
+        assertTrue(svc.sendBusinessNotification(user,tenant,"ORDER_CONFIRMED","customer@example.test","Order","Body"));
+        var captured=org.mockito.ArgumentCaptor.forClass(NotificationDelivery.class);
+        verify(deliveries,times(2)).save(captured.capture());
+        assertTrue(captured.getAllValues().stream().anyMatch(d->"SMS".equals(d.getChannel())));
+        verify(outbox,times(2)).save(any(NotificationOutbox.class));
     }
 
-
-    @Test
-    void scheduledRetryFailureStillClearsTenantContextAndSchedulesNextAttempt() {
-        JavaMailSender sender = mock(JavaMailSender.class);
-        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
-        UUID tenantId = UUID.randomUUID();
-        NotificationDelivery record = failedRecord(tenantId);
-        when(repository.findDistinctTenantIdsForRetry(eq("FAILED"), any()))
-                .thenReturn(java.util.List.of(tenantId));
-        when(repository.findTop50ByTenantIdAndStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(eq(tenantId), eq("FAILED"), any()))
-                .thenReturn(java.util.List.of(record));
-        when(repository.claimFailedDelivery(eq(record.getId()), eq(tenantId), any())).thenReturn(1);
-        when(repository.save(any(NotificationDelivery.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        doThrow(new MailSendException("SMTP temporarily unavailable"))
-                .when(sender).send(any(SimpleMailMessage.class));
-
-        new NotificationService(sender, repository, "no-reply@example.test", "http://localhost:3000")
-                .retryFailedDeliveries();
-
-        assertEquals("FAILED", record.getStatus());
-        assertEquals(2, record.getAttemptCount());
-        assertNotNull(record.getNextAttemptAt());
-        assertThrows(IllegalStateException.class,
-                com.saumyasolar.security.TenantExecutionContext::requireTenantId);
+    @Test void failedAdapterAttemptPersistsBackoffAndNeverLogsProviderException() throws Exception {
+        var deliveries=mock(NotificationDeliveryRepository.class);var adapters=mock(NotificationChannelAdapterRegistry.class);
+        UUID tenant=UUID.randomUUID(),id=UUID.randomUUID();var delivery=new NotificationDelivery();
+        delivery.setId(id);delivery.setTenantId(tenant);delivery.setChannel("EMAIL");delivery.setStatus("PENDING");delivery.setAttemptCount(0);
+        when(deliveries.claimPendingDelivery(eq(id),eq(tenant),any(),any())).thenReturn(1);
+        when(deliveries.findByIdAndTenantId(id,tenant)).thenReturn(Optional.of(delivery));
+        doThrow(new IllegalStateException("secret and PII must not leak")).when(adapters).dispatch(delivery);
+        service(mock(JavaMailSender.class),deliveries,null,mock(NotificationOutboxRepository.class),adapters,
+                mock(NotificationPreferenceRepository.class),null).processOutboxDelivery(id,tenant);
+        assertEquals("FAILED",delivery.getStatus());assertEquals(1,delivery.getAttemptCount());
+        assertNotNull(delivery.getNextAttemptAt());assertEquals("Notification provider delivery failed",delivery.getLastError());
     }
 
-    private static NotificationDelivery failedRecord(UUID tenantId) {
-        NotificationDelivery record = new NotificationDelivery();
-        record.setId(UUID.randomUUID());
-        record.setTenantId(tenantId);
-        record.setUserId(UUID.randomUUID());
-        record.setChannel("EMAIL");
-        record.setRecipient("customer@example.test");
-        record.setSubject("Retry test");
-        record.setMessageBody(tenantId.toString());
-        record.setStatus("FAILED");
-        record.setAttemptCount(1);
-        record.setNextAttemptAt(Instant.now().minusSeconds(5));
-        return record;
+    @Test void securityRecoveryEmailUsesOnlyConfiguredLocalSmtpSink() {
+        var mail=mock(JavaMailSender.class);var deliveries=mock(NotificationDeliveryRepository.class);
+        when(deliveries.save(any())).thenAnswer(inv->inv.getArgument(0));
+        assertTrue(new NotificationService(mail,deliveries,"no-reply@saumya.local","http://localhost:3000")
+                .sendPasswordReset(UUID.randomUUID(),UUID.randomUUID(),"user@example.test","User","one-time-token"));
+        verify(mail).send(any(SimpleMailMessage.class));
     }
-
-    @Test
-    void scheduledRetrySkipsDeliveryClaimedByAnotherWorker() {
-        JavaMailSender sender = mock(JavaMailSender.class);
-        NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
-        NotificationDelivery record = new NotificationDelivery();
-        record.setId(UUID.randomUUID());
-        record.setTenantId(UUID.randomUUID());
-        record.setChannel("EMAIL");
-        record.setRecipient("customer@example.test");
-        record.setSubject("Concurrent retry");
-        record.setMessageBody("Retry body");
-        record.setStatus("FAILED");
-        record.setAttemptCount(1);
-        record.setNextAttemptAt(Instant.now().minusSeconds(5));
-        when(repository.findDistinctTenantIdsForRetry(eq("FAILED"), any()))
-                .thenReturn(java.util.List.of(record.getTenantId()));
-        when(repository.findTop50ByTenantIdAndStatusAndNextAttemptAtBeforeOrderByCreatedAtAsc(eq(record.getTenantId()), eq("FAILED"), any()))
-                .thenReturn(java.util.List.of(record));
-        when(repository.claimFailedDelivery(eq(record.getId()), eq(record.getTenantId()), any())).thenReturn(0);
-
-        new NotificationService(sender, repository, "no-reply@example.test", "http://localhost:3000")
-                .retryFailedDeliveries();
-
-        verifyNoInteractions(sender);
-        verify(repository, never()).save(any(NotificationDelivery.class));
+    @Test void fifthFailedProviderAttemptMovesDeliveryToDeadLetter() throws Exception {
+        var deliveries=mock(NotificationDeliveryRepository.class);var adapters=mock(NotificationChannelAdapterRegistry.class);
+        UUID tenant=UUID.randomUUID(),id=UUID.randomUUID();var delivery=new NotificationDelivery();
+        delivery.setId(id);delivery.setTenantId(tenant);delivery.setChannel("SMS");delivery.setStatus("PENDING");delivery.setAttemptCount(4);
+        when(deliveries.claimPendingDelivery(eq(id),eq(tenant),any(),any())).thenReturn(1);
+        when(deliveries.findByIdAndTenantId(id,tenant)).thenReturn(Optional.of(delivery));
+        doThrow(new IllegalStateException("transient")).when(adapters).dispatch(delivery);
+        service(mock(JavaMailSender.class),deliveries,null,mock(NotificationOutboxRepository.class),adapters,
+                mock(NotificationPreferenceRepository.class),null).processOutboxDelivery(id,tenant);
+        assertEquals("DEAD_LETTER",delivery.getStatus());assertEquals(5,delivery.getAttemptCount());
+        assertNull(delivery.getNextAttemptAt());
     }
 
 }
