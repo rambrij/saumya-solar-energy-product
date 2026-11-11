@@ -177,6 +177,7 @@ public class PaymentGatewayCheckoutService {
         if ("VENDOR".equals(actor.accountType())) {
             if (actor.permissions() == null || !actor.permissions().contains("PAYMENT_RECORD"))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Finance permission required");
+            entitlements.assertBranchAccess(invoice.getBranchId(), actor);
             return;
         }
         if (!"CUSTOMER".equals(actor.accountType())) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
