@@ -1521,7 +1521,7 @@ class Release12TenantIntegrationTest {
         byte[] ownerBytes = ownerDownload.getResponse().getContentAsByteArray();
         assertTrue(ownerBytes.length > 0, "The owner must receive the completed private export bytes");
         String expectedContentType = switch (format) {
-            case "CSV" -> "text/csv";
+            case "CSV" -> "text/csv;charset=UTF-8";
             case "XLSX" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
             case "PDF" -> "application/pdf";
             default -> throw new AssertionError("Unexpected export format: " + format);
