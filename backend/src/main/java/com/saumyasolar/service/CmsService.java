@@ -12,6 +12,7 @@ import com.saumyasolar.security.Principal;
 import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -274,7 +275,7 @@ public class CmsService {
     private void validateInput(ContentInput input) {
         if (input == null || input.title() == null || input.title().isBlank() || input.title().length() > 180
                 || input.body() == null || input.body().isBlank() || input.body().length() > 100000
-                || input.body().matches("(?is).*<\\s*(script|iframe|object|embed|style|form)\\b.*")
+                || input.body().matches("(?is).*<[^>]+>.*")
                 || (input.seoTitle() != null && input.seoTitle().length() > 180)
                 || (input.seoDescription() != null && input.seoDescription().length() > 320))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "CMS content fields are invalid");
