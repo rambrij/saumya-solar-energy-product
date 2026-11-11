@@ -225,7 +225,7 @@ This section supersedes the initial audit's statement that Phase 6 runtime work 
 - **Preferences and consent:** per-user/per-channel preferences are persisted and exposed through the existing preference API. SMS and WhatsApp require an explicit enabled preference and consent record; absent consent suppresses delivery. Withdrawing consent also disables that channel from the frontend.
 - **Monitoring and frontend:** existing tenant-scoped delivery, outbox and integration-job monitoring APIs are retained. The existing Notifications workspace displays inbox, per-channel preferences, delivery attempts and outbox/integration status; its consent action was corrected to disable a channel on withdrawal.
 - **Inbox transaction boundary:** the in-app notification projection now joins the business transaction rather than committing independently in a `REQUIRES_NEW` transaction.
-- **Migrations:** V12 adds outbox, preference and provider-event tables and expands delivery states; V13 adds the provider-accepted `SENT` state. The release validation workflow now applies V13 in its MySQL 8.4 migration job.
+- **Migrations:** V12 adds outbox, preference and provider-event tables and expands delivery states; V13 adds the provider-accepted `SENT` state; V14 enforces tenant-matched composite foreign keys from outbox/provider events to delivery rows. The release validation workflow now applies V13 in its MySQL 8.4 migration job.
 
 ### Verification artifacts added/updated
 
