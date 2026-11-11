@@ -17,8 +17,7 @@ import java.math.BigDecimal;
 @Setter
 @NoArgsConstructor
 public class Tenant {
-    @Id
-    UUID id;
+    @Id UUID id;
     String name;
     String slug;
     String displayName;
@@ -31,34 +30,27 @@ public class Tenant {
     String supportPhone;
     String status;
     BigDecimal discountApprovalThreshold = BigDecimal.TEN;
-    @Column(name = "created_at")
-    Instant createdAt;
-    @Column(name = "updated_at")
-    Instant updatedAt;
+    @Column(name = "created_at") Instant createdAt;
+    @Column(name = "updated_at") Instant updatedAt;
     String gstin;
     String invoicePrefix = "INV";
     Integer serviceReopenDays;
-    
-    /**
-     * Keep newly-created tenants valid even when callers do not provide optional branding fields. Hibernate includes
-     * null-valued properties in INSERT statements, so database DEFAULT clauses alone are insufficient.
-     */
+    Instant verifiedAt;
+    UUID verifiedBy;
+    Instant activatedAt;
+    UUID activatedBy;
+    Instant suspendedAt;
+    UUID suspendedBy;
+    Instant closedAt;
+    UUID closedBy;
+    @Column(length = 500) String lifecycleReason;
+
     @PrePersist
     void applyDefaults() {
-        if (displayName == null || displayName.isBlank()) {
-            displayName = name;
-        }
-        if (primaryColor == null || primaryColor.isBlank()) {
-            primaryColor = "#0B6B4B";
-        }
-        if (secondaryColor == null || secondaryColor.isBlank()) {
-            secondaryColor = "#F6C85F";
-        }
-        if (discountApprovalThreshold == null) {
-            discountApprovalThreshold = BigDecimal.TEN;
-        }
-        if (invoicePrefix == null || invoicePrefix.isBlank()) {
-            invoicePrefix = "INV";
-        }
+        if (displayName == null || displayName.isBlank()) displayName = name;
+        if (primaryColor == null || primaryColor.isBlank()) primaryColor = "#0B6B4B";
+        if (secondaryColor == null || secondaryColor.isBlank()) secondaryColor = "#F6C85F";
+        if (discountApprovalThreshold == null) discountApprovalThreshold = BigDecimal.TEN;
+        if (invoicePrefix == null || invoicePrefix.isBlank()) invoicePrefix = "INV";
     }
 }

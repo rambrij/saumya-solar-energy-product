@@ -1,12 +1,21 @@
 name: Release 1-4 and Phase 2 tenant-isolation validation (final verification)
 
+concurrency:
+  group: phase5-release-validation-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
       - audit/phase-2-implementation-gap-analysis
+      - audit/phase-3-implementation-gap-analysis
+      - audit/phase-4-finance-provider-impl
+      - audit/phase-6-notifications-integrations
   pull_request:
     branches:
       - audit/phase-2-implementation-gap-analysis
+      - audit/phase-3-implementation-gap-analysis
+      - audit/phase-6-notifications-integrations
 
 permissions:
   contents: read
@@ -99,8 +108,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Install MySQL client
-        run: sudo apt-get update && sudo apt-get install -y default-mysql-client
+      - name: Use MySQL client from the MySQL 8.4 service container
+        shell: bash
+        run: |
+          MYSQL_CONTAINER="$(docker ps --filter 'ancestor=mysql:8.4' --format '{{.ID}}' | head -n 1)"
+          test -n "$MYSQL_CONTAINER"
+          echo "MYSQL_SERVICE_CONTAINER=$MYSQL_CONTAINER" >> "$GITHUB_ENV"
+          cat > /usr/local/bin/mysql <<'MYSQL_WRAPPER'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec docker exec -i "$MYSQL_SERVICE_CONTAINER" mysql --default-character-set=utf8mb4 --local-infile=1 "$@"
+          MYSQL_WRAPPER
+          chmod +x /usr/local/bin/mysql
       - name: Restore historical migrations for equivalence validation
         run: |
           mkdir -p /tmp/historical-source
@@ -109,17 +128,60 @@ jobs:
       - name: Enforce clean-install baseline structure
         run: |
           BASELINE=backend/src/main/resources/db/migration/V1__baseline.sql
-          test "$(find backend/src/main/resources/db/migration -maxdepth 1 -type f -name 'V*.sql' | wc -l)" = "1"
+          test "$(find backend/src/main/resources/db/migration -maxdepth 1 -type f -name 'V*.sql' | wc -l)" = "14"
           test "$(grep -Eic '^[[:space:]]*CREATE[[:space:]]+TABLE[[:space:]]' "$BASELINE")" = "74"
           if grep -Eiq '^[[:space:]]*ALTER[[:space:]]+TABLE[[:space:]]|^[[:space:]]*CREATE[[:space:]]+(UNIQUE[[:space:]]+)?INDEX[[:space:]]' "$BASELINE"; then
             echo "Baseline must declare all columns and indexes inside CREATE TABLE statements."
             exit 1
           fi
-          echo "PASS: one baseline, 74 table definitions, no ALTER TABLE or standalone CREATE INDEX."
+          echo "PASS: one V1 baseline plus additive V2 through V14 migrations; baseline retains 74 table definitions."
       - name: Apply V1 schema
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass -e "CREATE DATABASE solar_migration_test"
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V1__complete_release2.sql
+      - name: Validate current V1 plus Phase 3 V2 through V4 migrations on clean MySQL 8.4 schema
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass -e "CREATE DATABASE phase3_clean_install"
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V1__baseline.sql
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V2__phase3_reservation_expiry.sql
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V3__phase3_order_policy_and_tenant_lifecycle.sql
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -e "INSERT INTO tenant(id,name,slug,status) VALUES(UUID_TO_BIN(UUID()),'Phase 3 grant fixture','phase3-grant-fixture','ACTIVE'); SET @phase3_tenant_id=(SELECT id FROM tenant WHERE slug='phase3-grant-fixture'); INSERT INTO role(id,tenant_id,name) VALUES(UUID_TO_BIN(UUID()),@phase3_tenant_id,'VENDOR_ADMIN');"
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V4__phase3_order_policy_permission_grant.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='phase3_clean_install' AND table_name='inventory_reservation' AND column_name IN ('expires_at','released_at','release_reason','pre_reservation_order_status','released_by')")" = "5"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='phase3_clean_install' AND table_name='tenant' AND column_name IN ('verified_at','verified_by','activated_at','activated_by','suspended_at','suspended_by','closed_at','closed_by','lifecycle_reason')")" = "9"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM order_transition_policy WHERE tenant_id IS NULL")" = "36"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM permission WHERE code='ORDER_POLICY_MANAGE'")" = "1"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM role_permission rp JOIN role r ON r.id=rp.role_id JOIN permission p ON p.id=rp.permission_id WHERE r.name='VENDOR_ADMIN' AND r.tenant_id=(SELECT id FROM tenant WHERE slug='phase3-grant-fixture') AND p.code='ORDER_POLICY_MANAGE'")" = "1"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema='phase3_clean_install' AND trigger_name IN ('trg_order_status_history_no_update','trg_order_status_history_no_delete')")" = "2"
+
+      - name: Apply Phase 4 V5 finance/provider migration to clean Phase 3 install
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V5__phase4_finance_provider_reconciliation.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='phase3_clean_install' AND table_name IN ('payment_reconciliation_report','payment_reconciliation_line')")" = "2"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='phase3_clean_install' AND table_name='payment_webhook_event' AND column_name IN ('tenant_id','provider_reference','provider_refund_reference','event_type')")" = "4"
+
+      - name: Apply Phase 5 V6-V11 CMS, inbox, analytics and platform settings migrations
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V6__phase5_cms_content_revisions.sql
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V7__phase5_user_notification_inbox.sql
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V8__phase5_notification_view_permission.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='phase3_clean_install' AND table_name IN ('cms_content','cms_content_revision','user_notification')")" = "3"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM permission WHERE code='NOTIFICATION_VIEW'")" = "1"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM role_permission rp JOIN role r ON r.id=rp.role_id JOIN permission p ON p.id=rp.permission_id WHERE p.code='NOTIFICATION_VIEW' AND r.name='VENDOR_ADMIN'")" = "1"
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V9__phase5_platform_analytics_indexes.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema='phase3_clean_install' AND index_name IN ('ix_customer_order_created_at','ix_tenant_subscription_status')")" = "2"
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V10__phase5_typed_platform_settings.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='phase3_clean_install' AND table_name='platform_setting'")" = "1"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='phase3_clean_install' AND table_name='platform_setting' AND column_name IN ('setting_key','value_type','value_text','version','updated_by','updated_at')")" = "6"
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V11__phase5_operational_analytics_indexes.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(DISTINCT index_name) FROM information_schema.statistics WHERE table_schema='phase3_clean_install' AND index_name IN ('ix_installation_tenant_assignee_schedule','ix_service_tenant_assignee_created','ix_invoice_tenant_created','ix_order_tenant_created')")" = "4"
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V12__phase6_notification_outbox_preferences_provider_events.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='phase3_clean_install' AND table_name IN ('notification_outbox','notification_preference','notification_provider_event')")" = "3"
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V13__phase6_provider_accepted_delivery_status.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.check_constraints WHERE constraint_schema='phase3_clean_install' AND constraint_name='chk_notification_delivery_status' AND check_clause LIKE '%SENT%'")" = "1"
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V14__phase6_enforce_tenant_bound_notification_references.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema='phase3_clean_install' AND constraint_name IN ('fk_notification_outbox_delivery_tenant','fk_notification_provider_event_delivery_tenant')")" = "2"
+
       - name: Verify additive V2 permission migration
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -e "INSERT INTO tenant(id,name,slug,status) VALUES(UUID_TO_BIN(UUID()),'Migration tenant','migration-tenant','ACTIVE'); SET @tenant_id=(SELECT id FROM tenant WHERE slug='migration-tenant'); INSERT INTO role(id,tenant_id,name) VALUES(UUID_TO_BIN(UUID()),@tenant_id,'VENDOR_ADMIN');"
@@ -460,10 +522,11 @@ jobs:
         working-directory: backend
         run: mvn --batch-mode --no-transfer-progress clean package -DskipTests
       - name: Configure disposable MySQL for legacy trigger migrations
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y default-mysql-client
-          mysql --connect-timeout=15 --host=127.0.0.1 --port=3306 --user=root --password=rootpass \
+          MYSQL_CONTAINER="$(docker ps --filter 'ancestor=mysql:8.4' --format '{{.ID}}' | head -n 1)"
+          test -n "$MYSQL_CONTAINER"
+          docker exec "$MYSQL_CONTAINER" mysql --connect-timeout=15 --user=root --password=rootpass \
             -e "SET GLOBAL log_bin_trust_function_creators = 1"
       - name: Run concurrent SLA, warranty and integration scheduler tests on MySQL 8.4
         working-directory: backend
@@ -487,10 +550,11 @@ jobs:
           DB_PASSWORD: solarpass
           JWT_SECRET: ci-only-secret-with-at-least-sixty-four-characters-for-hmac-sha256-signing-key
           CORS_ORIGINS: http://localhost:5173
-          MAIL_HOST: 127.0.0.1
-          MAIL_PORT: 1025
-          MAIL_SMTP_AUTH: 'false'
-          MAIL_SMTP_STARTTLS: 'false'
+          SPRING_MAIL_HOST: 127.0.0.1
+          SPRING_MAIL_PORT: 1025
+          SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: 'false'
+          SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: 'false'
+          MAILPIT_BASE_URL: http://127.0.0.1:8025
           SEED_DATA_ENABLED: 'true'
           PLATFORM_BOOTSTRAP_ENABLED: 'false'
           APP_AUTH_PLATFORM_MFA_ENABLED: 'false'
@@ -530,7 +594,7 @@ jobs:
         run: npm install
       - name: Install Chromium
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       - name: Start React frontend for browser security tests
         working-directory: frontend
         env:

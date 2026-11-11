@@ -52,6 +52,8 @@ public class FinanceService {
     private IntegrationManagementService integrationManagement;
     @Autowired(required = false)
     private EnterpriseSaasService enterpriseSaas;
+    @Autowired(required = false)
+    private PaymentGatewayRegistry paymentGateways;
     
     public FinanceService(
             InvoiceRepository invoices,
@@ -438,8 +440,8 @@ public class FinanceService {
         BigDecimal total = BigDecimal.ZERO;
         for (Payment payment : payments.findByTenantIdAndInvoiceId(tenant, invoiceId)) {
             if ("CONFIRMED".equals(payment.getStatus())) total = total.add(payment.getAmount());
-            else if ("PARTIALLY_REFUNDED".equals(payment.getStatus())) {
-                BigDecimal refunded = refunds.findByTenantIdAndPaymentId(tenant, payment.getId()).stream().filter(r -> "RECORDED".equals(r.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            else if (Set.of("PARTIALLY_REFUNDED", "REFUNDED").contains(payment.getStatus())) {
+                BigDecimal refunded = refunds.findByTenantIdAndPaymentId(tenant, payment.getId()).stream().filter(r -> Set.of("RECORDED", "PROCESSED").contains(r.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
                 total = total.add(payment.getAmount().subtract(refunded));
             }
         }
@@ -485,11 +487,60 @@ public class FinanceService {
         permission(p, "PAYMENT_REFUND");
         if (x.amount() == null || x.amount().signum() <= 0 || x.reason() == null || x.reason().isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A positive refund amount and reason are required");
-        Payment pay = payments.findForUpdate(x.paymentId(), p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+        Payment pay = payments.findForUpdate(x.paymentId(), p.tenantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
         assertInvoiceBranchAccess(invoice(pay.getInvoiceId(), p.tenantId()), p);
+        List<Refund> prior = refunds.findByTenantIdAndPaymentId(p.tenantId(), pay.getId());
+        if ("GATEWAY".equals(pay.getSource())) {
+            if (paymentGateways == null)
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Payment gateway adapter is not configured");
+            if (x.idempotencyKey() == null || !x.idempotencyKey().matches("[A-Za-z0-9._:-]{8,160}"))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A valid Idempotency-Key is required for provider refunds");
+            Optional<Refund> previous = refunds.findByTenantIdAndPaymentIdAndIdempotencyKey(p.tenantId(), pay.getId(), x.idempotencyKey());
+            if (previous.isPresent()) {
+                Refund existing = previous.get();
+                if (!existing.getPaymentId().equals(pay.getId()) || existing.getAmount().compareTo(x.amount()) != 0
+                        || !existing.getReason().equals(x.reason().trim()))
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency-Key was already used for another refund");
+                return existing;
+            }
+            if (!Set.of("CONFIRMED", "PARTIALLY_REFUNDED").contains(pay.getStatus()))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Only captured payments can be refunded");
+            BigDecimal reserved = prior.stream().filter(r -> Set.of("RECORDED", "PENDING", "PROCESSED").contains(r.getStatus()))
+                    .map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (reserved.add(x.amount()).compareTo(pay.getAmount()) > 0)
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Refund exceeds the unrefunded payment amount");
+            PaymentGatewayAdapter.GatewayRefund gatewayRefund;
+            try {
+                gatewayRefund = paymentGateways.require(pay.getProvider())
+                        .refund(pay.getProviderReference(), x.amount(), x.idempotencyKey(), x.reason().trim());
+            } catch (Exception ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Payment provider could not initiate refund");
+            }
+            if (gatewayRefund == null || gatewayRefund.providerRefundReference() == null
+                    || gatewayRefund.providerRefundReference().isBlank())
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Payment provider returned an invalid refund reference");
+            Refund saved = new Refund();
+            saved.setId(UUID.randomUUID());
+            saved.setTenantId(p.tenantId());
+            saved.setPaymentId(pay.getId());
+            saved.setAmount(x.amount());
+            saved.setReason(x.reason().trim());
+            saved.setStatus("PENDING");
+            saved.setRecordedBy(p.userId());
+            saved.setProvider(pay.getProvider());
+            saved.setProviderRefundReference(gatewayRefund.providerRefundReference());
+            saved.setIdempotencyKey(x.idempotencyKey());
+            saved.setCreatedAt(Instant.now());
+            Refund result = refunds.save(saved);
+            accountingEvent("REFUND", result.getId().toString(), "UPSERT",
+                    Map.of("paymentId", pay.getId().toString(), "amount", result.getAmount(), "status", result.getStatus()), p);
+            return result;
+        }
         if (!"MANUAL".equals(pay.getSource()))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Gateway refunds require a configured provider refund adapter; no gateway is configured");
-        BigDecimal refunded = refunds.findByTenantIdAndPaymentId(p.tenantId(), pay.getId()).stream().filter(r -> "RECORDED".equals(r.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Unsupported payment source for refund");
+        BigDecimal refunded = prior.stream().filter(r -> "RECORDED".equals(r.getStatus()))
+                .map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         if (refunded.add(x.amount()).compareTo(pay.getAmount()) > 0)
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Refund exceeds the unrefunded payment amount");
         Refund r = new Refund();
@@ -508,10 +559,11 @@ public class FinanceService {
         BigDecimal net = netPaid(p.tenantId(), invoice.getId());
         invoice.setStatus(net.compareTo(invoice.getGrandTotal()) >= 0 ? "PAID" : net.signum() > 0 ? "PARTIALLY_PAID" : "ISSUED");
         invoices.save(invoice);
-        accountingEvent("REFUND", saved.getId().toString(), "UPSERT", Map.of("paymentId", pay.getId().toString(), "amount", saved.getAmount(), "status", saved.getStatus()), p);
+        accountingEvent("REFUND", saved.getId().toString(), "UPSERT",
+                Map.of("paymentId", pay.getId().toString(), "amount", saved.getAmount(), "status", saved.getStatus()), p);
         return saved;
     }
-    
+
     private boolean validSignature(String raw, String signature) {
         if (webhookSecret == null || webhookSecret.isBlank() || signature == null) return false;
         try {
@@ -528,42 +580,54 @@ public class FinanceService {
     public Map<String, Object> webhook(String provider, String raw, String signature, WebhookEvent event) {
         if (!validSignature(raw, signature))
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid payment webhook signature");
+        if (event == null || event.eventId() == null || event.eventId().isBlank()
+                || event.paymentReference() == null || event.paymentReference().isBlank()
+                || event.amount() == null || event.amount().signum() <= 0)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid payment webhook payload");
         String key = provider.toUpperCase(Locale.ROOT);
-        var duplicate = webhookEvents.findByProviderAndEventId(key, event.eventId());
+        Payment matched = payments.findByProviderAndProviderReference(key, event.paymentReference()).orElse(null);
+        if (matched == null) return Map.of("accepted", false, "matched", false, "retryable", true);
+        Payment pay = payments.findForUpdate(matched.getId(), matched.getTenantId()).orElse(null);
+        if (pay == null || !key.equalsIgnoreCase(pay.getProvider()) || !event.paymentReference().equals(pay.getProviderReference()))
+            return Map.of("accepted", false, "matched", false, "retryable", true);
+        if (pay.getAmount().compareTo(event.amount()) != 0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Webhook amount does not match the recorded provider payment");
+        var duplicate = webhookEvents.findByTenantIdAndProviderAndEventId(pay.getTenantId(), key, event.eventId());
         if (duplicate.isPresent()) return Map.of("accepted", true, "duplicate", true);
         PaymentWebhookEvent record = new PaymentWebhookEvent();
         record.setId(UUID.randomUUID());
+        record.setTenantId(pay.getTenantId());
         record.setProvider(key);
+        record.setProviderReference(event.paymentReference());
         record.setEventId(event.eventId());
         record.setPayloadHash(HexFormat.of().formatHex(hash(raw)));
         record.setProcessingStatus("RECEIVED");
+        record.setEventType(event.status());
         record.setReceivedAt(Instant.now());
         webhookEvents.saveAndFlush(record);
-        Payment pay = payments.findByProviderAndProviderReference(key, event.paymentReference()).orElse(null);
-        if (pay == null) {
-            record.setProcessingStatus("UNMATCHED");
-            record.setProcessedAt(Instant.now());
-            webhookEvents.save(record);
-            return Map.of("accepted", true, "matched", false);
+        if ("SUCCEEDED".equals(event.status())) {
+            pay.setStatus("CONFIRMED");
+            pay.setPaidAt(Instant.now());
+        } else if ("FAILED".equals(event.status()) && "PENDING".equals(pay.getStatus())) {
+            pay.setStatus("FAILED");
         }
-        if (pay.getAmount().compareTo(event.amount()) != 0)
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Webhook amount does not match the recorded provider payment");
-        if ("SUCCEEDED".equals(event.status())) pay.setStatus("CONFIRMED");
-        else if ("FAILED".equals(event.status()) && "PENDING".equals(pay.getStatus())) pay.setStatus("FAILED");
         payments.save(pay);
-        accountingEvent("PAYMENT", pay.getId().toString(), "UPSERT", Map.of("invoiceId", pay.getInvoiceId().toString(), "amount", pay.getAmount(), "currency", pay.getCurrency(), "status", pay.getStatus()), new Principal(null, pay.getTenantId(), "system@saumya.internal", "SYSTEM", Set.of(), Set.of(), 0));
+        accountingEvent("PAYMENT", pay.getId().toString(), "UPSERT",
+                Map.of("invoiceId", pay.getInvoiceId().toString(), "amount", pay.getAmount(),
+                        "currency", pay.getCurrency(), "status", pay.getStatus()),
+                new Principal(null, pay.getTenantId(), "system@saumya.internal", "SYSTEM", Set.of(), Set.of(), 0));
         Invoice i = invoice(pay.getInvoiceId(), pay.getTenantId());
-        if ("CONFIRMED".equals(pay.getStatus())) {
-            BigDecimal total = payments.findByTenantIdAndInvoiceId(pay.getTenantId(), i.getId()).stream().filter(v -> "CONFIRMED".equals(v.getStatus())).map(Payment::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-            i.setStatus(total.compareTo(i.getGrandTotal()) >= 0 ? "PAID" : "PARTIALLY_PAID");
-            invoices.save(i);
-        }
+        BigDecimal total = payments.findByTenantIdAndInvoiceId(pay.getTenantId(), i.getId()).stream()
+                .filter(v -> Set.of("CONFIRMED", "PARTIALLY_REFUNDED").contains(v.getStatus()))
+                .map(Payment::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        i.setStatus(total.compareTo(i.getGrandTotal()) >= 0 ? "PAID" : total.signum() > 0 ? "PARTIALLY_PAID" : "ISSUED");
+        invoices.save(i);
         record.setProcessingStatus("PROCESSED");
         record.setProcessedAt(Instant.now());
         webhookEvents.save(record);
         return Map.of("accepted", true, "matched", true, "duplicate", false);
     }
-    
+
     private byte[] hash(String raw) {
         try {
             return MessageDigest.getInstance("SHA-256").digest(raw.getBytes(StandardCharsets.UTF_8));
@@ -1034,6 +1098,16 @@ public class FinanceService {
     }
     
     public List<Refund> listRefunds(Principal p) {
+        if ("CUSTOMER".equals(p.accountType())) {
+            CustomerProfile cp = customer(p);
+            Set<UUID> visibleInvoiceIds = listInvoices(p).stream().map(Invoice::getId)
+                    .collect(java.util.stream.Collectors.toSet());
+            Set<UUID> visiblePaymentIds = payments.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream()
+                    .filter(payment -> visibleInvoiceIds.contains(payment.getInvoiceId()))
+                    .map(Payment::getId).collect(java.util.stream.Collectors.toSet());
+            return refunds.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream()
+                    .filter(refund -> visiblePaymentIds.contains(refund.getPaymentId())).toList();
+        }
         financeAccess(p);
         permission(p, "PAYMENT_REFUND");
         List<Refund> rows = refunds.findByTenantIdOrderByCreatedAtDesc(p.tenantId());

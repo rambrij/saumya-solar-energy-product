@@ -1,0 +1,12 @@
+app:
+  messaging:
+    provider: mock
+    mock:
+      enabled: true
+      webhook-secret: test-only-mock-notification-webhook-secret
+  payment:
+    mock:
+      enabled: true
+      signing-secret: test-only-mock-payment-signing-secret-32-chars
+      checkout-outcome: ${MOCK_PAYMENT_CHECKOUT_OUTCOME:PENDING}
+      frontend-base-url: ${MOCK_PAYMENT_FRONTEND_BASE_URL:http://localhost:3000}

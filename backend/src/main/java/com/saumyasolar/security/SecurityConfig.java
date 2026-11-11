@@ -48,9 +48,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(
-                                "/api/v1/auth/**", "/api/v1/public/**", "/api/v1/payment-webhooks/**", "/api/v1/payment-gateway-webhooks/**", "/uploads/**",
+                                "/api/v1/auth/**", "/api/v1/public/**", "/api/v1/payment-webhooks/**", "/api/v1/payment-gateway-webhooks/**", "/api/v1/notification-webhooks/mock", "/uploads/**",
                                 "/actuator/health", "/swagger-ui/**", "/v3/api-docs/**"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/cms/media").hasAuthority("CMS_UPDATE")
                         .anyRequest().authenticated())
                 .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
@@ -86,7 +87,7 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(Arrays.stream(origins.split(","))
                 .map(String::trim).filter(value -> !value.isEmpty()).distinct().toList());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Idempotency-Key", "X-Payment-Signature", "X-CSRF-Token"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Idempotency-Key", "X-Payment-Signature", "X-Mock-Signature", "X-CSRF-Token"));
         configuration.setExposedHeaders(List.of("Location", "Content-Disposition"));
         configuration.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

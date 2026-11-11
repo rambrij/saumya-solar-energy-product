@@ -27,6 +27,16 @@ test('React vendor workspace stays isolated when switching between two tenant ac
     });
     if (!tenantResponse.ok) throw new Error('Tenant fixture creation failed: ' + tenantResponse.status);
     const tenant = await tenantResponse.json();
+    for (const [status, reason] of [
+      ['VERIFIED', 'Browser E2E fixture verification'],
+      ['ACTIVE', 'Browser E2E fixture activation'],
+    ] as const) {
+      const lifecycleResponse = await fetch('/api/v1/tenants/' + tenant.id + '/status', {
+        method: 'PATCH', credentials: 'include', headers,
+        body: JSON.stringify({ status, reason }),
+      });
+      if (!lifecycleResponse.ok) throw new Error('Tenant fixture ' + status + ' transition failed: ' + lifecycleResponse.status);
+    }
     const vendor = await login(emailB, passwordB);
     const vendorHeaders = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + vendor.accessToken, 'X-CSRF-Token': vendor.csrfToken };
     const categoryResponse = await fetch('/api/v1/categories', {

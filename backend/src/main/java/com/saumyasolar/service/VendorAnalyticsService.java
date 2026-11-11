@@ -36,7 +36,7 @@ public class VendorAnalyticsService {
                 || actor.permissions() == null || !actor.permissions().contains("REPORT_VIEW") || !actor.permissions().contains("BRANCH_MANAGE"))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Vendor Admin analytics access required");
         Instant end = to == null ? Instant.now() : to, start = from == null ? end.minus(Duration.ofDays(90)) : from;
-        if (end.isBefore(start) || Duration.between(start, end).toDays() > 366)
+        if (end.isBefore(start) || Duration.between(start, end).compareTo(Duration.ofDays(366)) > 0)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Analytics date range must be valid and no longer than 366 days");
         if (branchId != null)
             branches.findByIdAndTenantId(branchId, actor.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Branch not found"));
@@ -96,6 +96,77 @@ public class VendorAnalyticsService {
         return Map.of("granularity", granularity == null ? "DAY" : granularity.toUpperCase(Locale.ROOT), "items", new ArrayList<>(series.values()));
     }
     
+    public Map<String,Object> operations(Principal actor, Instant from, Instant to, UUID branchId, UUID employeeId) {
+        MapSqlParameterSource p = scope(actor, from, to, branchId, null, null).addValue("employeeId", employeeId);
+        String installationsSql = """
+                SELECT ij.status, COUNT(*) itemCount FROM installation_job ij
+                WHERE ij.tenant_id=:tenantId AND ij.scheduled_at BETWEEN :from AND :to
+                  AND (:branchId IS NULL OR ij.branch_id=:branchId)
+                  AND (:employeeId IS NULL OR ij.assigned_engineer_id=:employeeId)
+                GROUP BY ij.status ORDER BY ij.status
+                """;
+        String servicesSql = """
+                SELECT sr.status, COUNT(*) itemCount FROM service_request sr
+                WHERE sr.tenant_id=:tenantId AND sr.created_at BETWEEN :from AND :to
+                  AND (:branchId IS NULL OR sr.branch_id=:branchId)
+                  AND (:employeeId IS NULL OR sr.assigned_engineer_id=:employeeId)
+                GROUP BY sr.status ORDER BY sr.status
+                """;
+        String stockSql = """
+                SELECT pr.id,pr.sku,pr.name,pr.reorder_level reorderLevel,
+                       COALESCE(SUM(ib.on_hand-ib.reserved-ib.damaged),0) available
+                FROM product pr
+                LEFT JOIN inventory_balance ib ON ib.tenant_id=pr.tenant_id AND ib.product_id=pr.id
+                LEFT JOIN warehouse wh ON wh.tenant_id=ib.tenant_id AND wh.id=ib.warehouse_id
+                WHERE pr.tenant_id=:tenantId AND pr.active=TRUE AND (:branchId IS NULL OR wh.branch_id=:branchId)
+                GROUP BY pr.id,pr.sku,pr.name,pr.reorder_level
+                HAVING available <= pr.reorder_level ORDER BY available ASC,pr.name LIMIT 100
+                """;
+        String employeeSql = """
+                SELECT u.id userId,u.name,
+                       COUNT(DISTINCT ij.id) installationCount,
+                       COUNT(DISTINCT CASE WHEN ij.status IN ('COMPLETED','COMMISSIONED') THEN ij.id END) completedInstallations,
+                       COUNT(DISTINCT sr.id) serviceTicketCount,
+                       COUNT(DISTINCT CASE WHEN sr.status IN ('RESOLVED','CUSTOMER_CONFIRMED','CLOSED') THEN sr.id END) resolvedTickets
+                FROM app_user u
+                LEFT JOIN installation_job ij ON ij.tenant_id=u.tenant_id AND ij.assigned_engineer_id=u.id
+                  AND ij.scheduled_at BETWEEN :from AND :to AND (:branchId IS NULL OR ij.branch_id=:branchId)
+                LEFT JOIN service_request sr ON sr.tenant_id=u.tenant_id AND sr.assigned_engineer_id=u.id
+                  AND sr.created_at BETWEEN :from AND :to AND (:branchId IS NULL OR sr.branch_id=:branchId)
+                WHERE u.tenant_id=:tenantId AND u.enabled=TRUE AND (:employeeId IS NULL OR u.id=:employeeId)
+                GROUP BY u.id,u.name ORDER BY completedInstallations DESC,u.name LIMIT 100
+                """;
+        String outstandingSql = """
+                SELECT i.id,i.invoice_number invoiceNumber,i.customer_name customerName,i.grand_total grandTotal,
+                       COALESCE(pay.received,0)-COALESCE(pay.refunded,0) paidAmount,
+                       GREATEST(i.grand_total-(COALESCE(pay.received,0)-COALESCE(pay.refunded,0)),0) outstandingAmount
+                FROM invoice i
+                LEFT JOIN (
+                  SELECT p.tenant_id,p.invoice_id,
+                    SUM(CASE WHEN p.status IN ('CONFIRMED','SUCCEEDED','PAID','PARTIALLY_REFUNDED','REFUNDED') THEN p.amount ELSE 0 END) received,
+                    SUM(CASE WHEN p.status IN ('CONFIRMED','SUCCEEDED','PAID','PARTIALLY_REFUNDED','REFUNDED') THEN COALESCE(r.refunded,0) ELSE 0 END) refunded
+                  FROM payment p
+                  LEFT JOIN (SELECT tenant_id,payment_id,SUM(amount) refunded FROM payment_refund WHERE status='RECORDED' GROUP BY tenant_id,payment_id) r
+                    ON r.tenant_id=p.tenant_id AND r.payment_id=p.id
+                  WHERE p.tenant_id=:tenantId GROUP BY p.tenant_id,p.invoice_id
+                ) pay ON pay.tenant_id=i.tenant_id AND pay.invoice_id=i.id
+                WHERE i.tenant_id=:tenantId AND i.created_at BETWEEN :from AND :to
+                  AND (:branchId IS NULL OR i.branch_id=:branchId)
+                  AND GREATEST(i.grand_total-(COALESCE(pay.received,0)-COALESCE(pay.refunded,0)),0)>0
+                ORDER BY outstandingAmount DESC,i.created_at DESC LIMIT 100
+                """;
+        Map<String,Object> result = new LinkedHashMap<>();
+        result.put("installationsByStatus", jdbc.queryForList(installationsSql,p));
+        result.put("serviceTicketsByStatus", jdbc.queryForList(servicesSql,p));
+        result.put("lowStockProducts", jdbc.queryForList(stockSql,p));
+        result.put("employeePerformance", jdbc.queryForList(employeeSql,p));
+        result.put("outstandingInvoices", jdbc.queryForList(outstandingSql,p));
+        result.put("from",p.getValue("from")); result.put("to",p.getValue("to"));
+        result.put("branchId",branchId); result.put("employeeId",employeeId);
+        result.put("scope","TENANT_SCOPED");
+        return result;
+    }
+
     private void mergeTrend(
             TreeMap<String, Map<String, Object>> series,
             String sql,

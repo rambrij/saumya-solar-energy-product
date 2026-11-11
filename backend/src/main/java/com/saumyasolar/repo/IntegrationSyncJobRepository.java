@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 public interface IntegrationSyncJobRepository extends JpaRepository<IntegrationSyncJob, UUID> {
+    List<IntegrationSyncJob> findTop100ByTenantIdOrderByCreatedAtDesc(UUID tenantId);
     List<IntegrationSyncJob> findTop100ByTenantIdAndConnectionIdOrderByCreatedAtDesc(UUID tenantId, UUID connectionId);
     
     List<IntegrationSyncJob> findTop50ByTenantIdAndStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(

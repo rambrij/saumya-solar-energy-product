@@ -43,7 +43,7 @@ public class AuthLifecycleService {
             "PAYMENT_VIEW", "PAYMENT_RECORD", "PAYMENT_REFUND",
             "SERVICE_VIEW", "SERVICE_CREATE", "SERVICE_ASSIGN", "SERVICE_UPDATE",
             "SERVICE_RESOLVE", "SERVICE_CLOSE", "REPORT_VIEW", "REPORT_EXPORT",
-            "CMS_VIEW", "CMS_CREATE", "CMS_UPDATE", "CMS_PUBLISH", "AUDIT_VIEW"
+            "CMS_VIEW", "CMS_CREATE", "CMS_UPDATE", "CMS_PUBLISH", "AUDIT_VIEW", "NOTIFICATION_VIEW"
     );
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private EnterpriseSaasService enterpriseSaas;
@@ -331,7 +331,7 @@ public class AuthLifecycleService {
         tenant.setId(UUID.randomUUID());
         tenant.setName(name.trim());
         tenant.setSlug(slug);
-        tenant.setStatus("ACTIVE");
+        tenant.setStatus("PENDING");
         tenant.setCreatedAt(Instant.now());
         tenant.setUpdatedAt(Instant.now());
         tenants.save(tenant);
