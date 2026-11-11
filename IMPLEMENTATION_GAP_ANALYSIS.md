@@ -1992,3 +1992,40 @@ The Phase 4 delivery requested for this branch is a deterministic, profile-gated
 No runtime Phase 4 feature is marked complete by this inspection. The code-level state above is confirmed from source, but this session did not have a working local clone/command environment to safely edit and execute the application test suites. Documentation and CI-branch wiring are the only changes committed so far.
 
 **Real-provider integration:** pending provider selection. **Mock adapter:** not yet complete. Do not use the acceptance wording "adapter and mock complete" until the mock lifecycle and its tests are implemented and verified.
+
+
+---
+
+## Phase 4 finance/provider implementation — current delivery
+
+**Branch:** `audit/phase-4-finance-provider-impl`  
+**Scope:** deterministic mock provider only; no live gateway or credentials.
+
+| Gap | Implementation delivered | Status |
+|---|---|---|
+| Mock adapter/configuration | `MockPaymentGatewayAdapter` registered by the existing registry; explicit `app.payment.mock.enabled`, checkout outcome, HMAC secret and frontend return URL. Adapter and simulators are profile-gated to dev/test and conditional on explicit enablement. | Implemented |
+| Checkout lifecycle | Tenant/idempotency-derived mock provider reference; success/failure/pending/cancelled outcomes; persisted provider-neutral payment remains PENDING until a signed event is accepted; localhost HTTP is allowed only for the dev/test mock return URL. | Implemented |
+| Webhook lifecycle | Tenant metadata is required inside the signed payload; HMAC-SHA256 verification; tenant/provider/event idempotency; payment capture/failure/cancellation and refund processed/failed events; event type, provider reference, tenant and payload hash are persisted. Unmatched and amount/currency/refund mismatches are not marked processed or consumed. | Implemented |
+| Provider refunds | Existing PAYMENT_REFUND, tenant lock, branch access, captured-payment, reason and outstanding-balance checks remain authoritative. Provider initiation requires an Idempotency-Key and creates a PENDING refund; only a verified provider refund event moves it to PROCESSED/FAILED. No maker-checker threshold was invented. | Implemented |
+| Settlement reconciliation | Tenant-owned report and line records; creator identity; payload hash and report-reference replay protection; MATCHED, MISSING_PAYMENT, AMOUNT_MISMATCH, CURRENCY_MISMATCH, DUPLICATE and PAYMENT_NOT_CAPTURED outcomes. Dev/test fixture emits deliberate mismatch rows. | Implemented |
+| Frontend | Customer checkout-result view loads payment state from authenticated APIs, never from redirect query parameters; customer and finance views show refund status; finance provider-refund action supplies an idempotency key. | Implemented |
+| GST/invoice numbering | Existing invoice tax snapshots and tenant/fiscal-year locked sequence retained. No unapproved GST rates, place-of-supply, reverse-charge, IRN/e-invoice or statutory series were invented. | Approval-dependent; unchanged |
+| Real payment provider | No real SDK, credentials, API calls or provider-specific finance logic introduced. | **pending provider selection; adapter and mock complete** |
+
+### Phase 4 schema
+
+Added `V5__phase4_finance_provider_reconciliation.sql` after the existing Phase 3 migrations. The V1 baseline remains unchanged. V5 allows pending payments to have a null `paid_at`, makes webhook event identity tenant-scoped and stores event type/provider references, adds provider-refund state/idempotency fields, and creates tenant-scoped reconciliation report/line tables with composite tenant foreign keys.
+
+### Phase 4 tests added
+
+- `MockPaymentGatewayAdapterTest`: deterministic checkout references/outcomes, HMAC signatures, tenant metadata, payment and refund status transitions, dev/test profile boundary.
+- `PaymentGatewayCheckoutServiceTest`: configured mock selection without a tenant live-provider connection.
+- `PaymentGatewayWebhookServiceTest`: signature rejection, tenant-bound capture, duplicate replay, cross-tenant reference rejection, amount mismatch, refund processing and invoice balance recalculation.
+- `PaymentReconciliationServiceTest`: matched/missing/amount/currency/duplicate classification, report replay and conflicting report-reference rejection.
+- `customer-portal-copy.test.ts`: redirect is not proof of payment; authenticated payment status and customer refund visibility.
+- Finance panel static regression coverage: provider refund idempotency header and refund-state visibility.
+- Existing unmatched-webhook regression expectation updated: unmatched signed events remain retryable and do not consume an event key.
+
+### Verification
+
+The Phase 4 GitHub Actions workflow validates frontend typecheck/build, MySQL 8.4 migrations including V5, Spring Boot startup/schema validation and backend tests. The latest revision's workflow is still pending; do not mark the branch release-ready until that exact head SHA passes all jobs.
