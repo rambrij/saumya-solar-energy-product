@@ -47,9 +47,9 @@ public class NotificationWebhookController {
         deliveries.save(delivery);
       }
       if(outbox!=null) outbox.findByDeliveryIdAndTenantId(deliveryId,tenant).ifPresent(row->{
-        row.setStatus("DELIVERED".equals(status)?"SUCCEEDED":"BOUNCED".equals(status)?"DEAD_LETTER":"RETRY");
-        row.setNextAttemptAt("FAILED".equals(status)?delivery.getNextAttemptAt():null);
-        row.setLastError("DELIVERED".equals(status)?null:delivery.getLastError());
+        row.setStatus("DELIVERED".equals(delivery.getStatus())?"SUCCEEDED":"DEAD_LETTER".equals(delivery.getStatus())?"DEAD_LETTER":"RETRY");
+        row.setNextAttemptAt("FAILED".equals(delivery.getStatus())?delivery.getNextAttemptAt():null);
+        row.setLastError("DELIVERED".equals(delivery.getStatus())?null:delivery.getLastError());
         row.setUpdatedAt(Instant.now());outbox.save(row);
       });
       return Map.of("status","accepted");
