@@ -1864,3 +1864,36 @@ The requested remaining role/resource scenarios are verified by the passing run.
 - `Release12TenantIntegrationTest.fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation` now snapshots `ExportJobRepository.count()` before denied CSV export creation attempts by inventory, accountant and engineer users, then asserts no export job was persisted.
 - Verified branch head: `165fbdb74c654b78195096f3fdca66c4e9d3d993`.
 - Final CI run for this head: [42985837841](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42985837841) — all four jobs successful; backend **224 tests, 0 failures, 0 errors, 0 skipped**.
+
+
+---
+
+## Phase 3 implementation update — 2026-11-11
+
+**Implementation branch:** `audit/phase-3-implementation-gap-analysis`
+
+### Reservation expiry and reconciliation
+- Added a configurable 24-hour reservation TTL and persisted expiry, pre-reservation order state, release timestamp, release reason and releasing actor.
+- Added tenant-scoped scheduled expiry and reserved-quantity reconciliation. Reconciliation derives the reserved quantity from active reservation rows and does not adjust on-hand or damaged stock.
+- Added reservation visibility/release UI and audit/history records.
+- Existing active reservations receive a 24-hour upgrade grace period.
+
+### Order transition policy
+- Added persisted platform-default transition edges and tenant-specific enable/disable overrides.
+- Transition permissions remain code-owned per edge; tenant configuration cannot change required permissions or create arbitrary state transitions.
+- Added API endpoints for permitted next states and policy administration. The operations UI now consumes permitted transitions rather than hard-coded status choices and exposes the policy editor to the vendor administrator.
+- Manual transitions, stock reservation/release, installation scheduling/start/cancellation/completion, commissioning and customer order acceptance/rejection now use the central policy enforcement path.
+- Invalid/disabled transitions return HTTP 409 without changing order state. Cancellation still requires the cancellation permission, a reason and no active stock reservation.
+
+### Tenant lifecycle
+- New tenants are provisioned as `PENDING`; vendor login and API access remain blocked until verification and activation.
+- Implemented `PENDING → VERIFIED → ACTIVE → SUSPENDED → ACTIVE` and `ACTIVE/SUSPENDED → CLOSED`; `CLOSED` is terminal.
+- Added verification/activation/suspension/closure actor and timestamp metadata, mandatory transition reasons, audit events, session revocation on suspension/closure and platform lifecycle actions.
+- Existing active tenants are retained as active and receive historical verification/activation timestamps during migration. The legacy `INACTIVE` directory filter remains supported.
+
+### Database and verification
+- Kept the original V1 baseline unchanged. Added V2 for reservation expiry/history metadata and V3 for tenant lifecycle metadata, the transition-policy table/default rules and the new policy permission.
+- Extended the release-validation workflow migration-count assertion to three versioned migrations.
+- Added/updated integration coverage for reservation expiry, order-policy disable/reenable and tenant onboarding, suspension, reactivation and terminal closure.
+
+**Verification state:** implementation has been committed to the Phase 3 branch, but the full CI run and MySQL 8.4 migration validation for this updated head are still pending. Do not mark Phase 3 production-ready until the updated workflow is green and the remaining external Phase 2 production preflight/DBA/infrastructure sign-offs are complete.

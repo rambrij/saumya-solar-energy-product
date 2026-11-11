@@ -592,8 +592,11 @@ public class OperationsService {
         if(!policy.isEnabled() && actor!=null)
             throw new ResponseStatusException(HttpStatus.CONFLICT,"Order transition "+from+" → "+to+" is disabled by this vendor's policy");
         if(actor!=null) permission(actor,policy.getRequiredPermission());
-        if("CANCELLED".equals(to)&&(reason==null||reason.isBlank()))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Order cancellation reason is required");
+        if("CANCELLED".equals(to)) {
+            if(reason==null||reason.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Order cancellation reason is required");
+            if(reservations.findByTenantIdAndOrderId(order.getTenantId(),order.getId()).stream().anyMatch(r->"RESERVED".equals(r.getStatus())))
+                throw new ResponseStatusException(HttpStatus.CONFLICT,"Release active inventory reservations before cancelling the order");
+        }
         order.setStatus(to); orders.save(order);
         OrderStatusHistory h=new OrderStatusHistory(); h.setId(UUID.randomUUID()); h.setTenantId(order.getTenantId());
         h.setOrderId(order.getId()); h.setOldStatus(from); h.setNewStatus(to);

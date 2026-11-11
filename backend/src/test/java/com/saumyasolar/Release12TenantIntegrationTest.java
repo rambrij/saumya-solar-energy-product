@@ -223,6 +223,17 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         assertTrue(new String(tenantPdf, 0, 5, java.nio.charset.StandardCharsets.US_ASCII).startsWith("%PDF-"));
 
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"email":"%s","password":"%s"}""".formatted(adminEmail,adminPassword)))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/tenants/" + tenantId + "/status")
+                        .header("Authorization", "Bearer " + platformToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"VERIFIED\",\"reason\":\"Onboarding documents verified\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("VERIFIED"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/tenants/" + tenantId + "/status")
+                        .header("Authorization", "Bearer " + platformToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"ACTIVE\",\"reason\":\"Subscription and limits assigned\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ACTIVE"));
         var vendorToken = accessToken(adminEmail, adminPassword);
         var rolesResponse = mvc.perform(get("/api/v1/roles").header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
@@ -251,7 +262,7 @@ class Release12TenantIntegrationTest {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/tenants/" + tenantId + "/status")
                         .header("Authorization", "Bearer " + platformToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"SUSPENDED\"}"))
+                        .content("{\"status\":\"SUSPENDED\",\"reason\":\"Compliance review\"}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -260,8 +271,50 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isUnauthorized());
         mvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isUnauthorized());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/tenants/" + tenantId + "/status")
+                        .header("Authorization", "Bearer " + platformToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"ACTIVE\",\"reason\":\"Compliance review completed\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ACTIVE"));
+        var reactivatedToken=accessToken(adminEmail,adminPassword);
+        mvc.perform(post("/api/v1/platform/tenants/" + tenantId + "/lifecycle")
+                        .header("Authorization", "Bearer " + platformToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"CLOSED\",\"reason\":\"Vendor account permanently closed\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CLOSED"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/tenants/" + tenantId + "/status")
+                        .header("Authorization", "Bearer " + platformToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"ACTIVE\",\"reason\":\"must not reopen\"}"))
+                .andExpect(status().isConflict());
+        mvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + reactivatedToken))
+                .andExpect(status().isUnauthorized());
     }
     
+
+    @Test
+    void vendorOrderTransitionPolicyCanDisableOnlyApprovedEdges() throws Exception {
+        var customer=customerProfiles.findByTenantIdOrderByIdDesc(vendorTenantId).get(0);
+        CustomerOrder order=new CustomerOrder(); order.setId(UUID.randomUUID()); order.setTenantId(vendorTenantId);
+        order.setCustomerId(customer.getId()); order.setOrderNumber("POL-"+UUID.randomUUID());
+        order.setStatus("CONFIRMED"); order.setTotal(new java.math.BigDecimal("100")); order.setCreatedAt(Instant.now());
+        customerOrders.saveAndFlush(order);
+        String token=accessToken("admin@saumya.local","Admin@123");
+        mvc.perform(get("/api/v1/orders/transition-options").header("Authorization","Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[?(@.fromStatus == 'CONFIRMED' && @.toStatus == 'PAYMENT_PENDING')]").exists());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/orders/transition-policy")
+                        .header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"transitions\":[{\"fromStatus\":\"CONFIRMED\",\"toStatus\":\"PAYMENT_PENDING\",\"enabled\":false}]}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/orders/"+order.getId()+"/transition").header("Authorization","Bearer "+token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"PAYMENT_PENDING\",\"reason\":\"disabled edge test\"}"))
+                .andExpect(status().isConflict());
+        assertEquals("CONFIRMED",customerOrders.findByIdAndTenantId(order.getId(),vendorTenantId).orElseThrow().getStatus());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/orders/transition-policy")
+                        .header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"transitions\":[{\"fromStatus\":\"CONFIRMED\",\"toStatus\":\"PAYMENT_PENDING\",\"enabled\":true}]}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/orders/transition-options").header("Authorization","Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[?(@.toStatus == 'PAYMENT_PENDING')]").exists());
+    }
 
     @Test
     void platformSupportCanReadTenantDirectoryButCannotMutatePlatformState() throws Exception {
