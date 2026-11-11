@@ -212,3 +212,38 @@ Implemented in this branch (runtime verification pending):
 | NOT-OQ-14 | Which existing integration providers/adapters are approved for each integration type, and should their mock adapters be profile-selected independently? | Product/integration owner | Existing IntegrationSyncScheduler and adapters are retained. No new real integration provider is selected or contacted by this phase. |
 
 These are explicit deferrals, not silently completed features. Phase 6 remains PARTIAL until the above decisions are made and the corresponding UI/workflows are implemented or explicitly excluded by product approval.
+## Phase 6 implementation update — 2026-11-11
+
+This section supersedes the initial audit's statement that Phase 6 runtime work had not yet been applied. The original audit remains as the branch-head baseline and explains why the changes below were required.
+
+### Implemented in this branch
+
+- **Transactional outbox:** business notification creation now persists the `notification_delivery` row and its `notification_outbox` row within the same `@Transactional` service boundary. The business request path no longer publishes an asynchronous event that can bypass the outbox. Dispatch is performed by the tenant-scoped outbox scheduler after the transaction has committed.
+- **Provider ports and selection:** `NotificationChannelAdapter` and `NotificationChannelAdapterRegistry` are the provider seam. Email uses the local Mailpit SMTP adapter. SMS/WhatsApp use the deterministic `MOCK-MESSAGING` adapter. `app.messaging.provider` / `NOTIFICATION_MESSAGING_PROVIDER` selects `mock` (default) or `twilio`. The Twilio adapter is deliberately a network-disabled placeholder that fails closed; no Twilio SDK, credentials, or network calls are included.
+- **Retry/dead-letter:** business delivery is processed only through the outbox. Provider errors are stored as generic non-PII messages; retry attempts use bounded exponential backoff and a five-attempt dead-letter limit. Provider-accepted SMS/WhatsApp messages are recorded as `SENT` until a signed provider callback confirms `DELIVERED` or reports `FAILED`/`BOUNCED`.
+- **Webhook handling:** the mock webhook is only registered in dev/test profiles, validates an HMAC-SHA256 signature before parsing/looking up delivery data, stores provider events under a unique provider/event key, checks duplicate payload hashes, and updates tenant-scoped delivery/outbox state. A late failure callback cannot downgrade a delivered message.
+- **Preferences and consent:** per-user/per-channel preferences are persisted and exposed through the existing preference API. SMS and WhatsApp require an explicit enabled preference and consent record; absent consent suppresses delivery. Withdrawing consent also disables that channel from the frontend.
+- **Monitoring and frontend:** existing tenant-scoped delivery, outbox and integration-job monitoring APIs are retained. The existing Notifications workspace displays inbox, per-channel preferences, delivery attempts and outbox/integration status; its consent action was corrected to disable a channel on withdrawal.
+- **Inbox transaction boundary:** the in-app notification projection now joins the business transaction rather than committing independently in a `REQUIRES_NEW` transaction.
+- **Migrations:** V12 adds outbox, preference and provider-event tables and expands delivery states; V13 adds the provider-accepted `SENT` state. The release validation workflow now applies V13 in its MySQL 8.4 migration job.
+
+### Verification artifacts added/updated
+
+- Backend tests: transactional outbox enqueue/idempotency, preference enforcement, retry/backoff and dead-letter, provider adapter selection, Twilio fail-closed behavior, signed webhook idempotency and outbox status update.
+- Frontend test: explicit opt-in consent request.
+- CI workflow: updated migration-count and MySQL 8.4 V13 validation steps.
+
+**Execution status:** source changes and test definitions are committed, but Maven, npm, MySQL migration, Playwright and GitHub Actions results have not been executed/observed in this session. Do not treat build/test acceptance as passed until the branch workflow is green.
+
+### Remaining policy/open-scope items
+
+- The NOT-OQ-01/02 escalation thresholds, clock semantics, recipient matrix and escalation cadence remain unimplemented because the requirements do not define them.
+- NOT-OQ-03/04 mandatory-event rules and full consent evidence/legal lifecycle remain product/privacy decisions. The implemented SMS/WhatsApp opt-in gate is the conservative default; email and in-app retain existing default behavior unless a preference row disables them.
+- NOT-OQ-05 real-provider webhook headers, payloads, timestamp tolerance and key rotation remain undefined. Only the documented mock HMAC contract is implemented.
+- NOT-OQ-06 retention/deletion periods remain undefined; no cleanup job was invented.
+- NOT-OQ-07 cross-tenant platform visibility remains restricted; monitoring APIs are tenant-scoped and vendor-admin-only for outbox/integration job records.
+- NOT-OQ-08 retry policy currently uses five attempts and bounded exponential backoff as a technical default. Operations must approve channel-specific limits, jitter and manual redrive permissions.
+- NOT-OQ-09 preference management is self-service for authenticated tenant users; vendor-admin delegation/defaults remain undefined.
+- NOT-OQ-10 mock delivery simulation currently supports deterministic acceptance and the explicit `[[MOCK_FAIL]]` failure trigger. Delivery callbacks are posted separately to the dev/test mock webhook.
+
+**Out of scope by explicit instruction:** live Twilio requests, Twilio SDK/credentials, real SMS/WhatsApp sending, any paid/hosted message provider, and undocumented SLA escalation policy. Selecting `app.messaging.provider=twilio` currently fails closed by design until live integration is separately authorized and implemented.
