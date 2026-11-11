@@ -55,5 +55,9 @@ class MockPaymentGatewayAdapterTest {
     void mockComponentsAreRestrictedToDevelopmentAndTestProfiles() {
         assertArrayEquals(new String[]{"dev", "test"},
                 MockPaymentGatewayAdapter.class.getAnnotation(Profile.class).value());
+        assertArrayEquals(new String[]{"dev", "test"},
+                com.saumyasolar.api.MockPaymentGatewaySimulatorController.class.getAnnotation(Profile.class).value());
+        assertArrayEquals(new String[]{"dev", "test"},
+                com.saumyasolar.api.MockSettlementFixtureController.class.getAnnotation(Profile.class).value());
     }
 }
