@@ -45,6 +45,33 @@ class PaymentGatewayWebhookServiceTest {
     }
 
     @Test
+    void returnsDuplicateForPreviouslyProcessedTenantBoundEvent() throws Exception {
+        UUID tenant = UUID.randomUUID(), paymentId = UUID.randomUUID(), invoiceId = UUID.randomUUID();
+        Payment payment = payment(tenant, paymentId, invoiceId);
+        PaymentWebhookEvent prior = new PaymentWebhookEvent();
+        prior.setId(UUID.randomUUID()); prior.setTenantId(tenant); prior.setProvider("MOCK_GATEWAY");
+        prior.setEventId("evt-duplicate"); prior.setProcessingStatus("PROCESSED");
+        PaymentGatewayAdapter adapter = mock(PaymentGatewayAdapter.class);
+        when(adapter.providerCode()).thenReturn("MOCK_GATEWAY");
+        when(adapter.verifyWebhook("payload", "sig")).thenReturn(true);
+        when(adapter.parseWebhook("payload")).thenReturn(new PaymentGatewayAdapter.GatewayWebhookEvent(
+                "evt-duplicate", "provider-ref", new BigDecimal("100.00"), "INR", "PAYMENT_CAPTURED", null, tenant.toString()));
+        PaymentRepository payments = mock(PaymentRepository.class);
+        when(payments.findByTenantIdAndProviderAndProviderReference(tenant, "MOCK_GATEWAY", "provider-ref")).thenReturn(Optional.of(payment));
+        PaymentWebhookEventRepository events = mock(PaymentWebhookEventRepository.class);
+        when(events.findByTenantIdAndProviderAndEventId(tenant, "MOCK_GATEWAY", "evt-duplicate")).thenReturn(Optional.of(prior));
+        PaymentGatewayWebhookService service = new PaymentGatewayWebhookService(
+                new PaymentGatewayRegistry(List.of(adapter)), payments, events, mock(InvoiceRepository.class),
+                mock(RefundRepository.class), mock(AuditEventRepository.class), new ObjectMapper());
+
+        Map<String, Object> result = service.accept("MOCK_GATEWAY", "payload", "sig");
+
+        assertEquals(true, result.get("duplicate"));
+        verify(events, never()).saveAndFlush(any());
+        verify(payments, never()).save(any());
+    }
+
+    @Test
     void rejectsInvalidSignatureWithoutConsumingEventId() {
         PaymentGatewayAdapter adapter = mock(PaymentGatewayAdapter.class);
         when(adapter.providerCode()).thenReturn("MOCK_GATEWAY");
