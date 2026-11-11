@@ -72,6 +72,31 @@ class PaymentGatewayWebhookServiceTest {
     }
 
     @Test
+    void refusesCrossTenantProviderReferenceAndLeavesEventRetryable() throws Exception {
+        UUID ownerTenant = UUID.randomUUID(), claimedTenant = UUID.randomUUID();
+        PaymentGatewayAdapter adapter = mock(PaymentGatewayAdapter.class);
+        when(adapter.providerCode()).thenReturn("MOCK_GATEWAY");
+        when(adapter.verifyWebhook("payload", "sig")).thenReturn(true);
+        when(adapter.parseWebhook("payload")).thenReturn(new PaymentGatewayAdapter.GatewayWebhookEvent(
+                "evt-cross-tenant", "provider-ref", new BigDecimal("100.00"), "INR", "PAYMENT_CAPTURED",
+                null, claimedTenant.toString()));
+        PaymentRepository payments = mock(PaymentRepository.class);
+        when(payments.findByTenantIdAndProviderAndProviderReference(claimedTenant, "MOCK_GATEWAY", "provider-ref"))
+                .thenReturn(Optional.empty());
+        PaymentWebhookEventRepository events = mock(PaymentWebhookEventRepository.class);
+        PaymentGatewayWebhookService service = new PaymentGatewayWebhookService(
+                new PaymentGatewayRegistry(List.of(adapter)), payments, events, mock(InvoiceRepository.class),
+                mock(RefundRepository.class), mock(AuditEventRepository.class), new ObjectMapper());
+
+        Map<String, Object> result = service.accept("MOCK_GATEWAY", "payload", "sig");
+
+        assertEquals(false, result.get("accepted"));
+        assertEquals(true, result.get("retryable"));
+        verify(events, never()).saveAndFlush(any());
+        verify(payments, never()).save(any());
+    }
+
+    @Test
     void rejectsInvalidSignatureWithoutConsumingEventId() {
         PaymentGatewayAdapter adapter = mock(PaymentGatewayAdapter.class);
         when(adapter.providerCode()).thenReturn("MOCK_GATEWAY");
