@@ -50,6 +50,10 @@ public class FinanceService {
     private final NotificationService notifications;
     @Autowired(required = false)
     private IntegrationManagementService integrationManagement;
+    @Autowired(required = false)
+    private EnterpriseSaasService enterpriseSaas;
+    @Autowired(required = false)
+    private PaymentGatewayRegistry paymentGateways;
     
     public FinanceService(
             InvoiceRepository invoices,
@@ -127,6 +131,11 @@ public class FinanceService {
         return customers.findByTenantIdAndUserId(p.tenantId(), p.userId()).filter(CustomerProfile::isActive).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer profile not found"));
     }
     
+    private void assertInvoiceBranchAccess(Invoice invoice, Principal p) {
+        if ("VENDOR".equals(p.accountType()) && enterpriseSaas != null)
+            enterpriseSaas.assertBranchAccess(invoice.getBranchId(), p);
+    }
+
     private Invoice invoice(UUID id, UUID tenant) {
         return invoices.findByIdAndTenantId(id, tenant).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found"));
     }
@@ -148,10 +157,11 @@ public class FinanceService {
         financeAccess(p);
         permission(p, "INVOICE_CREATE");
         Set<String> eligible = Set.of("CONFIRMED", "PAYMENT_PENDING", "PAYMENT_PARTIAL", "PAID", "MATERIAL_RESERVED", "INSTALLATION_SCHEDULED", "INSTALLATION_IN_PROGRESS", "INSTALLED", "COMMISSIONED", "CLOSED");
-        return orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
+        List<CustomerOrder> rows = orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
                 .filter(o -> eligible.contains(o.getStatus()))
                 .filter(o -> invoices.findByOrderIdAndTenantId(o.getId(), p.tenantId()).isEmpty())
                 .toList();
+        return enterpriseSaas == null ? rows : enterpriseSaas.filterBranchRecords(rows, CustomerOrder::getBranchId, p);
     }
     
     @Transactional
@@ -160,6 +170,7 @@ public class FinanceService {
         permission(p, "INVOICE_CREATE");
         permission(p, "INVOICE_CREATE");
         CustomerOrder order = orders.findForUpdate(input.orderId(), tenant).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+        if (enterpriseSaas != null) enterpriseSaas.assertBranchAccess(order.getBranchId(), p);
         if (!Set.of("CONFIRMED", "PAYMENT_PENDING", "PAYMENT_PARTIAL", "PAID", "MATERIAL_RESERVED", "INSTALLATION_SCHEDULED", "INSTALLATION_IN_PROGRESS", "INSTALLED", "COMMISSIONED", "CLOSED").contains(order.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "An invoice can only be issued for a confirmed order milestone");
         var existing = invoices.findByOrderIdAndTenantId(order.getId(), tenant);
@@ -248,6 +259,7 @@ public class FinanceService {
         Invoice invoice = new Invoice();
         invoice.setId(UUID.randomUUID());
         invoice.setTenantId(tenant);
+        invoice.setBranchId(order.getBranchId());
         invoice.setOrderId(order.getId());
         invoice.setFiscalYear(fy);
         invoice.setInvoiceNumber(( t.getInvoicePrefix() == null ? "INV" : t.getInvoicePrefix() ) + "-" + fy + "-" + String.format(Locale.ROOT, "%06d", sequence));
@@ -308,6 +320,7 @@ public class FinanceService {
         financeAccess(p);
         permission(p, "INVOICE_VOID");
         Invoice i = invoices.findForUpdate(invoiceId, p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found"));
+        assertInvoiceBranchAccess(i, p);
         if (x.amount() == null || x.amount().signum() <= 0 || x.reason() == null || x.reason().isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Credit note amount and reason are required");
         if ("VOID".equals(i.getStatus()))
@@ -338,7 +351,10 @@ public class FinanceService {
             CustomerProfile cp = customer(p);
             if (!orders.findByIdAndTenantId(i.getOrderId(), p.tenantId()).map(o -> cp.getId().equals(o.getCustomerId())).orElse(false))
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        } else financeAccess(p);
+        } else {
+            financeAccess(p);
+            assertInvoiceBranchAccess(i, p);
+        }
         permission(p, "INVOICE_VIEW");
         return creditNotes.findByTenantIdAndInvoiceIdOrderByCreatedAtDesc(p.tenantId(), invoiceId);
     }
@@ -350,7 +366,8 @@ public class FinanceService {
         }
         financeAccess(p);
         permission(p, "INVOICE_VIEW");
-        return invoices.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
+        List<Invoice> rows = invoices.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
+        return enterpriseSaas == null ? rows : enterpriseSaas.filterBranchRecords(rows, Invoice::getBranchId, p);
     }
     
     public List<InvoiceItem> invoiceLines(UUID id, Principal p) {
@@ -361,7 +378,8 @@ public class FinanceService {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         } else {
             financeAccess(p);
-        permission(p, "INVOICE_VIEW");
+            permission(p, "INVOICE_VIEW");
+            assertInvoiceBranchAccess(i, p);
         }
         return invoiceItems.findByTenantIdAndInvoiceId(p.tenantId(), id);
     }
@@ -373,6 +391,7 @@ public class FinanceService {
         if (reason == null || reason.isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Void reason is required");
         Invoice i = invoices.findForUpdate(id, p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found"));
+        assertInvoiceBranchAccess(i, p);
         if (!"ISSUED".equals(i.getStatus()) && !"PARTIALLY_PAID".equals(i.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only an issued, unpaid or partially paid invoice can be voided");
         if (payments.findByTenantIdAndInvoiceId(p.tenantId(), id).stream().anyMatch(x -> "CONFIRMED".equals(x.getStatus())))
@@ -389,6 +408,7 @@ public class FinanceService {
         if (x.paidAt() == null || x.paidAt().isAfter(Instant.now()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment date cannot be in the future");
         Invoice i = invoices.findForUpdate(x.invoiceId(), p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found"));
+        assertInvoiceBranchAccess(i, p);
         if (!Set.of("ISSUED", "PARTIALLY_PAID").contains(i.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Invoice is not open for payment");
         BigDecimal paid = netPaid(p.tenantId(), i.getId());
@@ -420,8 +440,8 @@ public class FinanceService {
         BigDecimal total = BigDecimal.ZERO;
         for (Payment payment : payments.findByTenantIdAndInvoiceId(tenant, invoiceId)) {
             if ("CONFIRMED".equals(payment.getStatus())) total = total.add(payment.getAmount());
-            else if ("PARTIALLY_REFUNDED".equals(payment.getStatus())) {
-                BigDecimal refunded = refunds.findByTenantIdAndPaymentId(tenant, payment.getId()).stream().filter(r -> "RECORDED".equals(r.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            else if (Set.of("PARTIALLY_REFUNDED", "REFUNDED").contains(payment.getStatus())) {
+                BigDecimal refunded = refunds.findByTenantIdAndPaymentId(tenant, payment.getId()).stream().filter(r -> Set.of("RECORDED", "PROCESSED").contains(r.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
                 total = total.add(payment.getAmount().subtract(refunded));
             }
         }
@@ -430,11 +450,17 @@ public class FinanceService {
     
     public Payment getPayment(UUID id, Principal p) {
         Payment payment = payments.findByIdAndTenantId(id, p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+        if ("VENDOR".equals(p.accountType())) {
+            Invoice paymentInvoice = invoice(payment.getInvoiceId(), p.tenantId());
+            assertInvoiceBranchAccess(paymentInvoice, p);
+        }
         if ("CUSTOMER".equals(p.accountType())) {
             if (listInvoices(p).stream().noneMatch(i -> i.getId().equals(payment.getInvoiceId())))
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        } else financeAccess(p);
-        permission(p, "PAYMENT_VIEW");
+        } else {
+            financeAccess(p);
+            permission(p, "PAYMENT_VIEW");
+        }
         return payment;
     }
     
@@ -447,7 +473,12 @@ public class FinanceService {
         }
         financeAccess(p);
         permission(p, "PAYMENT_VIEW");
-        return payments.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
+        List<Payment> rows = payments.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
+        if (enterpriseSaas == null || p.roles() != null && p.roles().contains("VENDOR_ADMIN")) return rows;
+        Set<UUID> visibleInvoiceIds = enterpriseSaas.filterBranchRecords(
+                invoices.findByTenantIdOrderByCreatedAtDesc(p.tenantId()), Invoice::getBranchId, p)
+                .stream().map(Invoice::getId).collect(java.util.stream.Collectors.toSet());
+        return rows.stream().filter(payment -> visibleInvoiceIds.contains(payment.getInvoiceId())).toList();
     }
     
     @Transactional
@@ -456,10 +487,60 @@ public class FinanceService {
         permission(p, "PAYMENT_REFUND");
         if (x.amount() == null || x.amount().signum() <= 0 || x.reason() == null || x.reason().isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A positive refund amount and reason are required");
-        Payment pay = payments.findForUpdate(x.paymentId(), p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+        Payment pay = payments.findForUpdate(x.paymentId(), p.tenantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+        assertInvoiceBranchAccess(invoice(pay.getInvoiceId(), p.tenantId()), p);
+        List<Refund> prior = refunds.findByTenantIdAndPaymentId(p.tenantId(), pay.getId());
+        if ("GATEWAY".equals(pay.getSource())) {
+            if (paymentGateways == null)
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Payment gateway adapter is not configured");
+            if (x.idempotencyKey() == null || !x.idempotencyKey().matches("[A-Za-z0-9._:-]{8,160}"))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A valid Idempotency-Key is required for provider refunds");
+            Optional<Refund> previous = refunds.findByTenantIdAndPaymentIdAndIdempotencyKey(p.tenantId(), pay.getId(), x.idempotencyKey());
+            if (previous.isPresent()) {
+                Refund existing = previous.get();
+                if (!existing.getPaymentId().equals(pay.getId()) || existing.getAmount().compareTo(x.amount()) != 0
+                        || !existing.getReason().equals(x.reason().trim()))
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency-Key was already used for another refund");
+                return existing;
+            }
+            if (!Set.of("CONFIRMED", "PARTIALLY_REFUNDED").contains(pay.getStatus()))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Only captured payments can be refunded");
+            BigDecimal reserved = prior.stream().filter(r -> Set.of("RECORDED", "PENDING", "PROCESSED").contains(r.getStatus()))
+                    .map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (reserved.add(x.amount()).compareTo(pay.getAmount()) > 0)
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Refund exceeds the unrefunded payment amount");
+            PaymentGatewayAdapter.GatewayRefund gatewayRefund;
+            try {
+                gatewayRefund = paymentGateways.require(pay.getProvider())
+                        .refund(pay.getProviderReference(), x.amount(), x.idempotencyKey(), x.reason().trim());
+            } catch (Exception ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Payment provider could not initiate refund");
+            }
+            if (gatewayRefund == null || gatewayRefund.providerRefundReference() == null
+                    || gatewayRefund.providerRefundReference().isBlank())
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Payment provider returned an invalid refund reference");
+            Refund saved = new Refund();
+            saved.setId(UUID.randomUUID());
+            saved.setTenantId(p.tenantId());
+            saved.setPaymentId(pay.getId());
+            saved.setAmount(x.amount());
+            saved.setReason(x.reason().trim());
+            saved.setStatus("PENDING");
+            saved.setRecordedBy(p.userId());
+            saved.setProvider(pay.getProvider());
+            saved.setProviderRefundReference(gatewayRefund.providerRefundReference());
+            saved.setIdempotencyKey(x.idempotencyKey());
+            saved.setCreatedAt(Instant.now());
+            Refund result = refunds.save(saved);
+            accountingEvent("REFUND", result.getId().toString(), "UPSERT",
+                    Map.of("paymentId", pay.getId().toString(), "amount", result.getAmount(), "status", result.getStatus()), p);
+            return result;
+        }
         if (!"MANUAL".equals(pay.getSource()))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Gateway refunds require a configured provider refund adapter; no gateway is configured");
-        BigDecimal refunded = refunds.findByTenantIdAndPaymentId(p.tenantId(), pay.getId()).stream().filter(r -> "RECORDED".equals(r.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Unsupported payment source for refund");
+        BigDecimal refunded = prior.stream().filter(r -> "RECORDED".equals(r.getStatus()))
+                .map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         if (refunded.add(x.amount()).compareTo(pay.getAmount()) > 0)
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Refund exceeds the unrefunded payment amount");
         Refund r = new Refund();
@@ -478,10 +559,11 @@ public class FinanceService {
         BigDecimal net = netPaid(p.tenantId(), invoice.getId());
         invoice.setStatus(net.compareTo(invoice.getGrandTotal()) >= 0 ? "PAID" : net.signum() > 0 ? "PARTIALLY_PAID" : "ISSUED");
         invoices.save(invoice);
-        accountingEvent("REFUND", saved.getId().toString(), "UPSERT", Map.of("paymentId", pay.getId().toString(), "amount", saved.getAmount(), "status", saved.getStatus()), p);
+        accountingEvent("REFUND", saved.getId().toString(), "UPSERT",
+                Map.of("paymentId", pay.getId().toString(), "amount", saved.getAmount(), "status", saved.getStatus()), p);
         return saved;
     }
-    
+
     private boolean validSignature(String raw, String signature) {
         if (webhookSecret == null || webhookSecret.isBlank() || signature == null) return false;
         try {
@@ -498,42 +580,54 @@ public class FinanceService {
     public Map<String, Object> webhook(String provider, String raw, String signature, WebhookEvent event) {
         if (!validSignature(raw, signature))
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid payment webhook signature");
+        if (event == null || event.eventId() == null || event.eventId().isBlank()
+                || event.paymentReference() == null || event.paymentReference().isBlank()
+                || event.amount() == null || event.amount().signum() <= 0)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid payment webhook payload");
         String key = provider.toUpperCase(Locale.ROOT);
-        var duplicate = webhookEvents.findByProviderAndEventId(key, event.eventId());
+        Payment matched = payments.findByProviderAndProviderReference(key, event.paymentReference()).orElse(null);
+        if (matched == null) return Map.of("accepted", false, "matched", false, "retryable", true);
+        Payment pay = payments.findForUpdate(matched.getId(), matched.getTenantId()).orElse(null);
+        if (pay == null || !key.equalsIgnoreCase(pay.getProvider()) || !event.paymentReference().equals(pay.getProviderReference()))
+            return Map.of("accepted", false, "matched", false, "retryable", true);
+        if (pay.getAmount().compareTo(event.amount()) != 0)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Webhook amount does not match the recorded provider payment");
+        var duplicate = webhookEvents.findByTenantIdAndProviderAndEventId(pay.getTenantId(), key, event.eventId());
         if (duplicate.isPresent()) return Map.of("accepted", true, "duplicate", true);
         PaymentWebhookEvent record = new PaymentWebhookEvent();
         record.setId(UUID.randomUUID());
+        record.setTenantId(pay.getTenantId());
         record.setProvider(key);
+        record.setProviderReference(event.paymentReference());
         record.setEventId(event.eventId());
         record.setPayloadHash(HexFormat.of().formatHex(hash(raw)));
         record.setProcessingStatus("RECEIVED");
+        record.setEventType(event.status());
         record.setReceivedAt(Instant.now());
         webhookEvents.saveAndFlush(record);
-        Payment pay = payments.findByProviderAndProviderReference(key, event.paymentReference()).orElse(null);
-        if (pay == null) {
-            record.setProcessingStatus("UNMATCHED");
-            record.setProcessedAt(Instant.now());
-            webhookEvents.save(record);
-            return Map.of("accepted", true, "matched", false);
+        if ("SUCCEEDED".equals(event.status())) {
+            pay.setStatus("CONFIRMED");
+            pay.setPaidAt(Instant.now());
+        } else if ("FAILED".equals(event.status()) && "PENDING".equals(pay.getStatus())) {
+            pay.setStatus("FAILED");
         }
-        if (pay.getAmount().compareTo(event.amount()) != 0)
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Webhook amount does not match the recorded provider payment");
-        if ("SUCCEEDED".equals(event.status())) pay.setStatus("CONFIRMED");
-        else if ("FAILED".equals(event.status()) && "PENDING".equals(pay.getStatus())) pay.setStatus("FAILED");
         payments.save(pay);
-        accountingEvent("PAYMENT", pay.getId().toString(), "UPSERT", Map.of("invoiceId", pay.getInvoiceId().toString(), "amount", pay.getAmount(), "currency", pay.getCurrency(), "status", pay.getStatus()), new Principal(null, pay.getTenantId(), "system@saumya.internal", "SYSTEM", Set.of(), Set.of(), 0));
+        accountingEvent("PAYMENT", pay.getId().toString(), "UPSERT",
+                Map.of("invoiceId", pay.getInvoiceId().toString(), "amount", pay.getAmount(),
+                        "currency", pay.getCurrency(), "status", pay.getStatus()),
+                new Principal(null, pay.getTenantId(), "system@saumya.internal", "SYSTEM", Set.of(), Set.of(), 0));
         Invoice i = invoice(pay.getInvoiceId(), pay.getTenantId());
-        if ("CONFIRMED".equals(pay.getStatus())) {
-            BigDecimal total = payments.findByTenantIdAndInvoiceId(pay.getTenantId(), i.getId()).stream().filter(v -> "CONFIRMED".equals(v.getStatus())).map(Payment::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-            i.setStatus(total.compareTo(i.getGrandTotal()) >= 0 ? "PAID" : "PARTIALLY_PAID");
-            invoices.save(i);
-        }
+        BigDecimal total = payments.findByTenantIdAndInvoiceId(pay.getTenantId(), i.getId()).stream()
+                .filter(v -> Set.of("CONFIRMED", "PARTIALLY_REFUNDED").contains(v.getStatus()))
+                .map(Payment::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        i.setStatus(total.compareTo(i.getGrandTotal()) >= 0 ? "PAID" : total.signum() > 0 ? "PARTIALLY_PAID" : "ISSUED");
+        invoices.save(i);
         record.setProcessingStatus("PROCESSED");
         record.setProcessedAt(Instant.now());
         webhookEvents.save(record);
         return Map.of("accepted", true, "matched", true, "duplicate", false);
     }
-    
+
     private byte[] hash(String raw) {
         try {
             return MessageDigest.getInstance("SHA-256").digest(raw.getBytes(StandardCharsets.UTF_8));
@@ -560,14 +654,22 @@ public class FinanceService {
         serviceEvents.save(e);
     }
     
+    static void assertAssignedTicketAccess(ServiceRequest t, Principal p) {
+        if ((p.permissions() == null || !p.permissions().contains("SERVICE_ASSIGN"))
+                && !Objects.equals(t.getAssignedEngineerId(), p.userId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
+    }
+
     private void ensureTicketAccess(ServiceRequest t, Principal p) {
+        if ("VENDOR".equals(p.accountType()) && enterpriseSaas != null)
+            enterpriseSaas.assertBranchAccess(t.getBranchId(), p);
         if ("CUSTOMER".equals(p.accountType())) {
             CustomerProfile cp = customer(p);
             if (!cp.getId().equals(t.getCustomerId())) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         } else {
             servicePermission(p);
-            if ((p.permissions() == null || !p.permissions().contains("SERVICE_ASSIGN")) && !Objects.equals(t.getAssignedEngineerId(), p.userId()))
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+            assertAssignedTicketAccess(t, p);
         }
     }
     
@@ -587,7 +689,7 @@ public class FinanceService {
             cp = customers.findByIdAndTenantId(x.customerId(), tenant).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
         }
         if (x.installationId() != null) {
-            installations.findById(x.installationId()).filter(j -> tenant.equals(j.getTenantId()) && cp.getId().equals(j.getCustomerId())).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Installation not found"));
+            installations.findByIdAndTenantId(x.installationId(), tenant).filter(j -> cp.getId().equals(j.getCustomerId())).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Installation not found"));
         }
         Product product = x.productId() == null ? null : products.findByIdAndTenantId(x.productId(), tenant).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
         if (product != null && "CUSTOMER".equals(p.accountType())) {
@@ -644,9 +746,9 @@ public class FinanceService {
         servicePermission(p);
         permission(p, "SERVICE_VIEW");
         List<ServiceRequest> all = tickets.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
-        if (p.permissions() != null && p.permissions().contains("SERVICE_ASSIGN"))
-            return all;
-        return all.stream().filter(t -> p.userId().equals(t.getAssignedEngineerId())).toList();
+        List<ServiceRequest> visible = p.permissions() != null && p.permissions().contains("SERVICE_ASSIGN")
+                ? all : all.stream().filter(t -> p.userId().equals(t.getAssignedEngineerId())).toList();
+        return enterpriseSaas == null ? visible : enterpriseSaas.filterBranchRecords(visible, ServiceRequest::getBranchId, p);
     }
     
     @Transactional
@@ -655,7 +757,7 @@ public class FinanceService {
         permission(p, "SERVICE_ASSIGN");
         UUID tenant = p.tenantId();
         ServiceRequest t = ticket(id, tenant);
-        AppUser engineer = users.findById(x.engineerId()).filter(u -> tenant.equals(u.getTenantId()) && u.isEnabled() && u.getRoles().stream().anyMatch(r -> "SERVICE_ENGINEER".equals(r.getName()) || "TECHNICIAN".equals(r.getName()) || "INSTALLER".equals(r.getName()))).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Engineer must be an enabled same-tenant service engineer"));
+        AppUser engineer = users.findByIdAndTenantId(x.engineerId(), tenant).filter(u -> u.isEnabled() && u.getRoles().stream().anyMatch(r -> "SERVICE_ENGINEER".equals(r.getName()) || "TECHNICIAN".equals(r.getName()) || "INSTALLER".equals(r.getName()))).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Engineer must be an enabled same-tenant service engineer"));
         String old = t.getStatus();
         if (!Set.of("OPEN", "ASSIGNED", "VISIT_SCHEDULED").contains(old))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ticket cannot be assigned in its current state");
@@ -676,6 +778,7 @@ public class FinanceService {
         servicePermission(p);
         permission(p, "SERVICE_ASSIGN");
                 ServiceRequest t = ticket(id, p.tenantId());
+        ensureTicketAccess(t, p);
         if (!x.scheduledAt().isAfter(Instant.now()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Visit must be scheduled in the future");
         if (t.getAssignedEngineerId() == null || !t.getAssignedEngineerId().equals(x.engineerId()))
@@ -703,7 +806,7 @@ public class FinanceService {
         permission(p, "SERVICE_UPDATE");
         ServiceRequest t = ticket(id, p.tenantId());
         ensureTicketAccess(t, p);
-        ServiceVisit v = visits.findById(visitId).filter(a -> a.getTenantId().equals(p.tenantId()) && a.getServiceRequestId().equals(id)).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Visit not found"));
+        ServiceVisit v = visits.findByIdAndTenantIdAndServiceRequestId(visitId, p.tenantId(), id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Visit not found"));
         if (!v.getEngineerId().equals(p.userId()) && !(p.permissions() != null && p.permissions().contains("SERVICE_ASSIGN")) )
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (v.getStartedAt() != null)
@@ -725,7 +828,7 @@ public class FinanceService {
         permission(p, "SERVICE_RESOLVE");
         ServiceRequest t = ticket(id, p.tenantId());
         ensureTicketAccess(t, p);
-        ServiceVisit v = visits.findById(visitId).filter(a -> a.getTenantId().equals(p.tenantId()) && a.getServiceRequestId().equals(id)).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Visit not found"));
+        ServiceVisit v = visits.findByIdAndTenantIdAndServiceRequestId(visitId, p.tenantId(), id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Visit not found"));
         if (!v.getEngineerId().equals(p.userId()) && !(p.permissions() != null && p.permissions().contains("SERVICE_ASSIGN")))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (v.getCompletedAt() != null)
@@ -802,6 +905,7 @@ public class FinanceService {
         if (reason == null || reason.isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Closure reason is required");
         ServiceRequest t = ticket(id, p.tenantId());
+        ensureTicketAccess(t, p);
         if (!"CUSTOMER_CONFIRMED".equals(t.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Customer confirmation is required before closure");
         String old = t.getStatus();
@@ -844,11 +948,20 @@ public class FinanceService {
         return t;
     }
     
+    static List<ServiceVisit> visibleServiceVisits(List<ServiceVisit> rows, Principal p) {
+        if ("CUSTOMER".equals(p.accountType())
+                || p.permissions() != null && p.permissions().contains("SERVICE_ASSIGN")) {
+            return rows;
+        }
+        return rows.stream().filter(visit -> Objects.equals(visit.getEngineerId(), p.userId())).toList();
+    }
+
     public List<ServiceVisit> serviceVisits(UUID id, Principal p) {
         ServiceRequest t = ticket(id, p.tenantId());
         ensureTicketAccess(t, p);
         if (!"CUSTOMER".equals(p.accountType())) permission(p, "SERVICE_VIEW");
-        return visits.findByTenantIdAndServiceRequestIdOrderByScheduledAtAsc(p.tenantId(), id);
+        List<ServiceVisit> rows = visits.findByTenantIdAndServiceRequestIdOrderByScheduledAtAsc(p.tenantId(), id);
+        return visibleServiceVisits(rows, p);
     }
     
     public List<ServiceEvent> serviceHistory(UUID id, Principal p) {
@@ -959,8 +1072,6 @@ public class FinanceService {
     public ServiceSlaPolicy saveSlaPolicy(SlaPolicyInput x, Principal p) {
         servicePermission(p);
         permission(p, "SERVICE_UPDATE");
-        if (p.roles() == null || !p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (x.resolutionMinutes() < x.responseMinutes())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Resolution SLA must be at least the response SLA");
         if (( x.businessStart() == null ) != ( x.businessEnd() == null ) || x.businessStart() != null && !x.businessEnd().isAfter(x.businessStart()))
@@ -987,21 +1098,37 @@ public class FinanceService {
     }
     
     public List<Refund> listRefunds(Principal p) {
+        if ("CUSTOMER".equals(p.accountType())) {
+            CustomerProfile cp = customer(p);
+            Set<UUID> visibleInvoiceIds = listInvoices(p).stream().map(Invoice::getId)
+                    .collect(java.util.stream.Collectors.toSet());
+            Set<UUID> visiblePaymentIds = payments.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream()
+                    .filter(payment -> visibleInvoiceIds.contains(payment.getInvoiceId()))
+                    .map(Payment::getId).collect(java.util.stream.Collectors.toSet());
+            return refunds.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream()
+                    .filter(refund -> visiblePaymentIds.contains(refund.getPaymentId())).toList();
+        }
         financeAccess(p);
         permission(p, "PAYMENT_REFUND");
-        permission(p, "PAYMENT_REFUND");
-        return refunds.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
+        List<Refund> rows = refunds.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
+        if (enterpriseSaas == null || p.roles() != null && p.roles().contains("VENDOR_ADMIN")) return rows;
+        Set<UUID> visibleInvoiceIds = enterpriseSaas.filterBranchRecords(
+                invoices.findByTenantIdOrderByCreatedAtDesc(p.tenantId()), Invoice::getBranchId, p)
+                .stream().map(Invoice::getId).collect(java.util.stream.Collectors.toSet());
+        Set<UUID> visiblePaymentIds = payments.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream()
+                .filter(payment -> visibleInvoiceIds.contains(payment.getInvoiceId()))
+                .map(Payment::getId).collect(java.util.stream.Collectors.toSet());
+        return rows.stream().filter(refund -> visiblePaymentIds.contains(refund.getPaymentId())).toList();
     }
     
     @Transactional
     public ServiceRequest pauseSla(UUID id, String reason, Principal p) {
         servicePermission(p);
         permission(p, "SERVICE_UPDATE");
-        if (p.roles() == null || !p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (reason == null || reason.isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SLA pause reason is required");
         ServiceRequest t = ticket(id, p.tenantId());
+        ensureTicketAccess(t, p);
         if (t.getSlaPausedAt() != null) throw new ResponseStatusException(HttpStatus.CONFLICT, "SLA is already paused");
         if (Set.of("CLOSED", "CANCELLED").contains(t.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Closed tickets cannot be paused");
@@ -1016,9 +1143,8 @@ public class FinanceService {
     public ServiceRequest resumeSla(UUID id, String reason, Principal p) {
         servicePermission(p);
         permission(p, "SERVICE_UPDATE");
-        if (p.roles() == null || !p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r)))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         ServiceRequest t = ticket(id, p.tenantId());
+        ensureTicketAccess(t, p);
         if (t.getSlaPausedAt() == null) throw new ResponseStatusException(HttpStatus.CONFLICT, "SLA is not paused");
         long seconds = Duration.between(t.getSlaPausedAt(), Instant.now()).getSeconds();
         t.setPausedSeconds(t.getPausedSeconds() + seconds);
@@ -1032,9 +1158,11 @@ public class FinanceService {
     }
     
     @Transactional
-    public void evaluateSlaBreaches() {
+    public void evaluateSlaBreaches(UUID tenantId) {
+        if (tenantId == null || !tenantId.equals(com.saumyasolar.security.TenantExecutionContext.requireTenantId()))
+            throw new IllegalArgumentException("Matching tenant execution context is required for SLA evaluation");
         Instant now = Instant.now();
-        for (ServiceRequest t : tickets.findAll()) {
+        for (ServiceRequest t : tickets.findForSlaEvaluationByTenantId(tenantId)) {
             if (t.getSlaPausedAt() != null || Set.of("CLOSED", "CANCELLED", "CUSTOMER_CONFIRMED").contains(t.getStatus()))
                 continue;
             boolean changed = false;

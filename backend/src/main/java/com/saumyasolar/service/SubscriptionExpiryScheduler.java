@@ -2,8 +2,11 @@ package com.saumyasolar.service;
 
 import com.saumyasolar.domain.AuditEvent;
 import com.saumyasolar.domain.TenantSubscription;
+import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.AuditEventRepository;
 import com.saumyasolar.repo.TenantSubscriptionRepository;
+import com.saumyasolar.repo.TenantRepository;
+import com.saumyasolar.security.TenantExecutionContext;
 import jakarta.transaction.Transactional;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -15,18 +18,23 @@ import java.util.UUID;
 public class SubscriptionExpiryScheduler {
     private final TenantSubscriptionRepository subscriptions;
     private final AuditEventRepository audits;
+    private final TenantRepository tenants;
     
-    public SubscriptionExpiryScheduler(TenantSubscriptionRepository s, AuditEventRepository a) {
+    public SubscriptionExpiryScheduler(TenantSubscriptionRepository s, AuditEventRepository a, TenantRepository tenants) {
         subscriptions = s;
         audits = a;
+        this.tenants = tenants;
     }
     
     @Scheduled(cron = "${app.subscription.expiry-cron:0 15 * * * *}")
     @Transactional
     public void expireSubscriptions() {
         Instant now = Instant.now();
-        List<TenantSubscription> expired = subscriptions.findByStatusInAndEndsAtBefore(List.of("TRIAL", "ACTIVE", "PAST_DUE"), now);
-        for (TenantSubscription s : expired) {
+        for (Tenant tenant : tenants.findAll()) {
+            try (var scope = TenantExecutionContext.open(tenant.getId())) {
+            List<TenantSubscription> expired = subscriptions.findByTenantIdAndStatusInAndEndsAtBefore(
+                    TenantExecutionContext.requireTenantId(), List.of("TRIAL", "ACTIVE", "PAST_DUE"), now);
+            for (TenantSubscription s : expired) {
             s.setStatus("EXPIRED");
             s.setUpdatedAt(now);
             subscriptions.save(s);
@@ -40,6 +48,8 @@ public class SubscriptionExpiryScheduler {
             event.setOutcome("SUCCESS");
             event.setCreatedAt(now);
             audits.save(event);
+            }
+            }
         }
     }
 }

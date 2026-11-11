@@ -1,5 +1,6 @@
 package com.saumyasolar.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import lombok.Getter;
@@ -15,6 +16,7 @@ import java.util.UUID;
 public class QuotationItem {
     @Id
     UUID id;
+    @Column(nullable = false)
     UUID tenantId;
     UUID quotationId;
     UUID productId;

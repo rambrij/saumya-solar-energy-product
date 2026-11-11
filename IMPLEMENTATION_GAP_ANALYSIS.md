@@ -1,11 +1,11 @@
 # Saumya Solar Energy Solution - Implementation Gap Analysis
 
 **Audit baseline:** `main` at `347c5cde2739bd117958521424e1d8a208847014`  
-**Audit branch:** `audit/implementation-gap-analysis`  
+**Audit branch:** `audit/phase-2-implementation-gap-analysis`  
 **Repository:** `rambrij/saumya-solar-energy-product`  
 **Primary business source:** `saumya-solar-energy-solution-requirements.md`  
 **Technical source:** `saumya-solar-production-ready-srs-hld.md`  
-**Review date:** 2026-11-09
+**Review date:** 2026-11-11
 
 ## Audit method, evidence standard and limitations
 
@@ -41,7 +41,7 @@ Status definitions:
 
 1. **Tenant isolation is strong in many reviewed service paths but is not yet proven exhaustively.** The SRS calls for defense-in-depth, including cross-tenant negative tests and tenant-aware database relationships. Several services explicitly use tenant-scoped repository methods, but a complete endpoint-by-endpoint guessed-ID test campaign has not been demonstrated.
 2. **Authentication rate limiting and password-login lockout have now been added in the Phase 1 branch update.** V52 and focused tests are present, but migration execution and automated test results remain unverified; proxy-aware client IP handling and audit events remain open.
-3. **Inventory reservation expiry/reconciliation is explicitly documented as not implemented.** Abandoned reservations require manual release.
+3. **Phase 3 reservation expiry/reconciliation is now implemented in the Phase 3 branch.** Its latest expiry/reconciliation changes still require the complete updated CI run; production preflight remains separate.
 4. **CMS/blog is absent** despite being in SRS scope.
 5. **In-app notification inbox is absent.** Email/SMS/WhatsApp delivery tracking is not the same capability.
 6. **Real hosted payment checkout, settlement reconciliation and provider refunds are not enabled.** The adapter and webhook foundations exist.
@@ -65,7 +65,7 @@ The codebase is materially beyond a basic MVP: CRM, quotation, inventory, instal
 | IAM-05 | Identity | Login throttling, account lockout and authentication endpoint rate limits | PARTIALLY IMPLEMENTED | AuthenticationRateLimitFilter; AuthLifecycleService.authenticate | shared authenticatedFetch handles 429 and session expiry | V52 app_user lockout fields; auth_rate_limit_bucket | Persistent account lockout; DB-backed IP/path rate limiting | AuthenticationRateLimitFilter.requestPath/doFilterInternal; ClientAddressResolver; AuthenticationRateLimitCleanup; V52; ClientAddressResolverTest; AuthenticationRateLimitFilterTest; AuthLifecycleServiceTest | Trusted exact-IP proxy allowlist and scheduled cleanup added; CIDR ranges, per-account/email recovery limits, live ingress verification and rate-limit audit events remain |
 | IAM-06 | Authorization | Permission catalogue and server-side role/permission checks | PARTIALLY IMPLEMENTED | Existing coarse permission checks retained; V53 catalogue and DataSeeder employeeRolePermissions expanded | RoleNavigation.tsx and role navigation continue filtering existing permission strings | permission; role; role_permission; user_role; V53 | JWT filter reloads roles and permissions from DB | JwtFilter.doFilterInternal; AppService.requirePermission; DataSeeder.employeeRolePermissions; V53; Release12TenantIntegrationTest | Fine-grained catalogue and employee grants added, but legacy broad permission codes are still enforced by multiple services; endpoint-by-endpoint least-privilege conversion and assigned-resource scopes remain |
 | IAM-07 | Authorization | Vendor employee role creation and permission-level customization | PARTIALLY IMPLEMENTED | Controller employee creation uses predefined roles; AuthLifecycleService audits assignment/status changes | RoleNavigation.tsx; users editor | role; permission; role_permission; user_role; V53 | Vendor employee creation rejects platform role escalation; custom role/permission editor not implemented | Controller.createEmployee; AuthLifecycleService.createEmployee/setEmployeeEnabled; DataSeeder.employeeRolePermissions; Release12TenantIntegrationTest | SRS fine-grained predefined grants added and platform role escalation negative test added; custom roles, permission editor, audit tests for every role change and fine-grained backend endpoint enforcement remain |
-| TEN-01 | Tenant | Platform tenant provisioning and vendor admin bootstrap | PARTIALLY IMPLEMENTED | TenantAdminService; Controller tenant endpoints | PlatformDashboard in main.tsx | tenant; app_user; role | Platform-only permission guard | TenantAdminService.create/provisioning methods; PlatformDashboard create handler | Lifecycle covers provisioning/activation/suspension, not full Pending→Verified→Active→Suspended→Closed lifecycle |
+| TEN-01 | Tenant | Platform tenant provisioning and vendor admin bootstrap | IMPLEMENTED | TenantAdminService; AuthLifecycleService; JwtFilter | PlatformDashboard lifecycle actions and tenant detail metadata | tenant lifecycle actor/timestamp columns; V3 | Platform-only transitions; login/JWT tenant ACTIVE gate; session revocation on suspension/closure | TenantAdminService.transition; AuthLifecycleService.tenantIsActive; JwtFilter; Release12TenantIntegrationTest | Lifecycle path is source-complete; production operational sign-off remains separate |
 | TEN-02 | Tenant | Vendor-to-vendor data isolation across APIs | PARTIALLY IMPLEMENTED | AppService tenant-scoped lookups; FinanceService; OperationsService; EnterpriseSaasService | Vendor pages pass authenticated token; no UI-only isolation assumed | Tenant IDs broadly present; composite tenant FKs are not consistently evident in V1 schema | JWT tenant resolved from DB identity; services frequently use findByIdAndTenantId | AppService.vendor/requireCustomer; FinanceService.ensureTicketAccess; OperationsService.order/warehouse; V43 branch FKs | Strong service-layer scoping in reviewed flows; exhaustive endpoint-by-endpoint negative tests not proven |
 | TEN-03 | Tenant | Customer ownership isolation | PARTIALLY IMPLEMENTED | CustomerAccountService; FinanceService; PaymentGatewayCheckoutService | Customer portal uses customer endpoints | customer_profile; customer_order; quotation; invoice; service_request | Customer identity checked in reviewed checkout/service paths | PaymentGatewayCheckoutService.authorizeInvoice; CustomerAccountService | Need systematic guessed-ID tests for every customer document/record endpoint |
 | TEN-04 | Tenant | Branch and warehouse isolation | IMPLEMENTED | EnterpriseSaasService; OperationsService | EnterpriseSaasPanel; OperationsPanel | branch; branch_user; warehouse; branch_id columns | Composite tenant/branch FKs in V37/V43; service checks | EnterpriseSaasService.createBranch; OperationsService.warehouse; V37/V43 migrations | Branch scope exists; unassigned legacy branch_id records remain NULL by design |
@@ -81,10 +81,10 @@ The codebase is materially beyond a basic MVP: CRM, quotation, inventory, instal
 | QUO-03 | Quotation | Quotation PDF with vendor branding, terms, warranty and email delivery | PARTIALLY IMPLEMENTED | Controller PDF generation and NotificationService | Quotation UI invokes PDF/download/email actions where available | Quotation snapshots and package/vendor data | Tenant authorization on quotation access | Controller quotation PDF/email mappings; NotificationService | PDF flow exists but full document fidelity against every required field/branding and delivery attachment is not demonstrated |
 | QUO-04 | Quotation | Customer acceptance/rejection of exact quotation version | IMPLEMENTED | Controller customer decision; AppService/QuotationRevisionService | Customer quotation actions in main.tsx | quotation decision actor/time/version columns; V3 | Customer ownership and version validation | Controller decision endpoints; V3; Release2SecurityTest | Decision audit is represented in schema and tests |
 | ORD-01 | Orders | Idempotent accepted-quotation-to-order conversion | IMPLEMENTED | AppService conversion transaction | Vendor/customer quotation workflows | customer_order unique quotation; idempotency_record | Tenant and customer checks | AppService conversion method; IdempotencyRecordRepository; Release2SecurityTest | Idempotency and uniqueness are present |
-| ORD-02 | Orders | Configurable order state machine and complete transition history | PARTIALLY IMPLEMENTED | OperationsService.transition/status; order history | OperationsPanel order actions | customer_order; order_status_history | Permission/tenant checks | OperationsService.transition/status/orderHistory | Transition rules exist but fully configurable state definitions and guards are not established |
+| ORD-02 | Orders | Configurable order state machine and complete transition history | IMPLEMENTED | OperationsService.transitionOrder; OrderTransitionPolicyRepository | OperationsPanel permitted transitions and policy editor | order_transition_policy; order_status_history; V3 | Tenant-scoped order lock; code-owned permission per edge; deny disabled/unknown transitions | OperationsService.transitionOrder; transitionOptions; updateTransitionPolicy; Release12TenantIntegrationTest | Policy supports approved edge enable/disable; adding new state edges remains a controlled code/migration change |
 | INV-01 | Inventory | Warehouse stock ledger, receipt/issue/return/damage/adjustment/transfer | IMPLEMENTED | OperationsService movement/receive/issue/transfer/adjust | OperationsPanel inventory tabs | warehouse; inventory_balance; inventory_transaction | Tenant and warehouse ownership checks | OperationsService.movement/receive/issue/transfer; V11/V12/V14 | Immutable ledger model and reversals are present |
 | INV-02 | Inventory | Order stock reservation with concurrency protection | IMPLEMENTED | OperationsService.reserve/release | OperationsPanel reserve action | inventory_reservation; inventory_balance | Tenant/order/warehouse checks | OperationsService.reserve; Release3OperationsIntegrationTest | Concurrency tests exist in backend suite |
-| INV-03 | Inventory | Reservation expiry and abandoned-order reconciliation job | NOT IMPLEMENTED | README explicitly says expiry/background reconciliation is not yet implemented | No expiry management UI found | Reservation expiry metadata/job not evidenced | Operational manual release only | README.md Known Release 3 validation limitations; OperationsService.release | Abandoned reservations require manual release/reconciliation |
+| INV-03 | Inventory | Reservation expiry and abandoned-order reconciliation job | IMPLEMENTED | OperationsService; ReservationMaintenanceScheduler | OperationsPanel reservation list/release controls | inventory_reservation expiry/release metadata; V2 | TenantExecutionContext; tenant-scoped locked balance/order operations | OperationsService.expireReservationsForTenant/reconcileReservationsForTenant; ReservationMaintenanceScheduler; Release3OperationsIntegrationTest | Scheduled runtime registration and production monitoring remain operational deployment checks |
 | INS-01 | Installation | Installation scheduling, engineer/team assignment, checklist and commissioning | IMPLEMENTED | OperationsService create/reschedule/complete/commission; Phase2OperationsController | OperationsPanel installation/checklist/commission flow | installation_job; installation_team; checklist tables; V11/V12 | Tenant and same-tenant engineer/team validation | OperationsService.validateTeamMembers/createInstallation/commission; OperationsPanel | Commissioning and sign-off flow is represented |
 | WAR-01 | Warranty | Warranty activation and warranty claims lifecycle | IMPLEMENTED | OperationsService.createWarranty; Phase2OperationsController | OperationsPanel warranty and claims views; customer portal | warranty; warranty_claim; V28 | Tenant/customer ownership and attachment authorization | OperationsService.createWarranty; Phase2OperationsController; Release4FinanceServiceAndPlatformTest | Expiry scheduler and claim attachment functionality are present |
 | SVC-01 | Service | Service tickets, visits, assignment, customer confirmation and closure | IMPLEMENTED | FinanceService createTicket/assignTicket/scheduleVisit/startVisit/completeVisit/confirmService/closeTicket | FinanceServicePanel and customer service screens | service_request; service_visit; service_event | Ticket access is tenant/customer scoped | FinanceService.ensureTicketAccess/getTicket; FinanceServicePanel | Main lifecycle is wired; remaining SLA escalation gaps are separate |
@@ -246,7 +246,7 @@ The codebase is materially beyond a basic MVP: CRM, quotation, inventory, instal
 - **Working portions:** SLA due calculation and scheduled evaluation.
 - **Missing portions:** README states automated SLA email/SMS/push escalation and provider-specific delivery policy remain future work.
 - **Evidence:** `FinanceService.java`; `ServiceSlaScheduler.java`; `FinanceServicePanel.tsx`; README Known Release 4 limitations.
-- **Required changes:** Escalation policy, notification events, retry/dead-letter monitoring and tests.
+- **Required changes:** Escalation policy, notification events, persisted retry/failure-state monitoring and tests.
 - **Priority:** Medium.
 
 ### GST and finance compliance
@@ -286,7 +286,7 @@ The codebase is materially beyond a basic MVP: CRM, quotation, inventory, instal
 - **Working portions:** Business event delivery paths and opt-in controls.
 - **Missing portions:** No in-app inbox, durable queue/outbox, provider delivery webhooks, and some provider-specific delivery policies remain unimplemented. Email uses synchronous `SimpleMailMessage` rather than an asynchronous event pipeline.
 - **Evidence:** `NotificationService.java`; `NotificationDelivery.java`; `CustomerAccountController.java`; V23/V29; README notification limitations.
-- **Required changes:** Add outbox/queue, delivery state machine, in-app channel, templates/preferences, dead-letter handling and channel-specific tests.
+- **Required changes:** Retain persisted notification_delivery records, complete the delivery state machine, add the in-app channel and templates/preferences, and test persisted failure/retry handling per channel.
 - **Priority:** Medium.
 
 ### Audit trail
@@ -341,7 +341,7 @@ Expected behavior and actual code appear aligned for this capability; the README
 5. Select and implement a real payment provider; add settlement reconciliation and provider refund execution.
 6. Close GST statutory rule decisions and implement approved invoice fields/numbering.
 7. Add SLA escalation policies and channel delivery.
-8. Add a durable notification/integration outbox or queue with retry/dead-letter semantics.
+8. Use persisted notification-delivery and integration-job records with retry state, atomic claims and operator retry; do not introduce separate messaging infrastructure.
 9. Complete audit event coverage for business mutations.
 10. Add backend pagination for unbounded list endpoints.
 11. Add database-backed backup/restore automation and operational runbooks.
@@ -465,7 +465,7 @@ Expected behavior and actual code appear aligned for this capability; the README
 - CMS and in-app notification tests (features absent).
 - Reservation expiry/reconciliation and crash-recovery tests.
 - Real provider checkout, settlement reconciliation and provider refund tests.
-- Notification outbox retry/dead-letter/provider webhook tests.
+- Notification persisted-delivery retry/provider webhook tests.
 - Full audit event coverage and append-only behavior tests across all modules.
 - Backup restore and RPO/RTO rehearsal tests.
 - Performance/load tests for high-volume lists, reports and analytics.
@@ -598,7 +598,7 @@ Maintain these in a separate product capability catalogue and ensure each featur
 
 ### Phase 6 — Notifications and integrations
 
-- **Features:** durable outbox/queue, dead-letter handling, SLA escalation, provider-specific adapters and webhooks.
+- **Features:** persisted notification and integration job state, retry monitoring, SLA escalation, provider-specific adapters and webhooks.
 - **Backend impact:** NotificationService, integration scheduler and provider adapters.
 - **Frontend impact:** notification preferences and delivery status.
 - **Database impact:** outbox, inbox, retry and provider event state.
@@ -901,3 +901,1265 @@ Final source commit `aca7facda4fbd4133f79b732c9b5b1bc0ce1e931` passed [GitHub Ac
 The report and gap analysis were updated after this source commit; no application source changes were made after the passing CI run.
 
 The remaining production blocker is outside the source tree: the inspected Render API service still points at the legacy `saumya-solar-energy-solution` repository on `main`, not this repository/branch. Its runtime CORS, cookie and trusted-proxy environment values are not exposed in the service inspection response. Do not claim production deployment readiness until the intended Render service is explicitly aligned and its runtime settings are verified.
+
+
+---
+
+## Phase 2 — Tenant isolation and data integrity (2026-11-10)
+
+### Scope and audit method
+
+This section extends the existing analysis. The source-of-truth order is the business requirements document, then the SRS/HLD, then this gap analysis. README was not used to validate Phase 2 behavior. The source audit covered all API controller mapping inventories, service/repository interfaces, scheduled components, migration V1–V58 and the frontend source/test inventory. Evidence below is file path plus line number from the audited branch; line numbers refer to the post-change source unless stated otherwise.
+
+**Stack detected:** Java 21, Spring Boot 3.5.7, Maven, Spring Data JPA, MySQL 8.4, Flyway SQL migrations, React/TypeScript, Vite and Vitest. Test frameworks: JUnit 5/Spring Boot Test/Mockito and Vitest/Testing Library. No separate ORM tenant filter or universal tenant-aware base repository was found; the current design is service-level tenant-scoped repository methods.
+
+### Phase 2 audit table
+
+| Item | Requirement ref | Status (Implemented/Partial/Missing) | Evidence (file:line) | Planned fix |
+|---|---|---|---|---|
+| Authenticated tenant identity is reloaded and matched to JWT tenant/account claims | SRS §8.2, §15; TEN-02 | Implemented | `backend/src/main/java/com/saumyasolar/security/JwtFilter.java:36-56` | Retain DB-backed identity check; add broader tampered-claim integration cases |
+| Generic vendor list endpoints (users/catalog/customers/enquiries/leads/surveys/quotes/orders) | Business req §13; SRS §8.2, §20.4 | Partial | `backend/src/main/java/com/saumyasolar/service/AppService.java:157-240` | Expand guessed-ID/list/export tests for every resource and permission/assignment combination |
+| Generic create endpoints and linked category/product/customer validation | SRS §8.2, §10.4 | Partial | `AppService.java:298-344`; `Controller.java:439-444` | Add cross-tenant body-ID mutation tests and DB FK coverage for all relationships |
+| Lead update/history and employee assignment | SRS §9.3, §10.3 | Partial | `AppService.java:650-696`; `Controller.java:472-477` | Complete negative tests for reassignment, branch scope and history IDOR |
+| Survey create/update and survey-linked quotation validation | SRS §10.5, §8.4 | Partial | `AppService.java:717-767`; `SurveyLifecycleService.java`; `SurveyLifecycleController.java` | Add full guessed-ID and attachment boundary tests |
+| Quotation create/action/revision/PDF endpoints | SRS §10.6, §8.4 | Partial | `Controller.java:491-516`; `AppService.java:751-933`; `QuotationRevisionService.java` | Exercise every action, revision and PDF using Tenant A against Tenant B IDs |
+| Package/product/category update/delete and image upload | SRS §10.4, §8.2 | Partial | `Controller.java:559-628`; `AppService.java:458-526` | Complete update/delete/upload cross-tenant tests; verify object key ownership |
+| Customer profile/address/order endpoints | Business req §3; SRS §10.3, §10.12 | Partial (core ownership negative tests added) | `CustomerAccountController.java`; `CustomerAccountService.java`; `Release12TenantIntegrationTest.customerAddressEndpointsEnforceAuthenticatedCustomerOwnershipAndIgnoreTamperedOwnerIds`; `Release12TenantIntegrationTest.customerCannotReadAnotherCustomersOrdersInvoicesOrServiceTickets` | Extend coverage to every customer-owned route, write action and download |
+| Inventory/warehouse/order/installations/warranty endpoints | SRS §10.8-10.11 | Partial | `Controller.java:696-916`; `OperationsService.java:90-1055` | Expand branch/customer IDOR and tampered body IDs; keep 404 for out-of-scope resources |
+| Finance invoice/payment/refund/service endpoints | SRS §10.12-10.14 | Partial | `FinanceController.java:37-263`; `FinanceService.java:131-450,563-993` | Add tenant/customer/branch tests for every mutation and read path |
+| Operations reports CSV/PDF | Business req §14; SRS §10.16, §8.3 | Partial (JSON/CSV tenant isolation test added) | `Phase2OperationsController.java:290-383`; `Release12TenantIntegrationTest.vendorCannotReadForeignSurveyOrDownloadForeignServiceEvidence` | Add equivalent XLSX/PDF content assertions and branch-filter export tests |
+| Platform tenant CSV/PDF exports | SRS §9, §10.2 | Partial | `Controller.java:300-426`; `TenantAdminService.java` | Keep platform-only authorization; test non-platform denial and audit of export |
+| Quotation PDF download | SRS §10.6, §8.3 | Partial | `Controller.java:516`; `AppService.java:921-933` | Add cross-tenant and assigned-sales PDF negative tests |
+| Invoice/payment PDF and receipts | SRS §10.12, §8.3 | Partial | `FinanceController.java:72-114`; `FinanceService.java:131-450` | Add customer ownership and cross-tenant binary response tests |
+| Private service/survey/warranty attachment download | SRS §8.3, §10.14 | Partial (service/survey parent IDOR tests added) | `ServiceAttachmentService.java`; `SurveyAttachmentService.java`; `WarrantyClaimAttachmentService.java`; `Release12TenantIntegrationTest.vendorCannotReadForeignSurveyOrDownloadForeignServiceEvidence` | Add warranty-claim attachment negative test and direct attachment-ID tampering tests for each module; no signed URL is currently used by these controller paths |
+| Service SLA scheduler | SRS §8.3, §10.14 | Implemented (source) | `ServiceSlaScheduler.java:7-22`; `FinanceService.java:1037-1070` | Scheduler now iterates tenants and passes explicit tenant ID; add multi-tenant scheduler integration test |
+| Subscription expiry scheduler | SRS §8.3, §10.2 | Implemented (source) | `SubscriptionExpiryScheduler.java:14-48`; `TenantSubscriptionRepository.java` | Scheduler now iterates tenants and uses tenant-qualified query; add multi-tenant scheduler integration test |
+| Warranty expiry/reminder scheduler | SRS §8.3, §10.11 | Implemented (source) | `WarrantyExpiryScheduler.java:13-57`; `WarrantyRepository.java`; `WarrantyExpirySchedulerTest.java` | Tenant-qualified expiry/reminder queries and test fixture added; add DB-backed multi-tenant test |
+| Integration queue scan/claim/process | SRS §8.3, §10.17 | Implemented (source) | `IntegrationSyncScheduler.java:11-130`; `IntegrationSyncJobRepository.java` | Queue discovery, atomic claim and reload now include tenant ID; add concurrent multi-tenant scheduler test |
+| Scheduled jobs tenant context lifecycle | SRS §8.3 | Implemented (scheduled jobs) | `security/TenantExecutionContext.java:1-35`; `ServiceSlaScheduler.java:20-24`; `SubscriptionExpiryScheduler.java:32-50`; `WarrantyExpiryScheduler.java:44-62`; `IntegrationSyncScheduler.java:39-45` | Each tenant iteration opens an explicit ThreadLocal scope, queries by the context tenant ID and restores/clears the previous scope in try-with-resources. Async/event listeners must use the same scope before being enabled |
+| Product → category FK | SRS §8.3, §11 | Implemented by V57 | `V1__complete_release2.sql`; `V57__tenant_aware_catalogue_foreign_keys.sql` | V57 adds composite (tenant_id,id) parent key and tenant-aware FK after fail-closed integrity preflight |
+| Package item → package/product FKs | SRS §8.3, §11 | Implemented by V57 | `V1__complete_release2.sql`; `V57__tenant_aware_catalogue_foreign_keys.sql` | V57 requires non-null package_item.tenant_id and adds both composite tenant-aware FKs |
+| Branch relationships | SRS §8.3, §11 | Implemented for branch-owned records | `V37__enterprise_saas_foundation.sql`; `V43__branch_scope_business_records.sql` | Existing composite tenant/branch FKs retained; broader customer/employee relationship coverage remains |
+| Sales, order, inventory, installation, warranty, finance, service, evidence, offline, integration and actor FKs | SRS §8.3, §11 | Implemented by V58 (schema constraints); production preflight still required | `V58__operational_tenant_composite_foreign_keys.sql` (89 composite tenant FKs); `tenant-isolation-v58.sql` | Run V58 fail-closed preflight against a production snapshot; remediate all mismatches before deployment |
+| Repository query predicates (derived/JPQL/native) | SRS §8.2-8.3 | Partial | `repo/*.java`; example `CustomerOrderRepository.java:13-25`, `ProductRepository.java:9-15` | Tenant-aware derived methods are common; exhaustive query-by-query static/runtime proof remains |
+| Frontend tenant/customer/branch filters and route params | SRS §6.2, §8.2 | Partial | `frontend/src/EnterpriseSaasPanel.tsx`; `OperationsPanel.tsx`; `FinanceServicePanel.tsx`; `authenticatedFetch.ts` | Client filters remain UX only; add API-level tampering tests and verify 403/404 handling per workflow |
+| Phase 1 identity and permission baseline | SRS §8.2, §9 | Implemented as prerequisite baseline | `JwtFilter.java:36-60`; `PHASE_1_AUTHENTICATION_SECURITY_IMPLEMENTATION.md`; V54–V56 | Do not redo Phase 1; tenant-resource coverage still needs Phase 2 negative tests |
+
+### What changed in Phase 2
+
+1. **SLA breach processing:** removed the global `ServiceRequestRepository.findAll()` scan. `FinanceService.evaluateSlaBreaches(UUID tenantId)` rejects a null tenant and reads only `findByTenantIdOrderByCreatedAtDesc(tenantId)`. The scheduler iterates tenants and passes the explicit tenant ID.
+2. **Subscription expiry:** replaced the global expiry query with `findByTenantIdAndStatusInAndEndsAtBefore`; the scheduler loops over tenants and audits each expired subscription with that subscription's tenant ID.
+3. **Warranty expiry/reminders:** replaced unscoped warranty queries with tenant-qualified repository methods. The scheduler loops over tenants; customer lookup already includes the warranty tenant. Updated unit tests to exercise tenant-qualified query calls.
+4. **Integration sync:** queued and stale job discovery now includes tenant ID; atomic claim includes both job ID and tenant ID; reload uses `findByIdAndTenantId`; connection lookup remains tenant-qualified. All scheduled workers now use `TenantExecutionContext` with try-with-resources cleanup; SLA service rejects a missing or mismatched active tenant scope.
+5. **Database:** V57 protects product/category and package-item/package/product relationships. New V58 adds 89 composite tenant-aware foreign keys across sales, survey, quotation, order, inventory, installation, warranty, invoice, payment/refund, service, evidence, offline sync, integration, branch membership, engineer profiles, approval actors, audit branch and notification ownership. V58 performs fail-closed orphan/cross-tenant preflight checks before adding constraints and adds composite parent keys/indexes.
+6. **Database negative tests:** `tenant-isolation-v57.sql` and `tenant-isolation-v58.sql` are executed in MySQL 8.4 CI. V58 assertions prove cross-tenant lead-history, service-comment and service-request/customer references are rejected.
+7. **Endpoint negative tests:** expanded `Release12TenantIntegrationTest` for customer-owned address tampering, customer-to-customer order/invoice/service isolation, generic vendor/customer list isolation across 13 list routes, cross-tenant branch CRUD/membership/analytics, foreign survey/service-attachment parent access, operations report/CSV export scoping and vendor denial of platform tenant export. `DataSeeder` now includes `BRANCH_MANAGE` so seeded vendor admins receive the same branch permission that V51 grants in migrated databases.
+8. **CI:** release validation applies/asserts V57 and V58 on MySQL 8.4 and runs the expanded backend integration suite.
+
+### Gaps deferred / remaining evidence
+
+- **Full endpoint-level negative matrix:** 222 HTTP mappings have been inventoried. Negative tests now cover the critical tenant/customer/branch and private attachment/report paths listed in the matrix below, but not every action of every mapping. Authentication lifecycle, platform-only management, all CRUD variants for each domain resource, warranty-claim attachment downloads, and every XLSX/PDF export still require dedicated negative tests.
+- **Customer and branch matrix:** core cross-customer addresses/orders/invoices/service and cross-tenant branch membership/analytics/CRUD tests now exist. Systematic ID-guessing remains for all customer resources and branch-assigned record families; null-branch visibility remains a product policy question.
+- **Database constraints:** V57 + V58 cover catalogue and the operational/financial/evidence relationships listed in V58. Remaining legacy links not yet converted include global/platform identity relations and resource links not represented by a tenant_id/id pair. Run V58 preflight on production data before rollout; do not bypass a failure.
+- **Background jobs:** scheduled loops are explicitly tenant-qualified. The integration sync worker also carries tenant ID from the persisted job. No current `@Async` method was identified in the reviewed backend inventory; asynchronous event listeners and future queue consumers need explicit tenant context before use.
+- **Signed URLs:** reviewed attachment controllers stream bytes after checking parent and attachment ownership; no signed-URL route was found in those paths. If object storage later returns signed URLs, the token must bind tenant + resource and expire.
+- **Frontend:** source has authenticated API helpers and role/branch UI filters. UI filters are not an authorization control; complete API negative tests are still needed to demonstrate tampered client filters cannot broaden data access.
+- **Migration data preflight:** V57 and V58 contain fail-closed SQL checks. CI passes against an isolated MySQL 8.4 migration database. This is not a substitute for running the same preflight against a production snapshot; existing production data has not been inspected.
+
+### Document conflicts
+
+- The business requirements describe vendor/tenant separation and customer identities as tenant-specific; the SRS §8.1 explicitly says a customer may have separate identities per vendor and cross-vendor customer unification is not required. These are consistent.
+- The SRS §8.2 allows tenant resolution from trusted JWT/server-side identity or verified public storefront slug. No conflict: public storefront slug is a separate unauthenticated discovery path; authenticated business writes must use principal-derived tenant.
+- The SRS requires tenant-owned entities to have non-null tenant_id, while V1 contains nullable tenant_id on some older relationship tables. V57 makes package_item.tenant_id NOT NULL after a preflight check; V58 explicitly blocks nullable legacy sales tenant IDs before creating composite constraints.
+- No business-vs-technical conflict was found that changes Phase 2 scope.
+
+### Verification status and baseline
+
+- **Local baseline/build:** not run. A local clone was attempted but the execution environment could not resolve github.com. The repository's GitHub Actions run for base-branch commit `295e284900d7aa7f85dc002f8aa2f905d4ec36df` is the available baseline.
+- **Baseline backend:** 128 tests, 1 failure, 0 errors, 0 skipped. Existing failure: `Release12TenantIntegrationTest.customSalesRoleCannotReadUnassignedLeadsOrAssignOutsideItsScope` expected the blocked platform-permission escalation audit event but did not find it.
+- **Baseline frontend:** 22 tests, 1 failure. Existing failure: `public-navigation.test.tsx` queries `Our Products` with `getByRole`, but the responsive header renders two matching links.
+- **Baseline MySQL migration and application startup jobs:** passed on that base commit.
+- **Phase 2 branch CI:** run `42780928514` on commit `862198c5f40baa86ca69629520d108b561384ea3` passed all four jobs: backend 137 tests, 0 failures/errors; frontend 22 tests, 0 failures plus production build; MySQL 8.4 V1–V58 migrations plus V57/V58 cross-tenant FK assertions (including customer-profile/user mismatch rejection); and Spring Boot startup against MySQL 8.4/Mailpit. Later commits only update audit/summary documentation. No local test pass is claimed; verification was performed in GitHub Actions.
+- **Lint/format:** no dedicated lint/format scripts or Maven formatter plugin were found in the inspected build configuration; frontend `npm run build` performs TypeScript typecheck plus Vite production build. The existing frontend duplicate-responsive-link test and role-escalation audit persistence regression were corrected after the base CI exposed those pre-existing failures. The audit remains in the caller transaction to preserve its actor foreign-key ordering; the specific role-escalation service methods commit on `ResponseStatusException` so the denied-attempt event survives.
+
+### Migration and rollback notes
+
+- V57 and V58 are additive and ordered after V56/V57. They do not rewrite IDs or edit any previously applied migration.
+- Before rollout, run the preflight statements against a production-like snapshot and resolve any mismatch rather than bypassing the checks.
+- Forward rollback for V57: drop `fk_package_item_product_tenant`, `fk_package_item_package_tenant`, and `fk_product_category_tenant`; drop the three V57 `uq_*_tenant_id` indexes; restore `package_item.tenant_id` nullable only if the schema contract explicitly requires it.
+- Forward rollback for V58: drop the 89 named `fk_*_tenant` constraints in V58, then drop the V58 `uq_*_tenant_id` indexes. Do not drop existing V37/V43/V49/V57 constraints or indexes. Prefer a reviewed forward corrective migration in shared environments; Flyway Community does not automatically reverse applied versioned migrations.
+- V57/V58 add many composite indexes and may take metadata/DDL locks. Apply during a controlled migration window, inspect production preflight output, and verify MySQL DDL behavior in staging first.
+
+### Open Questions
+
+1. Should the Phase 2 acceptance boundary include every legacy single-column tenant-owned FK in the full schema, or may the remaining relationships be delivered as a separately approved Phase 2.1 migration set?
+2. Are branch-unassigned legacy records intentionally visible to all branch memberships, as current `EnterpriseSaasService` behavior allows for null branch IDs?
+3. Which browser versions are supported for the frontend's branch and role filtering UX? (Authorization remains server-side regardless.)
+
+
+### Phase 2 endpoint security test matrix (post-V58)
+
+The matrix below records the endpoint families exercised by automated negative tests. It is not a claim that every mapping in the 222-route inventory has an individual test. Unlisted operations remain Partial and must not be treated as production-accepted.
+
+| Endpoint family | Negative scenarios executed | Automated evidence | Status / remaining |
+|---|---|---|---|
+| Catalogue product | Cross-tenant category ID on create; cross-tenant product excluded from list | `Release12TenantIntegrationTest.productCannotReferenceAnotherTenantsCategory`; `productListDoesNotExposeAnotherTenantsProducts`; `tenant-isolation-v57.sql` | Implemented for create/list and DB category relationship; update/delete/image still Partial |
+| Catalogue update/delete and customer order create | Foreign product/category/package update and delete IDs return 404; customer product-order creation with a foreign product ID plus tampered tenant/customer IDs is rejected | `Release12TenantIntegrationTest.genericVendorListEndpointsNeverReturnForeignTenantResources` | Implemented for these catalogue mutation and customer-order create paths; category/product/package image upload and all other resource mutation routes remain Partial |
+| Generic vendor/customer lists | Cross-tenant rows excluded from `/users`, `/categories`, `/products`, `/packages`, `/customers`, `/enquiries`, `/leads`, `/surveys`, `/quotations`, `/orders`, `/catalog-categories`, `/catalog-products` and `/catalog-packages` | `Release12TenantIntegrationTest.genericVendorListEndpointsNeverReturnForeignTenantResources` | Implemented for list predicates; remaining customer-specific `/customer-enquiries` and `/customer-orders` are covered by the customer-specific tests above, while every other read/write verb remains separately tracked |
+| Enquiry/lead | Foreign employee assignment rejected; assigned-sales user cannot read/update another user's lead; cross-tenant lead history read denied | `Release12TenantIntegrationTest.leadCannotBeAssignedToEmployeeFromAnotherTenant`; `salesExecutiveCanOnlyReadAndUpdateAssignedLeads`; `customSalesRoleCannotReadUnassignedLeadsOrAssignOutsideItsScope`; V58 SQL | Partial: all lead action variants and enquiry IDOR not individually tested |
+| Order/quotation/invoice/service/installation | Foreign tenant guessed IDs denied for order history, quotation revisions, invoice items, service ticket and installation checklist | `Release12TenantIntegrationTest.vendorCannotReadAnotherTenantsOrdersQuotesInvoicesServiceOrInstallationRecords` | Partial: write/action/PDF/payment/refund paths still require per-route tests |
+| Customer-owned data | Customer A cannot list customer B addresses/orders/invoices/service tickets; address update/delete guessed IDs return 404; tampered tenant/customer IDs in address create are ignored | `Release12TenantIntegrationTest.customerAddressEndpointsEnforceAuthenticatedCustomerOwnershipAndIgnoreTamperedOwnerIds`; `customerCannotReadAnotherCustomersOrdersInvoicesOrServiceTickets` | Partial: profile, payment, installation, warranty, quotation and document actions still require tests |
+| Branch | Foreign branch membership, analytics, update, deactivate and assignment access denied | `Release12TenantIntegrationTest.vendorBranchEndpointsCannotReadOrMutateAnotherTenantsBranch` | Partial: assigned-branch record filters and null-branch behavior remain |
+| Private evidence | Foreign service-ticket attachment list/download parent and foreign survey detail/attachment list denied | `Release12TenantIntegrationTest.vendorCannotReadForeignSurveyOrDownloadForeignServiceEvidence` | Partial: warranty-claim attachment, direct foreign attachment IDs and upload tampering remain |
+| Reporting/export | Tenant operations report and CSV export use caller tenant; vendor cannot invoke platform tenant export | `Release12TenantIntegrationTest.vendorCannotReadForeignSurveyOrDownloadForeignServiceEvidence` | Partial: XLSX/PDF output assertions, filter tampering and platform export audit remain |
+| Database constraints | Cross-tenant category/package/product, lead-history, service-comment and service-request/customer links rejected | `tenant-isolation-v57.sql`; `tenant-isolation-v58.sql`; MySQL 8.4 migration CI | Implemented for tested constraints; all 89 V58 constraints have preflight and schema enforcement; production snapshot preflight remains |
+| Scheduled jobs | Tenant-qualified SLA, subscription expiry, warranty expiry and integration queue tests; execution context cleanup test | `ServiceSlaSchedulerTest`; `SubscriptionExpirySchedulerTest`; `WarrantyExpirySchedulerTest`; `TenantExecutionContextTest` | Partial: multi-tenant database-backed concurrent worker test and async event tests remain |
+
+### Controller endpoint inventory (one row per HTTP mapping)
+
+The route annotations below were enumerated from every `*Controller.java` under `backend/src/main/java/com/saumyasolar/api/`. All are marked **Partial** until the corresponding cross-tenant/customer/branch negative tests exist; current service checks are not treated as proof that every verb and identifier path is closed.
+
+| Controller | HTTP mapping | Status | Evidence | Required verification |
+|---|---|---|---|---|
+| BranchAnalyticsController.java | `@GetMapping("/{branchId}/analytics")` | Partial | `backend/src/main/java/com/saumyasolar/api/BranchAnalyticsController.java:19` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/auth/login")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:109` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/auth/mfa/verify")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:125` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/auth/csrf")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:141` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/auth/refresh")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:149` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/auth/logout")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:167` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PatchMapping("/users/{userId}/role")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:175` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/users")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:191` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/auth/register")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:210` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/auth/forgot-password")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:217` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/auth/reset-password")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:222` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/me")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:228` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping( "/{type:tenants\|users\|categories\|products\|packages\|customers\|enquiries\|leads\|surveys\|quotations\|orders\|customer-orders\|catalog-categories\|catalog-products\|catalog-packages\|customer-enquiries}" )` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:233` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping({ "/tenant/settings", "/settings" })` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:240` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PatchMapping({ "/tenant/settings/discount-threshold", "/settings/discount-threshold" })` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:245` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/roles")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:250` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/permissions")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:255` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/roles")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:264` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PatchMapping("/roles/{roleId}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:273` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@DeleteMapping("/roles/{roleId}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:282` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/customer/enquiries")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:295` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/platform/tenants")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:300` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/platform/tenants/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:311` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PatchMapping("/platform/tenants/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:316` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping(value = "/platform/tenants/export", produces = "text/csv")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:324` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping( value = "/platform/tenants/export.xlsx", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" )` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:342` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping(value = "/platform/tenants/export.pdf", produces = MediaType.APPLICATION_PDF_VALUE)` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:376` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/tenants")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:426` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/{type:categories\|products\|packages\|customers\|enquiries}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:439` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PatchMapping("/tenants/{id}/status")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:444` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PatchMapping("/users/{id}/enabled")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:449` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/enquiries/{id}/convert")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:467` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PatchMapping("/leads/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:472` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/leads/{id}/history")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:477` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/surveys")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:482` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/quotations")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:491` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/quotations/{id}/{action:approve\|reject-approval\|send\|accept\|reject}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:496` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/quotations/{id}/convert-to-order")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:501` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/quotations/{id}/revisions")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:506` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/quotations/{id}/revisions")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:511` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping(value = "/quotations/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:516` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PatchMapping("/packages/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:559` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@DeleteMapping("/packages/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:568` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping(value = "/packages/{id}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:573` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/public/{storeSlug}/enquiries")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:584` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/public/{storeSlug}/packages")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:589` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/public/{storeSlug}/products")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:594` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/catalog/products")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:600` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PatchMapping("/products/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:605` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@DeleteMapping("/products/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:614` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PatchMapping("/categories/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:619` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@DeleteMapping("/categories/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:628` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PatchMapping("/customers/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:633` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@DeleteMapping("/customers/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:642` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PatchMapping("/users/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:647` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@DeleteMapping("/users/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:659` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/customer/product-orders")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:676` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/customer/product-orders")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:681` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/orders/{id}/vendor-decision")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:686` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/warehouses")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:696` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/warehouses")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:701` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/inventory/balances")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:706` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/inventory/transactions")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:711` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/inventory/transactions/{id}/reverse")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:716` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/inventory/receipts")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:725` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/inventory/returns")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:730` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/inventory/issues")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:735` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/inventory/low-stock")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:740` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/inventory/damages")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:745` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/inventory/adjustments")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:750` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/inventory/transfers")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:758` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/orders/{id}/reserve")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:763` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/orders/{id}/release-reservation")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:772` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/orders/{id}/transition")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:781` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/orders/{id}/history")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:786` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/installation-teams")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:791` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/installation-teams")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:796` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PatchMapping("/installation-teams/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:801` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/installation-checklist-templates")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:810` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/installation-checklist-templates")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:815` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@DeleteMapping("/installation-checklist-templates/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:823` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/installations")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:831` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/installations")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:836` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/installations/{id}/checklist")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:844` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PatchMapping("/installations/{id}/checklist/{itemId}")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:852` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/installations/{id}/reschedule")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:862` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/installations/{id}/cancel")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:871` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/installations/{id}/schedule-history")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:880` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/installations/{id}/complete")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:888` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@PostMapping("/installations/{id}/commission")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:897` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/warranties")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:906` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/customer/installations")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:911` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Controller.java | `@GetMapping("/customer/warranties")` | Partial | `backend/src/main/java/com/saumyasolar/api/Controller.java:916` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| CustomerAccountController.java | `@GetMapping("/profile")` | Partial | `backend/src/main/java/com/saumyasolar/api/CustomerAccountController.java:46` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| CustomerAccountController.java | `@PatchMapping("/profile")` | Partial | `backend/src/main/java/com/saumyasolar/api/CustomerAccountController.java:55` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| CustomerAccountController.java | `@GetMapping("/addresses")` | Partial | `backend/src/main/java/com/saumyasolar/api/CustomerAccountController.java:64` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| CustomerAccountController.java | `@PostMapping("/addresses")` | Partial | `backend/src/main/java/com/saumyasolar/api/CustomerAccountController.java:73` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| CustomerAccountController.java | `@PutMapping("/addresses/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/CustomerAccountController.java:83` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| CustomerAccountController.java | `@DeleteMapping("/addresses/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/CustomerAccountController.java:96` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/integrations")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:108` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PostMapping("/integrations")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:113` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PatchMapping("/integrations/{id}/status")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:118` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/integrations/{id}/sync-jobs")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:127` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PostMapping("/integrations/{id}/sync-jobs")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:132` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PostMapping("/integrations/sync-jobs/{jobId}/retry")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:141` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/approval-workflows")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:146` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PostMapping("/approval-workflows")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:151` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/approval-instances")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:156` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/approval-instances/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:161` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/approval-instances/{id}/decisions")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:166` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PostMapping("/approval-instances/{id}/decisions")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:171` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/vendor/branding")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:180` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PatchMapping("/vendor/branding")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:185` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/public/{slug}/branding")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:190` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/public/store-context")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:195` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/vendor/domains")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:210` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PostMapping("/vendor/domains")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:215` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PostMapping("/vendor/domains/{id}/verify")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:220` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/branches")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:225` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PostMapping("/branches")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:230` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PutMapping("/branches/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:235` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PostMapping("/branches/{id}/activate")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:240` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PostMapping("/branches/{id}/deactivate")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:246` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PostMapping("/branches/{id}/users")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:252` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/branches/{id}/users")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:262` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@DeleteMapping("/branches/{id}/users/{userId}")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:267` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/subscription-plans")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:273` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/platform/subscription-plans")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:278` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/platform/subscription-plans/{planId}")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:283` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PutMapping("/platform/subscription-plans/{planId}")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:288` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PostMapping("/platform/subscription-plans/{planId}/activate")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:293` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PostMapping("/platform/subscription-plans/{planId}/deactivate")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:298` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@DeleteMapping("/platform/subscription-plans/{planId}")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:303` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/platform/tenants/search")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:309` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/platform/tenants/{tenantId}/subscriptions")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:314` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/platform/tenants/{tenantId}/subscriptions/{subscriptionId}")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:319` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PutMapping("/platform/tenants/{tenantId}/subscriptions/{subscriptionId}")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:328` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/platform/tenants/{tenantId}/subscription-history")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:338` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PostMapping("/platform/subscription-plans")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:343` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PostMapping("/platform/tenants/{tenantId}/subscriptions/{subscriptionId}/cancel")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:348` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PostMapping("/platform/tenants/{tenantId}/subscriptions")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:357` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@PatchMapping("/warehouses/{id}/branch")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:368` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/subscription")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:377` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/platform/analytics/tenant-usage")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:386` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| EnterpriseSaasController.java | `@GetMapping("/audit-events")` | Partial | `backend/src/main/java/com/saumyasolar/api/EnterpriseSaasController.java:395` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@GetMapping("/finance/orders-awaiting-invoice")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:37` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@GetMapping("/invoices")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:42` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/invoices")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:47` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@GetMapping("/invoices/{id}/items")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:52` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/invoices/{id}/credit-notes")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:57` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@GetMapping("/invoices/{id}/credit-notes")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:62` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/invoices/{id}/void")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:67` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@GetMapping(value = "/invoices/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:72` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@GetMapping("/payments")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:109` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@GetMapping(value = "/payments/{id}/receipt.pdf", produces = MediaType.APPLICATION_PDF_VALUE)` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:114` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/payments")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:133` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/payments/{id}/refund")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:138` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@GetMapping("/refunds")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:148` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/payment-webhooks/{provider}")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:153` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@GetMapping("/service-requests")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:168` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@GetMapping("/service-requests/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:173` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/service-requests")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:178` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/service-requests/{id}/assign")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:183` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/service-requests/{id}/visits")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:188` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/service-requests/{id}/visits/{visitId}/start")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:193` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/service-requests/{id}/visits/{visitId}/complete")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:198` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/service-requests/{id}/sla/pause")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:208` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/service-requests/{id}/sla/resume")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:213` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/service-requests/{id}/confirm")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:218` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/service-requests/{id}/close")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:223` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/service-requests/{id}/reopen")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:228` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@GetMapping("/service-requests/{id}/visits")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:233` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@GetMapping("/service-requests/{id}/history")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:238` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@GetMapping("/service-customers")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:243` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@GetMapping("/service-engineers")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:248` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/service-settings/reopen-policy")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:253` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@GetMapping("/service-sla-policies")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:258` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| FinanceController.java | `@PostMapping("/service-sla-policies")` | Partial | `backend/src/main/java/com/saumyasolar/api/FinanceController.java:263` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| IntegrationAdapterCapabilitiesController.java | `@GetMapping("/capabilities")` | Partial | `backend/src/main/java/com/saumyasolar/api/IntegrationAdapterCapabilitiesController.java:27` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| OfflineSyncController.java | `@PostMapping("/operations")` | Partial | `backend/src/main/java/com/saumyasolar/api/OfflineSyncController.java:24` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| OfflineSyncController.java | `@GetMapping("/operations")` | Partial | `backend/src/main/java/com/saumyasolar/api/OfflineSyncController.java:30` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| PaymentGatewayController.java | `@GetMapping("/availability")` | Partial | `backend/src/main/java/com/saumyasolar/api/PaymentGatewayController.java:18` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| PaymentGatewayController.java | `@PostMapping("/invoices/{invoiceId}/checkout")` | Partial | `backend/src/main/java/com/saumyasolar/api/PaymentGatewayController.java:23` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| PaymentGatewayWebhookController.java | `@PostMapping("/{provider}")` | Partial | `backend/src/main/java/com/saumyasolar/api/PaymentGatewayWebhookController.java:16` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Phase2OperationsController.java | `@GetMapping("/engineers")` | Partial | `backend/src/main/java/com/saumyasolar/api/Phase2OperationsController.java:115` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Phase2OperationsController.java | `@PostMapping("/engineers")` | Partial | `backend/src/main/java/com/saumyasolar/api/Phase2OperationsController.java:142` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Phase2OperationsController.java | `@PatchMapping("/customer/messaging-consent")` | Partial | `backend/src/main/java/com/saumyasolar/api/Phase2OperationsController.java:187` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Phase2OperationsController.java | `@GetMapping("/customer/messaging-consent")` | Partial | `backend/src/main/java/com/saumyasolar/api/Phase2OperationsController.java:198` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Phase2OperationsController.java | `@GetMapping("/warranty-claims")` | Partial | `backend/src/main/java/com/saumyasolar/api/Phase2OperationsController.java:205` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Phase2OperationsController.java | `@GetMapping("/customer/warranty-claims")` | Partial | `backend/src/main/java/com/saumyasolar/api/Phase2OperationsController.java:212` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Phase2OperationsController.java | `@PostMapping("/customer/warranty-claims")` | Partial | `backend/src/main/java/com/saumyasolar/api/Phase2OperationsController.java:219` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Phase2OperationsController.java | `@PostMapping("/warranty-claims/{id}/approve")` | Partial | `backend/src/main/java/com/saumyasolar/api/Phase2OperationsController.java:240` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Phase2OperationsController.java | `@PostMapping("/warranty-claims/{id}/reject")` | Partial | `backend/src/main/java/com/saumyasolar/api/Phase2OperationsController.java:246` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Phase2OperationsController.java | `@PostMapping("/warranty-claims/{id}/resolve")` | Partial | `backend/src/main/java/com/saumyasolar/api/Phase2OperationsController.java:266` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Phase2OperationsController.java | `@GetMapping("/reports/operations")` | Partial | `backend/src/main/java/com/saumyasolar/api/Phase2OperationsController.java:290` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Phase2OperationsController.java | `@GetMapping(value = "/reports/operations/export.csv", produces = "text/csv")` | Partial | `backend/src/main/java/com/saumyasolar/api/Phase2OperationsController.java:338` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Phase2OperationsController.java | `@GetMapping( value = "/reports/operations/export.xlsx", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" )` | Partial | `backend/src/main/java/com/saumyasolar/api/Phase2OperationsController.java:350` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| Phase2OperationsController.java | `@GetMapping(value = "/reports/operations/export.pdf", produces = "application/pdf")` | Partial | `backend/src/main/java/com/saumyasolar/api/Phase2OperationsController.java:383` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| ServiceAttachmentController.java | `@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)` | Partial | `backend/src/main/java/com/saumyasolar/api/ServiceAttachmentController.java:28` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| ServiceAttachmentController.java | `@GetMapping List<ServiceAttachment> list(@PathVariable UUID ticketId, Authentication a) {` | Partial | `backend/src/main/java/com/saumyasolar/api/ServiceAttachmentController.java:37` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| ServiceAttachmentController.java | `@GetMapping("/{attachmentId}")` | Partial | `backend/src/main/java/com/saumyasolar/api/ServiceAttachmentController.java:42` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| ServiceCommentController.java | `@GetMapping public List<ServiceComment> list(@PathVariable UUID ticketId, Authentication a) {` | Partial | `backend/src/main/java/com/saumyasolar/api/ServiceCommentController.java:63` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| ServiceCommentController.java | `@PostMapping @Transactional public ServiceComment add(@PathVariable UUID ticketId, @Valid @RequestBody CommentInput x, Authentication a) {` | Partial | `backend/src/main/java/com/saumyasolar/api/ServiceCommentController.java:71` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| SubscriptionUsageController.java | `@GetMapping("/usage")` | Partial | `backend/src/main/java/com/saumyasolar/api/SubscriptionUsageController.java:23` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| SubscriptionUsageController.java | `@GetMapping("/storage")` | Partial | `backend/src/main/java/com/saumyasolar/api/SubscriptionUsageController.java:28` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| SurveyAttachmentController.java | `@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)` | Partial | `backend/src/main/java/com/saumyasolar/api/SurveyAttachmentController.java:26` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| SurveyAttachmentController.java | `@GetMapping public List<SiteSurveyAttachment> list(@PathVariable UUID surveyId, Authentication a) {` | Partial | `backend/src/main/java/com/saumyasolar/api/SurveyAttachmentController.java:35` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| SurveyAttachmentController.java | `@GetMapping("/{attachmentId}")` | Partial | `backend/src/main/java/com/saumyasolar/api/SurveyAttachmentController.java:40` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| SurveyLifecycleController.java | `@GetMapping("/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/SurveyLifecycleController.java:29` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| SurveyLifecycleController.java | `@GetMapping("/{id}/history")` | Partial | `backend/src/main/java/com/saumyasolar/api/SurveyLifecycleController.java:34` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| SurveyLifecycleController.java | `@PatchMapping("/{id}")` | Partial | `backend/src/main/java/com/saumyasolar/api/SurveyLifecycleController.java:39` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| SurveyLifecycleController.java | `@PostMapping("/{id}/start")` | Partial | `backend/src/main/java/com/saumyasolar/api/SurveyLifecycleController.java:47` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| SurveyLifecycleController.java | `@PostMapping("/{id}/submit")` | Partial | `backend/src/main/java/com/saumyasolar/api/SurveyLifecycleController.java:52` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| SurveyLifecycleController.java | `@PostMapping("/{id}/approve")` | Partial | `backend/src/main/java/com/saumyasolar/api/SurveyLifecycleController.java:57` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| SurveyLifecycleController.java | `@PostMapping("/{id}/reject")` | Partial | `backend/src/main/java/com/saumyasolar/api/SurveyLifecycleController.java:62` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| SurveyLifecycleController.java | `@PostMapping("/{id}/cancel")` | Partial | `backend/src/main/java/com/saumyasolar/api/SurveyLifecycleController.java:70` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| VendorAnalyticsController.java | `@GetMapping("/breakdowns")` | Partial | `backend/src/main/java/com/saumyasolar/api/VendorAnalyticsController.java:31` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| VendorAnalyticsController.java | `@GetMapping("/trends")` | Partial | `backend/src/main/java/com/saumyasolar/api/VendorAnalyticsController.java:45` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| VendorAnalyticsController.java | `@GetMapping("/rankings")` | Partial | `backend/src/main/java/com/saumyasolar/api/VendorAnalyticsController.java:62` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| WarrantyClaimAttachmentController.java | `@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)` | Partial | `backend/src/main/java/com/saumyasolar/api/WarrantyClaimAttachmentController.java:26` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| WarrantyClaimAttachmentController.java | `@GetMapping public List<WarrantyClaimAttachment> list(@PathVariable UUID claimId, Authentication a) {` | Partial | `backend/src/main/java/com/saumyasolar/api/WarrantyClaimAttachmentController.java:35` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+| WarrantyClaimAttachmentController.java | `@GetMapping("/{attachmentId}")` | Partial | `backend/src/main/java/com/saumyasolar/api/WarrantyClaimAttachmentController.java:40` | Tenant/customer/branch IDOR test; body/query/header tampering; export/download where applicable |
+
+### Repository interface inventory
+
+All 69 Spring Data repository interfaces in `com.saumyasolar.repo` are enumerated here. This is an interface inventory, not a claim that every method has been proven safe: Spring Data's inherited `findAll` and `findById` remain unscoped unless the service performs an ownership check. Custom JPQL and derived methods with `TenantId` predicates were found in several interfaces; customer and branch restrictions still require service checks and endpoint tests. The `@Query` / method signatures explicitly reviewed include `AppUserRepository`, `ApprovalInstanceRepository`, `CustomerAddressRepository`, `CustomerOrderRepository`, `EngineerProfileRepository`, `IntegrationSyncJobRepository`, `InventoryBalanceRepository`, `InvoiceRepository`, `InvoiceSequenceRepository`, `PaymentRepository`, `QuotationRepository`, `RefreshTokenRepository`, `TenantStorageLedgerRepository`, and `WarehouseRepository`. All remain Partial pending call-site and negative-test coverage.
+
+| Repository | Status | Evidence | Planned fix |
+|---|---|---|---|
+| AppUserRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/AppUserRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| ApprovalDecisionRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/ApprovalDecisionRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| ApprovalInstanceRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/ApprovalInstanceRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| ApprovalWorkflowRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/ApprovalWorkflowRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| AuditEventRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/AuditEventRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| BranchMembershipRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/BranchMembershipRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| BranchRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/BranchRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| CreditNoteRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/CreditNoteRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| CustomerAddressRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/CustomerAddressRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| CustomerOrderRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/CustomerOrderRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| CustomerProfileRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/CustomerProfileRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| EngineerProfileRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/EngineerProfileRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| EnquiryRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/EnquiryRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| IdempotencyRecordRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/IdempotencyRecordRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| InstallationChecklistItemRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/InstallationChecklistItemRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| InstallationChecklistTemplateRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/InstallationChecklistTemplateRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| InstallationJobRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/InstallationJobRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| InstallationScheduleHistoryRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/InstallationScheduleHistoryRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| InstallationTeamRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/InstallationTeamRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| IntegrationConnectionRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/IntegrationConnectionRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| IntegrationSyncJobRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/IntegrationSyncJobRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| IntegrationWebhookEventRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/IntegrationWebhookEventRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| InventoryBalanceRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/InventoryBalanceRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| InventoryReservationRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/InventoryReservationRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| InventoryTransactionRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/InventoryTransactionRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| InvoiceItemRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/InvoiceItemRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| InvoiceRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/InvoiceRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| InvoiceSequenceRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/InvoiceSequenceRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| LeadHistoryRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/LeadHistoryRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| MfaChallengeRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/MfaChallengeRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| NotificationDeliveryRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/NotificationDeliveryRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| OfflineSyncAttachmentRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/OfflineSyncAttachmentRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| OfflineSyncOperationRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/OfflineSyncOperationRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| OrderItemRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/OrderItemRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| OrderStatusHistoryRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/OrderStatusHistoryRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| PackageItemRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/PackageItemRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| PasswordResetTokenRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/PasswordResetTokenRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| PaymentRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/PaymentRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| PaymentWebhookEventRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/PaymentWebhookEventRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| PermissionRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/PermissionRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| ProductCategoryRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/ProductCategoryRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| ProductRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/ProductRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| QuotationItemRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/QuotationItemRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| QuotationRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/QuotationRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| RefreshTokenRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/RefreshTokenRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| RefundRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/RefundRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| RoleRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/RoleRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| SalesLeadRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/SalesLeadRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| ServiceAttachmentRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/ServiceAttachmentRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| ServiceCommentRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/ServiceCommentRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| ServiceEventRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/ServiceEventRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| ServiceRequestRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/ServiceRequestRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| ServiceSlaPolicyRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/ServiceSlaPolicyRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| ServiceVisitRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/ServiceVisitRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| SiteSurveyAttachmentRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/SiteSurveyAttachmentRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| SiteSurveyHistoryRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/SiteSurveyHistoryRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| SiteSurveyRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/SiteSurveyRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| SolarPackageRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/SolarPackageRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| SubscriptionAssignmentHistoryRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/SubscriptionAssignmentHistoryRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| SubscriptionPlanRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/SubscriptionPlanRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| SubscriptionUsageRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/SubscriptionUsageRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| TenantDomainRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/TenantDomainRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| TenantRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/TenantRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| TenantStorageLedgerRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/TenantStorageLedgerRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| TenantSubscriptionRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/TenantSubscriptionRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| WarehouseRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/WarehouseRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| WarrantyClaimAttachmentRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/WarrantyClaimAttachmentRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| WarrantyClaimRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/WarrantyClaimRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+| WarrantyRepository.java | Partial | `backend/src/main/java/com/saumyasolar/repo/WarrantyRepository.java` | Verify each declared and inherited query at every service call site; tenant/customer/branch predicate tests; add tenant-qualified methods where missing |
+
+
+### Phase 2 continuation — production-approval blockers (2026-11-10)
+
+The following implementation/test work was added after the initial post-V58 matrix. Statuses deliberately remain Partial where CI, production data, complete resource coverage, or a real browser UI workflow is still outstanding.
+
+| Item | Requirement ref | Status (Implemented/Partial/Missing) | Evidence (file:line) | Planned fix |
+|---|---|---|---|---|
+| Warranty attachment download parent-claim tenant authorization | SRS §8.2, §20.1, §20.4 | Implemented in service path; negative tests added, CI pending | `backend/src/main/java/com/saumyasolar/service/WarrantyClaimAttachmentService.java:43-51,105-113`; `backend/src/test/java/com/saumyasolar/WarrantyClaimAttachmentServiceTest.java` | Keep parent claim and attachment lookup tenant-qualified; pass cross-tenant, cross-customer and attachment-ID tampering tests |
+| Warranty claim attachment direct-IDOR (attachment ID from another claim under same tenant) | SRS §8.2, §20.4 | Implemented in service path; negative tests added, CI pending | `WarrantyClaimAttachmentService.download`; `WarrantyClaimAttachmentRepository.findByIdAndTenantIdAndClaimId`; `WarrantyClaimAttachmentServiceTest` | Retain compound attachment lookup; add controller multipart/download end-to-end coverage |
+| Warranty claim lifecycle (customer list/create; vendor list/approve) | Business req §13; SRS warranty workflow and §20.4 | Partial | `backend/src/main/java/com/saumyasolar/api/Phase2OperationsController.java:205-287`; `Release12TenantIntegrationTest.warrantyClaimListCreateAndDecisionAreTenantAndCustomerScoped` | Add reject/resolve lifecycle and successful own-tenant attachment controller tests; there is no claim-delete endpoint in the current API |
+| CSV operations export tenant scoping | SRS §8.2, §20.4 | Implemented in controller path; negative test added, CI pending | `Phase2OperationsController.java:338-348`; `Release12TenantIntegrationTest.operationsCsvXlsxAndPdfExportsContainOnlyAuthenticatedTenantAggregates` | Keep export delegated to the authenticated tenant-scoped report method |
+| XLSX operations export tenant scoping and content | SRS §8.2, §20.4 | Implemented in controller path; content test added, CI pending | `Phase2OperationsController.java:350-380`; same integration test; Apache POI workbook assertions | Verify generated workbook values against authenticated tenant aggregates; add other XLSX export families if present |
+| PDF operations export tenant scoping and content | SRS §8.2, §20.4 | Implemented in controller path; content test added, CI pending | `Phase2OperationsController.java:383-410`; same integration test; OpenPDF text extraction | Verify generated PDF values against authenticated tenant aggregates; add other PDF/download families if present |
+| Branch-assigned record filtering (branch A vs branch B) | SRS §8.2, §20.4 | Partial; filter implementation already existed, tests added | `backend/src/main/java/com/saumyasolar/service/EnterpriseSaasService.java: branch filterBranchRecords`; `backend/src/test/java/com/saumyasolar/EnterpriseSaasServiceTest.java` | Add endpoint integration coverage for each branch-bearing record family; define branch-unassigned visibility explicitly |
+| Concurrent integration-job claims across tenants | SRS §8.2, §20.1, NFR concurrency | Implemented at atomic claim query level; DB integration test added, CI pending | `backend/src/main/java/com/saumyasolar/repo/IntegrationSyncJobRepository.java:claimIfDue`; `TenantSchedulerConcurrencyIntegrationTest.concurrentWorkersCanClaimOnlyOneTimeAndOnlyWithinTheOwningTenant` | Run under MySQL 8.4 in CI as well as H2; test real adapter execution, retry and persisted failure-state behavior |
+| Database-backed subscription expiry tenant isolation | SRS subscription lifecycle; §20.1 | Implemented at scheduler query level; DB integration test added, CI pending | `backend/src/main/java/com/saumyasolar/service/SubscriptionExpiryScheduler.java`; `TenantSchedulerConcurrencyIntegrationTest.expirySchedulerProcessesOnlyExpiredRowsForTheirOwningTenants` | Add concurrent duplicate scheduler invocation and SLA/warranty expiry database integration cases |
+| Browser-level forged filter tests | SRS §11, §15, §20.4 | Partial; Chromium API-origin browser test added, CI pending | `frontend/e2e/tenant-filter-isolation.spec.ts`; `frontend/playwright.config.ts`; `.github/workflows/release-validation.yml` | Extend from browser-origin API requests to authenticated UI filter/dropdown/route interactions with real foreign-tenant fixtures and verify graceful 403/404 handling |
+| Full create/update/delete coverage across all resource families | Business req §13; SRS §20.4 | Partial | `Release12TenantIntegrationTest`; `WarrantyClaimServiceTest`; existing release integration suites | Build a generated endpoint/verb matrix from all controller mappings; add per-family negative create/read/list/update/delete tests and explicitly mark unsupported delete operations |
+| Production V57/V58 integrity preflight execution | SRS §8.2, §20.1 and database integrity requirements | Partial — safe execution path added; actual production run not performed | `backend/src/test/resources/tenant-isolation-production-preflight.sql`; `.github/workflows/phase-2-production-preflight.yml` | Configure protected GitHub `production` environment secrets `PROD_DB_HOST`, `PROD_DB_PORT`, `PROD_DB_NAME`, `PROD_DB_USER`, `PROD_DB_PASSWORD`; run manual workflow and attach PASS output/change approval before migration rollout |
+
+#### Continuation implementation notes
+
+- Warranty claim attachment access is derived from the authenticated principal. Customer access is checked against the active customer profile and parent claim; attachment download then uses the compound `(attachment_id, tenant_id, claim_id)` lookup. Tests cover foreign tenant claim guessing, another customer's claim, wrong attachment parent and successful own-claim download.
+- Operations CSV, XLSX and PDF all call `operationsReport(from,to,authentication)`, which derives tenant from the authenticated principal and uses tenant-qualified repository methods. The new integration test creates a foreign-tenant high-value order and checks that no exported aggregate/content includes it; XLSX and PDF content are parsed, not only status/MIME checked.
+- Branch filter tests assert that a non-admin member sees rows assigned to their own branch plus legacy `branch_id IS NULL` rows, but not another branch's rows. Vendor administrators retain tenant-wide branch visibility. This preserves current code behavior; business confirmation of the null-branch policy remains open.
+- Database-backed concurrency tests use the H2 integration profile. They race two workers against the same due integration job and assert exactly one atomic claim; tenant A cannot claim tenant B's job. A separate scheduler integration test verifies expired subscription rows change only in their owning tenant. These do not replace MySQL concurrency/load tests.
+- Playwright runs a real Chromium browser against the live Spring Boot API in the MySQL startup CI job. It tampers tenant/customer/branch query filters on seven list endpoints and checks that every returned row still belongs to the authenticated principal's tenant. It is not yet a complete UI interaction suite and the current test fixture does not provision a second tenant's resource in the browser run.
+- The production preflight SQL executes the exact V57/V58 fail-closed integrity procedures but excludes all constraint/index DDL. The workflow is manual and protected by the GitHub `production` environment. It requires production DB secrets and routine privileges. No production connection was available in this session, so **production preflight has not been executed and no production data was read or modified**.
+- The GitHub Actions runs triggered by the intermediate commits exposed a compile-time OpenPDF extractor API mismatch; this was corrected to the OpenPDF instance API. Treat only a successful run for the final branch head as verification.
+
+#### Current release gate
+
+Do not approve production until the final CI run for the latest branch head passes all backend, frontend, MySQL migration, MySQL application startup and Playwright jobs; the protected production preflight is executed and recorded as PASS; and the remaining full CRUD/branch UI coverage gaps are either closed or explicitly accepted by the release owner.
+
+
+#### Latest continuation verification record
+
+- Run 42785193481 on code commit 2eaddfc6c0b35459190ddc392dea12e022b886c3: backend 149 tests, 0 failures/errors; frontend typecheck/build passed; MySQL 8.4 V1–V58 migration validation passed. The MySQL application-startup job, Chromium installation and Playwright browser test also passed; all four jobs succeeded.
+- Run 42784999436 on commit 084782c8bda9edf5ae88e320b44abe4b322cb35a: Spring Boot MySQL startup and Chromium Playwright browser-filter test passed. That run's backend suite exposed one incorrect warranty-claim fixture expectation; corrected in 2eaddfc and all 149 backend tests pass in run 42785193481.
+- Production preflight remains Partial and unexecuted. The preflight script contains only the V57/V58 integrity procedures (no business-row INSERT/UPDATE/DELETE and no constraint/index DDL); it still requires a production database operator with approved credentials and routine privileges.
+
+
+### Phase 2 production blockers — continuation update (2026-11-10)
+
+| Item | Requirement ref | Status (Implemented/Partial/Missing) | Evidence (file:line) | Planned fix |
+|---|---|---|---|---|
+| Runtime authentication gate across every MVC mapping | SRS security / §20.4 | Implemented for unauthenticated access | `backend/src/test/java/com/saumyasolar/EndpointAuthenticationMatrixTest.java`; runtime handler mapping enumeration; `PHASE_2_ENDPOINT_MATRIX.md` | Keep the inventory-driven gate in CI; it is not a substitute for authenticated cross-tenant CRUD tests |
+| Endpoint-by-endpoint negative CRUD matrix | SRS §20.4 | Partial — inventory generated for 222 method mappings / 224 expanded route patterns; many endpoint-specific mutation cases remain | `PHASE_2_ENDPOINT_MATRIX.md`; `EndpointAuthenticationMatrixTest.java` | Close each endpoint's tenant/customer/branch create/read/update/delete cases or record a release-owner deferral |
+| Warranty attachment HTTP upload/download | SRS warranty evidence and §20.4 | Implemented in integration test; latest CI verification pending | `backend/src/test/java/com/saumyasolar/Release12TenantIntegrationTest.java`; `WarrantyClaimAttachmentServiceTest.java` | Retain actual multipart upload, response byte/content-disposition, foreign tenant, and wrong-parent IDOR checks |
+| Branch-assigned CRM lists | SRS branch access / §20.4 | Implemented in integration test for enquiries, leads, surveys, quotations and orders | `Release12TenantIntegrationTest.branchAssignedMemberListsOnlyAssignedBranchEnquiriesLeadsSurveysQuotationsAndOrders`; `AppService.list` | Keep regression test for each list route |
+| Branch-assigned finance/service/installation lists | SRS branch access / §20.4 | Implemented in service and integration tests; latest CI verification pending | `FinanceService.listInvoices`; `FinanceService.listTickets`; `OperationsService.installations`; branch integration test | Ensure any new branch-bearing list method uses the shared branch filter |
+| Branch-assigned warehouse/inventory lists | SRS branch access / §20.4 | Existing filter plus new integration tests | `OperationsService.warehouses`, `balances`, `ledger`; branch integration test | Keep warehouse-to-branch filter as the only source of inventory visibility |
+| Branch analytics authorization | SRS branch access / §20.4 | Implemented in integration test for assigned and unassigned branch IDs | `BranchAnalyticsController`; `BranchAnalyticsService`; branch integration test | Maintain 404 for a branch outside the member's membership |
+| Concurrent integration, subscription, SLA and warranty schedulers on MySQL 8.4 | SRS NFR concurrency / §20.1 | Implemented in test and CI job; one prior run passed MySQL scheduler test step | `TenantSchedulerConcurrencyIntegrationTest`; `ServiceRequestRepository.findForSlaEvaluationByTenantId`; `.github/workflows/release-validation.yml` | Preserve row locking for SLA idempotency; require final latest-head MySQL CI pass |
+| React browser test with two real tenants | SRS frontend security / §20.4 | Partial — test provisions a second tenant, creates private product, signs in through React and checks API IDOR; latest run pending | `frontend/e2e/tenant-react-ui.spec.ts`; `frontend/playwright.config.ts`; release workflow | Require final Chromium run to pass; extend UI interactions to additional resource families and branch selectors |
+| V57/V58 production preflight evidence and remediation | SRS DB integrity / §20.1 | Partial — protected workflow and artifact retention/runbook added; production execution not performed | `backend/src/test/resources/tenant-isolation-production-preflight.sql`; `.github/workflows/phase-2-production-preflight.yml`; `PHASE_2_PRODUCTION_PREFLIGHT_RUNBOOK.md` | Execute with approved production secrets and reviewers; retain PASS artifact and data-owner/DBA sign-off |
+
+#### Branch scope correction
+
+A further inspection found that tenant scoping alone did not enforce branch membership on vendor invoice lists, service-ticket lists and installation-job lists. These methods now apply the existing `EnterpriseSaasService.filterBranchRecords` helper after their existing permission/assignment filters. This extends the same branch rule already used by enquiries, leads, surveys, quotations and orders. Tests additionally cover warehouses, inventory balances and the immutable inventory ledger, plus branch analytics access. Legacy null-branch visibility remains unchanged.
+
+#### MySQL scheduler test fixtures
+
+The MySQL scheduler suite initially exposed incomplete test fixtures (missing integration connection, subscription plan, customer, warranty product/installation and non-null SLA warranty status). Fixtures were completed using tenant-consistent parent rows. The MySQL scheduler test step passed in run 42789991955; the complete latest-head verification must still be taken from the newest run after the final branch-scope additions.
+
+#### Production preflight limitation
+
+The production preflight script reads tenant-integrity relationships and fails closed. It creates/drops named stored procedures to implement SIGNAL-based assertions, so it is business-data read-only but requires CREATE ROUTINE and DROP ROUTINE privileges. A workflow artifact now preserves output for remediation review. The protected production secrets and DBA approval were not available in this session; no production database was accessed.
+
+
+#### Evidence line references (latest source layout)
+
+- Runtime endpoint authentication matrix: `backend/src/test/java/com/saumyasolar/EndpointAuthenticationMatrixTest.java:44-73`.
+- Warranty claim list/create/decision integration: `backend/src/test/java/com/saumyasolar/Release12TenantIntegrationTest.java:1334-1415`.
+- Warranty attachment controller multipart/download integration: `Release12TenantIntegrationTest.java:1665-1754`.
+- Branch integration coverage (CRM, finance, service, installations, warehouses, inventory and analytics): `Release12TenantIntegrationTest.java:1755-2030`.
+- Branch-filtered invoice and ticket lists: `backend/src/main/java/com/saumyasolar/service/FinanceService.java:348-358,642-654`.
+- Branch-filtered installation list: `backend/src/main/java/com/saumyasolar/service/OperationsService.java:634-641`.
+- Tenant row locking for SLA scheduler: `backend/src/main/java/com/saumyasolar/repo/ServiceRequestRepository.java` (`findForSlaEvaluationByTenantId`); concurrent SLA and warranty tests: `backend/src/test/java/com/saumyasolar/TenantSchedulerConcurrencyIntegrationTest.java:148-225`.
+- MySQL 8.4 scheduler CI step: `.github/workflows/release-validation.yml` (`Run concurrent SLA, warranty and integration scheduler tests on MySQL 8.4`).
+- React two-tenant browser test: `frontend/e2e/tenant-react-ui.spec.ts:3-120`; Playwright config: `frontend/playwright.config.ts`.
+
+
+#### Latest verification and preflight evidence
+
+- Run 42793775946 reports backend 154 tests / 0 failures / 0 errors, frontend typecheck/build PASS and MySQL migration validation PASS. Its MySQL application/browser job had not completed at report update.
+- Run 42793418195 completed the V57/V58 integrity preflight against the migrated MySQL CI database successfully, with the routine-cleanup EXIT trap in place. This is CI fixture data, not production.
+- The API filter-tampering browser test has passed. The React two-tenant UI browser test remains Partial: Chromium previously showed that the form did not issue the expected login request. The test now uses native form requestSubmit, clears fixture cookies/session storage before UI login and forces Vite's same-origin API proxy. Await a successful latest-head Playwright job before upgrading its status.
+
+
+---
+
+## Phase 1/2 validation addendum (2026-11-10)
+
+**Validated branch:** `audit/phase-2-implementation-gap-analysis`  
+**Companion report:** `docs/PHASE_1_2_VALIDATION_REPORT.md`  
+**Gap records:** `docs/gaps/GAP-P1-rate-limiting.md`, `GAP-P1-role-permission-matrix.md`, `GAP-P1-session-lockout-feedback.md`, `GAP-P2-composite-tenant-fks.md`, `GAP-P2-cross-tenant-customer-branch-export-tests.md`, and `GAP-P2-background-job-scoping.md`.
+
+This pass added traceability and gap documentation only. **No implementation item is marked closed, Implemented, or Verified by this addendum.** No application code, migration, or test source was modified.
+
+### Corrections confirmed against current branch source
+
+- Historical text saying browser access and refresh tokens remain in localStorage is stale: current `frontend/src/main.tsx` clears the legacy session key; `authenticatedFetch.ts` keeps the access session in memory and the CSRF value in sessionStorage; `AuthCookieService` issues the refresh cookie HttpOnly.
+- Historical text saying trusted proxy support is exact-IP-only is stale: current `ClientAddressResolver` parses CIDR prefixes.
+- Browser E2E is no longer wholly absent: `frontend/e2e/tenant-filter-isolation.spec.ts` and `frontend/e2e/tenant-react-ui.spec.ts` exist. The latter remains partial pending latest-head browser evidence.
+- A custom-role service implementation exists in `AuthLifecycleService.createCustomRole`; a complete controller/UI workflow and full least-privilege endpoint enforcement remain unproven.
+
+### Current audit status
+
+- Phase 1 remains **PARTIAL / not approved**: endpoint + IP rate limiting and account lockout exist, but a separate account rate-limit dimension, full SRS route coverage, complete role matrix enforcement and exhaustive 401/403 tests are not proven.
+- Phase 2 remains **PARTIAL / not approved**: identity-derived tenant scope, branch filtering, tenant-aware exports/downloads and several scoped schedulers exist, but full table/FK inventory and exhaustive tenant/customer/branch CRUD/export/download negative coverage are not proven.
+- CI/test status for the latest branch head was not executed in this pass. Historical CI run references above are not evidence of the current head passing.
+- Production preflight against production data was not executed. The earlier CI fixture preflight is not production sign-off.
+
+No statuses in the earlier tables were upgraded because no implementation/test item was closed and verified during this documentation-only pass.
+
+
+### Remediation update — 2026-11-10
+
+**Application change committed:** `1a79b56244af6aa23bd58f15f835766574eae908`  
+**Rate-limit gap documentation:** `201474727f2b9302dc0c571b3d4c9adefbab7a0f`  
+**Validation report update:** `4966625d83268ad039b46c065093eb7d59e071c2`
+
+- Extended `AuthenticationRateLimitFilter` with a separate account + endpoint bucket for login, forgot-password and reset-password. The identifier is normalized and HMAC-SHA-256 keyed using the configured JWT secret; the raw identifier is not stored.
+- Retained independent IP + endpoint throttling and the existing V52 persistence table. No Flyway migration was necessary or changed.
+- Added bounded JSON-body buffering/replay (16 KiB cap) so Spring MVC still receives the original login/recovery payload.
+- Added unit tests for the second bucket, request-body replay, identifier non-persistence and oversized-body rejection.
+- Status: **Implemented / Pending Verification**. The full release-validation workflow was triggered on this commit (run ID `42818434724`) and was still in progress at the time of this addendum. Do not mark P1-AUTH-001 MET until backend CI passes and public enquiry/export/webhook ingress policies are evidenced.
+- This is a partial remediation; all other Phase 1/2 gaps remain as previously recorded. No other requirement status is upgraded.
+
+## Remediation addendum — 2026-11-10 (Phase 1/2 audit branch)
+
+**Current branch:** `audit/phase-2-implementation-gap-analysis`
+**Latest application/test commit:** `5ccba941c0e7c54c40b038807cc3cb17f73a5e74`
+**Latest validation report:** `docs/PHASE_1_2_VALIDATION_REPORT.md`
+
+### Items extended in this pass
+
+- **P1 authentication throttling:** HMAC-derived account + endpoint buckets for login/forgot-password; opaque reset-token + endpoint bucket for reset-password; IP + endpoint buckets for login/refresh/recovery/MFA; configurable IP + endpoint buckets for public enquiries, exports and payment webhooks; bounded authentication request-body replay; focused unit tests. Commits `1a79b562`, `0d2a741d`, `f3cb1d30`, `3caa723d`, `ddd117ae`.
+- **P1 fine-grained/custom roles:** corrected historical finding: custom-role create/update/delete APIs and `RoleManagementPanel.tsx` already exist. Removed role-name-only authorization gates from installation-assignment and SLA control paths so explicit SRS permissions govern access; added custom-role INSTALLATION_ASSIGN controller test and an authenticated Inventory/Accountant/Service Engineer cross-module role matrix test. Added tests for cross-tenant custom-role update/delete and tenant-scoped employee role assignment. The exhaustive action-to-permission map and full standard-role matrix remain open. Commits `5f20f0a6`, `128f1fc5`, `2c429418`, `6c29c6fb`, `8b608e64`, `c55d3bca`.
+- **P1 assigned-resource scope:** quotation revision reads and revision creation now enforce the shared assigned-sales scope guard before exposing or mutating a quotation; negative tests cover both read and revision actions. Service visit completion uses the tenant-qualified visit repository lookup. Commits `bbd10cce`, `5ccba941`, `cb47fc3e`, `409165ea`.
+- **P2 tenant-qualified lookups:** employee, engineer, integration user, installation, service visit, survey employee reassignment and Phase2OperationsController engineer/warranty resource lookups use tenant-qualified repository methods. Commits `8be6f0d7`, `1f5ce498`, `cb47fc3e`, `102adc61`, `3e2d6d57`.
+- **P2 composite FK inventory:** V57/V58 were directly inspected. V57 covers product/category/package-item tenant relationships; V58 covers a broad set of sales, order, inventory, installation, warranty, finance, service, evidence, offline-sync, branch, approval, audit and notification relationships. MySQL 8.4 migration/integrity validation passed on prior CI runs. Added `docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql` and `docs/PHASE_1_2_TENANT_SCHEMA_INVENTORY.md`; `release-validation.yml` now executes the read-only schema/FK/unique-index inventory on the disposable MySQL 8.4 migration schema and uploads an artifact. Actual production-like schema execution and full table/column NOT NULL/FK proof remain open.
+- **P2 customer/branch/export/download tests:** existing `Release12TenantIntegrationTest` covers selected foreign tenant/customer/branch, operations CSV/XLSX/PDF, invoice PDF and private attachment paths. Added same-tenant cross-customer warranty claim denial and authenticated cross-module role permission cases. This is meaningful existing coverage, not proof of every endpoint/verb/resource family.
+- **P2 scheduled jobs:** `IntegrationSyncScheduler`, `ServiceSlaScheduler`, `WarrantyExpiryScheduler` and `SubscriptionExpiryScheduler` use `TenantExecutionContext` in try-with-resources. `NotificationService.retryFailedDeliveries` now establishes tenant scope for each delivery and uses `NotificationDeliveryRepository.claimFailedDelivery(id, tenantId, now)` for atomic tenant-qualified retry claims. Tests cover exception/nested-scope/thread-reuse cleanup, tenant context during notification retry and duplicate-claim rejection. Scanned all 41 service classes: six scheduled tasks were identified and no @Async/executor/CompletableFuture/new Thread use was found in that package. Repository-wide non-service/event/queue/export discovery and multi-instance provider delivery verification remain open.
+
+### Verification state
+
+- Prior complete release-validation workflow `42818724332` passed backend compile/tests, MySQL 8.4 migration validation, Spring Boot startup/health and frontend typecheck/production build.
+- Workflow `42820915064` for commit `5ccba941` completed with backend test failures: one outdated 429 response assertion and one test still stubbing the bare-ID employee lookup after the repository call was made tenant-qualified. Frontend build, MySQL migration validation and Spring Boot/browser checks passed.
+- Both test mismatches were corrected in commit `cab55e6f84245131f8de7252774c9ebd4cfb6c16`; its backend suite passed (162 tests), frontend build passed, and Flyway validation passed. Spring Boot health and browser Playwright steps were still in progress at the last check.
+- Newer code commits `cb47fc3e` and `409165ea` add assigned quotation revision mutation enforcement, tenant-scoped service-visit/survey lookups and a dedicated negative test. Workflow `42821756695` for the test commit is in progress (frontend and Flyway passed; backend and Spring Boot/browser checks pending). No latest-head full pass is claimed until it completes.
+- Do not change any remaining PARTIAL item to MET until the newest workflow passes and the listed residual coverage is complete.
+
+### Status corrections
+
+- Custom-role CRUD/UI is **PARTIALLY IMPLEMENTED**, not absent. The remaining issue is exhaustive permission/action matrix validation and legacy broad-check reconciliation.
+- Composite tenant FKs are **PARTIALLY IMPLEMENTED**, not unverifiable: V57/V58 exist and MySQL CI has passed on the prior validated head. Full schema coverage and production data preflight remain outstanding.
+- Rate limiting is **PARTIALLY IMPLEMENTED**: public enquiry/export/webhook application buckets have been added, but production ingress and distributed concurrency still require proof.
+- Assigned-sales scope is extended to quotation revision reads; customer/branch/service export/download matrix remains incomplete.
+
+CI update (2026-11-10): workflow 42821756695 passed all four jobs, including 163 backend tests, frontend build, MySQL migration/integrity validation and Playwright tenant-filter tampering. Reset-token throttling code/tests are being verified in workflow 42822434704.
+
+
+### Latest follow-up commits — 2026-11-10
+
+- `102adc61`, `3e2d6d57`: Phase2OperationsController engineer and customer warranty reads now use tenant-qualified repository lookups; warranty repository method added.
+- `597ebb3f`, `7d65478e`: nested exception and pooled-thread tenant context cleanup tests.
+- `128f1fc5`, `2c429418`: permission-first custom-role behavior for installation assignment and service SLA operations.
+- `a8837dc4`: service engineers with SERVICE_VIEW see warranties only for their assigned installations; INSTALLATION_ASSIGN remains the tenant-wide grant.
+- `6c29c6fb`: custom-role INSTALLATION_ASSIGN test.
+- `f11581a3`, `df73efd3`, `ed0780af`: notification retry establishes tenant context and has a context cleanup test.
+- `ea118cd0`: same-tenant cross-customer warranty claim creation denial.
+- `ed714646`, `9ada09fa`, `9763e0d7`: schema audit SQL and inventory documents.
+
+Verified full CI checkpoint: workflow `42828454430` for commit `6585efe6` passed all four jobs — backend (171 tests, zero failures), frontend typecheck/production build, MySQL 8.4 Flyway plus tenant schema inventory artifact, and Spring Boot health/Playwright browser security. A subsequent browser run exposed parallel-test interference because the auth E2E logged out the same seeded admin used by the tenant-filter spec; the auth E2E now uses the separate seeded sales account. Latest-head workflow `42828592637` is running for that test-isolation fix. Earlier warranty repository and JUnit assertion failures were corrected; do not count those failed runs as passing evidence.
+
+
+### Latest follow-up verification and CI work
+
+- Added `AuthenticationRateLimitConcurrencyIntegrationTest` for concurrent shared-MySQL account bucket updates; backend run `42827261872` passed 169 tests and all four jobs.
+- Added notification retry tenant context and atomic `(delivery_id, tenant_id)` claim; run `42827387874` passed 170 backend tests and all four jobs.
+- Added authenticated cross-module role test; initial run failed because temporary matrix fixtures were not rolled back. The test now uses `@Transactional`; run `42828044536` passed backend (171 tests), frontend and migration jobs.
+- Added browser auth E2E for HttpOnly refresh cookie, CSRF missing/mismatch, refresh rotation and logout revocation. The first run exposed a test URL-path mistake (cookie path is `/api/v1/auth`); test now inspects cookies at that path. Run `42828199821` passed backend (171 tests), frontend and migration jobs; browser/Spring Boot job was still in progress at last check.
+- CI workflow now uploads a disposable-MySQL schema inventory artifact after V57/V58. Production-like DB inventory and NULL-row proof remain outstanding.
+
+
+### Latest complete CI checkpoint — 2026-11-10
+
+- Workflow `42828454430` passed all four jobs at commit `6585efe6ae98e009a975c1c63fb83f6e529faf65`.
+- Backend: 171 tests passed, 0 failures/errors/skips.
+- Frontend production build passed.
+- MySQL 8.4 migration validation passed, including read-only tenant table/FK/unique-index inventory SQL execution and artifact upload.
+- Spring Boot health and Playwright browser tests passed, including CSRF, HttpOnly refresh cookie, refresh rotation, logout revocation and tenant-filter tampering.
+- The follow-up auth E2E test now uses `sales@saumya.local` rather than the shared admin account to prevent parallel logout/revocation interference. Latest code workflow `42828934287` for commit `fe7b1181` passed all four jobs; current branch head `00b4d767` contains documentation-only gap-register updates after that verified code commit.
+
+
+### Final verification checkpoint for this remediation pass
+
+- Code commit `fe7b118117f599d1ab275544afa27245ae3e83e0` passed workflow `42828934287` across backend (171 tests), frontend production build, MySQL 8.4 migrations/schema inventory artifact, and Spring Boot/Playwright browser tests.
+- The auth-session Playwright test now uses the seeded Sales user rather than the shared Vendor Admin to avoid cross-test logout/revocation interference.
+- Current branch head `00b4d7672b4412d57d0ebdbc75629d9e6f24955d` is documentation-only after the verified code checkpoint; its own workflow is running.
+- Phase 1 and Phase 2 remain NOT MET at the requirement level because the complete role × endpoint matrix, every customer/branch/export/download family, exhaustive schema/NOT NULL inventory and production data preflight, and full async/worker discovery are not complete.
+
+
+### Assigned-service mutation authorization correction — 2026-11-10
+
+- Latest branch review identified three service-ticket mutation methods (closeTicket, pauseSla, resumeSla) that checked tenant and permission but did not invoke the common assigned-ticket scope predicate.
+- Updated FinanceService so these operations call ensureTicketAccess, reusing the existing customer ownership and engineer-assignment rules. A package-visible predicate is covered by tests for assigned engineer, unassigned engineer and SERVICE_ASSIGN dispatcher behavior.
+- The change is intentionally narrow. It does not close the remaining full endpoint matrix, every service attachment/export route, all customer/branch CRUD families, schema NOT NULL inventory, production data preflight, or repository-wide async inventory.
+- CI verification for this commit is pending; do not treat the new regression tests as passed until the workflow completes.
+
+
+## Follow-up implementation evidence — 2026-11-10
+
+The audit branch has received additional targeted corrections after the initial static review:
+
+- Permission gates for survey review/reassignment, service comments, offline service comments, warranty-claim evidence, branch-wide visibility/warehouse access and service evidence upload now use fine-grained permission codes rather than standard role-name checks. Assigned-resource guards remain enforced.
+- Service ticket mutation/visit reads were tightened in FinanceService; the service attachment upload now requires SERVICE_UPDATE for vendor users.
+- V59 repairs the missing AUDIT_VIEW permission catalogue row/grants on upgrade and ensures BRANCH_MANAGE exists and is granted to tenant VENDOR_ADMIN roles. The MySQL migration CI step asserts these grants.
+- Branch lifecycle integration coverage now exercises create/list/update, membership assign/list/remove, activate/deactivate and denial for an employee without BRANCH_MANAGE. Customer isolation coverage now includes same-tenant quotation list and payment receipt ownership.
+- A service attachment upload unit test covers read-only denial and service updater access.
+- The tenant schema audit now executes exact NULL tenant row counts for every base table with tenant_id and inventories foreign keys, unique indexes and tables without tenant_id.
+- A repository async-worker scan script is wired into release-validation.yml and publishes its output as a CI artifact.
+
+These changes are deliberately not classified as full closure. The 222-row endpoint matrix is now fully classified: 15 public mappings and 207 protected mappings. Dynamic CI sweeps exercise authentication across all 207 protected mappings, least-privilege reads across 83 protected GET mappings, and mutation denial across 115 protected non-GET mappings; two resource-delegated routes have dedicated tests. Positive access is still representative rather than fixture-tested for every role/resource/verb combination. Customer/branch and export/download coverage has expanded with HTTP-level owner and negative cases, but exhaustive positive/negative evidence for every resource family remains open. CI schema and worker artifacts have been reviewed; production schema evidence, external runtime inventory and production DBA/data-owner sign-off remain open. Do not mark Phase 2 production-ready based on the CI evidence alone.
+
+
+### V60 tenant-owned NOT NULL enforcement — 2026-11-10
+
+- CI metadata inspection found eight tenant-owned tenant_id columns still nullable in the disposable MySQL schema; V60 now enforces NOT NULL for those eight and the entity mappings declare non-null.
+- The production preflight now checks those NULL cases and validates platform-vs-tenant classification for app_user, role, audit_event and notification_delivery. The separate SELECT-only schema audit inventories every base table, FK, unique index and tenant_id null count.
+- This is schema-level implementation, not production-data proof. The production workflow still requires protected database secrets, a DBA-approved execution identity, and archived output reviewed by the data owner.
+
+- V60 migration and disposable-database preflight verification passed in CI run 42844217653 (MySQL 8.4 migration, Spring Boot preflight, frontend build, and 184 backend tests with zero failures). The production preflight remains unexecuted.
+
+- Latest verification: workflow run 42845389769 passed all four jobs on the implementation branch: 188 backend tests (0 failures/errors), frontend typecheck/production build, MySQL 8.4 Flyway migration validation through V60, and Spring Boot health/preflight against MySQL 8.4/Mailpit. The protected production-data preflight was not run.
+
+
+### Phase 2 continuation — worker, schema and release-gate corrections (2026-11-11)
+
+- Restored the read-only schema inventory SQL, tenant schema inventory, repository-wide asynchronous worker scan, legacy authorization scan and endpoint matrix that were removed in the cleanup merge. Release validation now runs on this Phase 2 branch and uploads the worker/authz scan outputs.
+- Corrected the V60 disposable-MySQL assertion to match the eight tenant-owned columns actually made NOT NULL. notification_delivery is intentionally mixed-scope: platform password-reset/MFA deliveries may have NULL tenant_id, while business deliveries require a tenant and same-tenant recipient. Updated the entity mapping and production preflight to enforce this distinction rather than rejecting legitimate platform messages.
+- Changed export expiry cleanup from an unscoped global expired-job query to tenant-ID discovery followed by tenant-scoped query, storage deletion and state update inside TenantExecutionContext. Added tests for context-scoped cleanup and cross-user export download denial.
+- Restored and updated the background-worker inventory to include ExportService.recoverAndExpire, ExportEventListener, and BusinessNotificationEventListener.
+- The protected production preflight workflow now targets this Phase 2 branch. It remains manual and protected; no production database credentials were used and no production data was queried or modified.
+
+**Acceptance status remains PARTIAL / NOT APPROVED.** The 222-row endpoint matrix has no unclassified/pending rows: 15 are public exceptions and 207 are protected. The dynamic sweeps cover unauthenticated access for all 207 protected mappings, 83 protected GET mappings and 115 protected mutation mappings (at least 50 explicit 403s), with separate tests for quotation actions and resource-delegated offline sync. Representative positive role tests exist for Inventory Viewer, Accountant and Service Engineer, but positive access for every role/resource/verb combination is not yet proven. The export-job routes and download families are now included in the matrix. Production NULL-row evidence, external runtime inventory, production preflight PASS output, data-owner review and DBA sign-off remain outstanding.
+
+
+### Authenticated role × HTTP verb regression extension — 2026-11-11
+
+Release12TenantIntegrationTest.fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation now checks both positive reads and negative writes for Inventory Viewer, Accountant and Service Engineer fixtures. Added denied inventory receipt, invoice create, payment record, service request create, export create and export status operations for roles lacking the corresponding grants. This improves representative authenticated role × verb evidence but does not satisfy all 222 route-specific cases; the endpoint matrix continues to track remaining rows as PARTIAL.
+
+
+### CI and static worker evidence — 2026-11-11
+
+- GitHub Actions run 42904851740 (commit 3d05d94846e0a71e86cdef4b942e03cebf245dbe) passed all four jobs: backend compile/tests, MySQL 8.4 Flyway validation, frontend typecheck/build, and Spring Boot startup against MySQL 8.4/Mailpit. Backend reported 203 tests, zero failures/errors/skips. The V60 gate additionally asserted eight tenant-owned tenant_id columns are NOT NULL and four mixed-scope tenant_id columns remain nullable.
+- The repository-wide worker scan artifact from run 42904851740 was reviewed in the backend job log: seven scheduled triggers, two @Async application listeners, one bounded ThreadPoolTaskExecutor, no Kafka/Rabbit/JMS consumer or producer in checked-in Java source, and two startup runners. DataSeeder and PlatformAdminBootstrap are property-gated and must remain disabled in production unless separately approved.
+- GitHub Actions run 42913110214 passed all four jobs after adding authenticated GET and mutation sweeps. Backend reported 207 tests, zero failures/errors/skips; MySQL 8.4 migration validation, frontend build, application health and Playwright branch-filter tampering checks all passed. Later changes add pending/expired export and PDF/attachment owner checks and are being revalidated.
+- The reviewed MySQL 8.4 schema artifact 13808500261 enumerates 74 tables, 64 tenant_id columns (60 NOT NULL and four mixed-scope nullable), and three NULL rows in the role table only; all other tenant_id-bearing tables have zero NULLs in disposable CI data. A new CI assertion script now enforces these exact counts and the approved three global role names.
+- The protected production workflow is manual and branch-restricted. It is not present on main, so it must be reviewed and merged through the normal PR process before GitHub will allow workflow_dispatch. No production DB connection was made in this session; production NULL-row evidence and DBA/data-owner sign-off remain outstanding.
+
+## Phase 2 acceptance status — 2026-11-11
+
+| Acceptance item | Status | Evidence / remaining gate |
+|---|---|---|
+| Authenticated role × endpoint × HTTP verb coverage | PARTIAL — broad denial sweeps added | The 222-row matrix classifies 15 public mappings and 207 protected mappings. CI run 42914611354 passed all four jobs and 208 backend tests with zero failures. The tests assert unauthenticated denial across all 207 protected mappings, zero-permission vendor denial across 83 protected GET mappings and 115 protected mutation mappings (at least 50 explicit 403s), plus two resource-delegated routes with separate tests. Inventory Viewer, Accountant and Service Engineer have representative cross-module role tests. Positive access is not yet fixture-tested for every role/resource/verb combination, so full role × endpoint × verb acceptance remains open. |
+| Customer and branch negative tests | PARTIAL — expanded HTTP negative coverage | Added same-tenant cross-customer address DELETE denial with unchanged-row assertion; service attachment cross-customer upload/download denial and owner-byte verification; foreign-survey attachment upload/list/download denial; branch role denial and foreign-tenant employee membership rejection. These tests are included in the passing 208-test CI run 42914611354. The full customer/branch CRUD matrix across every resource family still needs route-specific reconciliation. |
+| Export/download authorization | PARTIAL — requester isolation now exercised over HTTP | Added HTTP requester checks for async export status/download, plus owner/foreign-customer PDF checks for quotations and invoices, payment receipt, service attachments, survey attachments and warranty attachments. Service tests cover foreign-tenant status/download, pending 409, expired 410, completed-owner private-object reads and no storage access after denial. CSV/XLSX/PDF operations and platform exports are covered. CI run 42914611354 passed all four jobs and 208 tests, including quotation-PDF 404 handling and survey attachment HTTP owner/foreign checks. The newest parameterized CSV/XLSX/PDF async export tests are being revalidated in the latest run. |
+| Tenant-owned schema and NULL-row evidence | PARTIAL — SQL and CI gate prepared | The read-only schema audit enumerates every base table, tenant_id nullability and exact NULL counts, plus FK and unique-index inventories. MySQL 8.4 CI validates V60 and the eight tenant-owned NOT NULL columns plus four mixed-scope nullable columns. Actual production NULL counts, full production FK/index output and data-owner classification approval remain unavailable because the protected production workflow has not been run. |
+| Repository-wide asynchronous worker discovery | MET for checked-in source/config | The repository-root CI scanner artifact was downloaded and reviewed: seven scheduled triggers, two @Async listeners, one bounded executor, a DB-backed integration queue, two startup runners; no checked-in Kafka/Rabbit/AMQP/JMS/SQS/SNS/EventBridge worker client, Python/Go/Ruby worker, BullMQ/Agenda/node-cron worker or separate Docker worker container was found. `SEED_DATA_ENABLED=true` is local docker-compose only and must be overridden false in production. External cloud cron/queue/worker registrations still require infrastructure-owner confirmation. |
+| Production-data preflight and DBA sign-off | BLOCKED | No production connection or production query was performed. The protected workflow file is absent from `main` and exists only on this audit branch; GitHub manual dispatch requires the workflow to be on the default branch. It must pass normal PR review/merge first, then run with protected production secrets and an approved DBA/data owner. |
+
+**Release decision: NOT APPROVED for production.** Do not advance to Phase 3 until positive role/resource coverage and exhaustive download evidence are closed, the checked-in worker inventory is supplemented by external-runtime confirmation, and the protected production preflight output plus DBA/data-owner sign-off are attached to the release record.
+
+
+## Phase 2 final verification update — 2026-11-11
+
+**Verified implementation commit:** `10287b76fc75e6bbf21eaee65f70d048b074cd1b`  
+**GitHub Actions run:** [42967893781](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42967893781)  
+**Result:** <strong>PASS — all four CI jobs succeeded.</strong>
+
+### Latest CI evidence
+
+| CI job | Result | Evidence |
+|---|---|---|
+| Backend compile, security suite and full Maven verification | PASS | 218 tests, 0 failures, 0 errors, 0 skipped; `BUILD SUCCESS`. The selected security/context suite also passed before the complete `clean verify`. |
+| Frontend typecheck, unit tests and production build | PASS | 6 test files and 22 frontend tests passed; production build completed. |
+| MySQL 8.4 migration and schema audit | PASS | Squashed baseline equivalence and migration assertions passed. Schema audit artifact: [13832410206](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42967893781/artifacts/13832410206). |
+| Spring Boot startup, MySQL scheduler tests, integrity preflight and Playwright | PASS | Spring Boot health UP on MySQL 8.4; 4 MySQL scheduler concurrency tests passed; V57, V58 and V60 disposable-DB preflight markers all PASS; 3 Chromium/Playwright tests passed. |
+
+The latest CI schema artifact confirms **74 base tables**, **64 tables with tenant_id**, **60 tenant_id columns declared NOT NULL with zero NULL rows**, and **four nullable mixed-scope tables**. In this disposable CI database, exact NULL tenant_id counts were: `app_user=0`, `audit_event=0`, `notification_delivery=0`, `role=3`; the three nullable role rows are the approved global roles `PLATFORM_SUPER_ADMIN`, `PLATFORM_SUPPORT` and `CUSTOMER`. These are test-database counts only; they are not production counts or production owner approval.
+
+### Runtime endpoint authorization evidence
+
+The runtime Spring MVC registry generated and validated four CSV evidence files in CI. The artifact is [phase2-endpoint-authorization-evidence, artifact 13832047670](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42967893781/artifacts/13832047670).
+
+| Evidence set | Runtime rows | PASS | Explicit exemption / delegated | Outcome |
+|---|---:|---:|---:|---|
+| Anonymous authentication and public exceptions | 228 | 210 | 18 | Every one of the 210 protected method/pattern mappings rejected an anonymous request with 401/403; 18 public/documentation exceptions were explicitly classified. |
+| Positive applicable-account authorization gate | 210 | 207 | 3 | All 207 exercised positive gates passed. Three vendor analytics routes delegate positive verification to `VendorAnalyticsServiceTest`, which checks VENDOR_ADMIN + REPORT_VIEW + BRANCH_MANAGE and foreign-branch denial. |
+| Zero-permission vendor protected GET sweep | 91 | 83 | 8 | All 83 probed protected reads denied with 403/404; eight documented self-service GETs were explicitly exempted from this vendor-zero-permission sweep. |
+| Zero-permission vendor mutation sweep | 120 | 117 | 3 | All 117 probed mutations denied with 403/404; three resource-delegated operations are covered by focused ownership/target-resource tests. |
+
+The evidence validator returned **PASS with no failing rows**. This is a runtime authorization-gate result, not proof that every named business role has successful CRUD evidence against a real resource for every route. The 222-row static endpoint document remains a historical annotation snapshot; the current runtime CSV is authoritative for the mappings actually discovered by Spring in this CI run. Positive and negative role/resource-specific CRUD coverage therefore remains a separate acceptance requirement.
+
+### Customer, branch and export/download regression evidence
+
+The 40-test `Release12TenantIntegrationTest` class passed as part of the 218-test backend suite. The latest full run includes the customer ownership, branch scope and document/export tests already added to that suite, including:
+
+- Customer A cannot use guessed IDs to read, update or delete Customer B's address; failed cross-customer deletes leave the target unchanged. Tampered tenant/customer IDs on address creation are ignored in favor of the authenticated customer.
+- Customer-owned order, quotation, invoice, payment receipt and service-ticket reads/downloads are isolated. Quotation PDF, invoice item/PDF and payment receipt requests return 404 to the other customer and succeed for the owner. Service evidence upload/download checks compare foreign-customer denial with owner byte-for-byte success.
+- Customer installation and warranty lists, profile changes and messaging consent are self-owned. Warranty-claim attachment HTTP tests cover upload/list/download, wrong parent claim, foreign tenant, other customer, unsupported content type and owner byte-for-byte download.
+- Branch lifecycle tests cover branch CRUD, membership assignment/list/removal and permission denial. Assigned-branch filtering covers CRM, quotations, orders, invoices, service tickets, installations, warehouses and inventory. Negative writes cover a branch-B lead/survey for a branch-A member; branch analytics rejects an unassigned branch.
+- Operations export content is checked in CSV, XLSX and PDF against authenticated-tenant aggregates and excludes a foreign-tenant sentinel. Asynchronous export status/download tests cover CSV, XLSX and PDF, requester ownership, same-tenant different requester, foreign tenant and customer denial. Platform tenant exports and quotation/invoice/receipt/service/survey/warranty attachment routes also have focused HTTP coverage.
+
+These are significant family-level checks, but they do **not** establish exhaustive positive and negative evidence for every customer-owned resource operation or every branch-scoped mutation. Unsupported CRUD operations (for example, a resource family with no DELETE route) must be marked N/A rather than assumed covered. Keep the residual matrix rows PARTIAL until every applicable route/resource/verb has a named fixture-backed test or an approved documented exception.
+
+### Production schema and external worker evidence boundary
+
+**Production schema: BLOCKED.** CI proves that V57/V58/V60 and the SELECT-only inventory execute cleanly against a disposable MySQL 8.4 schema. No production connection was available, so no production row counts, NULL counts, complete FK/unique-index output or production relationship preflight was collected. The protected `.github/workflows/phase-2-production-preflight.yml` must be reviewed/merged through the normal PR process, dispatched with the protected production environment and DBA-approved identities, and its full artifact reviewed by the data owner/DBA. Do not run V57/V58/V60 against production until the approved preflight and change window are complete.
+
+**Checked-in worker discovery: MET. External runtime discovery: PARTIAL / NOT CONFIRMED.** The repository-wide scan covers the application source and deployment files: seven scheduled triggers, two `@Async` listeners, one bounded executor, the database-backed integration queue and two startup runners; it found no checked-in broker client or separate worker container. The connected Render workspace exposed one web service, but it deploys the older `rambrij/soumya-solar-energy-solution` repository, not this product repository. The connected Vercel project is likewise linked to the older repository and its project response did not enumerate Cron registrations. AWS was not connected/queried. Therefore these observations cannot reconcile the production infrastructure serving `saumya-solar-energy-product`; AWS/other cloud, Vercel cron and production-only provider schedules/queues remain for the infrastructure owner to attest with timestamped exports.
+
+### Final acceptance register
+
+| Acceptance area | Current status | Reason |
+|---|---|---|
+| Runtime authentication gate for every protected mapping | MET for the current runtime registry | 210 protected method/pattern rows denied anonymous access; 18 explicit public/documentation exceptions classified. |
+| Role × endpoint × verb, including real-resource CRUD | PARTIAL | Applicable-account positive gates and zero-permission sweeps pass, with delegated tests; fixture-backed success/denial is not yet demonstrated for every named role, resource and verb. |
+| Customer isolation | PARTIAL | Strong HTTP coverage across addresses, orders, quotations, invoices, payments, tickets, installations, warranties and evidence; not every customer-owned resource/operation family is exhaustive. |
+| Branch isolation | PARTIAL | Branch CRUD/membership, filtering and selected cross-branch writes are tested; not every branch-bearing route's create/update/delete operation has an explicit negative/positive fixture pair. |
+| Export/download authorization | PARTIAL | Operations and platform exports, async CSV/XLSX/PDF exports and several document/attachment families are tested; exhaustive coverage of every export/download family and private-storage boundary is not yet proven. |
+| Disposable MySQL schema/migration/preflight | MET for CI | MySQL 8.4 baseline, V57/V58/V60 and exact test-schema audit passed. |
+| Production schema counts, FK/index reconciliation and data-owner classification | BLOCKED | Production database was not queried; DBA/data-owner output and approval are absent. |
+| Checked-in worker/scheduler inventory | MET | Repository-wide source/config scan and CI artifact reviewed. |
+| External production worker/queue/schedule reconciliation | BLOCKED / NOT CONFIRMED | Connected provider resources do not match this repository; AWS and actual target production control planes remain unverified. |
+
+**Release decision: NOT APPROVED for production.** Code-level CI is green, but final acceptance remains blocked on production schema/preflight and infrastructure-owner sign-off, plus completion or release-owner acceptance of the remaining role/resource CRUD and export/download coverage rows. Do not interpret the disposable CI schema PASS as production-data approval.
+
+
+---
+
+## Phase 2 final-acceptance work update — 2026-11-11
+
+This section supersedes earlier statements that no latest CI validation had been run. It does **not** waive production-only approvals or convert representative role coverage into exhaustive proof.
+
+### Runtime authorization checkpoint
+
+- GitHub Actions run [42967893781](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42967893781) passed all four jobs on commit `10287b76fc75e6bbf21eaee65f70d048b074cd1b`: backend (218 tests, zero failures/errors/skips), frontend typecheck/production build, MySQL 8.4 migration validation, and Spring Boot startup/health/Playwright validation.
+- The generated `phase2-endpoint-authorization-evidence` artifact (ID `13832047670`) was validated and uploaded. It records 228 expanded method/path rows: 210 protected anonymous-denial probes and 18 explicit public/exempt rows; 207 applicable-account positive authorization-gate probes with three analytics routes delegated to focused service tests; 83 zero-permission vendor GET denials with eight documented self-service exceptions; and 117 zero-permission vendor mutation denials with three resource-delegated routes.
+- The 222 declaration count in `PHASE_2_ENDPOINT_MATRIX.md` and 228 runtime evidence rows are different inventory dimensions: controller declarations versus expanded method/path evidence. Both are retained and reconciled in the evidence report.
+- This is evidence for authentication, applicable account-type gates, zero-permission denial, and separately delegated routes. It is **not** positive access proof for every named business role/resource/verb tuple. Platform Support, Vendor Admin, Sales, custom Sales, Inventory Viewer, Accountant, Service Engineer and Customer have representative role tests, but not every role × route × verb positive combination. **Acceptance item 1 remains PARTIAL.**
+
+### Customer, branch and export/download work added
+
+- Customer integration coverage already exercises address read/update/delete isolation; cross-customer order, quotation, invoice, payment, service, installation and warranty visibility; customer-owned quotation/invoice/receipt PDFs; service/survey/warranty evidence attachment ownership; and owner/foreign-customer upload/list/download behavior.
+- Additional HTTP negative assertions were added for guessed-ID customer quotation acceptance and invoice payment-gateway checkout. A foreign customer must receive 404, the quotation must remain `SENT`, and the payment count for the foreign invoice must remain unchanged. The test change is on this branch and requires the post-change CI run before it is treated as passing.
+- Branch membership is now enforced by `SurveyLifecycleService.requireSurvey` after tenant and engineer-assignment validation. Branch-scoped lead/survey mutation tests prove the assigned member can update branch-A records, cannot update branch-B records even where the same engineer is assigned, and leaves denied rows unchanged. These changes passed the 218-test run above.
+- Export/download coverage now includes asynchronous CSV/XLSX/PDF exports, operations CSV/XLSX/PDF, platform tenant exports, quotation/invoice/payment-receipt PDFs, and service/survey/warranty attachments. Owner bytes, cross-requester/cross-customer/cross-tenant denial, pending/expired states and no private-storage reads after denial are checked by HTTP/service tests. The final route-to-test review remains required for any mapping introduced after the static matrix was generated.
+- **Acceptance items 2 and 3 are substantially expanded but remain PARTIAL** until every applicable customer/branch resource operation and every current download mapping has a route-to-test reconciliation with no untested row. The newest quote-acceptance/checkout tests are subject to the pending run described in the current CI job.
+
+### Production schema and NULL-row evidence
+
+- The protected production preflight now requires V57, V58 and V60 PASS markers and creates a manifest containing workflow run/attempt, commit, UTC timestamp and SHA-256 hashes for the preflight SQL and output artifacts. The read-only schema audit emits exact tenant_id NULL counts, nullability, FK inventory, unique-index inventory and tables without tenant_id. The production sign-off register is `PHASE_2_PRODUCTION_DATA_SIGNOFF.md`.
+- The workflow is branch-only and must first be merged to the default branch through normal PR review before GitHub permits manual dispatch. It also requires protected production secrets, a read-only schema-audit account, a DBA-approved preflight identity (the V57/V58/V60 preflight creates/drops temporary stored procedures and therefore needs DBA-approved routine privileges), protected-environment review and production change approval.
+- No production database connection/query was made in this audit session. CI MySQL NULL counts are disposable test data and are not production evidence. Actual production counts, owner classification, artifact review and DBA/data-owner approval remain **BLOCKED**. **Acceptance item 4 is NOT COMPLETE.**
+
+### External worker registrations
+
+- The latest repository scanner output from run `42967893781` found seven Spring scheduled triggers, two `@Async` application listeners, one bounded event executor, two startup runners and a database-backed integration queue; no checked-in Kafka/Rabbit/JMS/SQS/SNS/EventBridge worker client or separate language/container worker was found. The checked-in source/config inventory is **MET** for the scanned commit.
+- The connected Render workspace returned one web service, `soumya-solar-api`, but it points to the older `rambrij/soumya-solar-energy-solution` repository. The connected Vercel team returned one similarly named project linked to that older repository; available Vercel connector operations did not expose its cron inventory. No AWS account/organization or target Kubernetes/other production control plane was connected.
+- This does not establish that the production environment for `saumya-solar-energy-product` has no external workers. Infrastructure-owner exports/sign-off for AWS EventBridge/Scheduler, Lambda triggers, ECS/EKS jobs, SQS/DLQ/SNS, Vercel Cron, Render jobs, GitHub schedules and other provider registrations remain **PENDING**. **Acceptance item 5 is NOT COMPLETE.**
+
+### CI status
+
+Run `42967893781` passed every job on commit `10287b76fc75e6bbf21eaee65f70d048b074cd1b`. Later customer authorization assertions and documentation refreshes have since advanced the branch, so the post-change workflow for the current head must pass before the “all CI jobs latest commit” criterion can be marked MET. **Acceptance item 6 is MET for that checkpoint and PENDING for the subsequent head until the latest run is green.**
+
+**Release decision:** Phase 2 remains **NOT APPROVED**. Do not release until the latest-head workflow is green, the remaining positive role/resource/verb matrix is reconciled, customer/branch/export mappings have zero untested applicable operations, the protected production preflight has archived exact production outputs with DBA/data-owner/security/release-owner approval, and the actual production infrastructure worker inventory is signed.
+
+
+---
+
+## Phase 2 remaining-acceptance verification — 2026-11-11 (branch-head audit)
+
+**Audit target:** `audit/phase-2-implementation-gap-analysis`  
+**Audited application-code HEAD:** `3cdd7b29ee9b8b5ccbed55b07f345a838fbad00d`  
+**Audit documentation commit:** `eaad88e83670fb6dbdaac451033f9fe634c00748` (documentation-only; no application source/test/schema changes)  
+**Latest application-code CI:** [run 42969622428](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42969622428) — completed successfully on the exact audited application-code HEAD. The subsequent audit commit changes only `IMPLEMENTATION_GAP_ANALYSIS.md`; no application code changed after this CI run.  
+**Scope:** Phase 2 operations and the outstanding Phase 2 tenant-isolation/data-integrity acceptance gates. The business requirements document is authoritative for phase placement; the SRS/HLD is authoritative for technical behavior.
+
+### Verified status table
+
+| Requirement / acceptance area | Source section | Status | Evidence and remaining condition |
+|---|---|---|---|
+| Site survey capture, lifecycle and customer/quotation linkage | Business requirements §9; SRS/HLD §10.5, §12.1 | MET for checked-in workflow evidence | `backend/src/test/java/com/saumyasolar/SurveyLifecycleIntegrationTest.java` (7 tests passed in run 42969622428); `Release12TenantIntegrationTest` (40 tests passed) includes branch/customer survey ownership scenarios. This is not a claim of production acceptance. |
+| Installation scheduling, assignment and commissioning controls | Business requirements §9; SRS/HLD §10.9 and §20.5 | PARTIAL | Installation workflows and tenant/branch filtering exist in `Release12TenantIntegrationTest`; current evidence does not prove every applicable role/resource/verb transition and customer sign-off path. |
+| Service ticket, SLA and assigned-engineer isolation | Business requirements §10; SRS/HLD §9.3, §10.11, §20.6 | PARTIAL | `Release12TenantIntegrationTest`, `ServiceAttachmentServiceTest`, `FinanceServiceAssignedVisitScopeTest`, `ServiceSlaSchedulerTest` and `TenantSchedulerConcurrencyIntegrationTest` passed. Route-to-role/resource/verb coverage and external worker confirmation remain incomplete. |
+| Warranty and warranty-claim ownership / attachments | Business requirements §10; SRS/HLD §10.11 | PARTIAL | `Release12TenantIntegrationTest` and `WarrantyClaimAttachmentServiceTest` cover tenant/customer/parent-claim and attachment boundaries. Exhaustive route-to-test reconciliation remains outstanding. |
+| Inventory transactions, warehouse/branch scoping and concurrency | Business requirements §8; SRS/HLD §10.8, §20.4 | PARTIAL | `backend/src/test/java/com/saumyasolar/domain/InventoryTransactionTest.java`, `Release12TenantIntegrationTest` and MySQL 8.4 CI migration/scheduler checks passed. Do not infer all inventory CRUD and branch mutations are covered from these representative tests. |
+| Payment tracking and financial record ownership | Business requirements §7; SRS/HLD §10.10 | PARTIAL | `Release12TenantIntegrationTest`, `Release4FinanceServiceAndPlatformTest` and `PaymentGatewayCheckoutServiceTest` passed. The SRS gateway integration is in conflict with the business roadmap phase placement; see Conflict Log. Manual payment tracking is Phase 2; gateway rollout is deferred pending phase decision. |
+| Role × endpoint × HTTP verb positive and negative evidence | SRS/HLD §9.1–9.3, §15.2, §20.2; §21.4 | NOT MET | `EndpointAuthenticationMatrixTest` passed all 4 tests and generated runtime evidence: 228 expanded method/path rows; 210 protected anonymous denials; 207 positive applicable-account permission-gate probes plus 3 delegated routes; 83 zero-permission GET denials plus 8 documented self-service exceptions; 117 zero-permission mutation denials plus 3 delegated routes. This is not named-role, fixture-backed successful and denied CRUD evidence for every applicable endpoint. The existing 222-declaration static matrix still records 112 route-specific CRUD/role-evidence rows requiring completion/reconciliation. |
+| Customer-level isolation for every applicable resource operation | SRS/HLD §8.4, §9.3, §20.1 | PARTIAL | `Release12TenantIntegrationTest` passed 40 tests, including customer addresses, orders, quotations, invoices, payments, service, installations, warranty claims and private attachments. The matrix still identifies resource/verb combinations without explicit fixture-backed negative evidence. |
+| Branch-level isolation for every applicable create/update/delete operation | SRS/HLD §8.4, §9.3, §11.3 | PARTIAL | `Release12TenantIntegrationTest` covers branch CRUD/membership, assigned-branch filtering and branch-A/branch-B lead/survey mutation denial. It does not demonstrate a positive/negative fixture pair for every branch-bearing mutation route. |
+| Export and private-download authorization for every current mapping | SRS/HLD §10.14, §13.8, §15.4, §20.7 | PARTIAL | `Release12TenantIntegrationTest`, `ExportServiceTest`, `ServiceAttachmentServiceTest`, `SurveyAttachmentServiceTest`, `WarrantyClaimAttachmentServiceTest` cover CSV/XLSX/PDF, async exports, requester/tenant/customer denial and attachment ownership. The current route-to-test reconciliation is not exhaustive; unmatched current download routes must remain open. |
+| Tenant-owned schema constraints and disposable MySQL migration/preflight | SRS/HLD §8.3, §14.3, §21.2 | MET for CI only | Run 42969622428 passed MySQL 8.4 migration validation, V57/V58/V60 checks and the schema audit. Artifact `phase-1-2-tenant-schema-inventory` (ID 13832806420). These are disposable CI database results, not production data. |
+| Production tenant NULL counts, FK/index reconciliation and DBA/data-owner approval | SRS/HLD §8.3, §14.3, §21.5, §22 | UNVERIFIED / BLOCKED | `PHASE_2_PRODUCTION_DATA_SIGNOFF.md` remains blank. No production database was queried. Production counts, classification of every base table, V57/V58/V60 output, backup/change ticket and DBA/data-owner/security/release-owner approvals are not available. |
+| Checked-in scheduler, executor, listener and worker inventory | SRS/HLD §18, §8.4 | MET for checked-in source/config at audited HEAD | Run 42969622428 uploaded `phase2-async-worker-inventory` (ID 13832289015); the CI scan ran on the audited HEAD. This does not establish the state of external production control planes. |
+| External production workers, queues and schedules | SRS/HLD §18, §22 | UNVERIFIED / BLOCKED | `PHASE_2_EXTERNAL_WORKER_CONFIRMATION.md` is still unsigned. Connected provider workspaces previously inspected do not target this repository; AWS/target Kubernetes/actual production PaaS and vendor retry/queue registrations have not been reconciled by the infrastructure owner. |
+| Latest-head backend, frontend, migration, startup and browser CI | SRS/HLD §21, §22, §25 | MET | Run 42969622428 passed all four jobs on the audited application-code HEAD; the later documentation-only commit did not alter application code. Backend Maven: 218 tests, 0 failures/errors/skips, BUILD SUCCESS. Frontend typecheck/component tests/build passed. MySQL 8.4 migration/schema job passed. Spring Boot/MySQL scheduler/browser job passed. |
+
+### What this verification pass changed
+
+No application source, API, schema or test code was changed in this verification pass. The latest branch-head CI was inspected directly, including all four job results and backend test logs. The acceptance register above corrects the evidence boundary: all-grants/zero-permission sweeps are permission-gate checks, not exhaustive role × endpoint × verb business-operation tests; disposable MySQL is not production data; and checked-in worker discovery is not external infrastructure sign-off.
+
+The remaining code/test gaps are deliberately **not** marked complete. In particular, the 112 route-specific CRUD/role-evidence rows, exhaustive customer/branch mutation pairs and exhaustive current download mapping reconciliation require additional fixture-backed test work. This audit does not manufacture passing evidence or weaken any test.
+
+### Conflict Log
+
+| ID | Business requirements reference | SRS/HLD reference | Conflict | Decision |
+|---|---|---|---|---|
+| C-01 | §20 Phase 2: operations include site survey, installation scheduling, engineer assignment, service tickets, warranty, inventory transactions, payment tracking, advanced reporting and SMS/WhatsApp. §20 Phase 3: multiple branches, multiple warehouses, payment gateway and analytics. | §24 Phase 2: multiple warehouses/transfers, advanced installation planning, warranty/AMC, full service SLA, SMS/WhatsApp adapters, payment gateway, advanced dashboards/exports and branch management. | The SRS places branches, multiple warehouses and payment gateway in Phase 2 while the business roadmap places them in Phase 3. | Business roadmap wins for phase placement. Phase 2 acceptance is limited to the business Phase 2 scope. Existing branch/warehouse/gateway code is preserved; no rollback is made. Do not treat those Phase 3 capabilities as Phase 2 acceptance blockers unless the product owner re-baselines scope. |
+| C-02 | §7 Order Management and §20 Phase 2 require payment recording/tracking; §20 Phase 3 lists payment gateway. | §10.10 FIN-004/FIN-005 and §13.7 describe future gateway callbacks and payment handling; §24 Phase 2 explicitly includes payment gateway. | Manual payment tracking is Phase 2 in the business document, while gateway integration is Phase 3 there but Phase 2 in the SRS. | Implement/verify manual payment tracking for Phase 2. Gateway integration remains deferred to Phase 3 under the higher-priority business roadmap. Existing gateway code is preserved and is not represented as a Phase 2 requirement. |
+| C-03 | §10 Service Management and §20 Phase 2 require warranty/service management; AMC is not named as a Phase 2 deliverable. | §24 Phase 2 says “Warranty and AMC”; §10.11 specifies warranty/service requirements but does not define AMC rules. | AMC is added by the SRS roadmap without a corresponding business workflow or acceptance definition. | Warranty and service are in scope. AMC is Unspecified / Needs Product Decision; no AMC behavior is invented or added. |
+
+### Unspecified / Needs Product Decision
+
+- AMC: coverage model, renewal, pricing, entitlement, visit cadence, SLA and customer/vendor workflows are not defined in the business requirements.
+- Whether Phase 2 should be re-baselined to pull branch management, multiple warehouses and payment gateway forward from Phase 3, contrary to the business roadmap.
+- Named role-by-route positive CRUD fixture expectations for routes where the SRS defines permissions but does not specify which exact standard role should hold each grant. Do not infer new grants.
+- Production hosting/account/region inventory and the authorized infrastructure owner identities; no production cloud account was connected for this audit.
+- Production data owner classification and approval for mixed-scope/global tables; this requires actual production output and owner decisions.
+- The exact supported customer-to-multiple-vendor identity model and retention/legal-hold rules remain open in SRS/HLD §26; they are not expanded as part of this Phase 2 audit.
+
+### Release decision
+
+**Phase 2 remains NOT APPROVED for production.** Latest-head CI is green, but role/resource/verb evidence, exhaustive customer/branch/download reconciliation, production database sign-off and external infrastructure worker confirmation are not complete. No production preflight should be run until the protected workflow, DBA-approved identity, production change window and backup approval are in place.
+
+
+---
+
+## Runtime route reconciliation and adapter-only payment test update — 2026-11-11
+
+**Branch:** `audit/phase-2-implementation-gap-analysis`  
+**Current code/documentation head at this update:** `59488148a0a46316b5fb9fa8c23f82b21296259a`
+
+### Implemented in this pass
+
+- `scripts/audit/assert-endpoint-authorization-evidence.py` now joins the exact HTTP method + Spring route pattern across anonymous, applicable-account positive-gate, zero-permission GET and zero-permission mutation evidence. It detects duplicate/missing/failed/unknown rows and writes `runtime-route-authorization-reconciliation.csv` with one row per runtime mapping.
+- The reconciliation includes the endpoint matrix's declared policy and evidence text, and verifies explicit `*Test.methodName` references against the checked-in test source.
+- `PHASE_2_ENDPOINT_MATRIX.md` was corrected to remove stale report-export routes, list the current asynchronous `/api/v1/exports` routes, correct attachment route trailing slashes, and repair the type-dispatch route row.
+- `EndpointAuthenticationMatrixTest.authenticatedZeroPermissionVendorIsDeniedEveryProtectedMutationMapping` no longer classifies the read-only `GET /api/v1/offline-sync/operations` mapping as mutation evidence.
+- `PaymentGatewayCheckoutServiceTest.createsPendingCheckoutThroughMockAdapterOnlyWithoutContactingARealProvider` exercises a Mockito-only adapter, verifies a pending record, and makes no real provider/network call. Live payment, capture, settlement and refund operations are not enabled.
+
+### Verification and remaining gate
+
+Run [42979515204](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42979515204) reported **219 backend tests passed with zero failures/errors/skips**. Its endpoint-evidence validator correctly failed because the old static matrix still contained 12 stale/malformed mappings and the mutation evidence included one GET row. Those findings were corrected in subsequent commits; the rerun for the corrected branch head is in progress and must pass before this reconciliation is accepted.
+
+**Route-specific CRUD status remains PARTIAL / NOT MET.** The runtime reconciliation proves each current mapping is represented in the dynamic authentication and broad account/permission-gate evidence, records whether its static matrix evidence points to a real test method, and distinguishes a 404 probe from a focused test. It does not manufacture fixture-backed positive and negative CRUD coverage for every named role/resource/verb. Rows whose evidence is only `ACCOUNT_PERMISSION_GATE_ONLY`, `NON_DISCLOSING_NOT_FOUND_PROBE`, or a generic test-family reference still require resource-backed tests with real same-tenant/foreign-tenant or assigned/unassigned fixtures and unchanged-state assertions for denied mutations. No test has been weakened to obtain a pass.
+
+**Release status:** Phase 2 production acceptance remains blocked until the generated runtime reconciliation passes and the remaining fixture-backed CRUD gaps are closed or explicitly accepted by the release owner.
+
+
+## Fixture-backed cross-domain CRUD authorization coverage — 2026-11-11
+
+Added `Release12TenantIntegrationTest.fixtureBackedCrudAuthorizationAcrossCrmQuotesOrdersInventoryInstallationsServiceWarrantyFinanceAndExports`. The test constructs persisted same-tenant and foreign-tenant resource graphs (customers, branches, enquiries, leads, surveys, quotations, orders, products, warehouses, inventory balances/ledger rows, invoices, service requests, installations, warranties and warranty claims).
+
+The test verifies same-tenant read and permitted mutation paths and foreign-tenant denial for lead update, quotation revision/send, order history/transition, inventory balance/reversal, installation checklist/cancel, service detail/close, warranty claim list/approval, invoice items/void and export status ownership. Each denied mutation is followed by repository-backed assertions that the foreign resource remains unchanged; inventory additionally asserts no foreign compensation ledger row is written. Export job access is verified against the requesting principal and a separate tenant's REPORT_EXPORT user.
+
+**Scope qualification:** this is a cross-domain fixture-backed integration layer, not proof that every CRUD route in every domain now has a complete per-role test. It does not yet enumerate every applicable role (e.g. sales, engineer, accountant, dispatcher, branch member and customer) against every HTTP verb and resource subtype, nor exhaustively cover all finance payment/refund/credit-note mutations or each export format/attachment route. Those specific route/role combinations remain partial until individually evidenced. The new method is being exercised by the branch CI run; do not mark its scenarios Met until that run passes.
+
+
+## Phase 2 role-, branch- and resource-backed CRUD authorization follow-up — 2026-11-11
+
+### Source-of-truth references
+
+- Business requirements: `saumya-solar-energy-solution-requirements.md` §§1, 5–10, 14, 18 (vendor employee roles; CRM assignment; quotation/order lifecycle; inventory; installation checklist and commissioning; service assignment and closure; CSV/Excel/PDF reports; security and tenant isolation).
+- Technical SRS/HLD: `saumya-solar-production-ready-srs-hld.md` §§8.2–8.4, 9.1–9.3, 10.3, 10.6–10.11, 10.14, 12.1–12.4, 19–21 (tenant resolution, role scopes, sales and engineer assignment, finance permissions, commissioning, exports, negative authorization and release gates).
+
+### Implementation and evidence added
+
+| Gap | Implementation / test evidence | Current status |
+|---|---|---|
+| Sales employee vs Sales Manager | `Release12TenantIntegrationTest.salesManagerCanManageUnassignedLeadsWhileSalesEmployeeIsRestrictedToAssignedLeads`: persisted assigned, unassigned and foreign-tenant leads; verifies employee visibility/update boundary, manager visibility/update/reassignment, and unchanged state after denied employee/foreign updates. | Implemented; CI pending |
+| Assigned vs unassigned service engineers | `Release12TenantIntegrationTest.assignedAndUnassignedServiceEngineersHaveFixtureBackedReadAndMutationBoundaries`: persisted assigned/unassigned/foreign tickets; verifies list/detail/close boundaries and unchanged denied ticket state. | Implemented; CI pending |
+| Service attachment ownership | The same integration test uploads and downloads evidence as the assigned engineer, denies unassigned download/upload, and asserts the attachment row count remains unchanged after denial. Existing `ServiceAttachmentServiceTest` covers assigned/unassigned evidence access at service layer. | Implemented; CI pending |
+| Branch-level direct-resource restrictions | Existing `Release12TenantIntegrationTest.branchAssignedMemberListsOnlyAssignedBranchEnquiriesLeadsSurveysQuotationsAndOrders` now additionally checks direct invoice items/void, service close and installation cancel across two branches, asserting the out-of-branch resource state is unchanged. `FinanceService.ensureTicketAccess` and finance invoice/payment/credit-note paths call `EnterpriseSaasService.assertBranchAccess`; `OperationsService.installation` applies the same branch check to installation detail/checklist/mutation paths. | Implemented; CI pending |
+| Payment/refund/credit-note authorization | `Release12TenantIntegrationTest.financePaymentRefundAndCreditNoteMutationsAreTenantAndPermissionScoped`: manual/offline payment record, manual refund and credit note persist for same-tenant accountant; foreign invoice/payment operations return non-disclosing 404; read-only accountant mutations return 403; payment/refund/credit-note counts and invoice/payment states are asserted unchanged after denial. | Implemented for manual adapter/offline records; CI pending |
+| Installation checklist and commissioning | `Release12TenantIntegrationTest.installationChecklistAndCommissioningAreRestrictedToAssignedEngineerAndPersistEvidence`: assigned engineer reads and completes mandatory checklist with evidence; unassigned engineer is denied checklist read/update and commissioning; repository state is checked after denials; assigned engineer commissions only after mandatory checklist completion and customer sign-off. | Implemented; CI pending |
+| Export formats and export ownership | Existing `Release12TenantIntegrationTest.asynchronousExportStatusAndDownloadAreRestrictedToTheRequestingPrincipalForEveryFormat` covers CSV, XLSX and PDF, requester-only status/download, same-tenant different requester and foreign-tenant denials. `operationsCsvXlsxAndPdfExportsContainOnlyAuthenticatedTenantAggregates` verifies tenant-only contents in all three formats. | Existing evidence retained |
+| Warranty attachment ownership | Existing `Release12TenantIntegrationTest.warrantyClaimAttachmentHttpUploadAndDownloadAreBoundToTenantAndParentClaim` checks owner download, other-customer/foreign-tenant/other-claim denial and tenant-scoped storage key; repository ownership is asserted. | Existing evidence retained |
+| Non-disclosing foreign-resource responses | `AppService.updateLead` and `AppService.action` now map missing tenant-scoped lead/quotation lookups to explicit HTTP 404 instead of leaking `NoSuchElementException` as an unhandled server error. | Implemented; CI pending |
+
+### Payment boundary
+
+The finance integration tests create only `source=MANUAL` ledger records for offline/manual payment recording and manual refund authorization. They do not initiate a bank, UPI, card or payment-gateway charge. Gateway refund execution remains unavailable without a configured provider refund adapter; no real payment is required or attempted.
+
+### Verification state
+
+- Branch: `audit/phase-2-implementation-gap-analysis` (no new branch).
+- Current source commit at this documentation update: see branch head.
+- Frontend production build and Flyway/MySQL migration validation passed in the preceding CI run.
+- Backend CI is still running against the updated branch. Do not treat these new scenarios as accepted until the backend job passes; any test failure must be fixed without deleting or weakening tests.
+- Existing export and warranty-attachment tests are reused as evidence rather than duplicated.
+
+### Remaining acceptance qualification
+
+These additions close the specifically requested role and workflow gaps with persisted fixtures and database-state assertions. They do not by themselves prove every runtime HTTP mapping, every permission catalogue entry, or every CRUD verb/resource combination in the entire platform. The generated runtime mapping reconciliation and the full route-by-route evidence matrix remain separate Phase 2 release gates. Any untested combinations remain **Unverified**, not Met.
+
+
+### Final verification update — 2026-11-11
+
+**Verified source commit:** `65172df0984d0952ba18c31fbd161a042cf365a0`  
+**CI run:** [42985206403](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42985206403) — **success**
+
+The final run for the verified code head completed all four jobs successfully:
+
+- Backend compile and full test suite: **224 tests, 0 failures, 0 errors, 0 skipped**. `Release12TenantIntegrationTest`: 45 tests, all passing.
+- Flyway migrations against MySQL 8.4: passed.
+- Spring Boot against MySQL 8.4 and Mailpit: passed.
+- Frontend typecheck and production build: passed.
+
+Additional final evidence in `Release12TenantIntegrationTest.branchAssignedMemberListsOnlyAssignedBranchEnquiriesLeadsSurveysQuotationsAndOrders` now includes:
+- branch-scoped billable-order visibility and denied invoice creation for another branch;
+- invoice item and void boundaries;
+- payment/refund list filtering, receipt PDF ownership, denied out-of-branch refund with unchanged payment/refund rows;
+- service attachment listing/upload denial for another branch;
+- service visit scheduling denial for another branch with no visit row created;
+- installation checklist read/update denial for another branch with the denied checklist item unchanged;
+- service ticket close and installation cancellation denials with unchanged resource state.
+
+`Release12TenantIntegrationTest.assignedAndUnassignedServiceEngineersHaveFixtureBackedReadAndMutationBoundaries` also verifies assigned/unassigned visit list, start and completion access, persisted engineer notes/resolution/evidence, and no completion timestamp after denied mutation. `FinanceService.scheduleVisit` now checks ticket assignment and branch scope before creating a visit.
+
+**Payment restriction remains unchanged:** all payment/refund HTTP integration tests use manual/offline ledger records only; the adapter-only checkout test uses a mock adapter. No external payment provider or real charge/refund is invoked.
+
+The requested remaining role/resource scenarios are verified by the passing run. The broader runtime route-to-evidence reconciliation remains its own release gate; untested route/role combinations outside these explicitly named scenarios must still be classified as Unverified rather than assumed Met.
+
+
+### Final test-only hardening — 2026-11-11
+
+- `Release12TenantIntegrationTest.fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation` now snapshots `ExportJobRepository.count()` before denied CSV export creation attempts by inventory, accountant and engineer users, then asserts no export job was persisted.
+- Verified branch head: `165fbdb74c654b78195096f3fdca66c4e9d3d993`.
+- Final CI run for this head: [42985837841](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42985837841) — all four jobs successful; backend **224 tests, 0 failures, 0 errors, 0 skipped**.
+
+
+---
+
+## Phase 3 implementation update — 2026-11-11
+
+**Implementation branch:** `audit/phase-3-implementation-gap-analysis`
+
+### Reservation expiry and reconciliation
+- Added a configurable 24-hour reservation TTL and persisted expiry, pre-reservation order state, release timestamp, release reason and releasing actor.
+- Added tenant-scoped scheduled expiry and reserved-quantity reconciliation. Reconciliation derives the reserved quantity from active reservation rows and does not adjust on-hand or damaged stock.
+- Added reservation visibility/release UI and audit/history records.
+- Existing active reservations receive a 24-hour upgrade grace period.
+
+### Order transition policy
+- Added persisted platform-default transition edges and tenant-specific enable/disable overrides.
+- Transition permissions remain code-owned per edge; tenant configuration cannot change required permissions or create arbitrary state transitions.
+- Added API endpoints for permitted next states and policy administration. The operations UI now consumes permitted transitions rather than hard-coded status choices and exposes the policy editor to the vendor administrator.
+- Manual transitions, stock reservation/release, installation scheduling/start/cancellation/completion, commissioning and customer order acceptance/rejection now use the central policy enforcement path.
+- Invalid/disabled transitions return HTTP 409 without changing order state. Cancellation still requires the cancellation permission, a reason and no active stock reservation.
+
+### Tenant lifecycle
+- New tenants are provisioned as `PENDING`; vendor login and API access remain blocked until verification and activation.
+- Implemented `PENDING → VERIFIED → ACTIVE → SUSPENDED → ACTIVE` and `ACTIVE/SUSPENDED → CLOSED`; `CLOSED` is terminal.
+- Added verification/activation/suspension/closure actor and timestamp metadata, mandatory transition reasons, audit events, session revocation on suspension/closure and platform lifecycle actions.
+- Existing active tenants are retained as active and receive historical verification/activation timestamps during migration. The legacy `INACTIVE` directory filter remains supported.
+
+### Database and verification
+- Kept the original V1 baseline unchanged. Added V2 for reservation expiry/history metadata and V3 for tenant lifecycle metadata, the transition-policy table/default rules and the new policy permission.
+- Added V4 to backfill `ORDER_POLICY_MANAGE` to existing tenant vendor-admin roles; clean-install migration validation now checks this grant.
+- Added/updated integration coverage for reservation expiry, order-policy disable/reenable and tenant onboarding, suspension, reactivation and terminal closure.
+
+**Verification state:** implementation has been committed to the Phase 3 branch, but the full CI run and MySQL 8.4 migration validation for this updated head are still pending. Do not mark Phase 3 production-ready until the updated workflow is green and the remaining external Phase 2 production preflight/DBA/infrastructure sign-offs are complete.
+
+
+### Phase 3 CI verification update — 2026-11-11
+
+- Backend CI on commit `e9bf590fd59fde7e02766bda0ade8f9b94c8817f`: **226 tests, 0 failures, 0 errors, 0 skipped**.
+- MySQL 8.4 validation: historical V1–V63 equivalence passed; clean current V1 + Phase 3 V2/V3 migration application and schema assertions passed.
+- Frontend component tests, typecheck and production build passed.
+- The MySQL application-startup job reached browser E2E and failed only in `frontend/e2e/tenant-react-ui.spec.ts`: its fixture creates a tenant and immediately attempts vendor-admin login. The Phase 3 lifecycle correctly leaves newly provisioned tenants in `PENDING`, so that login receives HTTP 401 until the fixture calls the existing lifecycle endpoint for `PENDING → VERIFIED → ACTIVE`. Update the fixture to perform those two platform-authorized transitions before logging in as the new vendor admin, then rerun the complete workflow.
+
+**Current acceptance:** Backend, frontend build and clean-install migration validation pass. Browser E2E is the remaining Phase 3 code/test acceptance item; Phase 3 is not marked fully verified or production-ready until that fixture is updated and the full workflow is green.
+
+### Phase 3 follow-up hardening — 2026-11-11
+
+- Updated the browser tenant-isolation fixture to verify and activate its newly provisioned tenant before attempting vendor-admin login. This aligns the test with the enforced production onboarding lifecycle.
+- Added V4 migration to grant `ORDER_POLICY_MANAGE` to already-existing vendor-admin roles; new vendor-admin roles receive it from the current permission catalogue. The release-validation workflow applies V4 and asserts the role grant on MySQL 8.4.
+- Changed the Operations Orders tab visibility and order-list fetch to use `ORDER_VIEW`, so read-only order viewers are not incorrectly hidden behind `ORDER_CREATE`. Reservation release controls are hidden without `INVENTORY_RESERVE`.
+- Added tenant lifecycle timestamps and last lifecycle reason to the platform tenant detail view.
+- CI before these follow-up commits: backend tests, frontend build and V1–V3 MySQL migration checks passed; browser E2E failed because its fixture attempted login while the tenant was still PENDING. The updated head must run the full workflow before acceptance.
+
+
+---
+
+## Phase 4 finance/provider implementation assessment — 2026-11-11
+
+**Implementation branch:** `audit/phase-4-finance-provider-impl`  
+**Base:** `audit/phase-3-implementation-gap-analysis`
+
+### Source references and implementation plan
+
+| Phase 4 item | Business requirement reference | SRS/HLD reference | Existing state at Phase 3 base | Planned change / current outcome |
+|---|---|---|---|---|
+| GST rules and statutory invoice snapshots | §§6–7, 8 (GST/tax configuration, quotation taxes, invoice generation) | §§3, 10.10 FIN-001–FIN-003, 14.2–14.3, 19, 26 item 4 | PARTIAL: tax/GSTIN/CGST/SGST/IGST snapshots and PDF exist; statutory treatment is not approved | Preserve immutable issued-invoice snapshots; implement only approved configurable tax rules after accounting decisions. Not implemented in this pass. |
+| Invoice numbering | §§6–7 (quotation/order/invoice generation) | §10.10 FIN-002; §14.3 unique tenant invoice number; §26 item 4 | PARTIAL: tenant invoice sequence exists; legal series/fiscal policy unresolved | Make approved fiscal-year/series/branch rules configurable and concurrency-safe; do not invent a statutory format. Not implemented in this pass. |
+| Provider adapter and registry | §15 (providers behind interfaces); §20 roadmap payment gateway | §§10.10 FIN-004–FIN-005, 17 payment-gateway adapter, 26 item 5 | PARTIAL: adapter/registry and pending checkout foundation exist; no live provider | Retain and extend existing ports; register deterministic mock by dev/test configuration only. Source inspection and code change blocked. |
+| Signed provider webhooks | §§7, 18 (payment updates/audit) | §§10.10 FIN-005/FIN-007, 13.7 webhook route, 18 idempotent tenant-aware jobs | PARTIAL/FOUNDATION: signed and deduplicated webhook processing is recorded as implemented in Phase 2 audit | Extend event types for capture/failure/refund outcomes; retain signature verification, idempotency and tenant binding. Not verified or changed in this pass. |
+| Settlement reconciliation | §§7, 14, 18 (payment tracking and audit) | §§17–18 (provider adapter, payment reconciliation job, idempotency/observability) | MISSING/PARTIAL: Phase 3 gap analysis says real settlement reconciliation is not enabled | Add tenant-scoped reconciliation records, deterministic mock settlement reports, mismatch classification and replay-safe processing. Not implemented in this pass. |
+| Provider refunds | §7 (cancel/refund where permitted); §12 accountant financial permissions | §§8.4, 10.10, 13.7, 20.7 and §26 item 12 | PARTIAL: manual refunds and authorization exist; provider-side execution is not enabled | Add adapter refund initiation/status and immutable provider refund event records without changing existing authorization. Refund policy and thresholds remain open. Not implemented in this pass. |
+| Hosted checkout result and payment/refund visibility | §§2–3 customer order/payment/invoice portal | §§10.10 FIN-006, 12.1–12.4, 13.7 | PARTIAL: customer checkout entry point and payment views exist; real hosted checkout disabled | Add safe result/status UI; browser redirect is informational only and cannot mark a payment paid. Not implemented in this pass. |
+
+### Work closed in this pass
+
+- Created the Phase 4 branch from the exact existing Phase 3 base.
+- Added `docs/CLEANUP_DECISIONS.md` with fixed safety decisions and ten explicit business/accounting/provider open questions.
+- No live provider SDK, credentials, network calls or payment endpoints were added.
+
+### Initial assessment at branch creation — superseded by current delivery below
+
+At the initial inspection, the following runtime Phase 4 items were outstanding: GST-rule approval and implementation, approved invoice numbering, mock adapter lifecycle, profile-gated mock simulators, expanded webhook events, settlement reconciliation, provider refund lifecycle, hosted checkout result UI, payment/refund visibility, database migrations, audit/tenant-isolation tests and complete CI validation.
+
+At that initial inspection, real-provider integration was pending provider selection and the mock adapter had not yet been implemented. The current delivery and verification status is recorded in the later section below.
+
+### Verification status at initial assessment
+
+At the initial documentation-only checkpoint, runtime tests and migration validation had not been run, and local Git clone was blocked by DNS resolution. Subsequent code implementation and GitHub Actions verification are documented in the current delivery section below.
+
+
+---
+
+## Phase 4 repository code inspection — 2026-11-11
+
+### Scope clarification
+
+The business roadmap places payment gateway integration in **Phase 3** (business requirements, Phase 3: Enterprise SaaS), while the SRS/HLD describes gateway callbacks in FIN-004/FIN-005 and lists payment gateway in its Phase 2 roadmap. The higher-priority business roadmap controls phase placement. The user's Phase 4 instruction explicitly authorizes finance/provider work now, but this is a scope re-baseline for this branch, not evidence that the original roadmap placed gateway in Phase 4. Existing gateway foundations are preserved.
+
+The Phase 4 delivery requested for this branch is a deterministic, profile-gated **mock adapter**. A real gateway must not be connected. Its future integration remains pending provider selection and commercial/security approval.
+
+### Confirmed code state from branch inspection
+
+| Area | Verified source state | Phase 4 gap |
+|---|---|---|
+| Finance/invoices | `FinanceService.createInvoice` snapshots customer/vendor identity, line prices, HSN, taxable values, tax totals and GST components. `InvoiceSequence` is tenant/fiscal-year scoped with a pessimistic lookup lock. | Tax treatment is still accepted from invoice input (including `UNSPECIFIED`); no approved GST rules, immutable statutory rule/version snapshot, or approved series policy. |
+| Payment adapter/registry | `PaymentGatewayAdapter` exposes create, signature verification, parse, fetch status and refund. `PaymentGatewayRegistry` registers adapter beans. | No mock adapter implementation is present in the branch tree. Registry is not selected by a configured mock provider. |
+| Checkout | `PaymentGatewayCheckoutService` enforces invoice tenant/customer ownership, invoice open status, feature entitlement, tenant integration connection, idempotency key, HTTPS checkout URL and audit event. | Checkout currently depends on an ACTIVE tenant integration connection; no dev/test-only mock integration/session lifecycle or deterministic success/failure/pending/cancelled outcome. |
+| Webhooks | `PaymentGatewayWebhookService` verifies adapter signatures, parses events, deduplicates provider/event ID and updates pending payment to confirmed/failed. | Event model accepts only SUCCEEDED/FAILED. It has no capture/refund processed/refund failed lifecycle, no tenant field on webhook event record, and no settlement reconciliation. |
+| Refunds | `FinanceService.refund` checks PAYMENT_REFUND, tenant payment lock, branch access, amount and mandatory reason. | It explicitly rejects non-MANUAL payments; adapter refund port is not called and provider refund event records are absent. |
+| Database | Baseline schema already contains tenant/fiscal-year invoice sequence, invoice/item snapshots, payment idempotency, payment webhook event uniqueness, and manual refund records with tenant-qualified payment FK. | No settlement/reconciliation table, provider refund event table, tax-rule version snapshot columns/structure or checkout outcome evidence. Existing webhook event uniqueness is provider/event, not tenant/provider/event. |
+| Customer frontend | `main.tsx` loads customer invoices, payments and gateway availability; it starts checkout and redirects to the returned URL. Customer invoice and payment lists already exist. | No mock checkout-result route/page; no explicit pending/failed/cancelled/refund state explanation or provider refund visibility beyond current payment ledger. |
+| Tests | Existing checkout tests cover no-adapter failure and a generic pending adapter response. Existing finance integration test covers signed, duplicate and invalid-signature unmatched webhook events. | No mock provider lifecycle, profile isolation, refund webhook, settlement mismatch, tenant-aware event replay, or browser result-page tests. |
+
+### Phase 4 implementation plan and status
+
+1. **Mock adapter and configuration:** implement a deterministic mock provider bean; select it using explicit dev/test configuration; never load mock endpoints, webhook simulators or fixture routes in production.
+2. **Checkout lifecycle:** provide deterministic success, failure, pending and cancelled sessions; persist the resulting provider-neutral payment state; never accept a browser redirect as payment confirmation.
+3. **Webhook lifecycle:** extend provider-neutral event semantics for capture, failure, refund processed and refund failed; keep HMAC verification, idempotency and tenant-scoped payment matching; ensure an invalid/mismatched event cannot leave a permanently consumed idempotency key.
+4. **Provider refunds:** call the adapter only after the existing refund permission, branch, reason and outstanding amount checks; preserve pending/processed/failed provider state as auditable records. Do not invent approval thresholds.
+5. **Settlement reconciliation:** persist tenant-scoped report and line/event outcomes; implement deterministic mock report fixtures with matched, missing, amount/currency mismatch and duplicate rows; make processing replay-safe.
+6. **Frontend:** add a safe hosted checkout result view and payment/refund status display; refresh authoritative API state after return; do not infer paid state from URL parameters.
+7. **GST/numbering:** keep existing fiscal sequence and invoice snapshots; do not hard-code unapproved tax rates, place-of-supply, reverse charge, IRN/e-invoice or statutory series. Implement configurable approved rules only after the named decision owners approve them.
+8. **Tests:** add adapter unit tests, webhook signature/idempotency/tenant tests, refund state tests, reconciliation mismatch/replay tests, production-profile exclusion tests and customer checkout result UI tests.
+
+### Initial implementation completion status
+
+At the time of this source inspection, runtime Phase 4 features had not yet been implemented. This historical status is superseded by the current delivery and verification section at the end of this document.
+
+
+---
+
+## Phase 4 finance/provider implementation — current delivery
+
+**Branch:** `audit/phase-4-finance-provider-impl`  
+**Scope:** deterministic mock provider only; no live gateway or credentials.
+
+| Gap | Implementation delivered | Status |
+|---|---|---|
+| Mock adapter/configuration | `MockPaymentGatewayAdapter` registered by the existing registry; explicit `app.payment.mock.enabled`, checkout outcome, HMAC secret and frontend return URL. Adapter and simulators are profile-gated to dev/test and conditional on explicit enablement. | Implemented |
+| Checkout lifecycle | Tenant/idempotency-derived mock provider reference; success/failure/pending/cancelled outcomes; persisted provider-neutral payment remains PENDING until a signed event is accepted; localhost HTTP is allowed only for the dev/test mock return URL. | Implemented |
+| Webhook lifecycle | Tenant metadata is required inside the signed payload; HMAC-SHA256 verification; tenant/provider/event idempotency; payment capture/failure/cancellation and refund processed/failed events; event type, provider reference, tenant and payload hash are persisted. Unmatched and amount/currency/refund mismatches are not marked processed or consumed. | Implemented |
+| Provider refunds | Existing PAYMENT_REFUND, tenant lock, branch access, captured-payment, reason and outstanding-balance checks remain authoritative. Provider initiation requires an Idempotency-Key and creates a PENDING refund; only a verified provider refund event moves it to PROCESSED/FAILED. No maker-checker threshold was invented. | Implemented |
+| Settlement reconciliation | Tenant-owned report and line records; creator identity; payload hash and report-reference replay protection; MATCHED, MISSING_PAYMENT, AMOUNT_MISMATCH, CURRENCY_MISMATCH, DUPLICATE and PAYMENT_NOT_CAPTURED outcomes. Dev/test fixture emits deliberate mismatch rows. | Implemented |
+| Frontend | Customer checkout-result view loads payment state from authenticated APIs, never from redirect query parameters; customer and finance views show refund status; finance provider-refund action supplies an idempotency key. | Implemented |
+| GST/invoice numbering | Existing invoice tax snapshots and tenant/fiscal-year locked sequence retained. No unapproved GST rates, place-of-supply, reverse-charge, IRN/e-invoice or statutory series were invented. | Approval-dependent; unchanged |
+| Real payment provider | No real SDK, credentials, API calls or provider-specific finance logic introduced. | **pending provider selection; adapter and mock complete** |
+
+### Phase 4 schema
+
+Added `V5__phase4_finance_provider_reconciliation.sql` after the existing Phase 3 migrations. The V1 baseline remains unchanged. V5 allows pending payments to have a null `paid_at`, makes webhook event identity tenant-scoped and stores event type/provider references, adds provider-refund state/idempotency fields, and creates tenant-scoped reconciliation report/line tables with composite tenant foreign keys.
+
+### Phase 4 tests added
+
+- `MockPaymentGatewayAdapterTest`: deterministic checkout references/outcomes, HMAC signatures, tenant metadata, payment and refund status transitions, dev/test profile boundary.
+- `PaymentGatewayCheckoutServiceTest`: configured mock selection without a tenant live-provider connection.
+- `PaymentGatewayWebhookServiceTest`: signature rejection, tenant-bound capture, duplicate replay, cross-tenant reference rejection, amount mismatch, refund processing and invoice balance recalculation.
+- `PaymentReconciliationServiceTest`: matched/missing/amount/currency/duplicate classification, report replay and conflicting report-reference rejection.
+- `customer-portal-copy.test.ts`: redirect is not proof of payment; authenticated payment status and customer refund visibility.
+- Finance panel static regression coverage: provider refund idempotency header and refund-state visibility.
+- Existing unmatched-webhook regression expectation updated: unmatched signed events remain retryable and do not consume an event key.
+
+### Verification
+
+The Phase 4 GitHub Actions workflow validates frontend tests/typecheck/build, MySQL 8.4 migrations including V5, Spring Boot startup/schema validation, backend tests, runtime endpoint authorization evidence and browser-level tenant filter tampering. Runtime implementation commit `24c1e88` passed all four jobs. Documentation-only commit `e6de31a` also passed all four jobs. Verified results: 238 backend tests passed; 24 frontend tests passed; V5 migration on MySQL 8.4 passed; Spring Boot startup against MySQL 8.4 passed; runtime endpoint authorization evidence and browser-level tenant filter tampering tests passed.
+
+
+---
+
+## Phase 5 audit baseline — 2026-11-11
+
+**Branch:** `audit/phase-4-finance-provider-impl`  
+**Phase 4 verification:** GitHub Actions run [43025279559](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/43025279559), head `d3a0f7656767d82a70f7f6dbedac5647d043aa31`, event `push`, completed with conclusion `success`. Four jobs completed successfully: frontend typecheck/build, Spring Boot + MySQL 8.4 startup and browser tenant-filter tests, MySQL 8.4 migration validation (including V5), and backend compile/tests plus runtime authorization evidence. This verifies the Phase 4 branch checkpoint; it is not a merge-to-main claim or production deployment sign-off.
+
+### Source-of-truth requirements reviewed
+
+Read the complete business requirements (`saumya-solar-energy-solution-requirements.md`), technical SRS/HLD (`saumya-solar-production-ready-srs-hld.md`) and current implementation gap analysis. Phase 5 scope is grounded in CMS/blog, customer documents and notifications, role management, platform/tenant settings and expanded analytics/reporting. The detailed audit and target acceptance matrix is in `docs/PHASE5_GAP_MATRIX.md`.
+
+### Branch-head source findings
+
+| Area | Branch-head evidence | Audit conclusion |
+|---|---|---|
+| CMS/blog | No CMS domain, repository, service, controller, migration or authoring UI found. Public home content remains partly static. | Absent; needs tenant-owned content, immutable revisions, workflow, SEO and published-only public read. |
+| Notifications | `NotificationService`, `NotificationDelivery` and delivery retry exist for email/SMS/WhatsApp. No inbox/read-state domain or API found. | Delivery exists; user-facing in-app inbox is absent and must be separate from provider delivery attempts. |
+| Roles | `RoleManagementPanel`, `/roles`, `/permissions` and `AuthLifecycleService` custom-role CRUD/assignment exist. Service checks tenant, reserved names and vendor permission allowlist and audits role changes. | Existing feature must be verified/hardened, not duplicated. Add negative tests and only add missing Phase 5 permission codes after seeder/migration reconciliation. |
+| Platform settings | Tenant branding/contact fields, discount-threshold update and a platform settings placeholder exist. No complete allow-listed platform settings API/storage workflow found. | Partial; preserve existing tenant fields and secret-provider boundary. |
+| Customer documents | Customer invoices, quotations, payments and private service evidence flows exist. No unified customer document centre found. | Partial; compose existing owner-checked sources and download services; do not duplicate binary storage. |
+| Analytics | Vendor analytics has date/branch/category/product breakdowns, trends and rankings. Platform analytics currently reports tenant resource usage. | Partial; fill only missing operational report families and platform aggregate KPIs, reusing export infrastructure. |
+
+### Implementation status and guardrail
+
+This checkpoint records the audit and gap matrix only. It does not claim Phase 5 runtime implementation or test completion. No production data was accessed, no backfill or compatibility shim was added, and no new branch was created. Continue implementation on this same branch in additive, tested vertical slices. Do not mark a requirement complete until backend, frontend, migration, authorization/tenant tests and CI evidence exist.
+
+
+### Phase 5 initial implementation progress — 2026-11-11
+
+The audit-first matrix is in `docs/PHASE5_GAP_MATRIX.md`. Initial vertical slices now exist on this branch:
+
+- CMS: tenant-scoped content and immutable revisions, DRAFT/REVIEW/PUBLISHED/ARCHIVED service lifecycle, rollback-as-new-revision, public published-revision APIs, slug uniqueness, safe body/image validation and audit events; V6 schema migration and vendor authoring panel.
+- Inbox: a separate user-owned `user_notification` projection, unread/read APIs and frontend panel; existing delivery retry remains in `notification_delivery`. V7 schema and V8 `NOTIFICATION_VIEW` permission grant are additive.
+- Customer documents: a customer workspace aggregation over existing invoice, quotation, payment receipt and service attachment views/download routes; no binary duplication.
+- Platform analytics: aggregate-only platform overview API/UI for tenant lifecycle, date-bounded order totals/value and subscription status counts; existing tenant resource-usage report retained.
+- Roles: existing custom-role editor and service are reused; the inbox permission is included in the vendor custom-role allowlist and system-role grants.
+
+**Not complete:** platform settings persistence/API remains intentionally deferred pending approval of the exact safe typed keys; CMS public storefront integration/media upload/preview and full lifecycle E2E remain; unified customer documents remain a frontend aggregation rather than a backend aggregate API; vendor report/export coverage remains partial. The latest full release-validation workflow must pass before any Phase 5 slice is declared complete. Intermediate CI runs failed on inbox authorization, an ambiguous CMS test selector and the old V1–V5 migration-count assertion; corrective commits have been made and the latest workflow is the release gate.
+
+
+### Phase 5 follow-up implementation — 2026-11-11
+
+The Phase 5 gap matrix is maintained in docs/PHASE5_GAP_MATRIX.md. Beyond the initial CMS/inbox/customer-document/platform-analytics slices, the latest implementation adds:
+
+- A finite typed platform settings API and PlatformSettingsPanel. The six supported non-secret keys are platform default currency, time zone, language, support email, support phone and public banner message. Platform Super Admin + PLATFORM_MANAGE is required; values are validated, updates require expectedVersion and are audited. V10 is additive.
+- Public CMS rendering for PAGE and BLOG detail routes, blog listing, BANNER and TESTIMONIAL sections. Authenticated media upload reuses the existing image validator/storage service and returns safe app-relative paths; authoring includes upload and preview.
+- Vendor operational analytics at /api/v1/vendor/analytics/operations: installation/service status, low stock, outstanding invoices and employee performance with tenant/date/branch/employee filters.
+- Existing async export infrastructure now supports OPERATIONS, SALES, INSTALLATIONS, SERVICE, INVENTORY and FINANCE in CSV/XLSX/PDF with private owner-scoped downloads and expiry. Report projections contain operational fields, not customer contact details.
+- Playwright E2E coverage for CMS upload/publish/public render and cross-customer invoice list/download denial. V11 adds operational report indexes. Release validation applies V1–V11 on MySQL 8.4.
+
+**Still pending acceptance:** latest full release-validation must pass. Additional MySQL-backed tests are required for report payment/status semantics, settings optimistic conflicts/audit persistence, CMS concurrent revision/publish behavior and all customer document families. The role × endpoint evidence for the new CMS/settings/export APIs must be reconciled before Phase 5 is closed. This branch is not declared Phase 5 complete while the latest workflow is queued, in progress or failed.
+
+
+---
+
+## Phase 6 notifications and integrations — branch audit baseline (2026-11-11)
+
+**Branch:** `audit/phase-6-notifications-integrations`  
+**Base:** `audit/phase-4-finance-provider-impl`
+
+The Phase 6 audit reuses the existing Phase 5 inbox and integration synchronization infrastructure. It does not treat the inbox as a delivery queue, nor payment webhooks as notification-provider delivery events.
+
+| Requirement | Status | Evidence / gap |
+|---|---|---|
+| Notification delivery persistence | PARTIAL | `NotificationDelivery` and repository persist channel, attempt count, status, next-attempt time, provider message ID and last error |
+| In-app inbox/read state | IMPLEMENTED (Phase 5) | `UserNotification`, `UserNotificationService` and V7/V8; retain and extend |
+| Transactional outbox | MISSING | No dedicated outbox and transactional enqueue boundary established |
+| Integration job state/scheduler | PARTIAL | `IntegrationSyncJob` and `IntegrationSyncScheduler` already support tenant-scoped claim, retry and dead-letter states |
+| Notification provider adapter ports | MISSING | SMTP and Twilio-specific network calls remain in `NotificationService` |
+| Mock-only adapter selection | MISSING / BLOCKING | Current inspected notification service can make direct SMTP/Twilio requests; Phase 6 requires mock adapters and no real provider calls |
+| Notification retry/dead-letter | PARTIAL | Five-attempt retry/backoff exists; explicit terminal dead-letter and safe redrive/monitoring remain unverified |
+| Integration retry monitoring | PARTIAL | Persisted job status/error/attempt data exists; admin API/UI and authorization evidence remain unverified |
+| Per-user/per-channel preferences and consent | PARTIAL | Customer SMS/WhatsApp consent flags exist; full preference model and UI absent/unverified |
+| Provider delivery webhook/event state | MISSING / NOT PROVEN | No notification provider event ledger and signature-verified delivery callback path established |
+| SLA escalation | PARTIAL / POLICY BLOCKED | Service SLA breach evaluation exists; escalation thresholds, targets and cadence are not specified |
+| Notification preferences UI and delivery status UI | MISSING / PARTIAL | Phase 5 inbox exists; preferences and channel-delivery status are not established |
+| Phase 6 tests | PARTIAL | Added preference consent, mock adapter, webhook signature/replay/tenant binding and outbox dispatch/suppression tests; full backend CI, MySQL 8.4 migration, Spring Boot startup and browser evidence must pass on final branch HEAD |
+
+### Phase 6 implementation status
+
+**Phase 6 is not complete.** The branch creation and source audit are complete; runtime implementation, migrations, frontend changes, targeted tests and CI evidence are outstanding. Do not mark the Phase 6 gap as done until each row is implemented and verified.
+
+Blocking policy decisions are recorded as NOT-OQ-01 through NOT-OQ-10 in `docs/CLEANUP_DECISIONS.md`. In particular, notification SLA escalation thresholds/targets, mandatory-vs-optional event preferences, consent evidence, provider callback contract, retention, retry policy and admin visibility must not be invented.
+
+No new provider SDK, credentials, live messaging call, migration, data backfill or compatibility shim was added in this audit checkpoint.
+### Phase 6 implementation update — partial (2026-11-11)
+
+| Requirement | Current status | Implementation evidence / remaining gate |
+|---|---|---|
+| Transactional outbox | PARTIAL | V12 `notification_outbox`; NotificationService enqueue transaction; outbox scheduler. Verify commit rollback and concurrent dispatch tests in CI. |
+| Existing inbox reuse | IMPLEMENTED | Phase 5 UserNotification retained; IN_APP preference checked before creation. |
+| Mailpit email adapter | PARTIAL | Mailpit adapter and local compose service; verify local app profile and CI tests. |
+| SMS/WhatsApp mock adapters | IMPLEMENTED (mock only) | Deterministic adapter; no real network provider. |
+| Retry/backoff/dead-letter | PARTIAL | Existing attempt/backoff retained and DEAD_LETTER status added; dispatcher/retry concurrency needs integration tests. |
+| Provider webhook/event ledger | PARTIAL | HMAC-verified mock callback, provider event persistence and replay hash check; automated signature/tenant/replay tests still required. |
+| Preferences and consent | PARTIAL | Tenant/user/channel preference API and UI; SMS/WhatsApp explicit consent; consent evidence lifecycle and mandatory categories remain open. |
+| Delivery/outbox/integration monitoring APIs | PARTIAL | Tenant-scoped read APIs; platform-wide view and manual redrive not included. |
+| Frontend preferences and delivery status | PARTIAL | NotificationInboxPanel extended; browser tests and full design/role review pending. |
+| SLA escalation | DEFERRED | No approved thresholds, targets or cadence; see NOT-OQ-01 and NOT-OQ-02. |
+| Phase 6 full verification | NOT VERIFIED | Branch-head full CI and migration/startup/browser evidence pending. |
+
+**Phase 6 remains PARTIAL, not done.** Do not merge/release until build, backend/frontend tests, V12 migration validation, webhook/tenant/idempotency tests and browser verification pass. Open policy decisions remain in `docs/CLEANUP_DECISIONS.md`.
+### Phase 6 latest implementation checkpoint
+
+- V12 is the Phase 6 notification outbox/preferences/provider-event schema migration. The release-validation workflow now includes V12 on its clean MySQL 8.4 path.
+- Mailpit is the only email transport. Its deterministic Message-ID is searched through the local Mailpit API before resend, allowing retries to recognize a previously captured email. SMS/WhatsApp use mock-only adapters; mock delivery webhooks are dev/test profile-only.
+- Adapter selection is through the notification channel adapter registry. The mock messaging adapter is disabled by default and enabled only in dev/test configuration.
+- Vendor self-delivery visibility remains separate from tenant-wide operations monitoring: outbox and integration job monitoring require VENDOR_ADMIN; integration error details are not returned verbatim.
+- Current phase status remains PARTIAL until final branch-head CI is green. SLA escalation, notification template administration, manual redrive and platform cross-tenant provider monitoring remain deferred under NOT-OQ-01/02 and NOT-OQ-11/14.
+---
+
+## Phase 6 notifications and integrations — implementation status (2026-11-11)
+
+The following status supersedes the initial audit baseline above.
+
+| Requirement | Current status | Implementation/evidence |
+|---|---|---|
+| Transactional outbox | IMPLEMENTED | V12 `notification_outbox`; V14 tenant-matched composite FKs; `NotificationService.sendBusinessNotification` writes delivery + outbox transactionally; event-driven bypass removed |
+| In-app inbox | IMPLEMENTED | Existing Phase 5 inbox retained; projection now participates in business transaction |
+| Email adapter | IMPLEMENTED (local only) | `MailpitEmailNotificationAdapter` uses local Mailpit SMTP and Message-ID idempotency lookup |
+| SMS/WhatsApp provider abstraction | IMPLEMENTED (mock) | `NotificationChannelAdapter`, registry, deterministic `MockMessagingNotificationAdapter` |
+| Twilio swap point | IMPLEMENTED (fail-closed seam) | `app.messaging.provider=mock|twilio`; reserved Twilio adapter makes no network calls and fails closed |
+| Retry/backoff/dead-letter | IMPLEMENTED | Single outbox dispatch path; five attempts, bounded exponential backoff, dead-letter; stale processing recovery |
+| Provider callback/event ledger | IMPLEMENTED (mock only) | Dev/test HMAC webhook, unique provider event ID, payload-hash replay validation, tenant-bound delivery and outbox update |
+| User/channel preferences and consent | IMPLEMENTED (conservative opt-in) | V12 preference table/API; explicit SMS/WhatsApp consent; dispatcher suppresses missing/withdrawn consent |
+| Delivery/outbox/integration monitoring | IMPLEMENTED | Existing tenant-scoped operations APIs and Notifications UI |
+| Frontend preference and delivery status | IMPLEMENTED | Existing inbox panel extended/corrected; frontend consent test added |
+| SLA escalation policy | DEFERRED — Open Questions | Thresholds, target matrix and cadence are not defined in requirements |
+| Real Twilio provider integration | OUT OF SCOPE | Explicit no-real-provider rule; adapter seam fails closed |
+| Phase 6 automated tests | ADDED, EXECUTION PENDING | Backend and frontend test sources added/updated; workflow includes MySQL V13 check |
+
+### Phase 6 acceptance gate
+
+**Implementation status: code changes applied; verification not yet confirmed.** Maven full verify, frontend tests/build, MySQL 8.4 Flyway validation and Playwright browser tests must pass in GitHub Actions before Phase 6 can be marked fully complete. SLA escalation and live Twilio remain deferred as documented open questions/out-of-scope decisions.

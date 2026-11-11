@@ -4,6 +4,7 @@ import com.saumyasolar.domain.*;
 import com.saumyasolar.repo.*;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import com.saumyasolar.security.TenantExecutionContext;
 
 import java.time.Instant;
 import java.util.*;
@@ -15,6 +16,7 @@ public class IntegrationSyncScheduler {
     private final IntegrationCircuitBreaker breaker;
     private final AccountingAdapterRegistry accountingAdapters;
     private final com.fasterxml.jackson.databind.ObjectMapper mapper;
+    private final com.saumyasolar.repo.TenantRepository tenants;
     
     public IntegrationSyncScheduler(
             IntegrationSyncJobRepository j,
@@ -22,7 +24,8 @@ public class IntegrationSyncScheduler {
             List<IntegrationAdapter> a,
             IntegrationCircuitBreaker breaker,
             AccountingAdapterRegistry accountingAdapters,
-            com.fasterxml.jackson.databind.ObjectMapper mapper
+            com.fasterxml.jackson.databind.ObjectMapper mapper,
+            com.saumyasolar.repo.TenantRepository tenants
     ) {
         jobs = j;
         connections = c;
@@ -30,17 +33,21 @@ public class IntegrationSyncScheduler {
         this.breaker = breaker;
         this.accountingAdapters = accountingAdapters;
         this.mapper = mapper;
+        this.tenants = tenants;
     }
     
     @Scheduled(fixedDelayString = "${app.integrations.dispatch-interval-ms:30000}")
     public void dispatch() {
         Instant now = Instant.now(), staleBefore = now.minusSeconds(600);
-        List<IntegrationSyncJob> batch = new ArrayList<>(jobs.findTop50ByStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(List.of("QUEUED", "RETRY"), now));
-        batch.addAll(jobs.findTop50ByStatusAndUpdatedAtLessThanEqualOrderByUpdatedAtAsc("PROCESSING", staleBefore));
-        for (IntegrationSyncJob candidate : batch) {
+        for (com.saumyasolar.domain.Tenant tenant : tenants.findAll()) {
+            try (var scope = TenantExecutionContext.open(tenant.getId())) {
+            UUID tenantId = TenantExecutionContext.requireTenantId();
+            List<IntegrationSyncJob> batch = new ArrayList<>(jobs.findTop50ByTenantIdAndStatusInAndNextAttemptAtLessThanEqualOrderByCreatedAtAsc(tenantId, List.of("QUEUED", "RETRY"), now));
+            batch.addAll(jobs.findTop50ByTenantIdAndStatusAndUpdatedAtLessThanEqualOrderByUpdatedAtAsc(tenantId, "PROCESSING", staleBefore));
+            for (IntegrationSyncJob candidate : batch) {
             Instant claimedAt = Instant.now();
-            if (jobs.claimIfDue(candidate.getId(), claimedAt, staleBefore) != 1) continue;
-            IntegrationSyncJob job = jobs.findById(candidate.getId()).orElse(null);
+            if (jobs.claimIfDue(candidate.getId(), tenantId, claimedAt, staleBefore) != 1) continue;
+            IntegrationSyncJob job = jobs.findByIdAndTenantId(candidate.getId(), tenantId).orElse(null);
             if (job == null) continue;
             Optional<IntegrationConnection> c = connections.findByIdAndTenantId(job.getConnectionId(), job.getTenantId());
             if (c.isEmpty() || !"ACTIVE".equals(c.get().getStatus())) {
@@ -123,6 +130,8 @@ public class IntegrationSyncScheduler {
             }
             job.setUpdatedAt(Instant.now());
             jobs.save(job);
+            }
+            }
         }
     }
 }

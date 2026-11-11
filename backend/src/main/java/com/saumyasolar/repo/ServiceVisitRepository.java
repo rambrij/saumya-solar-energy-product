@@ -7,4 +7,6 @@ import java.util.*;
 import java.util.UUID;
 public interface ServiceVisitRepository extends JpaRepository<ServiceVisit, UUID> {
     List<ServiceVisit> findByTenantIdAndServiceRequestIdOrderByScheduledAtAsc(UUID tenantId, UUID requestId);
+
+    Optional<ServiceVisit> findByIdAndTenantIdAndServiceRequestId(UUID id, UUID tenantId, UUID requestId);
 }

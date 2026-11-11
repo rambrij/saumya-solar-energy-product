@@ -14,7 +14,7 @@ public interface TenantSubscriptionRepository extends JpaRepository<TenantSubscr
     
     List<TenantSubscription> findByTenantIdOrderByCreatedAtDesc(UUID tenantId);
     
-    List<TenantSubscription> findByStatusInAndEndsAtBefore(List<String> statuses, Instant now);
+    List<TenantSubscription> findByTenantIdAndStatusInAndEndsAtBefore(UUID tenantId, List<String> statuses, Instant now);
     
     boolean existsByPlanId(UUID planId);
 }

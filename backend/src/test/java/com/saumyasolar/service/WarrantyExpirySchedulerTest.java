@@ -2,8 +2,10 @@ package com.saumyasolar.service;
 
 import com.saumyasolar.domain.CustomerProfile;
 import com.saumyasolar.domain.Warranty;
+import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.repo.WarrantyRepository;
+import com.saumyasolar.repo.TenantRepository;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
@@ -21,14 +23,18 @@ class WarrantyExpirySchedulerTest {
         WarrantyRepository warranties = mock(WarrantyRepository.class);
         CustomerProfileRepository customers = mock(CustomerProfileRepository.class);
         NotificationService notifications = mock(NotificationService.class);
+        TenantRepository tenants = mock(TenantRepository.class);
+        UUID tenantId = UUID.randomUUID();
+        Tenant tenant = new Tenant(); tenant.setId(tenantId);
+        when(tenants.findAll()).thenReturn(List.of(tenant));
         Warranty w = new Warranty();
         w.setId(UUID.randomUUID());
-        w.setTenantId(UUID.randomUUID());
+        w.setTenantId(tenantId);
         w.setCustomerId(UUID.randomUUID());
         w.setStatus("ACTIVE");
         w.setEndDate(LocalDate.now(ZoneId.of("Asia/Kolkata")).minusDays(1));
-        when(warranties.findByStatusAndEndDateBefore("ACTIVE", LocalDate.now(ZoneId.of("Asia/Kolkata")))).thenReturn(List.of(w));
-        new WarrantyExpiryScheduler(warranties, customers, notifications, "Asia/Kolkata").evaluateWarrantyExpiry();
+        when(warranties.findByTenantIdAndStatusAndEndDateBefore(tenantId, "ACTIVE", LocalDate.now(ZoneId.of("Asia/Kolkata")))).thenReturn(List.of(w));
+        new WarrantyExpiryScheduler(warranties, customers, notifications, tenants, "Asia/Kolkata").evaluateWarrantyExpiry();
         assertEquals("EXPIRED", w.getStatus());
         verify(warranties).save(w);
         verifyNoInteractions(notifications);
@@ -39,7 +45,10 @@ class WarrantyExpirySchedulerTest {
         WarrantyRepository warranties = mock(WarrantyRepository.class);
         CustomerProfileRepository customers = mock(CustomerProfileRepository.class);
         NotificationService notifications = mock(NotificationService.class);
+        TenantRepository tenants = mock(TenantRepository.class);
         UUID tenant = UUID.randomUUID(), customerId = UUID.randomUUID(), user = UUID.randomUUID();
+        Tenant tenantEntity = new Tenant(); tenantEntity.setId(tenant);
+        when(tenants.findAll()).thenReturn(List.of(tenantEntity));
         Warranty w = new Warranty();
         w.setId(UUID.randomUUID());
         w.setTenantId(tenant);
@@ -52,9 +61,9 @@ class WarrantyExpirySchedulerTest {
         c.setUserId(user);
         c.setEmail("customer@example.test");
         c.setActive(true);
-        when(warranties.findByStatusAndEndDate("ACTIVE", LocalDate.now(ZoneId.of("Asia/Kolkata")).plusDays(30))).thenReturn(List.of(w));
+        when(warranties.findByTenantIdAndStatusAndEndDate(tenant, "ACTIVE", LocalDate.now(ZoneId.of("Asia/Kolkata")).plusDays(30))).thenReturn(List.of(w));
         when(customers.findByIdAndTenantId(customerId, tenant)).thenReturn(Optional.of(c));
-        new WarrantyExpiryScheduler(warranties, customers, notifications, "Asia/Kolkata").evaluateWarrantyExpiry();
+        new WarrantyExpiryScheduler(warranties, customers, notifications, tenants, "Asia/Kolkata").evaluateWarrantyExpiry();
         verify(notifications).sendBusinessNotification(user, tenant, "WARRANTY_EXPIRY_30_DAYS", "customer@example.test", "Warranty expiry reminder", "Your product warranty expires in 30 day(s), on " + w.getEndDate() + ". Warranty reference: " + w.getId() + ". Contact your vendor for assistance.");
     }
 }

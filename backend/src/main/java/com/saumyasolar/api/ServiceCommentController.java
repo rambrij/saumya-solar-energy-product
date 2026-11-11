@@ -53,7 +53,7 @@ public class ServiceCommentController {
         } else {
             if (!"VENDOR".equals(p.accountType()) || p.permissions() == null || !p.permissions().contains("SERVICE_VIEW"))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-            boolean manager = p.roles() != null && p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r));
+            boolean manager = p.permissions() != null && p.permissions().contains("SERVICE_ASSIGN");
             if (!manager && !p.userId().equals(t.getAssignedEngineerId()))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }

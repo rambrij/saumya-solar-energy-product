@@ -38,10 +38,36 @@ public class ApprovalWorkflowService {
         enterpriseSaas = e;
     }
     
-    private UUID vendor(Principal p) {
-        if (!"VENDOR".equals(p.accountType()) || p.tenantId() == null || p.permissions() == null || !p.permissions().contains("APPROVAL_WORKFLOW_MANAGE"))
+    private UUID requireVendorPermission(Principal p, String permission) {
+        if (!"VENDOR".equals(p.accountType()) || p.tenantId() == null || p.permissions() == null
+                || !p.permissions().contains(permission)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
         return p.tenantId();
+    }
+
+    private UUID vendor(Principal p) {
+        return requireVendorPermission(p, "APPROVAL_WORKFLOW_MANAGE");
+    }
+
+    private boolean assignedToApprovalStep(ApprovalInstance instance, Principal p) {
+        try {
+            JsonNode steps = parseSteps(instance.getStepsSnapshotJson());
+            for (JsonNode step : steps) {
+                String role = step.hasNonNull("approverRole") ? step.get("approverRole").asText() : null;
+                String permission = step.hasNonNull("permissionCode") ? step.get("permissionCode").asText() : null;
+                if (role != null && p.roles() != null && p.roles().contains(role)) return true;
+                if (permission != null && p.permissions() != null && p.permissions().contains(permission)) return true;
+            }
+        } catch (ResponseStatusException ignored) {
+            return false;
+        }
+        return false;
+    }
+
+    private boolean canViewInstance(ApprovalInstance instance, Principal p) {
+        return p.permissions() != null && p.permissions().contains("APPROVAL_WORKFLOW_MANAGE")
+                || assignedToApprovalStep(instance, p);
     }
     
     private String json(Object v) {
@@ -149,9 +175,8 @@ public class ApprovalWorkflowService {
     
     @Transactional
     public ApprovalInstance decide(UUID instanceId, String decision, String comments, Principal p) {
-        if (!"VENDOR".equals(p.accountType()) || p.tenantId() == null)
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-        ApprovalInstance i = instances.findForUpdate(instanceId, p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Approval request not found"));
+        UUID tenantId = requireVendorPermission(p, "APPROVAL_INSTANCE_DECIDE");
+        ApprovalInstance i = instances.findForUpdate(instanceId, tenantId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Approval request not found"));
         return decideInternal(i, decision, comments, p);
     }
     
@@ -226,15 +251,21 @@ public class ApprovalWorkflowService {
     }
     
     public ApprovalInstance get(UUID id, Principal p) {
-        if (!"VENDOR".equals(p.accountType()) || p.tenantId() == null)
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-        return instances.findByIdAndTenantId(id, p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Approval request not found"));
+        UUID tenantId = requireVendorPermission(p, "APPROVAL_INSTANCE_VIEW");
+        ApprovalInstance instance = instances.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Approval request not found"));
+        if (!canViewInstance(instance, p))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Approval request not found");
+        return instance;
     }
-    
+
     public List<ApprovalInstance> instances(Principal p) {
-        return instances.findByTenantIdOrderByRequestedAtDesc(vendor(p));
+        UUID tenantId = requireVendorPermission(p, "APPROVAL_INSTANCE_VIEW");
+        return instances.findByTenantIdOrderByRequestedAtDesc(tenantId).stream()
+                .filter(instance -> canViewInstance(instance, p))
+                .toList();
     }
-    
+
     public List<ApprovalDecision> history(UUID id, Principal p) {
         ApprovalInstance instance = get(id, p);
         return decisions.findByTenantIdAndInstanceIdOrderByStepOrderAscCreatedAtAsc(p.tenantId(), instance.getId());

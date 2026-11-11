@@ -7,9 +7,6 @@ import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -82,15 +79,17 @@ public class Phase2OperationsController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing permission: " + code);
     }
     
-    private boolean hasRole(Principal p, String... roles) {
-        return p.roles() != null && p.roles().stream().anyMatch(Set.of(roles)::contains);
-    }
-    
     private void ops(Principal p) {
         tenant(p);
         permission(p, "INSTALLATION_ASSIGN");
-        if (!hasRole(p, "VENDOR_ADMIN", "OPERATIONS_MANAGER", "SERVICE_MANAGER"))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+    }
+
+    private void reportView(Principal p) {
+        tenant(p);
+        if (p.permissions() == null
+                || (!p.permissions().contains("REPORT_VIEW") && !p.permissions().contains("REPORT_EXPORT"))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing permission: REPORT_VIEW");
+        }
     }
     
     public record EngineerInput(
@@ -118,7 +117,7 @@ public class Phase2OperationsController {
         ops(p);
         List<Map<String, Object>> out = new ArrayList<>();
         for (EngineerProfile e : engineers.findByTenantIdAndActiveTrueOrderByCreatedAtDesc(p.tenantId())) {
-            AppUser u = users.findById(e.getUserId()).filter(x -> p.tenantId().equals(x.getTenantId()) && x.isEnabled()).orElse(null);
+            AppUser u = users.findByIdAndTenantId(e.getUserId(), p.tenantId()).filter(AppUser::isEnabled).orElse(null);
             if (u == null) continue;
             long active = installations.findByTenantIdOrderByScheduledAtAsc(p.tenantId()).stream().filter(j -> e.getUserId().equals(j.getAssignedEngineerId()) && Set.of("SCHEDULED", "IN_PROGRESS").contains(j.getStatus())).count();
             Map<String, Object> row = new LinkedHashMap<>();
@@ -144,7 +143,7 @@ public class Phase2OperationsController {
     public EngineerProfile saveEngineer(@Valid @RequestBody EngineerInput x, Authentication a) {
         Principal p = p(a);
         ops(p);
-        AppUser u = users.findById(x.userId()).filter(v -> p.tenantId().equals(v.getTenantId()) && v.isEnabled() && v.getRoles().stream().anyMatch(r -> Set.of("SERVICE_ENGINEER", "TECHNICIAN", "INSTALLER", "OPERATIONS_MANAGER").contains(r.getName()))).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "User must be an enabled same-tenant engineer or installer"));
+        AppUser u = users.findByIdAndTenantId(x.userId(), p.tenantId()).filter(v -> v.isEnabled() && v.getRoles().stream().anyMatch(r -> Set.of("SERVICE_ENGINEER", "TECHNICIAN", "INSTALLER", "OPERATIONS_MANAGER").contains(r.getName()))).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "User must be an enabled same-tenant engineer or installer"));
         var from = parseTime(x.availableFrom());
         var until = parseTime(x.availableUntil());
         if (( from == null ) != ( until == null ) || from != null && !until.isAfter(from))
@@ -221,7 +220,7 @@ public class Phase2OperationsController {
     public WarrantyClaim createClaim(@Valid @RequestBody ClaimInput x, Authentication a) {
         Principal p = p(a);
         CustomerProfile c = customer(p);
-        Warranty w = warranties.findById(x.warrantyId()).filter(v -> p.tenantId().equals(v.getTenantId()) && c.getId().equals(v.getCustomerId()) && "ACTIVE".equals(v.getStatus()) && !LocalDate.now().isBefore(v.getStartDate()) && !LocalDate.now().isAfter(v.getEndDate())).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Active warranty not found"));
+        Warranty w = warranties.findByIdAndTenantId(x.warrantyId(), p.tenantId()).filter(v -> c.getId().equals(v.getCustomerId()) && "ACTIVE".equals(v.getStatus()) && !LocalDate.now().isBefore(v.getStartDate()) && !LocalDate.now().isAfter(v.getEndDate())).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Active warranty not found"));
         WarrantyClaim claim = new WarrantyClaim();
         claim.setId(UUID.randomUUID());
         claim.setTenantId(p.tenantId());
@@ -294,10 +293,15 @@ public class Phase2OperationsController {
             Authentication a
     ) {
         Principal p = p(a);
-        ops(p);
+        reportView(p);
+        return operationsReportForTenant(p.tenantId(), from, to);
+    }
+
+    /** Tenant-scoped report projection shared by the JSON report endpoint and asynchronous export jobs. */
+    public Map<String, Object> operationsReportForTenant(UUID t, LocalDate from, LocalDate to) {
+        if (t == null) throw new IllegalArgumentException("tenantId is required");
         if (from != null && to != null && to.isBefore(from))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "to must not precede from");
-        UUID t = p.tenantId();
         Instant start = from == null ? Instant.EPOCH : from.atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
         Instant end = to == null ? Instant.now() : to.plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
         var orderRows = orders.findByTenantIdOrderByIdDesc(t).stream().filter(x -> x.getCreatedAt() != null && !x.getCreatedAt().isBefore(start) && x.getCreatedAt().isBefore(end)).toList();
@@ -332,80 +336,48 @@ public class Phase2OperationsController {
         result.put("invoicedAmount", invoiceRows.stream().map(Invoice::getGrandTotal).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add));
         result.put("paymentsReceived", paymentTotal);
         result.put("inventoryTransactions", stockRows.size());
+        result.put("salesOrders", orderRows.stream().map(x -> {
+            Map<String,Object> row = new LinkedHashMap<>();
+            row.put("orderNumber",x.getOrderNumber()); row.put("status",x.getStatus());
+            row.put("total",x.getTotal()); row.put("createdAt",x.getCreatedAt()); row.put("branchId",x.getBranchId());
+            return row;
+        }).toList());
+        result.put("installationDetails", installationRows.stream().map(x -> {
+            Map<String,Object> row = new LinkedHashMap<>();
+            row.put("status",x.getStatus()); row.put("scheduledAt",x.getScheduledAt());
+            row.put("completedAt",x.getCompletedAt()); row.put("capacityKw",x.getCapacityKw());
+            row.put("assignedEngineerId",x.getAssignedEngineerId()); row.put("branchId",x.getBranchId());
+            return row;
+        }).toList());
+        result.put("serviceTicketDetails", ticketRows.stream().map(x -> {
+            Map<String,Object> row = new LinkedHashMap<>();
+            row.put("ticketNumber",x.getTicketNumber()); row.put("status",x.getStatus());
+            row.put("priority",x.getPriority()); row.put("createdAt",x.getCreatedAt());
+            row.put("assignedEngineerId",x.getAssignedEngineerId()); row.put("branchId",x.getBranchId());
+            return row;
+        }).toList());
+        result.put("inventoryMovementDetails", stockRows.stream().map(x -> {
+            Map<String,Object> row = new LinkedHashMap<>();
+            row.put("transactionReference",x.getTransactionReference()); row.put("type",x.getType());
+            row.put("quantityDelta",x.getQuantityDelta()); row.put("createdAt",x.getCreatedAt());
+            row.put("warehouseId",x.getWarehouseId()); row.put("productId",x.getProductId());
+            return row;
+        }).toList());
+        result.put("invoiceDetails", invoiceRows.stream().map(x -> {
+            Map<String,Object> row = new LinkedHashMap<>();
+            row.put("invoiceNumber",x.getInvoiceNumber()); row.put("status",x.getStatus());
+            row.put("grandTotal",x.getGrandTotal()); row.put("currency",x.getCurrency());
+            row.put("issuedAt",x.getIssuedAt()); row.put("branchId",x.getBranchId());
+            return row;
+        }).toList());
+        result.put("paymentDetails", paymentRows.stream().map(x -> {
+            Map<String,Object> row = new LinkedHashMap<>();
+            row.put("amount",x.getAmount()); row.put("currency",x.getCurrency());
+            row.put("status",x.getStatus()); row.put("method",x.getMethod());
+            row.put("paidAt",x.getPaidAt()); row.put("invoiceId",x.getInvoiceId());
+            return row;
+        }).toList());
         return result;
     }
-    
-    @GetMapping(value = "/reports/operations/export.csv", produces = "text/csv")
-    public ResponseEntity<byte[]> exportOperationsCsv(
-            @RequestParam(required = false) LocalDate from,
-            @RequestParam(required = false) LocalDate to,
-            Authentication a
-    ) {
-        Map<String, Object> report = operationsReport(from, to, a);
-        StringBuilder csv = new StringBuilder("Metric,Value\n");
-        report.forEach((key, value) -> csv.append(key).append(',').append(value == null ? "" : value).append('\n'));
-        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=operations-report.csv").contentType(MediaType.parseMediaType("text/csv; charset=UTF-8")).body(csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
-    }
-    
-    @GetMapping(
-            value = "/reports/operations/export.xlsx",
-            produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-    public ResponseEntity<byte[]> exportOperationsExcel(
-            @RequestParam(required = false) LocalDate from,
-            @RequestParam(required = false) LocalDate to,
-            Authentication a
-    ) {
-        Map<String, Object> report = operationsReport(from, to, a);
-        try (
-                java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-                org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook()
-        ) {
-            var sheet = workbook.createSheet("Operations");
-            var header = sheet.createRow(0);
-            header.createCell(0).setCellValue("Metric");
-            header.createCell(1).setCellValue("Value");
-            int row = 1;
-            for (var entry : report.entrySet()) {
-                var cells = sheet.createRow(row++);
-                cells.createCell(0).setCellValue(entry.getKey());
-                cells.createCell(1).setCellValue(entry.getValue() == null ? "" : String.valueOf(entry.getValue()));
-            }
-            sheet.setColumnWidth(0, 24 * 256);
-            sheet.setColumnWidth(1, 32 * 256);
-            workbook.write(out);
-            return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=operations-report.xlsx").contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")).body(out.toByteArray());
-        } catch (java.io.IOException ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to generate Excel report", ex);
-        }
-    }
-    
-    @GetMapping(value = "/reports/operations/export.pdf", produces = "application/pdf")
-    public ResponseEntity<byte[]> exportOperationsPdf(
-            @RequestParam(required = false) LocalDate from,
-            @RequestParam(required = false) LocalDate to,
-            Authentication a
-    ) {
-        Map<String, Object> report = operationsReport(from, to, a);
-        try (java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
-            com.lowagie.text.Document document = new com.lowagie.text.Document();
-            com.lowagie.text.pdf.PdfWriter.getInstance(document, out);
-            document.open();
-            document.add(new com.lowagie.text.Paragraph("Soumya Solar — Operations Report"));
-            document.add(new com.lowagie.text.Paragraph("Period: " + ( from == null ? "Beginning" : from ) + " to " + ( to == null ? "Today" : to )));
-            com.lowagie.text.pdf.PdfPTable table = new com.lowagie.text.pdf.PdfPTable(2);
-            table.setWidthPercentage(100);
-            table.addCell("Metric");
-            table.addCell("Value");
-            for (var entry : report.entrySet()) {
-                table.addCell(entry.getKey());
-                table.addCell(entry.getValue() == null ? "" : String.valueOf(entry.getValue()));
-            }
-            document.add(table);
-            document.close();
-            return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=operations-report.pdf").contentType(MediaType.APPLICATION_PDF).body(out.toByteArray());
-        } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to generate PDF report", ex);
-        }
-    }
+
 }

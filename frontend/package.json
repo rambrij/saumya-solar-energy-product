@@ -2,7 +2,8 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc && vite build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test --config=playwright.config.ts"
   },
   "dependencies": {
     "react": "latest",
@@ -17,6 +18,7 @@
     "vitest": "latest",
     "jsdom": "latest",
     "@testing-library/react": "latest",
-    "@testing-library/jest-dom": "latest"
+    "@testing-library/jest-dom": "latest",
+    "@playwright/test": "1.56.1"
   }
 }

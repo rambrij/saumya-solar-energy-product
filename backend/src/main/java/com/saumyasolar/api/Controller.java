@@ -29,6 +29,8 @@ import com.saumyasolar.service.PackageImageStorageService;
 import com.saumyasolar.service.TenantAdminService;
 import com.saumyasolar.api.TenantAdminModels.TenantUpdate;
 import com.saumyasolar.api.TenantAdminModels.TenantPage;
+import com.saumyasolar.api.TenantAdminModels.TenantLifecycleInput;
+import com.saumyasolar.api.OrderPolicyModels.TransitionPolicyUpdate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpHeaders;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -433,7 +435,7 @@ public class Controller {
                     HttpStatus.FORBIDDEN,
                     "Platform Super Admin permission is required"
             );
-        return lifecycle.createTenant(x.name(), x.slug(), x.adminName(), x.adminEmail(), x.adminPassword());
+        return tenantAdmin.createTenant(x,principal);
     }
     
     @PostMapping("/{type:categories|products|packages|customers|enquiries}")
@@ -442,9 +444,10 @@ public class Controller {
     }
     
     @PatchMapping("/tenants/{id}/status")
-    Tenant tenantStatus(@PathVariable UUID id, @RequestBody Input x, Authentication a) {
-        return s.updateTenantStatus(id, x.status(), p(a));
-    }
+    com.saumyasolar.api.TenantAdminModels.TenantRow tenantStatus(@PathVariable UUID id, @Valid @RequestBody TenantLifecycleInput x, Authentication a) { return tenantAdmin.transition(id,x,p(a)); }
+
+    @PostMapping("/platform/tenants/{id}/lifecycle")
+    com.saumyasolar.api.TenantAdminModels.TenantRow tenantLifecycle(@PathVariable UUID id,@Valid @RequestBody TenantLifecycleInput x,Authentication a) { return tenantAdmin.transition(id,x,p(a)); }
     
     @PatchMapping("/users/{id}/enabled")
     UserView employeeEnabled(@PathVariable UUID id, @RequestBody Input x, Authentication a) {
@@ -515,7 +518,9 @@ public class Controller {
     
     @GetMapping(value = "/quotations/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
     byte[] pdf(@PathVariable UUID id, Authentication a) throws Exception {
-        var q = ( (List<Quotation>) s.list("quotations", p(a)) ).stream().filter(x -> x.getId().equals(id)).findFirst().orElseThrow();
+        var q = ( (List<Quotation>) s.list("quotations", p(a)) ).stream().filter(x -> x.getId().equals(id)).findFirst()
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "Quotation not found"));
         try (var out = new ByteArrayOutputStream()) {
             var d = new Document();
             PdfWriter.getInstance(d, out);
@@ -707,6 +712,10 @@ public class Controller {
     List<com.saumyasolar.domain.InventoryBalance> inventoryBalances(Authentication a) {
         return operations.balances(p(a));
     }
+    @GetMapping("/inventory/reservations")
+    List<com.saumyasolar.domain.InventoryReservation> inventoryReservations(Authentication a) {
+        return operations.reservations(p(a));
+    }
     
     @GetMapping("/inventory/transactions")
     List<com.saumyasolar.domain.InventoryTransaction> inventoryLedger(Authentication a) {
@@ -760,6 +769,15 @@ public class Controller {
         return operations.transfer(x, p(a));
     }
     
+    @GetMapping("/orders/transition-options")
+    List<com.saumyasolar.api.OrderPolicyModels.TransitionOption> orderTransitionOptions(Authentication a) { return operations.transitionOptions(p(a)); }
+
+    @GetMapping("/orders/transition-policy")
+    List<com.saumyasolar.api.OrderPolicyModels.PolicyRule> orderTransitionPolicy(Authentication a) { return operations.transitionPolicy(p(a)); }
+
+    @PutMapping("/orders/transition-policy")
+    List<com.saumyasolar.api.OrderPolicyModels.PolicyRule> updateOrderTransitionPolicy(@RequestBody TransitionPolicyUpdate x,Authentication a) { return operations.updateTransitionPolicy(x,p(a)); }
+
     @PostMapping("/orders/{id}/reserve")
     List<com.saumyasolar.domain.InventoryReservation> reserveOrder(
             @PathVariable UUID id,

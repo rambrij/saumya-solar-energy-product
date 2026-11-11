@@ -30,7 +30,7 @@ public final class FinanceModels {
     
     public record RefundCreate(
             @NotNull UUID paymentId, @NotNull @DecimalMin("0.01") BigDecimal amount,
-            @NotBlank @Size(max = 500) String reason
+            @NotBlank @Size(max = 500) String reason, @Size(max = 160) String idempotencyKey
     ) {
     }
     

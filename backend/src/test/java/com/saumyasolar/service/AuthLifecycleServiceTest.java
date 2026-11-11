@@ -127,7 +127,7 @@ class AuthLifecycleServiceTest {
         role.setId(UUID.randomUUID());
         role.setTenantId(tenantId);
         role.setName("CUSTOM_SALES_READ");
-        when(users.findById(employeeId)).thenReturn(Optional.of(employee));
+        when(users.findByIdAndTenantId(employeeId, tenantId)).thenReturn(Optional.of(employee));
         when(roles.findByNameAndTenantId("CUSTOM_SALES_READ", tenantId)).thenReturn(Optional.of(role));
         when(users.save(any(AppUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -165,6 +165,38 @@ class AuthLifecycleServiceTest {
         assertTrue(oldToken.isRevoked());
         assertTrue(activeDescendant.isRevoked());
         verify(refresh).save(activeDescendant);
+    }
+
+    @Test
+    void employeeRoleAssignmentUsesTenantQualifiedUserLookup() {
+        UUID tenantId = UUID.randomUUID();
+        UUID employeeId = UUID.randomUUID();
+        when(users.findByIdAndTenantId(employeeId, tenantId)).thenReturn(Optional.empty());
+
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class,
+                () -> service.assignEmployeeRole(tenantId, UUID.randomUUID(), employeeId, "SALES_EXECUTIVE"));
+
+        assertEquals(HttpStatus.NOT_FOUND, failure.getStatusCode());
+        verify(users).findByIdAndTenantId(employeeId, tenantId);
+        verify(users, never()).findById(employeeId);
+        verifyNoInteractions(roles);
+    }
+
+    @Test
+    void customRoleCannotBeUpdatedOrDeletedThroughAnotherTenant() {
+        UUID otherTenant = UUID.randomUUID();
+        UUID roleId = UUID.randomUUID();
+        when(roles.findByIdAndTenantId(roleId, otherTenant)).thenReturn(Optional.empty());
+
+        ResponseStatusException updateFailure = assertThrows(ResponseStatusException.class,
+                () -> service.updateCustomRole(otherTenant, UUID.randomUUID(), roleId, java.util.Set.of("LEAD_VIEW")));
+        ResponseStatusException deleteFailure = assertThrows(ResponseStatusException.class,
+                () -> service.deleteCustomRole(otherTenant, UUID.randomUUID(), roleId));
+
+        assertEquals(HttpStatus.NOT_FOUND, updateFailure.getStatusCode());
+        assertEquals(HttpStatus.NOT_FOUND, deleteFailure.getStatusCode());
+        verify(roles, times(2)).findByIdAndTenantId(roleId, otherTenant);
+        verify(roles, never()).delete(any(Role.class));
     }
 
 }

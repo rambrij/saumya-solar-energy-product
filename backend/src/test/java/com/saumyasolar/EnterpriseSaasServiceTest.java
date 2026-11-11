@@ -196,6 +196,72 @@ class EnterpriseSaasServiceTest {
     }
     
     @Test
+    void branchRecordFilteringKeepsOnlyAssignedAndLegacyUnassignedRows() {
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID assignedBranch = UUID.randomUUID();
+        UUID otherBranch = UUID.randomUUID();
+        record BranchRow(UUID id, UUID branchId) {}
+        var assigned = new BranchRow(UUID.randomUUID(), assignedBranch);
+        var foreignBranch = new BranchRow(UUID.randomUUID(), otherBranch);
+        var legacyUnassigned = new BranchRow(UUID.randomUUID(), null);
+        when(memberships.findByTenantIdAndUserId(tenantId, userId)).thenReturn(List.of(membership(tenantId, assignedBranch, userId)));
+
+        List<BranchRow> result = service.filterBranchRecords(
+                List.of(assigned, foreignBranch, legacyUnassigned), BranchRow::branchId,
+                new Principal(userId, tenantId, "member@example.test", "VENDOR",
+                        Set.of("SALES_EXECUTIVE"), Set.of("LEAD_VIEW"), 0)
+        );
+
+        assertEquals(List.of(assigned, legacyUnassigned), result);
+        assertFalse(result.contains(foreignBranch));
+    }
+
+    @Test
+    void branchRecordFilteringDoesNotTrustMembershipFromAnotherTenant() {
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID branchId = UUID.randomUUID();
+        UUID foreignTenant = UUID.randomUUID();
+        record BranchRow(UUID id, UUID branchId) {}
+        var row = new BranchRow(UUID.randomUUID(), branchId);
+        BranchMembership foreignMembership = membership(foreignTenant, branchId, userId);
+        when(memberships.findByTenantIdAndUserId(tenantId, userId)).thenReturn(List.of());
+
+        List<BranchRow> result = service.filterBranchRecords(
+                List.of(row), BranchRow::branchId,
+                new Principal(userId, tenantId, "member@example.test", "VENDOR",
+                        Set.of("SALES_EXECUTIVE"), Set.of("LEAD_VIEW"), 0)
+        );
+
+        assertTrue(result.isEmpty());
+        verify(memberships).findByTenantIdAndUserId(tenantId, userId);
+    }
+
+    @Test
+    void vendorAdminSeesAllTenantBranchRowsWithoutMembershipLookup() {
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID branchA = UUID.randomUUID();
+        UUID branchB = UUID.randomUUID();
+        record BranchRow(UUID id, UUID branchId) {}
+        var rows = List.of(new BranchRow(UUID.randomUUID(), branchA), new BranchRow(UUID.randomUUID(), branchB));
+        assertEquals(rows, service.filterBranchRecords(rows, BranchRow::branchId,
+                new Principal(userId, tenantId, "admin@example.test", "VENDOR",
+                        Set.of("VENDOR_ADMIN"), Set.of("BRANCH_MANAGE"), 0)));
+        verifyNoInteractions(memberships);
+    }
+
+    private BranchMembership membership(UUID tenantId, UUID branchId, UUID userId) {
+        BranchMembership membership = new BranchMembership();
+        membership.setId(UUID.randomUUID());
+        membership.setTenantId(tenantId);
+        membership.setBranchId(branchId);
+        membership.setUserId(userId);
+        return membership;
+    }
+
+    @Test
     void branchWarehouseRequiresExplicitMembershipForNonAdmin() {
         UUID tenantId = UUID.randomUUID(), userId = UUID.randomUUID(), branchId = UUID.randomUUID();
         Warehouse warehouse = new Warehouse();

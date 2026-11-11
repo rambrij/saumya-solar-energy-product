@@ -38,12 +38,12 @@ public class AuthLifecycleService {
             "INVENTORY_VIEW", "INVENTORY_RECEIVE", "INVENTORY_RESERVE", "INVENTORY_TRANSFER",
             "INVENTORY_ADJUST", "INVENTORY_EXPORT",
             "INSTALLATION_VIEW", "INSTALLATION_SCHEDULE", "INSTALLATION_ASSIGN",
-            "INSTALLATION_UPDATE", "INSTALLATION_COMMISSION",
+            "INSTALLATION_UPDATE", "INSTALLATION_COMMISSION", "INTEGRATION_MANAGE", "APPROVAL_WORKFLOW_MANAGE", "APPROVAL_INSTANCE_VIEW", "APPROVAL_INSTANCE_DECIDE",
             "INVOICE_VIEW", "INVOICE_CREATE", "INVOICE_SEND", "INVOICE_VOID",
             "PAYMENT_VIEW", "PAYMENT_RECORD", "PAYMENT_REFUND",
             "SERVICE_VIEW", "SERVICE_CREATE", "SERVICE_ASSIGN", "SERVICE_UPDATE",
             "SERVICE_RESOLVE", "SERVICE_CLOSE", "REPORT_VIEW", "REPORT_EXPORT",
-            "CMS_VIEW", "CMS_CREATE", "CMS_UPDATE", "CMS_PUBLISH", "AUDIT_VIEW"
+            "CMS_VIEW", "CMS_CREATE", "CMS_UPDATE", "CMS_PUBLISH", "AUDIT_VIEW", "NOTIFICATION_VIEW"
     );
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private EnterpriseSaasService enterpriseSaas;
@@ -331,7 +331,7 @@ public class AuthLifecycleService {
         tenant.setId(UUID.randomUUID());
         tenant.setName(name.trim());
         tenant.setSlug(slug);
-        tenant.setStatus("ACTIVE");
+        tenant.setStatus("PENDING");
         tenant.setCreatedAt(Instant.now());
         tenant.setUpdatedAt(Instant.now());
         tenants.save(tenant);
@@ -377,7 +377,7 @@ public class AuthLifecycleService {
         return roleName == null || java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT", "CUSTOMER").contains(roleName);
     }
 
-    @Transactional
+    @Transactional(dontRollbackOn = ResponseStatusException.class)
     public com.saumyasolar.domain.Role createCustomRole(UUID tenantId, UUID actorId, String name, java.util.Set<String> permissionCodes) {
         if (tenantId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         String normalized = name == null ? "" : name.trim().toUpperCase(java.util.Locale.ROOT);
@@ -406,7 +406,7 @@ public class AuthLifecycleService {
         return saved;
     }
 
-    @Transactional
+    @Transactional(dontRollbackOn = ResponseStatusException.class)
     public com.saumyasolar.domain.Role updateCustomRole(UUID tenantId, UUID actorId, UUID roleId, java.util.Set<String> permissionCodes) {
         if (tenantId == null || roleId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         var role = roles.findByIdAndTenantId(roleId, tenantId)
@@ -426,7 +426,7 @@ public class AuthLifecycleService {
         return saved;
     }
 
-    @Transactional
+    @Transactional(dontRollbackOn = ResponseStatusException.class)
     public AppUser assignEmployeeRole(UUID tenantId, UUID actorId, UUID employeeId, String roleName) {
         if (tenantId == null || employeeId == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         if (reservedVendorRole(roleName)) {
@@ -435,8 +435,8 @@ public class AuthLifecycleService {
         }
         if (employeeId.equals(actorId))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Administrators cannot change their own role");
-        AppUser employee = users.findById(employeeId)
-                .filter(user -> tenantId.equals(user.getTenantId()) && "VENDOR".equals(user.getAccountType()))
+        AppUser employee = users.findByIdAndTenantId(employeeId, tenantId)
+                .filter(user -> "VENDOR".equals(user.getAccountType()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
         if (employee.getRoles().stream().anyMatch(existing -> "VENDOR_ADMIN".equals(existing.getName())))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Vendor administrator roles cannot be reassigned");
@@ -515,8 +515,8 @@ public class AuthLifecycleService {
     public AppUser setEmployeeEnabled(UUID tenantId, UUID actorId, UUID employeeId, boolean enabled) {
         if (tenantId == null || employeeId == null || employeeId.equals(actorId))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot change this employee account");
-        var employee = users.findById(employeeId)
-                .filter(u -> tenantId.equals(u.getTenantId()) && "VENDOR".equals(u.getAccountType()))
+        var employee = users.findByIdAndTenantId(employeeId, tenantId)
+                .filter(u -> "VENDOR".equals(u.getAccountType()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found in this vendor"));
         if (employee.getRoles().stream().anyMatch(role -> "VENDOR_ADMIN".equals(role.getName())))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Vendor admin accounts cannot be disabled through this endpoint");

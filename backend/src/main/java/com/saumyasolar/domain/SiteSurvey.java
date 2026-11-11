@@ -20,6 +20,7 @@ import java.util.UUID;
 public class SiteSurvey {
     @Id
     UUID id;
+    @Column(nullable = false)
     UUID tenantId;
     UUID branchId;
     UUID leadId;

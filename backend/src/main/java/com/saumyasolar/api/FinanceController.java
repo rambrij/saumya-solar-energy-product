@@ -136,8 +136,8 @@ public class FinanceController {
     }
     
     @PostMapping("/payments/{id}/refund")
-    Object refund(@PathVariable UUID id, @Valid @RequestBody RefundBody body, Authentication a) {
-        return finance.refund(new RefundCreate(id, body.amount(), body.reason()), principal(a));
+    Object refund(@PathVariable UUID id, @Valid @RequestBody RefundBody body, @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey, Authentication a) {
+        return finance.refund(new RefundCreate(id, body.amount(), body.reason(), idempotencyKey), principal(a));
     }
     
     public record RefundBody(

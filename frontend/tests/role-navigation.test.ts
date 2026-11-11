@@ -12,8 +12,14 @@ describe('role navigation configuration',()=>{
   expect(groups.find(g=>g.label==='Tenants')?.items.map(i=>i.key)).toEqual(['tenants']);
   expect(groups.find(g=>g.label==='Settings')?.items.map(i=>i.key)).toEqual(['settings']);
  });
- it('shows vendor admin analytics by role even when a pre-migration session lacks permission claims',()=>{
-  expect(getNavigationKeys('vendor',[],['VENDOR_ADMIN'])).toContain('analytics');
+ it('shows the full vendor admin workspace by role when a pre-migration session lacks permission claims',()=>{
+  const keys=getNavigationKeys('vendor',[],['VENDOR_ADMIN']);
+  expect(keys).toContain('categories');
+  expect(keys).toContain('products');
+  expect(keys).toContain('packages');
+  expect(keys).toContain('analytics');
+  expect(keys).toContain('cms');
+  expect(keys).toContain('notifications');
   expect(getNavigationKeys('vendor',['REPORT_VIEW'],['VENDOR_ADMIN'])).toContain('analytics');
   expect(getNavigationKeys('vendor',['BRANCH_MANAGE'],['VENDOR_ADMIN'])).toContain('analytics');
   expect(getNavigationKeys('vendor',['REPORT_VIEW','BRANCH_MANAGE'],['SALES_MANAGER'])).not.toContain('analytics');
@@ -28,7 +34,7 @@ describe('role navigation configuration',()=>{
   const groups=getRoleNavigation('customer');
   const keys=getNavigationKeys('customer');
   expect(groups.find(g=>g.label==='Dashboard')?.singleLink).toBe(true);
-  expect(groups.find(g=>g.label==='My Account')?.items.map(i=>i.key)).toEqual(['profile','customer-orders','invoices','quotations','enquiries','addresses','settings','logout']);
+  expect(groups.find(g=>g.label==='My Account')?.items.map(i=>i.key)).toEqual(['profile','customer-orders','invoices','quotations','enquiries','addresses','notifications','documents','settings','logout']);
   expect(keys).toContain('dashboard');
   expect(keys).not.toContain('catalog');
   expect(keys).not.toContain('offline-sync');

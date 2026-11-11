@@ -183,7 +183,7 @@ public class EnterpriseSaasService {
     public void assignUser(UUID branchId, UUID userId, Principal p) {
         UUID t = vendor(p, "BRANCH_MANAGE");
         branches.findByIdAndTenantId(branchId, t).filter(Branch::isActive).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Active branch not found"));
-        users.findById(userId).filter(u -> t.equals(u.getTenantId()) && u.isEnabled() && "VENDOR".equals(u.getAccountType())).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Enabled same-tenant vendor user not found"));
+        users.findByIdAndTenantId(userId, t).filter(u -> u.isEnabled() && "VENDOR".equals(u.getAccountType())).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Enabled same-tenant vendor user not found"));
         if (!memberships.existsByTenantIdAndBranchIdAndUserId(t, branchId, userId)) {
             BranchMembership m = new BranchMembership();
             m.setId(UUID.randomUUID());
@@ -604,7 +604,7 @@ public class EnterpriseSaasService {
     @Transactional
     public Warehouse assignWarehouseBranch(UUID warehouseId, UUID branchId, Principal p) {
         UUID t = vendor(p, "INVENTORY_TRANSFER");
-        if (( p.roles() == null || !p.roles().contains("VENDOR_ADMIN") ) && ( p.permissions() == null || !p.permissions().contains("BRANCH_MANAGE") ))
+        if (p.permissions() == null || !p.permissions().contains("BRANCH_MANAGE"))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Branch management permission is required to move warehouses between branches");
         Warehouse w = warehouses.findByIdAndTenantId(warehouseId, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Warehouse not found"));
         if (branchId != null) branches.findByIdAndTenantId(branchId, t).filter(Branch::isActive)

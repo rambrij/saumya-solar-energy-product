@@ -7,4 +7,6 @@ import java.util.*;
 import java.util.UUID;
 public interface ServiceEventRepository extends JpaRepository<ServiceEvent, UUID> {
     List<ServiceEvent> findByTenantIdAndServiceRequestIdOrderByOccurredAtAsc(UUID tenantId, UUID requestId);
+
+    long countByTenantIdAndServiceRequestIdAndEventType(UUID tenantId, UUID requestId, String eventType);
 }
