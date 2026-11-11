@@ -36,7 +36,7 @@ public class NotificationOutboxDispatcher {
             if((consentRequired && preference.isEmpty()) || (preference.isPresent() && (!preference.get().isEnabled() || (consentRequired && !preference.get().isConsented())))) { delivery.setStatus("SUPPRESSED"); deliveries.save(delivery); row.setStatus("SUCCEEDED"); row.setLastError(null); row.setUpdatedAt(Instant.now()); outbox.save(row); continue; }
             service.processOutboxDelivery(row.getDeliveryId(),tenantId);
             delivery=deliveries.findByIdAndTenantId(row.getDeliveryId(),tenantId).orElseThrow();
-            row.setStatus(("DELIVERED".equals(delivery.getStatus())||"SUPPRESSED".equals(delivery.getStatus()))?"SUCCEEDED":"DEAD_LETTER".equals(delivery.getStatus())?"DEAD_LETTER":"RETRY");
+            row.setStatus(("DELIVERED".equals(delivery.getStatus())||"SENT".equals(delivery.getStatus())||"SUPPRESSED".equals(delivery.getStatus()))?"SUCCEEDED":"DEAD_LETTER".equals(delivery.getStatus())?"DEAD_LETTER":"RETRY");
             row.setAttemptCount(delivery.getAttemptCount()); row.setNextAttemptAt(delivery.getNextAttemptAt()!=null?delivery.getNextAttemptAt():("PENDING".equals(delivery.getStatus())?Instant.now().plusSeconds(30):null)); row.setLastError(delivery.getLastError());
           } catch(RuntimeException ex) { row.setStatus(row.getAttemptCount()>=5?"DEAD_LETTER":"RETRY"); row.setLastError("Outbox dispatch failed"); row.setNextAttemptAt(Instant.now().plusSeconds(Math.min(3600,60L << Math.min(row.getAttemptCount(),5)))); }
           row.setUpdatedAt(Instant.now()); outbox.save(row);
@@ -50,7 +50,7 @@ public class NotificationOutboxDispatcher {
         for(NotificationOutbox row:outbox.findTop50ByTenantIdAndStatusAndUpdatedAtBeforeOrderByCreatedAtAsc(tenantId,"PROCESSING",staleBefore)) {
           var delivery=deliveries.findByIdAndTenantId(row.getDeliveryId(),tenantId).orElse(null);
           if(delivery==null){row.setStatus("DEAD_LETTER");row.setLastError("Outbox delivery record is missing");}
-          else if("DELIVERED".equals(delivery.getStatus())||"SUPPRESSED".equals(delivery.getStatus())){row.setStatus("SUCCEEDED");row.setLastError(null);}
+          else if("DELIVERED".equals(delivery.getStatus())||"SENT".equals(delivery.getStatus())||"SUPPRESSED".equals(delivery.getStatus())){row.setStatus("SUCCEEDED");row.setLastError(null);}
           else if("DEAD_LETTER".equals(delivery.getStatus())){row.setStatus("DEAD_LETTER");row.setLastError(delivery.getLastError());}
           else {row.setStatus("RETRY");row.setNextAttemptAt(delivery.getNextAttemptAt()!=null?delivery.getNextAttemptAt():Instant.now().plusSeconds(30));row.setLastError(delivery.getLastError());}
           row.setUpdatedAt(Instant.now());outbox.save(row);
