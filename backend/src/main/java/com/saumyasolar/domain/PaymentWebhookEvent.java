@@ -15,6 +15,7 @@ public class PaymentWebhookEvent {
     @Id UUID id;
     UUID tenantId;
     @Column(length = 60) String provider;
+    @Column(length = 150) String providerReference;
     @Column(name = "event_id", length = 180) String eventId;
     @Column(length = 64) String payloadHash;
     @Column(length = 24) String processingStatus;
