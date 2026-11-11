@@ -2299,7 +2299,7 @@ class Release12TenantIntegrationTest {
         role.setId(UUID.randomUUID());
         role.setTenantId(vendorTenantId);
         role.setName("BRANCH_SCOPE_TEST_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10));
-        for (String code : List.of("LEAD_VIEW", "SURVEY_VIEW", "QUOTATION_VIEW", "ORDER_VIEW", "BRANCH_MANAGE", "INVOICE_VIEW", "SERVICE_VIEW", "SERVICE_ASSIGN", "INSTALLATION_VIEW", "INSTALLATION_ASSIGN", "INVENTORY_VIEW")) {
+        for (String code : List.of("LEAD_VIEW", "LEAD_UPDATE", "SURVEY_VIEW", "SURVEY_COMPLETE", "QUOTATION_VIEW", "ORDER_VIEW", "BRANCH_MANAGE", "INVOICE_VIEW", "SERVICE_VIEW", "SERVICE_ASSIGN", "INSTALLATION_VIEW", "INSTALLATION_ASSIGN", "INVENTORY_VIEW")) {
             Permission permission = permissions.findByCode(code).orElseThrow();
             role.getPermissions().add(permission);
         }
@@ -2419,6 +2419,41 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), balanceA.getId(), balanceB.getId());
         assertBranchListContainsOnly(mvc.perform(get("/api/v1/inventory/transactions?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), movementA.getId(), movementB.getId());
+
+        // Branch membership must constrain writes as well as filtered list reads. These two
+        // fixtures deliberately retain the same assigned member while living in branch B.
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                                "/api/v1/leads/" + leadA.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"stage\\":\\"CONTACTED\\"}"))
+                .andExpect(status().isOk());
+        assertEquals("CONTACTED", salesLeadRecords.findById(leadA.getId()).orElseThrow().getStage());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                                "/api/v1/leads/" + leadB.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"stage\\":\\"CONTACTED\\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("NEW", salesLeadRecords.findById(leadB.getId()).orElseThrow().getStage(),
+                "A branch-A member cannot mutate a branch-B lead even when assignedUserId matches");
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                                "/api/v1/surveys/" + surveyA.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"findings\\":\\"Branch A assessment\\"}"))
+                .andExpect(status().isOk());
+        assertEquals("Branch A assessment", surveys.findById(surveyA.getId()).orElseThrow().getFindings());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                                "/api/v1/surveys/" + surveyB.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\\"findings\\":\\"Unauthorized branch B assessment\\"}"))
+                .andExpect(status().isNotFound());
+        assertNotEquals("Unauthorized branch B assessment",
+                surveys.findById(surveyB.getId()).orElseThrow().getFindings(),
+                "A branch-A member cannot mutate a branch-B survey even when assignedUserId matches");
     }
 
     @org.springframework.transaction.annotation.Transactional
