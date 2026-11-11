@@ -45,3 +45,6 @@ CREATE TABLE notification_provider_event (
   CONSTRAINT fk_notification_provider_event_delivery FOREIGN KEY (delivery_id) REFERENCES notification_delivery(id),
   INDEX ix_notification_provider_event_delivery (tenant_id,delivery_id,received_at)
 );
+
+ALTER TABLE notification_delivery DROP CHECK chk_notification_delivery_status;
+ALTER TABLE notification_delivery ADD CONSTRAINT chk_notification_delivery_status CHECK (status IN ('PENDING','DELIVERED','FAILED','DEAD_LETTER','SUPPRESSED'));
