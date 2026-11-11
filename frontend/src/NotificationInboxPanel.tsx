@@ -4,7 +4,7 @@ const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
 export default function NotificationInboxPanel({s,error}:{s:{accessToken:string};error:(message:string)=>void}){
  const [rows,setRows]=useState<any[]>([]),[count,setCount]=useState(0),[totalPages,setTotalPages]=useState(0),[page,setPage]=useState(0),[loading,setLoading]=useState(true),[unreadOnly,setUnreadOnly]=useState(false);
  const request=useCallback(async(path:string,init:RequestInit={})=>{const r=await authenticatedFetch(API_BASE+'/api/v1'+path,init,s as AuthSession);const b=await r.json().catch(()=>({}));if(!r.ok)throw Error(b.detail||b.message||'Notification request failed');return b},[s.accessToken]);
- const load=useCallback(async()=>{setLoading(true);try{const [page,unread]=await Promise.all([request('/notifications?page='+page+'&size=50&unreadOnly='+unreadOnly),request('/notifications/unread-count')]);setRows(page.content||[]);setTotalPages(Number(page.totalPages||0));setCount(Number(unread.count||0))}catch(e:any){error(e.message)}finally{setLoading(false)}},[request,unreadOnly,error,page]);
+ const load=useCallback(async()=>{setLoading(true);try{const [pageData,unread]=await Promise.all([request('/notifications?page='+page+'&size=50&unreadOnly='+unreadOnly),request('/notifications/unread-count')]);setRows(pageData.content||[]);setTotalPages(Number(pageData.totalPages||0));setCount(Number(unread.count||0))}catch(e:any){error(e.message)}finally{setLoading(false)}},[request,unreadOnly,error,page]);
  useEffect(()=>{setPage(0)},[unreadOnly]);
  useEffect(()=>{void load()},[load]);
  const markRead=async(id:string)=>{try{await request('/notifications/'+id+'/read',{method:'PATCH'});await load()}catch(e:any){error(e.message)}};
