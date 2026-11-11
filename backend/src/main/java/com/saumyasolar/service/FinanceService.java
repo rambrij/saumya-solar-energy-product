@@ -714,6 +714,7 @@ public class FinanceService {
         servicePermission(p);
         permission(p, "SERVICE_ASSIGN");
                 ServiceRequest t = ticket(id, p.tenantId());
+        ensureTicketAccess(t, p);
         if (!x.scheduledAt().isAfter(Instant.now()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Visit must be scheduled in the future");
         if (t.getAssignedEngineerId() == null || !t.getAssignedEngineerId().equals(x.engineerId()))
