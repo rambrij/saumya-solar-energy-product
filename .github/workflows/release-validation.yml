@@ -128,13 +128,13 @@ jobs:
       - name: Enforce clean-install baseline structure
         run: |
           BASELINE=backend/src/main/resources/db/migration/V1__baseline.sql
-          test "$(find backend/src/main/resources/db/migration -maxdepth 1 -type f -name 'V*.sql' | wc -l)" = "13"
+          test "$(find backend/src/main/resources/db/migration -maxdepth 1 -type f -name 'V*.sql' | wc -l)" = "14"
           test "$(grep -Eic '^[[:space:]]*CREATE[[:space:]]+TABLE[[:space:]]' "$BASELINE")" = "74"
           if grep -Eiq '^[[:space:]]*ALTER[[:space:]]+TABLE[[:space:]]|^[[:space:]]*CREATE[[:space:]]+(UNIQUE[[:space:]]+)?INDEX[[:space:]]' "$BASELINE"; then
             echo "Baseline must declare all columns and indexes inside CREATE TABLE statements."
             exit 1
           fi
-          echo "PASS: one V1 baseline plus additive V2 through V13 migrations; baseline retains 74 table definitions."
+          echo "PASS: one V1 baseline plus additive V2 through V14 migrations; baseline retains 74 table definitions."
       - name: Apply V1 schema
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass -e "CREATE DATABASE solar_migration_test"
@@ -179,6 +179,8 @@ jobs:
           test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='phase3_clean_install' AND table_name IN ('notification_outbox','notification_preference','notification_provider_event')")" = "3"
           mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V13__phase6_provider_accepted_delivery_status.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.check_constraints WHERE constraint_schema='phase3_clean_install' AND constraint_name='chk_notification_delivery_status' AND check_clause LIKE '%SENT%'")" = "1"
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V14__phase6_enforce_tenant_bound_notification_references.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema='phase3_clean_install' AND constraint_name IN ('fk_notification_outbox_delivery_tenant','fk_notification_provider_event_delivery_tenant')")" = "2"
 
       - name: Verify additive V2 permission migration
         run: |
