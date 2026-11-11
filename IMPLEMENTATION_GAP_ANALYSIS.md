@@ -1951,3 +1951,44 @@ Real-provider integration status: **pending provider selection; adapter and mock
 ### Verification status
 
 No baseline or post-change backend/frontend test suite was run. No build or migration validation was run. The GitHub connector session did not provide a repository checkout/tree API, and a network clone could not resolve GitHub. Consequently, code-level state beyond the existing gap-analysis evidence could not be independently inspected, and no runtime Phase 4 acceptance criterion is marked Met. Do not treat Phase 4 as implemented or release-ready.
+
+
+---
+
+## Phase 4 repository code inspection — 2026-11-11
+
+### Scope clarification
+
+The business roadmap places payment gateway integration in **Phase 3** (business requirements, Phase 3: Enterprise SaaS), while the SRS/HLD describes gateway callbacks in FIN-004/FIN-005 and lists payment gateway in its Phase 2 roadmap. The higher-priority business roadmap controls phase placement. The user's Phase 4 instruction explicitly authorizes finance/provider work now, but this is a scope re-baseline for this branch, not evidence that the original roadmap placed gateway in Phase 4. Existing gateway foundations are preserved.
+
+The Phase 4 delivery requested for this branch is a deterministic, profile-gated **mock adapter**. A real gateway must not be connected. Its future integration remains pending provider selection and commercial/security approval.
+
+### Confirmed code state from branch inspection
+
+| Area | Verified source state | Phase 4 gap |
+|---|---|---|
+| Finance/invoices | `FinanceService.createInvoice` snapshots customer/vendor identity, line prices, HSN, taxable values, tax totals and GST components. `InvoiceSequence` is tenant/fiscal-year scoped with a pessimistic lookup lock. | Tax treatment is still accepted from invoice input (including `UNSPECIFIED`); no approved GST rules, immutable statutory rule/version snapshot, or approved series policy. |
+| Payment adapter/registry | `PaymentGatewayAdapter` exposes create, signature verification, parse, fetch status and refund. `PaymentGatewayRegistry` registers adapter beans. | No mock adapter implementation is present in the branch tree. Registry is not selected by a configured mock provider. |
+| Checkout | `PaymentGatewayCheckoutService` enforces invoice tenant/customer ownership, invoice open status, feature entitlement, tenant integration connection, idempotency key, HTTPS checkout URL and audit event. | Checkout currently depends on an ACTIVE tenant integration connection; no dev/test-only mock integration/session lifecycle or deterministic success/failure/pending/cancelled outcome. |
+| Webhooks | `PaymentGatewayWebhookService` verifies adapter signatures, parses events, deduplicates provider/event ID and updates pending payment to confirmed/failed. | Event model accepts only SUCCEEDED/FAILED. It has no capture/refund processed/refund failed lifecycle, no tenant field on webhook event record, and no settlement reconciliation. |
+| Refunds | `FinanceService.refund` checks PAYMENT_REFUND, tenant payment lock, branch access, amount and mandatory reason. | It explicitly rejects non-MANUAL payments; adapter refund port is not called and provider refund event records are absent. |
+| Database | Baseline schema already contains tenant/fiscal-year invoice sequence, invoice/item snapshots, payment idempotency, payment webhook event uniqueness, and manual refund records with tenant-qualified payment FK. | No settlement/reconciliation table, provider refund event table, tax-rule version snapshot columns/structure or checkout outcome evidence. Existing webhook event uniqueness is provider/event, not tenant/provider/event. |
+| Customer frontend | `main.tsx` loads customer invoices, payments and gateway availability; it starts checkout and redirects to the returned URL. Customer invoice and payment lists already exist. | No mock checkout-result route/page; no explicit pending/failed/cancelled/refund state explanation or provider refund visibility beyond current payment ledger. |
+| Tests | Existing checkout tests cover no-adapter failure and a generic pending adapter response. Existing finance integration test covers signed, duplicate and invalid-signature unmatched webhook events. | No mock provider lifecycle, profile isolation, refund webhook, settlement mismatch, tenant-aware event replay, or browser result-page tests. |
+
+### Phase 4 implementation plan and status
+
+1. **Mock adapter and configuration:** implement a deterministic mock provider bean; select it using explicit dev/test configuration; never load mock endpoints, webhook simulators or fixture routes in production.
+2. **Checkout lifecycle:** provide deterministic success, failure, pending and cancelled sessions; persist the resulting provider-neutral payment state; never accept a browser redirect as payment confirmation.
+3. **Webhook lifecycle:** extend provider-neutral event semantics for capture, failure, refund processed and refund failed; keep HMAC verification, idempotency and tenant-scoped payment matching; ensure an invalid/mismatched event cannot leave a permanently consumed idempotency key.
+4. **Provider refunds:** call the adapter only after the existing refund permission, branch, reason and outstanding amount checks; preserve pending/processed/failed provider state as auditable records. Do not invent approval thresholds.
+5. **Settlement reconciliation:** persist tenant-scoped report and line/event outcomes; implement deterministic mock report fixtures with matched, missing, amount/currency mismatch and duplicate rows; make processing replay-safe.
+6. **Frontend:** add a safe hosted checkout result view and payment/refund status display; refresh authoritative API state after return; do not infer paid state from URL parameters.
+7. **GST/numbering:** keep existing fiscal sequence and invoice snapshots; do not hard-code unapproved tax rates, place-of-supply, reverse charge, IRN/e-invoice or statutory series. Implement configurable approved rules only after the named decision owners approve them.
+8. **Tests:** add adapter unit tests, webhook signature/idempotency/tenant tests, refund state tests, reconciliation mismatch/replay tests, production-profile exclusion tests and customer checkout result UI tests.
+
+### Current implementation completion
+
+No runtime Phase 4 feature is marked complete by this inspection. The code-level state above is confirmed from source, but this session did not have a working local clone/command environment to safely edit and execute the application test suites. Documentation and CI-branch wiring are the only changes committed so far.
+
+**Real-provider integration:** pending provider selection. **Mock adapter:** not yet complete. Do not use the acceptance wording "adapter and mock complete" until the mock lifecycle and its tests are implemented and verified.
