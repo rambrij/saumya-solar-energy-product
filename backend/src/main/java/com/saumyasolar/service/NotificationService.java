@@ -40,6 +40,7 @@ public class NotificationService {
     private final JavaMailSender mailSender;
     private final NotificationDeliveryRepository deliveries;
     private final NotificationOutboxRepository outbox;
+    private final NotificationChannelAdapterRegistry adapters;
     private final String from;
     private final String publicBaseUrl;
     private final CustomerProfileRepository customers;
@@ -54,7 +55,7 @@ public class NotificationService {
             String from,
             String publicBaseUrl
     ) {
-        this(mailSender, deliveries, null, from, publicBaseUrl, "", "", "", "", null, null, null);
+        this(mailSender, deliveries, null, from, publicBaseUrl, "", "", "", "", null, null, null, null);
     }
     
     public NotificationService(
@@ -63,7 +64,7 @@ public class NotificationService {
             String smsFrom, String whatsappFrom, ApplicationEventPublisher eventPublisher
     ) {
         this(mailSender, deliveries, customers, from, publicBaseUrl, twilioSid, twilioToken,
-                smsFrom, whatsappFrom, eventPublisher, null, null);
+                smsFrom, whatsappFrom, eventPublisher, null, null, null);
     }
 
     @Autowired
@@ -77,11 +78,13 @@ public class NotificationService {
             @Value("${app.messaging.whatsapp-from:}") String whatsappFrom,
             ApplicationEventPublisher eventPublisher,
             UserNotificationService inbox,
-            NotificationOutboxRepository outbox
+            NotificationOutboxRepository outbox,
+            NotificationChannelAdapterRegistry adapters
     ) {
         this.mailSender = mailSender;
         this.deliveries = deliveries;
         this.outbox = outbox;
+        this.adapters = adapters;
         this.customers = customers;
         this.from = from;
         this.publicBaseUrl = publicBaseUrl.replaceAll("/+$", "");
@@ -225,16 +228,11 @@ public class NotificationService {
         NotificationDelivery record = deliveries.findByIdAndTenantId(deliveryId, tenantId).orElse(null);
         if (record == null || !"PENDING".equals(record.getStatus())) return;
         try {
-            if ("EMAIL".equals(record.getChannel())) {
-                SimpleMailMessage message = new SimpleMailMessage();
-                message.setFrom(from);
-                message.setTo(record.getRecipient());
-                message.setSubject(record.getSubject());
-                message.setText(record.getMessageBody());
-                mailSender.send(message);
-            } else {
-                sendProviderDelivery(record);
-            }
+            if (adapters != null) adapters.dispatch(record);
+            else if ("EMAIL".equals(record.getChannel())) {
+                SimpleMailMessage message = new SimpleMailMessage(); message.setFrom(from); message.setTo(record.getRecipient());
+                message.setSubject(record.getSubject()); message.setText(record.getMessageBody()); mailSender.send(message);
+            } else sendProviderDelivery(record);
             record.setAttemptCount(record.getAttemptCount() + 1);
             record.setStatus("DELIVERED");
             record.setSentAt(Instant.now());
@@ -334,16 +332,11 @@ public class NotificationService {
     private void retryFailedDelivery(NotificationDelivery record) {
         record.setStatus("PENDING");
         try {
-            if ("EMAIL".equals(record.getChannel())) {
-                SimpleMailMessage message = new SimpleMailMessage();
-                message.setFrom(from);
-                message.setTo(record.getRecipient());
-                message.setSubject(record.getSubject());
-                message.setText(record.getMessageBody());
-                mailSender.send(message);
-            } else {
-                sendProviderDelivery(record);
-            }
+            if (adapters != null) adapters.dispatch(record);
+            else if ("EMAIL".equals(record.getChannel())) {
+                SimpleMailMessage message = new SimpleMailMessage(); message.setFrom(from); message.setTo(record.getRecipient());
+                message.setSubject(record.getSubject()); message.setText(record.getMessageBody()); mailSender.send(message);
+            } else sendProviderDelivery(record);
             record.setAttemptCount(record.getAttemptCount() + 1);
             record.setStatus("DELIVERED");
             record.setSentAt(Instant.now());
