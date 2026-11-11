@@ -1,5 +1,9 @@
 name: Release 1-4 and Phase 2 tenant-isolation validation (final verification)
 
+concurrency:
+  group: phase5-release-validation-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
