@@ -48,3 +48,15 @@ ALTER TABLE cms_content
     FOREIGN KEY (tenant_id,current_revision_id) REFERENCES cms_content_revision(tenant_id,id),
   ADD CONSTRAINT fk_cms_content_published_revision
     FOREIGN KEY (tenant_id,published_revision_id) REFERENCES cms_content_revision(tenant_id,id);
+
+
+-- Revision snapshots are immutable even if an application path is accidentally added later.
+CREATE TRIGGER trg_cms_revision_no_update
+BEFORE UPDATE ON cms_content_revision
+FOR EACH ROW
+SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'CMS content revisions are immutable';
+
+CREATE TRIGGER trg_cms_revision_no_delete
+BEFORE DELETE ON cms_content_revision
+FOR EACH ROW
+SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'CMS content revisions are immutable';
