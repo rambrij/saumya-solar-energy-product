@@ -585,8 +585,11 @@ public class FinanceService {
                 || event.amount() == null || event.amount().signum() <= 0)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid payment webhook payload");
         String key = provider.toUpperCase(Locale.ROOT);
-        Payment pay = payments.findByProviderAndProviderReference(key, event.paymentReference()).orElse(null);
-        if (pay == null) return Map.of("accepted", false, "matched", false, "retryable", true);
+        Payment matched = payments.findByProviderAndProviderReference(key, event.paymentReference()).orElse(null);
+        if (matched == null) return Map.of("accepted", false, "matched", false, "retryable", true);
+        Payment pay = payments.findForUpdate(matched.getId(), matched.getTenantId()).orElse(null);
+        if (pay == null || !key.equalsIgnoreCase(pay.getProvider()) || !event.paymentReference().equals(pay.getProviderReference()))
+            return Map.of("accepted", false, "matched", false, "retryable", true);
         if (pay.getAmount().compareTo(event.amount()) != 0)
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Webhook amount does not match the recorded provider payment");
         var duplicate = webhookEvents.findByTenantIdAndProviderAndEventId(pay.getTenantId(), key, event.eventId());
