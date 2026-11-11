@@ -1783,6 +1783,31 @@ class Release12TenantIntegrationTest {
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
                         .contentType(MediaType.APPLICATION_PDF));
 
+        // A customer must not approve/reject another customer's quotation by guessed ID.
+        // Rejection must be side-effect free; the actual owner can perform the decision.
+        mvc.perform(post("/api/v1/quotations/" + quotation.getId() + "/accept")
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isNotFound());
+        assertEquals("SENT", quotations.findByIdAndTenantId(quotation.getId(), vendorTenantId)
+                .orElseThrow().getStatus(),
+                "A foreign customer's guessed quotation ID must not change the quotation state");
+        mvc.perform(post("/api/v1/quotations/" + quotation.getId() + "/accept")
+                        .header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isOk());
+        assertEquals("ACCEPTED", quotations.findByIdAndTenantId(quotation.getId(), vendorTenantId)
+                .orElseThrow().getStatus());
+
+        // Checkout authorization must bind invoice -> order -> customer before any gateway
+        // lookup, entitlement check or payment creation.
+        int paymentsBeforeForeignCheckout = payments.findByTenantIdAndInvoiceId(vendorTenantId, invoice.getId()).size();
+        mvc.perform(post("/api/v1/payment-gateways/invoices/" + invoice.getId() + "/checkout")
+                        .header("Authorization", "Bearer " + customerAToken)
+                        .header("Idempotency-Key", "foreign-invoice-checkout-01"))
+                .andExpect(status().isNotFound());
+        assertEquals(paymentsBeforeForeignCheckout,
+                payments.findByTenantIdAndInvoiceId(vendorTenantId, invoice.getId()).size(),
+                "A foreign-customer checkout attempt must not create a payment");
+
         var invoicesJson = mvc.perform(get("/api/v1/invoices")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
