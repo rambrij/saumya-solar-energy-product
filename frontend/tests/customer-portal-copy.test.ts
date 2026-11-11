@@ -30,7 +30,8 @@ describe('Customer catalogue and quotation copy regressions',()=>{
   expect(customerPortal).toContain("api('/refunds',{},s)");
  });
  it('supports idempotent provider refunds and displays refund state in finance workspace',()=>{
-  expect(financePanel).toContain("'Idempotency-Key':crypto.randomUUID()");
+  expect(financePanel).toContain("'Idempotency-Key':idempotencyKey");
+  expect(financePanel).toContain('refundKeys[fingerprint]||crypto.randomUUID()');
   expect(financePanel).toContain('Initiate provider refund');
   expect(financePanel).toContain('Refund ₹');
   expect(financePanel).toContain('Final status will update after a verified provider event.');
