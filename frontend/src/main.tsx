@@ -129,7 +129,8 @@ function Customer({s,error,logout,onPublicNavigate}:any){
    setCatalog({categories,products,packages});setQuotes(q||[]);setOrders(o||[]);setEnquiries(e||[]);setInstallations(i||[]);setWarranties(w||[]);setWarrantyClaims(claims||[]);setMessagingConsent(consent||{smsConsent:false,whatsappConsent:false});setSavedAddresses(addresses||[]);setInvoices(inv||[]);setPayments(pay||[]);setRefunds(refundRows||[]);setServiceTickets(svc||[]);const evidence=await Promise.all((svc||[]).map(async(ticket:any)=>[ticket.id,await api('/service-requests/'+ticket.id+'/attachments',{},s).catch(()=>[])]));setServiceAttachments(Object.fromEntries(evidence));const commentRows=await Promise.all((svc||[]).map(async(ticket:any)=>[ticket.id,await api('/service-requests/'+ticket.id+'/comments',{},s).catch(()=>[])]));setServiceComments(Object.fromEntries(commentRows));setGatewayAvailability(gateway||{available:false,providers:[]});
   }catch(err:any){error(err.message)}finally{setBusy(false)}
  };
- useEffect(()=>{void load()},[]);\n useEffect(()=>{if(checkoutPaymentId)setTab('checkout-result')},[checkoutPaymentId]);
+ useEffect(()=>{void load()},[]);
+ useEffect(()=>{if(checkoutPaymentId)setTab('checkout-result')},[checkoutPaymentId]);
  const requestQuote=async(e:React.FormEvent<HTMLFormElement>)=>{
   e.preventDefault();const form=e.currentTarget;const f:any=Object.fromEntries(new FormData(form));
   try{await send('/customer/enquiries',{propertyType:f.propertyType,monthlyBill:f.monthlyBill?Number(f.monthlyBill):null,requiredCapacityKw:f.requiredCapacityKw?Number(f.requiredCapacityKw):null,message:f.message,addressId:f.addressId},s);form.reset();setTab('enquiries');await load()}
