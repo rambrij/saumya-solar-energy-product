@@ -24,6 +24,7 @@ public class NotificationOutboxDispatcher {
   @Scheduled(fixedDelayString="${app.messaging.outbox-interval-ms:15000}")
   public void dispatch() {
     Instant now=Instant.now();
+    recoverStaleProcessing(now.minusSeconds(600));
     for(UUID tenantId:outbox.findDueTenantIds(now)) {
       try(var scope=TenantExecutionContext.open(tenantId)) {
         List<NotificationOutbox> rows=outbox.findDueByTenant(tenantId,List.of("PENDING","RETRY"),now);
@@ -38,6 +39,20 @@ public class NotificationOutboxDispatcher {
             row.setAttemptCount(delivery.getAttemptCount()); row.setNextAttemptAt(delivery.getNextAttemptAt()!=null?delivery.getNextAttemptAt():("PENDING".equals(delivery.getStatus())?Instant.now().plusSeconds(30):null)); row.setLastError(delivery.getLastError());
           } catch(RuntimeException ex) { row.setStatus(row.getAttemptCount()>=5?"DEAD_LETTER":"RETRY"); row.setLastError("Outbox dispatch failed"); row.setNextAttemptAt(Instant.now().plusSeconds(Math.min(3600,60L << Math.min(row.getAttemptCount(),5)))); }
           row.setUpdatedAt(Instant.now()); outbox.save(row);
+        }
+      }
+    }
+  }
+  private void recoverStaleProcessing(Instant staleBefore) {
+    for(UUID tenantId:outbox.findStaleProcessingTenantIds(staleBefore)) {
+      try(var scope=TenantExecutionContext.open(tenantId)) {
+        for(NotificationOutbox row:outbox.findTop50ByTenantIdAndStatusAndUpdatedAtBeforeOrderByCreatedAtAsc(tenantId,"PROCESSING",staleBefore)) {
+          var delivery=deliveries.findByIdAndTenantId(row.getDeliveryId(),tenantId).orElse(null);
+          if(delivery==null){row.setStatus("DEAD_LETTER");row.setLastError("Outbox delivery record is missing");}
+          else if("DELIVERED".equals(delivery.getStatus())){row.setStatus("SUCCEEDED");row.setLastError(null);}
+          else if("DEAD_LETTER".equals(delivery.getStatus())){row.setStatus("DEAD_LETTER");row.setLastError(delivery.getLastError());}
+          else {row.setStatus("RETRY");row.setNextAttemptAt(delivery.getNextAttemptAt()!=null?delivery.getNextAttemptAt():Instant.now().plusSeconds(30));row.setLastError(delivery.getLastError());}
+          row.setUpdatedAt(Instant.now());outbox.save(row);
         }
       }
     }
