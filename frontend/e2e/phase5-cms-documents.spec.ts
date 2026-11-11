@@ -39,7 +39,7 @@ test('published CMS page and blog render publicly and uploaded media is served',
     const route=type==='BLOG'?'/blog/'+itemSlug:'/pages/'+itemSlug;
     await page.goto(baseURL+route);
     await expect(page.getByText('Published CMS content visible to public visitors.',{exact:true})).toBeVisible();
-    await expect(page.locator('img').filter({has:page.locator('[src*="/uploads/"]')})).toHaveCount(0).catch(()=>{});
+    await expect(page.locator('img[src*="/uploads/"]')).toBeVisible();
   }
 });
 
