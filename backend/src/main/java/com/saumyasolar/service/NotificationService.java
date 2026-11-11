@@ -12,12 +12,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
-import java.util.Base64;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -44,8 +38,6 @@ public class NotificationService {
     private final String from;
     private final String publicBaseUrl;
     private final CustomerProfileRepository customers;
-    private final String twilioSid, twilioToken, smsFrom, whatsappFrom;
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     private final ApplicationEventPublisher eventPublisher;
     private final UserNotificationService inbox;
     
@@ -88,10 +80,6 @@ public class NotificationService {
         this.customers = customers;
         this.from = from;
         this.publicBaseUrl = publicBaseUrl.replaceAll("/+$", "");
-        this.twilioSid = twilioSid;
-        this.twilioToken = twilioToken;
-        this.smsFrom = smsFrom;
-        this.whatsappFrom = whatsappFrom;
         this.eventPublisher = eventPublisher;
         this.inbox = inbox;
     }
@@ -360,10 +348,6 @@ public class NotificationService {
             record.setNextAttemptAt(attempts >= 5 ? null : Instant.now().plusSeconds(Math.min(3600, 60L * ( 1L << Math.min(attempts, 5) ))));
         }
         deliveries.save(record);
-    }
-    
-    private String encForm(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
     
     private String safeName(String name) {
