@@ -30,6 +30,7 @@ class MockPaymentGatewayAdapterTest {
         PaymentGatewayAdapter.GatewayWebhookEvent event = adapter.parseWebhook(raw);
         assertEquals("tenant-a", event.tenantId());
         assertEquals("PAYMENT_CAPTURED", event.status());
+        assertEquals("CONFIRMED", adapter.fetchStatus(first.providerReference()).status());
     }
 
     @Test
@@ -49,6 +50,9 @@ class MockPaymentGatewayAdapterTest {
         var retry = adapter.refund(payment.providerReference(), new BigDecimal("25.00"), "refund-key-123", "Customer request");
         assertEquals(first.providerRefundReference(), retry.providerRefundReference());
         assertEquals("PENDING", first.status());
+        adapter.signedEvent("refund-evt", payment.providerReference(), new BigDecimal("25.00"), "INR",
+                "REFUND_PROCESSED", first.providerRefundReference(), "tenant");
+        assertEquals("PROCESSED", adapter.refundStatus(first.providerRefundReference()).status());
     }
 
     @Test
