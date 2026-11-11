@@ -34,7 +34,7 @@ The following are intentionally unresolved. Keep the existing behavior and make 
 
 ### Verification limitation
 
-This record is a decision log, not evidence that Phase 4 code has been implemented or tested. The connected GitHub account has repository push/admin permissions and the GitHub API exposed the branch tree and source files. A local `git clone` attempt still failed because this execution environment could not resolve `github.com`; no local Maven/npm command execution is available through the GitHub connector. Runtime code and tests were therefore changed through individual GitHub commits and verified through the repository's GitHub Actions workflow. The latest exact branch head must pass all workflow jobs before release acceptance.
+This record is a decision log, not evidence that Phase 4 code has been implemented or tested. The connected GitHub account has repository push/admin permissions and the GitHub API exposed the branch tree and source files. A local `git clone` attempt still failed because this execution environment could not resolve `github.com`; no local Maven/npm command execution is available through the GitHub connector. Runtime code and tests were changed through individual GitHub commits and verified through the repository's GitHub Actions workflow. Runtime implementation commit `24c1e88` and subsequent documentation-only commit `e6de31a` passed all four jobs: 238 backend tests, 24 frontend tests, MySQL 8.4 V5 migration, Spring Boot startup/schema validation, endpoint authorization evidence and browser-level tenant filter tampering. The final follow-up commit changes documentation only; no runtime code changed after the verified implementation.
 
 
 ## Phase 4 implementation decisions
