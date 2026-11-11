@@ -27,18 +27,24 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
     private final ObjectMapper mapper;
     private final byte[] signingSecret;
+    private final String checkoutOutcome;
     private final Map<String, GatewayPaymentStatus> payments = new ConcurrentHashMap<>();
     private final Map<String, GatewayRefund> refunds = new ConcurrentHashMap<>();
 
     public MockPaymentGatewayAdapter(
             ObjectMapper mapper,
-            @Value("${app.payment.mock.signing-secret:}") String signingSecret
+            @Value("${app.payment.mock.signing-secret:}") String signingSecret,
+            @Value("${app.payment.mock.checkout-outcome:PENDING}") String checkoutOutcome
     ) {
         this.mapper = mapper;
         if (signingSecret == null || signingSecret.length() < 32) {
             throw new IllegalStateException("app.payment.mock.signing-secret must contain at least 32 characters");
         }
         this.signingSecret = signingSecret.getBytes(StandardCharsets.UTF_8);
+        if (!java.util.Set.of("SUCCESS", "FAILURE", "PENDING", "CANCELLED").contains(checkoutOutcome)) {
+            throw new IllegalStateException("app.payment.mock.checkout-outcome must be SUCCESS, FAILURE, PENDING or CANCELLED");
+        }
+        this.checkoutOutcome = checkoutOutcome;
     }
 
     @Override
@@ -57,7 +63,7 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
         String reference = "mock_pay_" + sha256(metadata.get("tenantId") + ":" + metadata.get("idempotencyKey")).substring(0, 32);
         GatewayPaymentStatus status = new GatewayPaymentStatus(reference, "PENDING", amount, currency);
         payments.putIfAbsent(reference, status);
-        return new GatewayPayment(reference, "https://mock-checkout.saumyasolar.invalid/session/" + reference, "PENDING");
+        return new GatewayPayment(reference, "https://mock-checkout.saumyasolar.invalid/session/" + reference, checkoutOutcome);
     }
 
     @Override
@@ -81,7 +87,8 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
                 requiredText(json, "providerReference"),
                 new BigDecimal(requiredText(json, "amount")),
                 requiredText(json, "currency"),
-                requiredText(json, "status")
+                requiredText(json, "status"),
+                json.hasNonNull("providerRefundReference") ? json.get("providerRefundReference").asText() : null
         );
     }
 
@@ -106,14 +113,19 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
     /** Used only by the dev/test simulator to produce a provider-authentic signed webhook body. */
     public String signedEvent(String eventId, String providerReference, BigDecimal amount, String currency, String status)
             throws Exception {
-        String payload = mapper.writeValueAsString(Map.of(
-                "eventId", eventId,
-                "providerReference", providerReference,
-                "amount", amount.toPlainString(),
-                "currency", currency,
-                "status", status
-        ));
-        return payload;
+        return signedEvent(eventId, providerReference, amount, currency, status, null);
+    }
+
+    public String signedEvent(String eventId, String providerReference, BigDecimal amount, String currency,
+                              String status, String providerRefundReference) throws Exception {
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("eventId", eventId);
+        payload.put("providerReference", providerReference);
+        payload.put("amount", amount.toPlainString());
+        payload.put("currency", currency);
+        payload.put("status", status);
+        if (providerRefundReference != null) payload.put("providerRefundReference", providerRefundReference);
+        return mapper.writeValueAsString(payload);
     }
 
     public String sign(String rawPayload) {
