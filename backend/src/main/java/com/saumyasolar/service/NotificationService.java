@@ -54,7 +54,7 @@ public class NotificationService {
             String from,
             String publicBaseUrl
     ) {
-        this(mailSender, deliveries, null, from, publicBaseUrl, "", "", "", "", null, null);
+        this(mailSender, deliveries, null, from, publicBaseUrl, "", "", "", "", null, null, null);
     }
     
     public NotificationService(
