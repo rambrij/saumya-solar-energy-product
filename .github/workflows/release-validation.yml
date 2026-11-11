@@ -5,6 +5,7 @@ on:
     branches:
       - audit/phase-2-implementation-gap-analysis
       - audit/phase-3-implementation-gap-analysis
+      - audit/phase-4-finance-provider-impl
   pull_request:
     branches:
       - audit/phase-2-implementation-gap-analysis
