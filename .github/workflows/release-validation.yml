@@ -112,7 +112,7 @@ jobs:
       - name: Enforce clean-install baseline structure
         run: |
           BASELINE=backend/src/main/resources/db/migration/V1__baseline.sql
-          test "$(find backend/src/main/resources/db/migration -maxdepth 1 -type f -name 'V*.sql' | wc -l)" = "10"
+          test "$(find backend/src/main/resources/db/migration -maxdepth 1 -type f -name 'V*.sql' | wc -l)" = "11"
           test "$(grep -Eic '^[[:space:]]*CREATE[[:space:]]+TABLE[[:space:]]' "$BASELINE")" = "74"
           if grep -Eiq '^[[:space:]]*ALTER[[:space:]]+TABLE[[:space:]]|^[[:space:]]*CREATE[[:space:]]+(UNIQUE[[:space:]]+)?INDEX[[:space:]]' "$BASELINE"; then
             echo "Baseline must declare all columns and indexes inside CREATE TABLE statements."
@@ -144,7 +144,7 @@ jobs:
           test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='phase3_clean_install' AND table_name IN ('payment_reconciliation_report','payment_reconciliation_line')")" = "2"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='phase3_clean_install' AND table_name='payment_webhook_event' AND column_name IN ('tenant_id','provider_reference','provider_refund_reference','event_type')")" = "4"
 
-      - name: Apply Phase 5 V6-V10 CMS, inbox, analytics and platform settings migrations
+      - name: Apply Phase 5 V6-V11 CMS, inbox, analytics and platform settings migrations
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V6__phase5_cms_content_revisions.sql
           mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V7__phase5_user_notification_inbox.sql
@@ -157,6 +157,8 @@ jobs:
           mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V10__phase5_typed_platform_settings.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='phase3_clean_install' AND table_name='platform_setting'")" = "1"
           test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='phase3_clean_install' AND table_name='platform_setting' AND column_name IN ('setting_key','value_type','value_text','version','updated_by','updated_at')")" = "6"
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V11__phase5_operational_analytics_indexes.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema='phase3_clean_install' AND index_name IN ('ix_installation_tenant_assignee_schedule','ix_service_tenant_assignee_created','ix_invoice_tenant_created','ix_order_tenant_created')")" = "4"
 
       - name: Verify additive V2 permission migration
         run: |
