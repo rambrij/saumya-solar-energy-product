@@ -288,6 +288,22 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isConflict());
         mvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + reactivatedToken))
                 .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(adminEmail,adminPassword)))
+                .andExpect(status().isUnauthorized());
+        var tenantView=json.readTree(mvc.perform(get("/api/v1/platform/tenants/"+tenantId)
+                        .header("Authorization","Bearer "+platformToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        for(String field:java.util.List.of("verifiedAt","verifiedBy","activatedAt","activatedBy",
+                "suspendedAt","suspendedBy","closedAt","closedBy"))
+            assertFalse(tenantView.path(field).isNull(),field+" should be persisted and exposed");
+        var lifecycleActions=auditEvents.findTop200ByTenantIdAndCreatedAtBetweenOrderByCreatedAtDesc(
+                        java.util.UUID.fromString(tenantId),Instant.now().minusSeconds(3600),Instant.now().plusSeconds(60))
+                .stream().map(event->event.getAction()).collect(java.util.stream.Collectors.toSet());
+        assertTrue(lifecycleActions.containsAll(java.util.Set.of("TENANT_CREATED","TENANT_VERIFIED",
+                "TENANT_ACTIVATED","TENANT_SUSPENDED","TENANT_REACTIVATED","TENANT_CLOSED")),lifecycleActions.toString());
     }
     
 
