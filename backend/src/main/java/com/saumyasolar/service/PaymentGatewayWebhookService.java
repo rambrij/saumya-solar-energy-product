@@ -56,8 +56,12 @@ public class PaymentGatewayWebhookService {
         UUID eventTenant;
         try { eventTenant = UUID.fromString(event.tenantId()); }
         catch (IllegalArgumentException ex) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid payment tenant metadata"); }
-        Payment payment = payments.findByTenantIdAndProviderAndProviderReference(eventTenant, code, event.providerReference()).orElse(null);
-        if (payment == null) return Map.of("accepted", false, "matched", false, "retryable", true);
+        Payment matched = payments.findByTenantIdAndProviderAndProviderReference(eventTenant, code, event.providerReference()).orElse(null);
+        if (matched == null) return Map.of("accepted", false, "matched", false, "retryable", true);
+        Payment payment = payments.findForUpdate(matched.getId(), eventTenant).orElse(null);
+        if (payment == null || !code.equalsIgnoreCase(payment.getProvider())
+                || !event.providerReference().equals(payment.getProviderReference()))
+            return Map.of("accepted", false, "matched", false, "retryable", true);
         if (!payment.getCurrency().equalsIgnoreCase(event.currency()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Payment provider currency does not match the tenant payment");
         if (events.findByTenantIdAndProviderAndEventId(payment.getTenantId(), code, event.eventId()).isPresent())
@@ -68,7 +72,7 @@ public class PaymentGatewayWebhookService {
         if (isRefund) {
             if (event.providerRefundReference() == null || event.providerRefundReference().isBlank())
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Provider refund reference is required");
-            refund = refunds.findByTenantIdAndProviderAndProviderRefundReference(
+            refund = refunds.findForUpdateByTenantAndProviderReference(
                     payment.getTenantId(), code, event.providerRefundReference()).orElse(null);
             if (refund == null || !refund.getPaymentId().equals(payment.getId()))
                 return Map.of("accepted", false, "matched", false, "retryable", true);
@@ -92,7 +96,11 @@ public class PaymentGatewayWebhookService {
         events.saveAndFlush(record);
 
         if (isRefund) {
-            refund.setStatus("REFUND_PROCESSED".equals(event.status()) ? "PROCESSED" : "FAILED");
+            String nextRefundStatus = "REFUND_PROCESSED".equals(event.status()) ? "PROCESSED" : "FAILED";
+            if (Set.of("PROCESSED", "FAILED").contains(refund.getStatus())
+                    && !refund.getStatus().equals(nextRefundStatus))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Provider refund is already in a different terminal state");
+            refund.setStatus(nextRefundStatus);
             refund.setProcessedAt(Instant.now());
             refunds.save(refund);
             refreshPaymentAndInvoice(payment);
