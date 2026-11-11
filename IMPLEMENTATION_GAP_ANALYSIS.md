@@ -5,7 +5,7 @@
 **Repository:** `rambrij/saumya-solar-energy-product`  
 **Primary business source:** `saumya-solar-energy-solution-requirements.md`  
 **Technical source:** `saumya-solar-production-ready-srs-hld.md`  
-**Review date:** 2026-11-10
+**Review date:** 2026-11-11
 
 ## Audit method, evidence standard and limitations
 
@@ -1595,3 +1595,68 @@ Release12TenantIntegrationTest.fineGrainedRoleMatrixDeniesCrossModulePrivilegeEs
 | Production-data preflight and DBA sign-off | BLOCKED | No production connection or production query was performed. The protected workflow file is absent from `main` and exists only on this audit branch; GitHub manual dispatch requires the workflow to be on the default branch. It must pass normal PR review/merge first, then run with protected production secrets and an approved DBA/data owner. |
 
 **Release decision: NOT APPROVED for production.** Do not advance to Phase 3 until positive role/resource coverage and exhaustive download evidence are closed, the checked-in worker inventory is supplemented by external-runtime confirmation, and the protected production preflight output plus DBA/data-owner sign-off are attached to the release record.
+
+
+## Phase 2 final verification update — 2026-11-11
+
+**Verified implementation commit:** `10287b76fc75e6bbf21eaee65f70d048b074cd1b`  
+**GitHub Actions run:** [42967893781](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42967893781)  
+**Result:** <strong>PASS — all four CI jobs succeeded.</strong>
+
+### Latest CI evidence
+
+| CI job | Result | Evidence |
+|---|---|---|
+| Backend compile, security suite and full Maven verification | PASS | 218 tests, 0 failures, 0 errors, 0 skipped; `BUILD SUCCESS`. The selected security/context suite also passed before the complete `clean verify`. |
+| Frontend typecheck, unit tests and production build | PASS | 6 test files and 22 frontend tests passed; production build completed. |
+| MySQL 8.4 migration and schema audit | PASS | Squashed baseline equivalence and migration assertions passed. Schema audit artifact: [13832410206](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42967893781/artifacts/13832410206). |
+| Spring Boot startup, MySQL scheduler tests, integrity preflight and Playwright | PASS | Spring Boot health UP on MySQL 8.4; 4 MySQL scheduler concurrency tests passed; V57, V58 and V60 disposable-DB preflight markers all PASS; 3 Chromium/Playwright tests passed. |
+
+The latest CI schema artifact confirms **74 base tables**, **64 tables with tenant_id**, **60 tenant_id columns declared NOT NULL with zero NULL rows**, and **four nullable mixed-scope tables**. In this disposable CI database, exact NULL tenant_id counts were: `app_user=0`, `audit_event=0`, `notification_delivery=0`, `role=3`; the three nullable role rows are the approved global roles `PLATFORM_SUPER_ADMIN`, `PLATFORM_SUPPORT` and `CUSTOMER`. These are test-database counts only; they are not production counts or production owner approval.
+
+### Runtime endpoint authorization evidence
+
+The runtime Spring MVC registry generated and validated four CSV evidence files in CI. The artifact is [phase2-endpoint-authorization-evidence, artifact 13832047670](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42967893781/artifacts/13832047670).
+
+| Evidence set | Runtime rows | PASS | Explicit exemption / delegated | Outcome |
+|---|---:|---:|---:|---|
+| Anonymous authentication and public exceptions | 228 | 210 | 18 | Every one of the 210 protected method/pattern mappings rejected an anonymous request with 401/403; 18 public/documentation exceptions were explicitly classified. |
+| Positive applicable-account authorization gate | 210 | 207 | 3 | All 207 exercised positive gates passed. Three vendor analytics routes delegate positive verification to `VendorAnalyticsServiceTest`, which checks VENDOR_ADMIN + REPORT_VIEW + BRANCH_MANAGE and foreign-branch denial. |
+| Zero-permission vendor protected GET sweep | 91 | 83 | 8 | All 83 probed protected reads denied with 403/404; eight documented self-service GETs were explicitly exempted from this vendor-zero-permission sweep. |
+| Zero-permission vendor mutation sweep | 120 | 117 | 3 | All 117 probed mutations denied with 403/404; three resource-delegated operations are covered by focused ownership/target-resource tests. |
+
+The evidence validator returned **PASS with no failing rows**. This is a runtime authorization-gate result, not proof that every named business role has successful CRUD evidence against a real resource for every route. The 222-row static endpoint document remains a historical annotation snapshot; the current runtime CSV is authoritative for the mappings actually discovered by Spring in this CI run. Positive and negative role/resource-specific CRUD coverage therefore remains a separate acceptance requirement.
+
+### Customer, branch and export/download regression evidence
+
+The 40-test `Release12TenantIntegrationTest` class passed as part of the 218-test backend suite. The latest full run includes the customer ownership, branch scope and document/export tests already added to that suite, including:
+
+- Customer A cannot use guessed IDs to read, update or delete Customer B's address; failed cross-customer deletes leave the target unchanged. Tampered tenant/customer IDs on address creation are ignored in favor of the authenticated customer.
+- Customer-owned order, quotation, invoice, payment receipt and service-ticket reads/downloads are isolated. Quotation PDF, invoice item/PDF and payment receipt requests return 404 to the other customer and succeed for the owner. Service evidence upload/download checks compare foreign-customer denial with owner byte-for-byte success.
+- Customer installation and warranty lists, profile changes and messaging consent are self-owned. Warranty-claim attachment HTTP tests cover upload/list/download, wrong parent claim, foreign tenant, other customer, unsupported content type and owner byte-for-byte download.
+- Branch lifecycle tests cover branch CRUD, membership assignment/list/removal and permission denial. Assigned-branch filtering covers CRM, quotations, orders, invoices, service tickets, installations, warehouses and inventory. Negative writes cover a branch-B lead/survey for a branch-A member; branch analytics rejects an unassigned branch.
+- Operations export content is checked in CSV, XLSX and PDF against authenticated-tenant aggregates and excludes a foreign-tenant sentinel. Asynchronous export status/download tests cover CSV, XLSX and PDF, requester ownership, same-tenant different requester, foreign tenant and customer denial. Platform tenant exports and quotation/invoice/receipt/service/survey/warranty attachment routes also have focused HTTP coverage.
+
+These are significant family-level checks, but they do **not** establish exhaustive positive and negative evidence for every customer-owned resource operation or every branch-scoped mutation. Unsupported CRUD operations (for example, a resource family with no DELETE route) must be marked N/A rather than assumed covered. Keep the residual matrix rows PARTIAL until every applicable route/resource/verb has a named fixture-backed test or an approved documented exception.
+
+### Production schema and external worker evidence boundary
+
+**Production schema: BLOCKED.** CI proves that V57/V58/V60 and the SELECT-only inventory execute cleanly against a disposable MySQL 8.4 schema. No production connection was available, so no production row counts, NULL counts, complete FK/unique-index output or production relationship preflight was collected. The protected `.github/workflows/phase-2-production-preflight.yml` must be reviewed/merged through the normal PR process, dispatched with the protected production environment and DBA-approved identities, and its full artifact reviewed by the data owner/DBA. Do not run V57/V58/V60 against production until the approved preflight and change window are complete.
+
+**Checked-in worker discovery: MET. External runtime discovery: PARTIAL / NOT CONFIRMED.** The repository-wide scan covers the application source and deployment files: seven scheduled triggers, two `@Async` listeners, one bounded executor, the database-backed integration queue and two startup runners; it found no checked-in broker client or separate worker container. The connected Render workspace exposed one web service, but it deploys the older `rambrij/soumya-solar-energy-solution` repository, not this product repository. The connected Vercel project is likewise linked to the older repository and its project response did not enumerate Cron registrations. AWS was not connected/queried. Therefore these observations cannot reconcile the production infrastructure serving `saumya-solar-energy-product`; AWS/other cloud, Vercel cron and production-only provider schedules/queues remain for the infrastructure owner to attest with timestamped exports.
+
+### Final acceptance register
+
+| Acceptance area | Current status | Reason |
+|---|---|---|
+| Runtime authentication gate for every protected mapping | MET for the current runtime registry | 210 protected method/pattern rows denied anonymous access; 18 explicit public/documentation exceptions classified. |
+| Role × endpoint × verb, including real-resource CRUD | PARTIAL | Applicable-account positive gates and zero-permission sweeps pass, with delegated tests; fixture-backed success/denial is not yet demonstrated for every named role, resource and verb. |
+| Customer isolation | PARTIAL | Strong HTTP coverage across addresses, orders, quotations, invoices, payments, tickets, installations, warranties and evidence; not every customer-owned resource/operation family is exhaustive. |
+| Branch isolation | PARTIAL | Branch CRUD/membership, filtering and selected cross-branch writes are tested; not every branch-bearing route's create/update/delete operation has an explicit negative/positive fixture pair. |
+| Export/download authorization | PARTIAL | Operations and platform exports, async CSV/XLSX/PDF exports and several document/attachment families are tested; exhaustive coverage of every export/download family and private-storage boundary is not yet proven. |
+| Disposable MySQL schema/migration/preflight | MET for CI | MySQL 8.4 baseline, V57/V58/V60 and exact test-schema audit passed. |
+| Production schema counts, FK/index reconciliation and data-owner classification | BLOCKED | Production database was not queried; DBA/data-owner output and approval are absent. |
+| Checked-in worker/scheduler inventory | MET | Repository-wide source/config scan and CI artifact reviewed. |
+| External production worker/queue/schedule reconciliation | BLOCKED / NOT CONFIRMED | Connected provider resources do not match this repository; AWS and actual target production control planes remain unverified. |
+
+**Release decision: NOT APPROVED for production.** Code-level CI is green, but final acceptance remains blocked on production schema/preflight and infrastructure-owner sign-off, plus completion or release-owner acceptance of the remaining role/resource CRUD and export/download coverage rows. Do not interpret the disposable CI schema PASS as production-data approval.
