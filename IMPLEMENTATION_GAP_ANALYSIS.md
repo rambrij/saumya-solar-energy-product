@@ -2105,7 +2105,7 @@ The Phase 6 audit reuses the existing Phase 5 inbox and integration synchronizat
 | Provider delivery webhook/event state | MISSING / NOT PROVEN | No notification provider event ledger and signature-verified delivery callback path established |
 | SLA escalation | PARTIAL / POLICY BLOCKED | Service SLA breach evaluation exists; escalation thresholds, targets and cadence are not specified |
 | Notification preferences UI and delivery status UI | MISSING / PARTIAL | Phase 5 inbox exists; preferences and channel-delivery status are not established |
-| Phase 6 tests | MISSING / NOT PROVEN | No Phase 6-specific outbox, retry/idempotency, webhook signature, preference or cross-tenant monitoring test evidence was established |
+| Phase 6 tests | PARTIAL | Added preference consent, mock adapter, webhook signature/replay/tenant binding and outbox dispatch/suppression tests; full backend CI, MySQL 8.4 migration, Spring Boot startup and browser evidence must pass on final branch HEAD |
 
 ### Phase 6 implementation status
 
@@ -2131,3 +2131,10 @@ No new provider SDK, credentials, live messaging call, migration, data backfill 
 | Phase 6 full verification | NOT VERIFIED | Branch-head full CI and migration/startup/browser evidence pending. |
 
 **Phase 6 remains PARTIAL, not done.** Do not merge/release until build, backend/frontend tests, V12 migration validation, webhook/tenant/idempotency tests and browser verification pass. Open policy decisions remain in `docs/CLEANUP_DECISIONS.md`.
+### Phase 6 latest implementation checkpoint
+
+- V12 is the Phase 6 notification outbox/preferences/provider-event schema migration. The release-validation workflow now includes V12 on its clean MySQL 8.4 path.
+- Mailpit is the only email transport. Its deterministic Message-ID is searched through the local Mailpit API before resend, allowing retries to recognize a previously captured email. SMS/WhatsApp use mock-only adapters; mock delivery webhooks are dev/test profile-only.
+- Adapter selection is through the notification channel adapter registry. The mock messaging adapter is disabled by default and enabled only in dev/test configuration.
+- Vendor self-delivery visibility remains separate from tenant-wide operations monitoring: outbox and integration job monitoring require VENDOR_ADMIN; integration error details are not returned verbatim.
+- Current phase status remains PARTIAL until final branch-head CI is green. SLA escalation, notification template administration, manual redrive and platform cross-tenant provider monitoring remain deferred under NOT-OQ-01/02 and NOT-OQ-11/14.
