@@ -105,4 +105,17 @@ class NotificationServiceTest {
                 .sendPasswordReset(UUID.randomUUID(),UUID.randomUUID(),"user@example.test","User","one-time-token"));
         verify(mail).send(any(SimpleMailMessage.class));
     }
+    @Test void fifthFailedProviderAttemptMovesDeliveryToDeadLetter() throws Exception {
+        var deliveries=mock(NotificationDeliveryRepository.class);var adapters=mock(NotificationChannelAdapterRegistry.class);
+        UUID tenant=UUID.randomUUID(),id=UUID.randomUUID();var delivery=new NotificationDelivery();
+        delivery.setId(id);delivery.setTenantId(tenant);delivery.setChannel("SMS");delivery.setStatus("PENDING");delivery.setAttemptCount(4);
+        when(deliveries.claimPendingDelivery(eq(id),eq(tenant),any(),any())).thenReturn(1);
+        when(deliveries.findByIdAndTenantId(id,tenant)).thenReturn(Optional.of(delivery));
+        doThrow(new IllegalStateException("transient")).when(adapters).dispatch(delivery);
+        service(mock(JavaMailSender.class),deliveries,null,mock(NotificationOutboxRepository.class),adapters,
+                mock(NotificationPreferenceRepository.class),null).processOutboxDelivery(id,tenant);
+        assertEquals("DEAD_LETTER",delivery.getStatus());assertEquals(5,delivery.getAttemptCount());
+        assertNull(delivery.getNextAttemptAt());
+    }
+
 }
