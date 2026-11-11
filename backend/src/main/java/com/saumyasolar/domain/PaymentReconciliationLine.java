@@ -8,8 +8,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @Entity
-@Table(name = "payment_reconciliation_line", uniqueConstraints =
-        @UniqueConstraint(name = "uq_payment_reconciliation_line", columnNames = {"tenant_id", "report_id", "provider_reference", "outcome"}))
+@Table(name = "payment_reconciliation_line")
 @Getter @Setter @NoArgsConstructor
 public class PaymentReconciliationLine {
     @Id UUID id;
