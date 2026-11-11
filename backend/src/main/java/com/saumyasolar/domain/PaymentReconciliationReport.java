@@ -15,14 +15,14 @@ import java.util.UUID;
 public class PaymentReconciliationReport {
     @Id UUID id;
     UUID tenantId;
-    String provider;
-    String reportReference;
+    @Column(length = 60) String provider;
+    @Column(length = 160) String reportReference;
     @Column(length = 3, columnDefinition = "CHAR(3)") String currency;
-    BigDecimal reportedTotal;
-    BigDecimal matchedTotal;
+    @Column(precision = 19, scale = 4) BigDecimal reportedTotal;
+    @Column(precision = 19, scale = 4) BigDecimal matchedTotal;
     Integer mismatchCount;
-    String status;
-    String payloadHash;
+    @Column(length = 24) String status;
+    @Column(length = 64) String payloadHash;
     Instant createdAt;
     Instant processedAt;
 }
