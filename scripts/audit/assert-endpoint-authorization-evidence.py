@@ -195,12 +195,12 @@ with output.open("w", newline="", encoding="utf-8") as handle:
         neg = get_by_key.get(identity) if method == "GET" else mutation_by_key.get(identity)
         matrix_record = policies.get(identity, {})
         matrix_evidence = matrix_record.get("evidence", "")
-        test_refs = re.findall(r"\\b([A-Za-z0-9_]+Test)\\.([A-Za-z0-9_]+)\\b", matrix_evidence)
+        test_refs = re.findall(r"\b([A-Za-z0-9_]+Test)\.([A-Za-z0-9_]+)\b", matrix_evidence)
         verified_refs = []
         unresolved_refs = []
         for test_class, test_method in test_refs:
             candidates = list((repo_root / "backend" / "src" / "test" / "java").rglob(test_class + ".java"))
-            if any(re.search(r"\\b" + re.escape(test_method) + r"\\s*\\(", candidate.read_text(encoding="utf-8")) for candidate in candidates):
+            if any(re.search(r"\b" + re.escape(test_method) + r"\s*\(", candidate.read_text(encoding="utf-8")) for candidate in candidates):
                 verified_refs.append(test_class + "." + test_method)
             else:
                 unresolved_refs.append(test_class + "." + test_method)
