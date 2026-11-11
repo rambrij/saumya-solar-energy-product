@@ -107,6 +107,12 @@ public class UserNotificationService {
     private void validate(Principal actor, int page, int size) {
         if (actor == null || actor.userId() == null)
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        if ("VENDOR".equals(actor.accountType())) {
+            if (actor.permissions() == null || !actor.permissions().contains("NOTIFICATION_VIEW"))
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing permission: NOTIFICATION_VIEW");
+        } else if (!"CUSTOMER".equals(actor.accountType()) && !"PLATFORM".equals(actor.accountType())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
         if (page < 0 || size < 1 || size > 100)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Page must be non-negative and size must be between 1 and 100");
     }
