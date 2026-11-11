@@ -164,7 +164,7 @@ Frontend tests are in `frontend/tests/` and browser-level suites are in `fronten
 
 ## Complete V1 table inventory and later schema objects
 
-V1 declares 74 tables. The table list below is extracted from `V1__baseline.sql` and maps to the corresponding Java domain/repository pair under `backend/src/main/java/com/saumyasolar/domain/` and `repo/` (or a shared aggregate in `AppService`/service packages).
+Before cleanup, the original V1 migration declared 74 tables. The table list below records that original V1 table set (now included in the consolidated `V1__baseline.sql`) and maps to the corresponding Java domain/repository pair under `backend/src/main/java/com/saumyasolar/domain/` and `repo/` (or a shared aggregate in `AppService`/service packages).
 
 - **Identity/tenant/security:** `tenant`, `permission`, `role`, `role_permission`, `app_user`, `user_role`, `refresh_token`, `password_reset_token`, `mfa_challenge`, `auth_rate_limit_bucket`, `audit_event`.
 - **Vendor/SaaS:** `subscription_plan`, `tenant_subscription`, `subscription_usage`, `subscription_assignment_history`, `tenant_domain`, `tenant_storage_ledger`, `branch`, `branch_user`, `warehouse`.
@@ -175,7 +175,7 @@ V1 declares 74 tables. The table list below is extracted from `V1__baseline.sql`
 - **Integrations/communications:** `integration_connection`, `integration_secret_reference`, `integration_webhook_event`, `integration_sync_job`, `notification_delivery`, `offline_sync_operation`, `offline_sync_attachment`.
 - **Reporting/approvals/exports:** `export_job`, `approval_workflow`, `approval_instance`, `approval_decision`.
 
-Later migrations add the following required tables: `order_transition_policy` (V3), `payment_reconciliation_report` and `payment_reconciliation_line` (V5), `cms_content` and `cms_content_revision` (V6), `user_notification` (V7), `platform_setting` (V10), `notification_outbox`, `notification_preference` and `notification_provider_event` (V12). V2–V14 also add required columns, checks, indexes, triggers, permission catalogue rows/grants and tenant-bound composite foreign keys. These later schema objects must be absorbed into the consolidated baseline.
+Later migrations added ten required tables: `order_transition_policy` (V3), `payment_reconciliation_report` and `payment_reconciliation_line` (V5), `cms_content` and `cms_content_revision` (V6), `user_notification` (V7), `platform_setting` (V10), `notification_outbox`, `notification_preference` and `notification_provider_event` (V12). V2–V14 also add required columns, checks, indexes, triggers, permission catalogue rows/grants and tenant-bound composite foreign keys. All ten tables and every required schema/seed effect are now included in the consolidated baseline, which contains 84 tables in total.
 
 ## Repository inventory scope
 
