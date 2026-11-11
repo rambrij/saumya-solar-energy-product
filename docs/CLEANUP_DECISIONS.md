@@ -47,3 +47,35 @@ This record is a decision log, not evidence that Phase 4 code has been implement
 - V1 remains the existing Phase 3 baseline. Phase 4 schema changes are in V5; no data backfill or compatibility shim is added.
 - Existing invoice tax snapshots and tenant/fiscal-year sequence behavior are retained until the business/accounting decisions in FIN-OQ-01 through FIN-OQ-05 are approved.
 - Real-provider integration remains **pending provider selection; adapter and mock complete**. No live provider SDK, credentials, or network integration is present.
+
+
+## Phase 5 — CMS, customer workspace and reporting decisions
+
+**Date:** 2026-11-11  
+**Branch:** `audit/phase-4-finance-provider-impl`
+
+### Scope and architecture decisions
+
+1. Keep the existing Java/Spring modular monolith, React/TypeScript frontend and MySQL schema. Do not introduce a separate CMS service or new provider SDK.
+2. CMS content is tenant-owned. Public routes resolve the tenant from a validated store slug and return published content only. Draft/review content is never public.
+3. CMS revisions are immutable snapshots. Rollback creates a new revision; it never edits history. Content status changes require explicit policy, authorization, optimistic concurrency and audit.
+4. In-app notifications are a user-facing inbox projection, separate from `notification_delivery` provider attempts. The recipient is derived from the authenticated principal. Read state is per user and tenant-scoped.
+5. Customer documents aggregate existing authorized invoice, quotation, receipt and private attachment records. Do not copy binary objects, expose storage keys or weaken source download authorization.
+6. Extend the existing custom-role editor and service. Do not create another role editor. Vendor custom roles cannot receive platform permissions; system roles remain immutable; assigned roles cannot be deleted.
+7. Platform settings are allow-listed and typed. Secret values remain in the existing secret-provider mechanism; settings store references only and never return raw secrets.
+8. Extend existing vendor/platform analytics and `ExportService` only for report families not already covered. Platform metrics must be aggregate-only and must not disclose customer PII.
+9. Additive migrations only after V5. No production data, backfill, destructive change, or compatibility shim is authorized.
+10. No feature is complete without migration validation, tenant/RBAC negative tests, API/UI tests, audit coverage and full CI evidence.
+
+### Open decisions requiring product/security approval
+
+- Whether CMS review must be a two-person approval or whether a single authorized publisher may move REVIEW to PUBLISHED.
+- Which content blocks/rich-text format and image storage constraints are approved; sanitize all rendered content.
+- Which notification categories are user-configurable and which events are mandatory/security-critical.
+- Retention and deletion periods for inbox notifications and immutable CMS revisions.
+- Exact platform-wide settings that are safe to expose as typed values; secret ownership/rotation remains outside settings UI.
+- Which additional vendor report families and KPIs are required, and which roles may export them.
+
+### Phase 4 gate evidence
+
+GitHub Actions run [43025279559](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/43025279559) ran on `audit/phase-4-finance-provider-impl` at `d3a0f7656767d82a70f7f6dbedac5647d043aa31` and concluded `success`. All four jobs completed successfully, including backend tests, frontend tests/typecheck/build, MySQL 8.4 migration validation including V5, Spring Boot startup and browser tenant-filter tampering checks. This is branch CI verification, not production deployment or merge-to-main sign-off.
