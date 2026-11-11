@@ -247,3 +247,68 @@ This section supersedes the initial audit's statement that Phase 6 runtime work 
 - NOT-OQ-10 mock delivery simulation currently supports deterministic acceptance and the explicit `[[MOCK_FAIL]]` failure trigger. Delivery callbacks are posted separately to the dev/test mock webhook.
 
 **Out of scope by explicit instruction:** live Twilio requests, Twilio SDK/credentials, real SMS/WhatsApp sending, any paid/hosted message provider, and undocumented SLA escalation policy. Selecting `app.messaging.provider=twilio` currently fails closed by design until live integration is separately authorized and implemented.
+
+
+---
+
+# Repository cleanup — Phase 0 analysis
+
+**Date:** 2026-11-12  
+**Branch:** `cleanup/final-code-cleanup`  
+**Base:** `audit/implementation-gap-analysis`  
+**Phase 0 scope:** documentation and evidence inventory only. No application code, configuration, SQL migration, test, CI workflow, or script has been removed or modified.
+
+## Conflicts
+
+| Document | Section | Conflict | Resolution |
+|---|---|---|---|
+| Business requirements | §15 Communication System | Requires centralized notifications over email, SMS, WhatsApp and in-app, with replaceable provider interfaces. | Preserve the notification domain, channels, adapter ports, persisted delivery state, inbox and retry behavior. Removing a broker client is not permission to remove notification functionality. |
+| SRS/HLD | §§10.12, 17, 18, 16.5 | Explicitly requires asynchronous notification processing, persisted attempts, retries, background jobs, event handling and dead-letter/manual-retry capability. | Preserve asynchronous behavior. The documented implementation uses a database-backed outbox/job model and in-process schedulers; do not replace it with another broker. If any actual broker client is found, remove only that transport after verifying the durable DB-backed behavior remains intact. |
+| SRS/HLD | §§17–18 | Requires integrations, background jobs and events, including tenant-aware processing and reliability. | Retain IntegrationSyncJob, IntegrationSyncScheduler, offline synchronization and integration adapters unless an individual implementation is proven outside scope. "No message broker" does not mean "no asynchronous work." |
+| SRS/HLD | §§14, 20, 21, 23 | Requires Flyway/Liquibase migrations, tenant isolation, clean-install validation and reference/seed data. | Consolidate V1–V14 only after clean MySQL 8.4 old-chain vs single-baseline schema comparison. Preserve all required columns, indexes, constraints, composite tenant FKs, triggers, seed/catalogue data and permission grants. |
+| Business requirements and SRS/HLD | §§1, 11, 12; SRS §§8–9, 15 | Require multi-tenant access, lifecycle and tenant-scoped security; no legacy production deployment exists. | Remove backward-compatibility code only when route/API and source-reference searches prove it is not a documented contract. Tenant authorization and security controls are not compatibility code. |
+
+## Removals
+
+**No removals are approved in Phase 0.** This is deliberate: the branch inventory alone does not establish that a file, dependency, property, environment variable, script or route is unused. Each candidate below requires a positive repository-wide reference search and a negative requirements/SRS trace before Phase 1 deletion.
+
+| Path / candidate | Why it may be unused (hypothesis only) | Evidence required before removal | Decision |
+|---|---|---|---|
+| Any deprecated endpoint or old DTO/version | Could be a compatibility surface. | Enumerate every mapping and DTO reference; compare method/path/request/response behavior with SRS/HLD §13 and frontend callers/tests. | KEEP pending evidence |
+| Any feature flag or fallback | Could preserve a superseded implementation path. | Find all property reads, environment bindings, profile overrides, tests and runtime references; prove no required behavior depends on it. | KEEP pending evidence |
+| Any dependency in backend/pom.xml or frontend/package.json | Could be unused. | Build dependency tree/import graph, source/test references and plugin usage; verify build and tests without candidate. | KEEP pending evidence |
+| Any application property or environment variable | Could be stale. | Trace property binding, `@Value`, `@ConfigurationProperties`, compose/workflow/script references and deployment docs. | KEEP pending evidence |
+| Any SQL file outside the active Flyway chain | Could be a one-off, rollback or duplicate seed script. | Search all scripts, workflows, test resources and documentation for invocation; compare schema/data effects. | KEEP pending evidence |
+| Any script or test fixture | Could be orphaned. | Search workflow/package/compose references and test imports; prove no required behavior/test evidence is lost. | KEEP pending evidence |
+| Any messaging/broker dependency or transport | The user explicitly requests zero broker usage. | Search all source, build manifests, lockfiles, properties, env files, compose, CI, scripts, docs and tests for broker clients and endpoint/config references; distinguish broker transport from required DB outbox, async executor, scheduler and integration jobs. | KEEP until complete evidence; remove transport only |
+| Any migration V2–V14 | Candidate for consolidation, not unused functionality. | Reproduce all 14 active migrations on clean MySQL 8.4, compare against the proposed consolidated baseline and document exact schema/seed equivalence. | KEEP until schema diff passes |
+
+## Contract Changes
+
+| Old | New | Reason | Document reference |
+|---|---|---|---|
+| None approved | None | Phase 0 is documentation-only. No REST API, DTO, event, persistence, or user-visible contract is changed. | SRS/HLD §§10–14 |
+
+## Open Questions
+
+1. **Async implementation boundary:** The SRS requires asynchronous processing, and the existing implementation/gap inventory describes DB-backed outbox and integration jobs plus in-process schedulers/listeners. Confirm that the cleanup intent is to eliminate external message-broker transports only, while retaining these required async mechanisms. Until confirmed, preserve them.
+2. **Provider adapter placeholder:** Existing Phase 6 decisions describe a fail-closed Twilio adapter seam and mock SMS/WhatsApp. The business requirement calls for replaceable providers, but no production provider is selected. Preserve the interface and fail-closed behavior; do not introduce a live provider or remove the required adapter boundary.
+3. **External worker infrastructure:** Repository documentation says the checked-in scan cannot prove absence of cloud-managed queues, cron jobs or worker overrides. Infrastructure owner confirmation is required for external resources; no external infrastructure configuration is changed by this repository cleanup.
+4. **Notification policy:** SLA escalation, mandatory event preferences, consent evidence, retention, provider callback contracts, retry/redrive policy and cross-tenant monitoring remain unresolved in the existing NOT-OQ records. Cleanup must not invent these policies.
+5. **Schema baseline semantics:** Confirm that the final single baseline is intended for fresh installations only and that there are no deployed production databases requiring a Flyway history migration. User context states no production deployment, so the plan assumes fresh installs but still documents Flyway history handling.
+6. **CI branch policy:** User instruction requires release-validation triggers to include only `main` and `cleanup/final-code-cleanup`. Confirm whether the phrase "restrict CI to the single valid branch" applies only to release-validation as separately specified, or all workflows. Phase 3 will apply the explicit workflow-specific rule and audit other workflows for stale audit-branch triggers.
+
+## Verification
+
+| Check | Command / evidence | Result |
+|---|---|---|
+| Base branch | GitHub branch creation from `audit/implementation-gap-analysis` | PASS — target branch created |
+| Required source documents | Full GitHub file fetch for all three named documents; heading inventory recorded in `docs/CLEANUP_TRACEABILITY.md` | PASS — source files fetched in full; README excluded |
+| Repository clone | `git clone --branch audit/implementation-gap-analysis --single-branch https://github.com/rambrij/saumya-solar-energy-product.git` | BLOCKED — execution environment could not resolve github.com |
+| Local build/tests/MySQL schema dump | Maven, npm, Docker Compose and MySQL commands | NOT RUN — no local repository clone/network resolution in this execution environment |
+| Repository-wide broker scan | Pending complete branch-ref source/config/docs search | NOT YET VERIFIED |
+| Schema equivalence | Pending old migration chain vs single baseline MySQL 8.4 dump diff | NOT RUN |
+| Fresh database application startup | Pending baseline consolidation | NOT RUN |
+| CI branch policy | Pending Phase 3 workflow audit/change | NOT RUN |
+
+No command is marked successful unless its output was observed. GitHub Actions must provide build, test, MySQL and browser verification evidence after implementation commits.
