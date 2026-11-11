@@ -20,16 +20,20 @@ public class MockPaymentGatewaySimulatorController {
     private final RefundRepository refunds;
     private final CustomerProfileRepository customers;
     private final CustomerOrderRepository orders;
+    private final InvoiceRepository invoices;
+    private final EnterpriseSaasService entitlements;
     private final PaymentGatewayRegistry gateways;
     private final PaymentGatewayWebhookService webhooks;
 
     public MockPaymentGatewaySimulatorController(PaymentRepository payments, RefundRepository refunds,
-            CustomerProfileRepository customers, CustomerOrderRepository orders,
-            PaymentGatewayRegistry gateways, PaymentGatewayWebhookService webhooks) {
+            CustomerProfileRepository customers, CustomerOrderRepository orders, InvoiceRepository invoices,
+            EnterpriseSaasService entitlements, PaymentGatewayRegistry gateways, PaymentGatewayWebhookService webhooks) {
         this.payments = payments;
         this.refunds = refunds;
         this.customers = customers;
         this.orders = orders;
+        this.invoices = invoices;
+        this.entitlements = entitlements;
         this.gateways = gateways;
         this.webhooks = webhooks;
     }
@@ -88,6 +92,9 @@ public class MockPaymentGatewaySimulatorController {
             if (actor.permissions() == null || !(actor.permissions().contains("PAYMENT_RECORD")
                     || actor.permissions().contains("PAYMENT_VIEW") || actor.permissions().contains("PAYMENT_REFUND")))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+            Invoice invoice = invoices.findByIdAndTenantId(payment.getInvoiceId(), actor.tenantId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found"));
+            entitlements.assertBranchAccess(invoice.getBranchId(), actor);
             return;
         }
         if (!"CUSTOMER".equals(actor.accountType()))
