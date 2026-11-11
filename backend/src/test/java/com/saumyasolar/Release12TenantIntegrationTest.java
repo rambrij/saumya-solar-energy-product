@@ -157,6 +157,8 @@ class Release12TenantIntegrationTest {
     @Autowired
     com.saumyasolar.service.ServiceAttachmentService serviceAttachments;
     @Autowired
+    com.saumyasolar.repo.ServiceAttachmentRepository serviceAttachmentRecords;
+    @Autowired
     com.saumyasolar.service.ExportService exportService;
     @Autowired
     SurveyAttachmentService surveyAttachments;
@@ -2980,6 +2982,29 @@ class Release12TenantIntegrationTest {
         assertFalse(visible.contains(foreign.getId().toString()));
         mvc.perform(get("/api/v1/service-requests/" + assigned.getId()).header("Authorization", "Bearer " + assignedToken))
                 .andExpect(status().isOk());
+        byte[] evidenceBytes = "%PDF-1.7\\nservice visit evidence\\n%%EOF"
+                .getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        MockMultipartFile evidence = new MockMultipartFile("file", "service-evidence.pdf", "application/pdf", evidenceBytes);
+        String uploadedEvidence = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/service-requests/" + assigned.getId() + "/attachments")
+                        .file(evidence).header("Authorization", "Bearer " + assignedToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        UUID attachmentId = UUID.fromString(json.readTree(uploadedEvidence).get("id").asText());
+        assertEquals(1, serviceAttachmentRecords.findByTenantIdAndServiceRequestIdOrderByCreatedAtAsc(
+                vendorTenantId, assigned.getId()).size());
+        mvc.perform(get("/api/v1/service-requests/" + assigned.getId() + "/attachments/" + attachmentId)
+                        .header("Authorization", "Bearer " + assignedToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(evidenceBytes));
+        mvc.perform(get("/api/v1/service-requests/" + assigned.getId() + "/attachments/" + attachmentId)
+                        .header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/service-requests/" + assigned.getId() + "/attachments")
+                        .file(evidence).header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isForbidden());
+        assertEquals(1, serviceAttachmentRecords.findByTenantIdAndServiceRequestIdOrderByCreatedAtAsc(
+                vendorTenantId, assigned.getId()).size());
         mvc.perform(get("/api/v1/service-requests/" + unassigned.getId()).header("Authorization", "Bearer " + assignedToken))
                 .andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/service-requests/" + unassigned.getId() + "/close")
