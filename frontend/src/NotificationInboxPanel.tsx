@@ -1,6 +1,6 @@
 import React,{useCallback,useEffect,useState} from 'react';
 import {authenticatedFetch,type AuthSession} from './authenticatedFetch';
-const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\\/+$/,'');
+const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
 type Preference={channel:string;enabled:boolean;consented:boolean};
 export default function NotificationInboxPanel({s,error}:{s:{accessToken:string};error:(message:string)=>void}){
  const [rows,setRows]=useState<any[]>([]),[count,setCount]=useState(0),[totalPages,setTotalPages]=useState(0),[page,setPage]=useState(0),[loading,setLoading]=useState(true),[unreadOnly,setUnreadOnly]=useState(false);
