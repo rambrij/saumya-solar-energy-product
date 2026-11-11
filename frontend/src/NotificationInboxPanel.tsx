@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useState} from 'react';
-import {authenticatedFetch,sessionForToken,type AuthSession} from './authenticatedFetch';
+import {authenticatedFetch,type AuthSession} from './authenticatedFetch';
 const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
 export default function NotificationInboxPanel({s,error}:{s:{accessToken:string};error:(message:string)=>void}){
  const [rows,setRows]=useState<any[]>([]),[count,setCount]=useState(0),[loading,setLoading]=useState(true),[unreadOnly,setUnreadOnly]=useState(false);
