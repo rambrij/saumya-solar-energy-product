@@ -38,17 +38,11 @@ public class MockSettlementFixtureController {
         if (!mockPayments.isEmpty()) {
             Payment first = mockPayments.get(0);
             rows.add(new PaymentReconciliationService.SettlementLine(first.getProviderReference(), first.getAmount(), first.getCurrency()));
+            rows.add(new PaymentReconciliationService.SettlementLine(first.getProviderReference(),
+                    first.getAmount().add(new BigDecimal("0.01")), first.getCurrency()));
+            String wrongCurrency = "INR".equals(first.getCurrency()) ? "USD" : "INR";
+            rows.add(new PaymentReconciliationService.SettlementLine(first.getProviderReference(), first.getAmount(), wrongCurrency));
             rows.add(new PaymentReconciliationService.SettlementLine(first.getProviderReference(), first.getAmount(), first.getCurrency()));
-        }
-        if (mockPayments.size() > 1) {
-            Payment second = mockPayments.get(1);
-            rows.add(new PaymentReconciliationService.SettlementLine(second.getProviderReference(),
-                    second.getAmount().add(new BigDecimal("0.01")), second.getCurrency()));
-        }
-        if (mockPayments.size() > 2) {
-            Payment third = mockPayments.get(2);
-            String wrongCurrency = "INR".equals(third.getCurrency()) ? "USD" : "INR";
-            rows.add(new PaymentReconciliationService.SettlementLine(third.getProviderReference(), third.getAmount(), wrongCurrency));
         }
         rows.add(new PaymentReconciliationService.SettlementLine("mock_missing_" + reportRef,
                 new BigDecimal("1.00"), "INR"));
