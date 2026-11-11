@@ -34,4 +34,16 @@ The following are intentionally unresolved. Keep the existing behavior and make 
 
 ### Verification limitation
 
-This record is a decision log, not evidence that Phase 4 code has been implemented or tested. The connected GitHub account has repository push/admin permissions and the GitHub API successfully exposed the branch tree and source files. A local `git clone` attempt still failed because this execution environment could not resolve `github.com`; no local Maven/npm command execution is available through the GitHub connector. Finance source files and the recursive tree were inspected remotely, and CI was enabled for this branch. No runtime Phase 4 feature implementation or passing test result is claimed.
+This record is a decision log, not evidence that Phase 4 code has been implemented or tested. The connected GitHub account has repository push/admin permissions and the GitHub API exposed the branch tree and source files. A local `git clone` attempt still failed because this execution environment could not resolve `github.com`; no local Maven/npm command execution is available through the GitHub connector. Runtime code and tests were therefore changed through individual GitHub commits and verified through the repository's GitHub Actions workflow. The latest exact branch head must pass all workflow jobs before release acceptance.
+
+
+## Phase 4 implementation decisions
+
+- The mock provider is selected only when `app.payment.mock.enabled=true` and the active profile is `dev` or `test`. Mock simulator and settlement-fixture controllers are both profile- and property-gated.
+- The browser return URL identifies a payment only; authenticated payment API state is authoritative. Only HMAC-verified webhook events can move a pending payment or refund into a terminal state.
+- Tenant identity is part of the signed provider event payload and part of the webhook idempotency key. An unmatched or mismatched event is retryable and does not create a processed idempotency record.
+- Provider refunds reserve the outstanding amount while PENDING. A verified refund webhook records PROCESSED or FAILED and recalculates the payment/invoice balance.
+- Settlement report reference plus payload hash makes an identical replay idempotent and a changed payload under the same reference a conflict. Every line outcome is retained; mismatches are not auto-corrected.
+- V1 remains the existing Phase 3 baseline. Phase 4 schema changes are in V5; no data backfill or compatibility shim is added.
+- Existing invoice tax snapshots and tenant/fiscal-year sequence behavior are retained until the business/accounting decisions in FIN-OQ-01 through FIN-OQ-05 are approved.
+- Real-provider integration remains **pending provider selection; adapter and mock complete**. No live provider SDK, credentials, or network integration is present.
