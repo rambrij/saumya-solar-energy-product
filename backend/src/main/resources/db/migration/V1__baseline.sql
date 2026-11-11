@@ -1,22 +1,14 @@
 -- Consolidated clean-install baseline for MySQL 8.4.
-
--- This is the only active Flyway migration. It contains the former V1-V14 schema and seed changes.
-
--- DDL order: tables (dependency order), table extensions/constraints, standalone indexes, triggers, then seed/reference data.
-
--- No runtime feature, permission grant, tenant constraint, status check, or seed operation from the former chain is intentionally omitted.
-
--- Existing deployments are not in scope; this baseline is for a fresh database only.
-
-
+-- This is the only active Flyway migration. It preserves the former V1-V14 schema and seed operations.
+-- DDL order: dependency-ordered tables, column/constraint extensions, standalone indexes, then triggers.
+-- Reference and seed initialization DML follows the complete schema.
+-- Tenant composite foreign keys, append-only triggers and permission grants are retained.
+-- Fresh database installs only; no production Flyway history or deployed database conversion is performed.
 
 -- TABLES
 
 -- Source: V1__baseline.sql
--- Clean-install MySQL 8.4 baseline.
--- All columns, indexes, primary/unique keys, checks and foreign keys are declared at table creation.
--- Tables are ordered by foreign-key dependency; no post-creation table alterations are needed.
--- Seed and bootstrap statements execute after all required tables have been created.
+-- Original V1 core schema definitions; consolidated extensions are applied below before seed data.
 
 CREATE TABLE tenant(
   id BINARY(16) PRIMARY KEY,
