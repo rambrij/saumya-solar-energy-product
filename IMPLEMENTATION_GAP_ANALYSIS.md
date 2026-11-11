@@ -1791,3 +1791,41 @@ Added `Release12TenantIntegrationTest.fixtureBackedCrudAuthorizationAcrossCrmQuo
 The test verifies same-tenant read and permitted mutation paths and foreign-tenant denial for lead update, quotation revision/send, order history/transition, inventory balance/reversal, installation checklist/cancel, service detail/close, warranty claim list/approval, invoice items/void and export status ownership. Each denied mutation is followed by repository-backed assertions that the foreign resource remains unchanged; inventory additionally asserts no foreign compensation ledger row is written. Export job access is verified against the requesting principal and a separate tenant's REPORT_EXPORT user.
 
 **Scope qualification:** this is a cross-domain fixture-backed integration layer, not proof that every CRUD route in every domain now has a complete per-role test. It does not yet enumerate every applicable role (e.g. sales, engineer, accountant, dispatcher, branch member and customer) against every HTTP verb and resource subtype, nor exhaustively cover all finance payment/refund/credit-note mutations or each export format/attachment route. Those specific route/role combinations remain partial until individually evidenced. The new method is being exercised by the branch CI run; do not mark its scenarios Met until that run passes.
+
+
+## Phase 2 role-, branch- and resource-backed CRUD authorization follow-up — 2026-11-11
+
+### Source-of-truth references
+
+- Business requirements: `saumya-solar-energy-solution-requirements.md` §§1, 5–10, 14, 18 (vendor employee roles; CRM assignment; quotation/order lifecycle; inventory; installation checklist and commissioning; service assignment and closure; CSV/Excel/PDF reports; security and tenant isolation).
+- Technical SRS/HLD: `saumya-solar-production-ready-srs-hld.md` §§8.2–8.4, 9.1–9.3, 10.3, 10.6–10.11, 10.14, 12.1–12.4, 19–21 (tenant resolution, role scopes, sales and engineer assignment, finance permissions, commissioning, exports, negative authorization and release gates).
+
+### Implementation and evidence added
+
+| Gap | Implementation / test evidence | Current status |
+|---|---|---|
+| Sales employee vs Sales Manager | `Release12TenantIntegrationTest.salesManagerCanManageUnassignedLeadsWhileSalesEmployeeIsRestrictedToAssignedLeads`: persisted assigned, unassigned and foreign-tenant leads; verifies employee visibility/update boundary, manager visibility/update/reassignment, and unchanged state after denied employee/foreign updates. | Implemented; CI pending |
+| Assigned vs unassigned service engineers | `Release12TenantIntegrationTest.assignedAndUnassignedServiceEngineersHaveFixtureBackedReadAndMutationBoundaries`: persisted assigned/unassigned/foreign tickets; verifies list/detail/close boundaries and unchanged denied ticket state. | Implemented; CI pending |
+| Service attachment ownership | The same integration test uploads and downloads evidence as the assigned engineer, denies unassigned download/upload, and asserts the attachment row count remains unchanged after denial. Existing `ServiceAttachmentServiceTest` covers assigned/unassigned evidence access at service layer. | Implemented; CI pending |
+| Branch-level direct-resource restrictions | Existing `Release12TenantIntegrationTest.branchAssignedMemberListsOnlyAssignedBranchEnquiriesLeadsSurveysQuotationsAndOrders` now additionally checks direct invoice items/void, service close and installation cancel across two branches, asserting the out-of-branch resource state is unchanged. `FinanceService.ensureTicketAccess` and finance invoice/payment/credit-note paths call `EnterpriseSaasService.assertBranchAccess`; `OperationsService.installation` applies the same branch check to installation detail/checklist/mutation paths. | Implemented; CI pending |
+| Payment/refund/credit-note authorization | `Release12TenantIntegrationTest.financePaymentRefundAndCreditNoteMutationsAreTenantAndPermissionScoped`: manual/offline payment record, manual refund and credit note persist for same-tenant accountant; foreign invoice/payment operations return non-disclosing 404; read-only accountant mutations return 403; payment/refund/credit-note counts and invoice/payment states are asserted unchanged after denial. | Implemented for manual adapter/offline records; CI pending |
+| Installation checklist and commissioning | `Release12TenantIntegrationTest.installationChecklistAndCommissioningAreRestrictedToAssignedEngineerAndPersistEvidence`: assigned engineer reads and completes mandatory checklist with evidence; unassigned engineer is denied checklist read/update and commissioning; repository state is checked after denials; assigned engineer commissions only after mandatory checklist completion and customer sign-off. | Implemented; CI pending |
+| Export formats and export ownership | Existing `Release12TenantIntegrationTest.asynchronousExportStatusAndDownloadAreRestrictedToTheRequestingPrincipalForEveryFormat` covers CSV, XLSX and PDF, requester-only status/download, same-tenant different requester and foreign-tenant denials. `operationsCsvXlsxAndPdfExportsContainOnlyAuthenticatedTenantAggregates` verifies tenant-only contents in all three formats. | Existing evidence retained |
+| Warranty attachment ownership | Existing `Release12TenantIntegrationTest.warrantyClaimAttachmentHttpUploadAndDownloadAreBoundToTenantAndParentClaim` checks owner download, other-customer/foreign-tenant/other-claim denial and tenant-scoped storage key; repository ownership is asserted. | Existing evidence retained |
+| Non-disclosing foreign-resource responses | `AppService.updateLead` and `AppService.action` now map missing tenant-scoped lead/quotation lookups to explicit HTTP 404 instead of leaking `NoSuchElementException` as an unhandled server error. | Implemented; CI pending |
+
+### Payment boundary
+
+The finance integration tests create only `source=MANUAL` ledger records for offline/manual payment recording and manual refund authorization. They do not initiate a bank, UPI, card or payment-gateway charge. Gateway refund execution remains unavailable without a configured provider refund adapter; no real payment is required or attempted.
+
+### Verification state
+
+- Branch: `audit/phase-2-implementation-gap-analysis` (no new branch).
+- Current source commit at this documentation update: see branch head.
+- Frontend production build and Flyway/MySQL migration validation passed in the preceding CI run.
+- Backend CI is still running against the updated branch. Do not treat these new scenarios as accepted until the backend job passes; any test failure must be fixed without deleting or weakening tests.
+- Existing export and warranty-attachment tests are reused as evidence rather than duplicated.
+
+### Remaining acceptance qualification
+
+These additions close the specifically requested role and workflow gaps with persisted fixtures and database-state assertions. They do not by themselves prove every runtime HTTP mapping, every permission catalogue entry, or every CRUD verb/resource combination in the entire platform. The generated runtime mapping reconciliation and the full route-by-route evidence matrix remain separate Phase 2 release gates. Any untested combinations remain **Unverified**, not Met.
