@@ -96,7 +96,8 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
                 new BigDecimal(requiredText(json, "amount")),
                 requiredText(json, "currency"),
                 requiredText(json, "status"),
-                json.hasNonNull("providerRefundReference") ? json.get("providerRefundReference").asText() : null
+                json.hasNonNull("providerRefundReference") ? json.get("providerRefundReference").asText() : null,
+                requiredText(json, "tenantId")
         );
     }
 
@@ -130,6 +131,11 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
 
     public String signedEvent(String eventId, String providerReference, BigDecimal amount, String currency,
                               String status, String providerRefundReference) throws Exception {
+        return signedEvent(eventId, providerReference, amount, currency, status, providerRefundReference, null);
+    }
+
+    public String signedEvent(String eventId, String providerReference, BigDecimal amount, String currency,
+                              String status, String providerRefundReference, String tenantId) throws Exception {
         Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("eventId", eventId);
         payload.put("providerReference", providerReference);
@@ -137,6 +143,7 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
         payload.put("currency", currency);
         payload.put("status", status);
         if (providerRefundReference != null) payload.put("providerRefundReference", providerRefundReference);
+        if (tenantId != null) payload.put("tenantId", tenantId);
         return mapper.writeValueAsString(payload);
     }
 
