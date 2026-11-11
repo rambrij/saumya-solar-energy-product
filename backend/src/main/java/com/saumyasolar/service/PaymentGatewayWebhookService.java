@@ -85,6 +85,7 @@ public class PaymentGatewayWebhookService {
         record.setEventId(event.eventId());
         record.setPayloadHash(hash(raw));
         record.setProcessingStatus("RECEIVED");
+        record.setEventType(event.status());
         record.setProviderRefundReference(event.providerRefundReference());
         record.setReceivedAt(Instant.now());
         events.saveAndFlush(record);
