@@ -2027,3 +2027,30 @@ Added `V5__phase4_finance_provider_reconciliation.sql` after the existing Phase 
 ### Verification
 
 The Phase 4 GitHub Actions workflow validates frontend tests/typecheck/build, MySQL 8.4 migrations including V5, Spring Boot startup/schema validation, backend tests, runtime endpoint authorization evidence and browser-level tenant filter tampering. Runtime implementation commit `24c1e88` passed all four jobs. Documentation-only commit `e6de31a` also passed all four jobs. Verified results: 238 backend tests passed; 24 frontend tests passed; V5 migration on MySQL 8.4 passed; Spring Boot startup against MySQL 8.4 passed; runtime endpoint authorization evidence and browser-level tenant filter tampering tests passed.
+
+
+---
+
+## Phase 5 audit baseline — 2026-11-11
+
+**Branch:** `audit/phase-4-finance-provider-impl`  
+**Phase 4 verification:** GitHub Actions run [43025279559](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/43025279559), head `d3a0f7656767d82a70f7f6dbedac5647d043aa31`, event `push`, completed with conclusion `success`. Four jobs completed successfully: frontend typecheck/build, Spring Boot + MySQL 8.4 startup and browser tenant-filter tests, MySQL 8.4 migration validation (including V5), and backend compile/tests plus runtime authorization evidence. This verifies the Phase 4 branch checkpoint; it is not a merge-to-main claim or production deployment sign-off.
+
+### Source-of-truth requirements reviewed
+
+Read the complete business requirements (`saumya-solar-energy-solution-requirements.md`), technical SRS/HLD (`saumya-solar-production-ready-srs-hld.md`) and current implementation gap analysis. Phase 5 scope is grounded in CMS/blog, customer documents and notifications, role management, platform/tenant settings and expanded analytics/reporting. The detailed audit and target acceptance matrix is in `docs/PHASE5_GAP_MATRIX.md`.
+
+### Branch-head source findings
+
+| Area | Branch-head evidence | Audit conclusion |
+|---|---|---|
+| CMS/blog | No CMS domain, repository, service, controller, migration or authoring UI found. Public home content remains partly static. | Absent; needs tenant-owned content, immutable revisions, workflow, SEO and published-only public read. |
+| Notifications | `NotificationService`, `NotificationDelivery` and delivery retry exist for email/SMS/WhatsApp. No inbox/read-state domain or API found. | Delivery exists; user-facing in-app inbox is absent and must be separate from provider delivery attempts. |
+| Roles | `RoleManagementPanel`, `/roles`, `/permissions` and `AuthLifecycleService` custom-role CRUD/assignment exist. Service checks tenant, reserved names and vendor permission allowlist and audits role changes. | Existing feature must be verified/hardened, not duplicated. Add negative tests and only add missing Phase 5 permission codes after seeder/migration reconciliation. |
+| Platform settings | Tenant branding/contact fields, discount-threshold update and a platform settings placeholder exist. No complete allow-listed platform settings API/storage workflow found. | Partial; preserve existing tenant fields and secret-provider boundary. |
+| Customer documents | Customer invoices, quotations, payments and private service evidence flows exist. No unified customer document centre found. | Partial; compose existing owner-checked sources and download services; do not duplicate binary storage. |
+| Analytics | Vendor analytics has date/branch/category/product breakdowns, trends and rankings. Platform analytics currently reports tenant resource usage. | Partial; fill only missing operational report families and platform aggregate KPIs, reusing export infrastructure. |
+
+### Implementation status and guardrail
+
+This checkpoint records the audit and gap matrix only. It does not claim Phase 5 runtime implementation or test completion. No production data was accessed, no backfill or compatibility shim was added, and no new branch was created. Continue implementation on this same branch in additive, tested vertical slices. Do not mark a requirement complete until backend, frontend, migration, authorization/tenant tests and CI evidence exist.
