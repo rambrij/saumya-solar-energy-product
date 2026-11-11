@@ -25,7 +25,7 @@ public class MailpitEmailNotificationAdapter implements NotificationChannelAdapt
   if(alreadyCaptured(key))return;
   MimeMessage message=sender.createMimeMessage();MimeMessageHelper helper=new MimeMessageHelper(message,false,StandardCharsets.UTF_8.name());
   helper.setFrom(from);helper.setTo(d.getRecipient());helper.setSubject(d.getSubject());helper.setText(d.getMessageBody()==null?"":d.getMessageBody(),false);
-  message.setHeader("Message-ID","<"+key+"@saumya.local>");sender.send(message);
+  message.setHeader("Message-ID","<"+key+"@saumya.local>");d.setProviderMessageId("<"+key+"@saumya.local>");sender.send(message);
  }
  private boolean alreadyCaptured(String key) throws Exception {
   String query=URLEncoder.encode("message-id:"+key+"@saumya.local",StandardCharsets.UTF_8);
