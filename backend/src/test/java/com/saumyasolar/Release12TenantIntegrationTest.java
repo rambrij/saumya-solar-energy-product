@@ -1674,6 +1674,7 @@ class Release12TenantIntegrationTest {
         quotation.setQuotationNumber("CUSTOMER-B-QUOTE-" + UUID.randomUUID().toString().substring(0, 8));
         quotation.setRevision(1);
         quotation.setStatus("SENT");
+        quotation.setValidUntil(java.time.LocalDate.now().plusDays(30));
         quotation.setSubtotal(BigDecimal.TEN);
         quotation.setDiscountPercent(BigDecimal.ZERO);
         quotation.setDiscountAmount(BigDecimal.ZERO);
