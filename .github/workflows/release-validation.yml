@@ -514,10 +514,11 @@ jobs:
         working-directory: backend
         run: mvn --batch-mode --no-transfer-progress clean package -DskipTests
       - name: Configure disposable MySQL for legacy trigger migrations
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y default-mysql-client
-          mysql --connect-timeout=15 --host=127.0.0.1 --port=3306 --user=root --password=rootpass \
+          MYSQL_CONTAINER="$(docker ps --filter 'ancestor=mysql:8.4' --format '{{.ID}}' | head -n 1)"
+          test -n "$MYSQL_CONTAINER"
+          docker exec "$MYSQL_CONTAINER" mysql --connect-timeout=15 --user=root --password=rootpass \
             -e "SET GLOBAL log_bin_trust_function_creators = 1"
       - name: Run concurrent SLA, warranty and integration scheduler tests on MySQL 8.4
         working-directory: backend
