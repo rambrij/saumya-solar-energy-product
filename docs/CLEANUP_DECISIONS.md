@@ -118,3 +118,68 @@ All are additive; no production data backfill or destructive migration is intend
 - V11: tenant/assignee/date indexes used by installation, service, invoice and order reporting.
 
 No production data backfill, destructive migration or live provider integration was introduced.
+
+
+## Phase 6 — Notifications and integrations audit
+
+**Date:** 2026-11-11  
+**Branch:** `audit/phase-6-notifications-integrations`  
+**Base:** `audit/phase-4-finance-provider-impl`
+
+### Requirements traced to the source documents
+
+- Business requirements §15 require centralized events for quotation creation/acceptance, order confirmation, payment receipt, installation scheduling/completion, service-ticket creation/resolution and invoice generation. Supported channels are email, SMS, WhatsApp and in-app; provider implementations must be replaceable behind interfaces.
+- SRS/HLD §10.12 (NOT-001–NOT-006) requires event-driven notifications, in-app/email plus pluggable SMS/WhatsApp, tenant-configurable templates with platform defaults, asynchronous processing, persisted attempts/provider references/failures/retry counts, and isolation of provider failures from completed business transactions.
+- SRS/HLD §11.3–11.4 defines vendor notification-template and platform provider-configuration/job-monitoring screens.
+- SRS/HLD §16.5 and §17 require observable background jobs, provider-failure/backlog alerting, ports/adapters, bounded retries, circuit breaking and dead-letter/manual-retry handling.
+- SRS/HLD §18 requires notification delivery/retry and SLA breach evaluation as tenant-aware, idempotent background jobs.
+- SRS/HLD §25 requires authorization, tenant tests, unit/integration/E2E tests, audit/logging/metrics and migration validation before completion.
+
+### Branch-head audit — existing implementation
+
+| Requirement | Status | Evidence observed on base branch |
+|---|---|---|
+| Persisted notification delivery attempts | PARTIAL | `backend/src/main/java/com/saumyasolar/domain/NotificationDelivery.java`; `NotificationDeliveryRepository.java`; `NotificationService.java` |
+| Separate user inbox and read state | EXISTS | `domain/UserNotification.java`; `repo/UserNotificationRepository.java`; `service/UserNotificationService.java`; Phase 5 V7/V8 decisions |
+| Transactional outbox and atomic enqueue with business transaction | MISSING / NOT PROVEN | Existing delivery persistence exists, but the inspected business notification path writes the inbox in REQUIRES_NEW and queues channel delivery separately; no dedicated outbox record or transactional outbox boundary was found |
+| Integration job persistence and scheduler | PARTIAL | `domain/IntegrationSyncJob.java`; `service/IntegrationSyncScheduler.java`; tenant-aware claim/reload and retry/dead-letter states exist |
+| Notification provider ports/adapters | MISSING | `NotificationService.java` contains provider-specific SMTP/Twilio delivery logic directly rather than using channel adapter interfaces |
+| Mock-only notification providers and profile/config selection | MISSING / BLOCKING | The inspected notification service contains direct SMTP and Twilio HTTP calls; this does not satisfy the Phase 6 no-real-provider requirement |
+| Bounded notification retry and terminal state | PARTIAL | Existing retry uses attempt count and exponential delay, with a five-attempt check; no explicit DEAD_LETTER status is set for exhausted notification rows |
+| Integration retry and dead-letter state | PARTIAL | Integration scheduler has RETRY/DEAD_LETTER and circuit-breaker handling; max attempts and operational monitoring need verification |
+| Notification preferences and consent | PARTIAL | Customer profile has SMS/WhatsApp consent flags; no complete per-user/per-channel preference model/API/UI was established |
+| Provider delivery webhooks and provider event ledger | MISSING / NOT PROVEN | Payment webhook persistence is not evidence of notification delivery callbacks; no notification provider-event/inbox webhook path was found in inspected files |
+| Retry and integration monitoring APIs/admin UI | MISSING / NOT PROVEN | SRS defines platform provider configuration and job/integration monitoring screens; corresponding Phase 6 monitoring surface was not established by this audit |
+| SLA escalation notifications | PARTIAL / UNDEFINED | Existing service SLA breach evaluation/scheduler is present from Phase 2; notification escalation rules, thresholds and targets are not specified in the cited SRS requirements |
+| Frontend notification preferences and delivery status | MISSING / PARTIAL | Phase 5 inbox is present; preference management and channel-delivery status surfaces were not established by this audit |
+| Tenant isolation and authorization evidence | PARTIAL | Existing notification repositories/services carry tenant/user predicates; Phase 6-specific negative tests for preferences, delivery status, retries and webhook tenant binding are not present in the inspected evidence |
+
+### Decisions for this branch
+
+1. Reuse `NotificationDelivery`, `UserNotification`, `IntegrationSyncJob`, `IntegrationSyncScheduler` and the existing Phase 5 inbox. Do not introduce parallel inbox, integration-job or notification-delivery aggregates.
+2. Keep platform password-reset/MFA delivery distinct from tenant business notifications. Never expose recovery/MFA content through vendor monitoring or customer notification preferences.
+3. The business notification write must ultimately be transactionally coupled to an outbox insert. Dispatch must occur after commit; provider failure must not roll back the business transaction.
+4. Provider-specific network behavior must be moved behind channel ports. This Phase 6 implementation must select deterministic mock adapters only, with explicit dev/test configuration and production-profile exclusion. Do not add provider credentials or real SDK/network calls.
+5. Provider callbacks must be signature-verified and idempotently recorded as provider events before updating delivery status. Raw secrets, message bodies, phone numbers, email addresses and callback payload PII must not be logged.
+6. Reuse existing tenant execution context and identity-derived tenant scope for every scheduler, API, query and webhook-to-delivery association.
+7. Do not infer escalation policy, mandatory notification categories, consent defaults, retention periods or provider callback contracts. Preserve existing behavior until product/security decisions are recorded below.
+8. No legacy shim or data backfill is authorized. Correct the schema directly in new forward migrations; do not edit applied migrations.
+
+### Open Questions
+
+| ID | Open question | Decision owner | Why implementation cannot safely guess |
+|---|---|---|---|
+| NOT-OQ-01 | What are the notification SLA thresholds by event/priority, when does the clock start/pause, and what constitutes breach? | Product/operations owner | SRS defines configurable service SLA targets by priority but does not define notification escalation thresholds or timing semantics |
+| NOT-OQ-02 | Who receives each escalation (role, named user, branch manager, tenant admin, platform operations), and what is the escalation sequence/cadence? | Product/operations owner | No escalation target matrix or escalation ladder is specified |
+| NOT-OQ-03 | Which event categories are mandatory/security-critical and cannot be disabled, and which can users opt out of? | Product/security/privacy owner | Phase 5 notes already identify configurable-vs-mandatory categories as unresolved |
+| NOT-OQ-04 | Is consent required separately for email, SMS and WhatsApp; what evidence/source/timestamp/version is retained; how are withdrawals and re-consent handled? | Legal/privacy owner | Existing SMS/WhatsApp profile flags do not define complete consent lifecycle or email consent |
+| NOT-OQ-05 | Which provider-specific callback event types, signature headers, canonical payload rules, timestamp tolerance and key-rotation process should the mock contract model? | Integration/security owner | No real provider has been selected; do not imitate an undocumented provider contract |
+| NOT-OQ-06 | What notification retention/deletion period applies to outbox, inbox, provider events, delivery metadata and failed payloads? | Legal/privacy/security owner | SRS does not specify retention periods; message content can contain personal data |
+| NOT-OQ-07 | Should platform administrators see tenant-level delivery metadata only, or may they inspect message content? | Product/security/privacy owner | Access scope for cross-tenant operations monitoring is not defined |
+| NOT-OQ-08 | What are the approved retry max-attempt count, base delay, multiplier, cap, jitter and manual-redrive permissions for each channel/job class? | Operations owner | Current notification retry and integration retry use different limits; do not silently impose a unified policy |
+| NOT-OQ-09 | Which user identities (customer, vendor employee, platform user) can configure preferences, and may vendor admins set defaults for employees/customers? | Product owner | SRS defines notification screens but not preference ownership/delegation |
+| NOT-OQ-10 | What mock-provider behavior should represent accepted, delivered, bounced, undeliverable and unknown outcomes? | Product/test owner | The deterministic mock lifecycle must model agreed status semantics without pretending to be a selected provider |
+
+### Verification status
+
+This commit records the Phase 6 source audit and decisions only. It does not claim Phase 6 runtime implementation or test completion. No migration, adapter, API, UI or provider webhook implementation is included in this audit checkpoint. Full build/test/CI verification remains outstanding.
