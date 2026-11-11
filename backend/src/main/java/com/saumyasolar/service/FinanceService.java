@@ -441,7 +441,7 @@ public class FinanceService {
         for (Payment payment : payments.findByTenantIdAndInvoiceId(tenant, invoiceId)) {
             if ("CONFIRMED".equals(payment.getStatus())) total = total.add(payment.getAmount());
             else if ("PARTIALLY_REFUNDED".equals(payment.getStatus())) {
-                BigDecimal refunded = refunds.findByTenantIdAndPaymentId(tenant, payment.getId()).stream().filter(r -> "RECORDED".equals(r.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+                BigDecimal refunded = refunds.findByTenantIdAndPaymentId(tenant, payment.getId()).stream().filter(r -> Set.of("RECORDED", "PROCESSED").contains(r.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
                 total = total.add(payment.getAmount().subtract(refunded));
             }
         }
@@ -1090,6 +1090,16 @@ public class FinanceService {
     }
     
     public List<Refund> listRefunds(Principal p) {
+        if ("CUSTOMER".equals(p.accountType())) {
+            CustomerProfile cp = customer(p);
+            Set<UUID> visibleInvoiceIds = listInvoices(p).stream().map(Invoice::getId)
+                    .collect(java.util.stream.Collectors.toSet());
+            Set<UUID> visiblePaymentIds = payments.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream()
+                    .filter(payment -> visibleInvoiceIds.contains(payment.getInvoiceId()))
+                    .map(Payment::getId).collect(java.util.stream.Collectors.toSet());
+            return refunds.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream()
+                    .filter(refund -> visiblePaymentIds.contains(refund.getPaymentId())).toList();
+        }
         financeAccess(p);
         permission(p, "PAYMENT_REFUND");
         List<Refund> rows = refunds.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
