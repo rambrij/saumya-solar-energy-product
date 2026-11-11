@@ -32,7 +32,7 @@ public class MockSettlementFixtureController {
                 || !actor.permissions().contains("PAYMENT_VIEW"))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         String reportRef = request.reportReference() == null || request.reportReference().isBlank()
-                ? "mock_settlement_" + UUID.randomUUID() : request.reportReference();
+                ? "mock_settlement_" + actor.tenantId() : request.reportReference();
         List<Payment> mockPayments = payments.findByTenantIdOrderByCreatedAtDesc(actor.tenantId()).stream()
                 .filter(p -> "MOCK_GATEWAY".equals(p.getProvider())).toList();
         List<PaymentReconciliationService.SettlementLine> rows = new ArrayList<>();
