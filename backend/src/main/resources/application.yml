@@ -69,6 +69,6 @@ app:
   public-base-url: ${PUBLIC_BASE_URL:http://localhost:3000}
   messaging:
     mock:
-      enabled: true
+      enabled: false
       webhook-secret: ${MOCK_NOTIFICATION_WEBHOOK_SECRET:local-mock-notification-secret-change-me}
     outbox-interval-ms: ${NOTIFICATION_OUTBOX_INTERVAL_MS:15000}
