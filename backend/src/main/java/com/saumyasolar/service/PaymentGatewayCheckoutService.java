@@ -130,8 +130,12 @@ public class PaymentGatewayCheckoutService {
         } catch (Exception ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Payment provider could not create checkout");
         }
+        boolean localMockCheckout = "MOCK_GATEWAY".equalsIgnoreCase(selectedProvider) && mockEnabled
+                && gateway != null && gateway.checkoutUrl() != null
+                && (gateway.checkoutUrl().startsWith("http://localhost:")
+                    || gateway.checkoutUrl().startsWith("http://127.0.0.1:"));
         if (gateway == null || gateway.providerReference() == null || gateway.providerReference().isBlank()
-                || gateway.checkoutUrl() == null || !gateway.checkoutUrl().startsWith("https://"))
+                || gateway.checkoutUrl() == null || (!gateway.checkoutUrl().startsWith("https://") && !localMockCheckout))
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Payment provider returned an invalid checkout response");
         Payment payment = new Payment();
         payment.setId(paymentId);
