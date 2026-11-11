@@ -709,6 +709,10 @@ public class Controller {
     List<com.saumyasolar.domain.InventoryBalance> inventoryBalances(Authentication a) {
         return operations.balances(p(a));
     }
+    @GetMapping("/inventory/reservations")
+    List<com.saumyasolar.domain.InventoryReservation> inventoryReservations(Authentication a) {
+        return operations.reservations(p(a));
+    }
     
     @GetMapping("/inventory/transactions")
     List<com.saumyasolar.domain.InventoryTransaction> inventoryLedger(Authentication a) {
