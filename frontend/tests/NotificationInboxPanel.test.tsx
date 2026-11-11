@@ -22,4 +22,14 @@ describe('in-app notification inbox',()=>{
   fireEvent.click(await screen.findByRole('button',{name:'Mark read'}));
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(call=>String(call[0]).includes('/notifications/n-1/read')&&call[1]?.method==='PATCH')).toBe(true));
  });
+ it('records explicit opt-in before enabling SMS delivery',async()=>{
+  render(<NotificationInboxPanel s={{accessToken:'token'}} error={vi.fn()}/>);
+  const consent=await screen.findByLabelText('I consent');
+  fireEvent.click(consent);
+  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(call=>{
+   const url=String(call[0]),init=call[1]||{};
+   return url.includes('/notifications/preferences')&&init.method==='PUT'&&String(init.body).includes('"channel":"SMS"')&&String(init.body).includes('"consented":true');
+  })).toBe(true));
+ });
+
 });
