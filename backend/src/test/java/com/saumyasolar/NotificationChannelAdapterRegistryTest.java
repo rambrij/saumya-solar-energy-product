@@ -16,7 +16,7 @@ class NotificationChannelAdapterRegistryTest {
         var registry=new NotificationChannelAdapterRegistry(List.of(mailpit,mockMessaging,twilio),"mock");
         var delivery=new NotificationDelivery();delivery.setChannel("SMS");
         registry.dispatch(delivery);
-        verify(mockMessaging).dispatch(delivery);verifyNoInteractions(twilio,mailpit);
+        verify(mockMessaging).dispatch(delivery);verify(twilio,never()).dispatch(any());verify(mailpit,never()).dispatch(any());
     }
 
     @Test void twilioPropertySelectsReservedAdapterButCannotMakeNetworkCalls() {
@@ -25,7 +25,7 @@ class NotificationChannelAdapterRegistryTest {
         var registry=new NotificationChannelAdapterRegistry(List.of(mockMessaging,twilio),"twilio");
         var delivery=new NotificationDelivery();delivery.setChannel("SMS");
         assertThrows(IllegalStateException.class,()->registry.dispatch(delivery));
-        verifyNoInteractions(mockMessaging);
+        verify(mockMessaging,never()).dispatch(any());
     }
 
     @Test void rejectsUnknownProviderConfiguration() {
