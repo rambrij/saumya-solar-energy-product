@@ -1857,3 +1857,10 @@ Additional final evidence in `Release12TenantIntegrationTest.branchAssignedMembe
 **Payment restriction remains unchanged:** all payment/refund HTTP integration tests use manual/offline ledger records only; the adapter-only checkout test uses a mock adapter. No external payment provider or real charge/refund is invoked.
 
 The requested remaining role/resource scenarios are verified by the passing run. The broader runtime route-to-evidence reconciliation remains its own release gate; untested route/role combinations outside these explicitly named scenarios must still be classified as Unverified rather than assumed Met.
+
+
+### Final test-only hardening — 2026-11-11
+
+- `Release12TenantIntegrationTest.fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation` now snapshots `ExportJobRepository.count()` before denied CSV export creation attempts by inventory, accountant and engineer users, then asserts no export job was persisted.
+- Verified branch head: `165fbdb74c654b78195096f3fdca66c4e9d3d993`.
+- Final CI run for this head: [42985837841](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42985837841) — all four jobs successful; backend **224 tests, 0 failures, 0 errors, 0 skipped**.
