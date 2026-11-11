@@ -19,8 +19,8 @@ public class Refund {
     String reason;
     String status;
     UUID recordedBy;
-    String provider;
-    String providerRefundReference;
+    @Column(length = 60) String provider;
+    @Column(length = 150) String providerRefundReference;
     @Column(length = 160) String idempotencyKey;
     Instant processedAt;
     Instant createdAt;
