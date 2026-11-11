@@ -342,3 +342,38 @@ The shared branch filter is now applied to `FinanceService.listInvoices`, `Finan
 | Branch analytics | `GET /api/v1/branches/{branchId}/analytics` | Assigned branch allowed; another branch in same tenant returns 404 | Same test |
 
 The branch integration test also supplies a forged `branchId` query parameter for every branch-bearing list and verifies it cannot widen assigned-branch results; it verifies that branch analytics returns 404 for an unassigned same-tenant branch. The warranty attachment HTTP test additionally covers customer-owned list/download, cross-customer upload/list/download denial, foreign-tenant upload denial and unsupported content-type rejection. The full 222-mapping endpoint-specific role/permission and negative CRUD matrix remains PARTIAL: each handler still needs an explicit applicable read/create/update/delete negative test where that operation exists.
+
+
+## Runtime authorization and ownership evidence checkpoint — 2026-11-11
+
+**Validated code commit:** `10287b76fc75e6bbf21eaee65f70d048b074cd1b`  
+**GitHub Actions:** [run 42967893781](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42967893781)  
+**Result:** all four workflow jobs passed; backend suite reported 218 tests, zero failures/errors/skips. The additional customer quote-decision and gateway-checkout guessed-ID tests added at the subsequent commit are under a newer workflow and must be considered separately until that run finishes.
+
+The test-generated evidence artifact `phase2-endpoint-authorization-evidence` (artifact 13832047670) was uploaded and validated by `scripts/audit/assert-endpoint-authorization-evidence.py`. It records:
+
+| Evidence file | Runtime rows | Passing probes | Exempt / delegated | Meaning |
+|---|---:|---:|---:|---|
+| authentication-and-public-exceptions.csv | 228 | 210 | 18 | 210 protected mappings denied anonymously; 18 public/allowlisted expanded rows explicitly classified |
+| positive-applicable-account-gates.csv | 210 | 207 | 3 | Applicable VENDOR/PLATFORM/CUSTOMER all-catalogued-grants actors passed the authorization gate; three vendor analytics routes delegate to focused analytics tests |
+| negative-vendor-get.csv | 91 | 83 | 8 | 83 protected GET probes denied for a persisted zero-permission vendor; eight self-service GET exceptions classified |
+| negative-vendor-mutations.csv | 120 | 117 | 3 | 117 mutation probes denied for a persisted zero-permission vendor; three resource-delegated routes have separate owner/assignment tests |
+
+The source inventory remains 222 controller method-mapping declarations (224 expanded patterns in the static inventory); the live Spring HandlerMethod probe expands to 228 evidence rows because aliases/public-path expansions are represented separately. The dynamic checks now fail closed on failed rows, missing artifacts and inventory shrinkage, and CI retains the CSV evidence for 30 days.
+
+**Important boundary:** the all-catalogued-grants probes establish the account-type and permission gate, not successful business execution for every named role/resource/verb combination. Named-role tests currently cover Platform Support, Vendor Admin, Sales, custom Sales, Inventory Viewer, Accountant, Service Engineer and Customer scenarios, but they remain representative rather than exhaustive. The route-specific role × endpoint × verb criterion therefore remains **PARTIAL**, not fully accepted.
+
+### Added customer and branch negative evidence
+
+- Branch membership is now applied in `SurveyLifecycleService.requireSurvey` as well as assignment and tenant checks. A matching/stale `assignedUserId` no longer bypasses branch membership.
+- The two-branch integration scenario now verifies branch-A member positive updates on a branch-A lead and survey, rejects updates to branch-B lead and survey even when the same user is assigned, and asserts both rejected rows are unchanged.
+- The customer ownership suite already checks foreign-customer address update/delete, customer order/quotation/invoice/payment/service/installation/warranty read isolation, quotation/invoice/receipt PDFs, and private service/survey/warranty attachment upload/list/download. The newest test addition also denies a guessed-ID quotation acceptance and a guessed-ID invoice checkout for a different customer, with unchanged quotation state and payment count. Its dedicated workflow is pending at the time of this document update.
+
+### Export and download families represented by HTTP tests
+
+- Asynchronous exports: owner create/status/download, CSV/XLSX/PDF content type, same-tenant different-requester and foreign-tenant 404, customer 403, pending 409 and expired 410 behavior.
+- Operations and platform tenant exports: CSV/XLSX/PDF output and vendor/platform permission checks.
+- Customer document families: quotation PDF, invoice PDF and payment receipt PDF.
+- Private evidence families: service attachments, site-survey attachments and warranty-claim attachments, including owner bytes, wrong-customer/tenant denial and denial before private storage access.
+
+This is broad HTTP-level evidence for the checked-in export/download families. Final completeness still requires a final route-to-test reconciliation against the current runtime mapping inventory and review of any newly added mapping after this checkpoint.
