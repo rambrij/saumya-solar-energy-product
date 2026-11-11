@@ -52,7 +52,7 @@ public class MockPaymentGatewaySimulatorController {
         MockPaymentGatewayAdapter adapter = (MockPaymentGatewayAdapter) gateways.require("MOCK_GATEWAY");
         String eventId = "mock_checkout_" + payment.getId() + "_" + eventStatus;
         String raw = adapter.signedEvent(eventId, payment.getProviderReference(), payment.getAmount(),
-                payment.getCurrency(), eventStatus);
+                payment.getCurrency(), eventStatus, null, payment.getTenantId().toString());
         return webhooks.accept("MOCK_GATEWAY", raw, adapter.sign(raw));
     }
 
@@ -75,7 +75,7 @@ public class MockPaymentGatewaySimulatorController {
         MockPaymentGatewayAdapter adapter = (MockPaymentGatewayAdapter) gateways.require("MOCK_GATEWAY");
         String eventId = "mock_refund_" + refund.getId() + "_" + eventStatus;
         String raw = adapter.signedEvent(eventId, payment.getProviderReference(), refund.getAmount(),
-                payment.getCurrency(), eventStatus, refund.getProviderRefundReference());
+                payment.getCurrency(), eventStatus, refund.getProviderRefundReference(), payment.getTenantId().toString());
         return webhooks.accept("MOCK_GATEWAY", raw, adapter.sign(raw));
     }
 
