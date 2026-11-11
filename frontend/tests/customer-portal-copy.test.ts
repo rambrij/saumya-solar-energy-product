@@ -21,4 +21,11 @@ describe('Customer catalogue and quotation copy regressions',()=>{
   expect(customerPortal).toContain('Request a Solar Quotation');
   expect(customerPortal).not.toContain('Request a Solar Quote');
  });
+ it('shows checkout status from the authenticated payment list rather than URL parameters',()=>{
+  expect(customerPortal).toContain("get('mockCheckoutPaymentId')");
+  expect(customerPortal).toContain("payment.status==='PENDING'");
+  expect(customerPortal).toContain('Authoritative status:');
+  expect(customerPortal).toContain('Returning from checkout does not itself confirm a payment.');
+  expect(customerPortal).toContain("api('/refunds',{},s)");
+ });
 });
