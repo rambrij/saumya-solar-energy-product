@@ -56,6 +56,16 @@ class ExportServiceTest {
                 && job.getId().equals(requested.exportId()) && tenant.equals(requested.tenantId())));
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"OPERATIONS","SALES","INSTALLATIONS","SERVICE","INVENTORY","FINANCE"})
+    void createAcceptsOnlyDocumentedTenantReportFamilies(String reportType) {
+        UUID tenant=UUID.randomUUID(),user=UUID.randomUUID();
+        when(jobs.save(any(ExportJob.class))).thenAnswer(invocation->invocation.getArgument(0));
+        ExportJob job=service().create(principal(tenant,user,Set.of("REPORT_EXPORT")),reportType,"CSV",null,null);
+        assertEquals(reportType,job.getReportType());
+        assertEquals(tenant,job.getTenantId());
+    }
+
     @Test
     void createRequiresExplicitReportExportPermission() {
         Principal p = principal(UUID.randomUUID(), UUID.randomUUID(), Set.of("REPORT_VIEW"));
