@@ -32,7 +32,10 @@ The following are intentionally unresolved. Keep the existing behavior and make 
 | FIN-OQ-09 | Which roles may initiate, approve and execute refunds, and is maker-checker approval required above a threshold? | Business/security owner | Do not broaden existing finance permissions or invent approval thresholds. |
 | FIN-OQ-10 | What retention, privacy, and evidence requirements apply to invoice snapshots, provider events, reconciliation files and refund events? | Legal/privacy and accounting | Preserve auditable references; final retention/deletion policy requires approval. |
 
-### Verification limitation
+#
+7. **Unused symbols/dependencies attestation:** The full file/tree, endpoint, caller and configuration inventories were reviewed, but no exhaustive compiler-assisted dead-code/symbol reachability or Maven/npm dependency-usage report was produced because local clone DNS was unavailable. No unproven dependency, class, config property or fixture was removed. A strict zero-unused-code attestation would require a separate full dependency/symbol audit; uncertain candidates were preserved.
+
+## Verification limitation
 
 This record is a decision log, not evidence that Phase 4 code has been implemented or tested. The connected GitHub account has repository push/admin permissions and the GitHub API exposed the branch tree and source files. A local `git clone` attempt still failed because this execution environment could not resolve `github.com`; no local Maven/npm command execution is available through the GitHub connector. Runtime code and tests were changed through individual GitHub commits and verified through the repository's GitHub Actions workflow. Runtime implementation commit `24c1e88` and subsequent documentation-only commit `e6de31a` passed all four jobs: 238 backend tests, 24 frontend tests, MySQL 8.4 V5 migration, Spring Boot startup/schema validation, endpoint authorization evidence and browser-level tenant filter tampering. The final follow-up commit changes documentation only; no runtime code changed after the verified implementation.
 
@@ -412,7 +415,7 @@ No documented business workflow, documented versioned REST API, authorization ru
 2. **Provider selection:** SMS/WhatsApp currently uses a deterministic dev/test mock and the reserved real-provider adapter fails closed. Select and approve a live provider separately before any real outbound integration is implemented.
 3. **Notification policy:** Existing NOT-OQ decisions remain open for SLA escalation thresholds/targets/cadence, mandatory notification categories, consent evidence/retention, provider callback contract, retry/redrive policy, notification retention and platform-wide monitoring. Cleanup did not invent those policies.
 4. **Manual local build availability:** The local clone was attempted with the user's permission, but this execution host still returned a DNS resolution failure for `github.com`. Maven/npm/MySQL commands were therefore not run locally. GitHub Actions is the available build/test/DB verification path.
-5. **Baseline schema result:** The exact MySQL 8.4 old-chain vs baseline comparison is pending a successful CI run on the current branch head. Any non-empty diff must be explained and approved against the requirements before the schema is marked equivalent.
+5. **Baseline schema result:** PASS on final branch-head CI run 43089380154. The old V1–V14 chain and consolidated V1 produce identical MySQL 8.4 schema dumps; artifact 13888520692 contains a 63-byte PASS result and no diff. No schema deviation required justification.
 6. **Branch-policy interpretation:** The explicit release-validation rule has been applied exactly as written. The production preflight remains manual and is restricted to `main` so it cannot run against an audit/feature branch with production secrets.
 
 ## Verification
@@ -424,12 +427,31 @@ No documented business workflow, documented versioned REST API, authorization ru
 | Consolidated SQL inventory | Source parser over all original 14 migration files; original statement order retained within DML | PASS — 84 tables, 14 table alters, 6 standalone indexes, 8 triggers, 67 DML statements, zero unclassified statements. |
 | Runtime API route caller cleanup | Mapping and reference searches for both settings aliases | PASS — canonical frontend paths and canonical backend mappings are aligned. |
 | Workflow branch references | Inspected both workflow files | PASS — release-validation branches are exactly `main` and `cleanup/final-code-cleanup`; production preflight condition is `main`. |
-| External transport source/dependency/compose scan | Manifest, Compose, worker inventory and repository-wide assertion added to CI | PENDING — definitive whole-tree result requires the workflow step to pass. |
-| Old-chain vs single-baseline schema diff | `mysql-migrations` CI job: old 14-migration chain vs consolidated V1 on MySQL 8.4 | PENDING — no equivalence claim until CI success and artifact review. |
-| Backend build/tests | `mvn --batch-mode --no-transfer-progress clean verify` in workflow | PENDING branch-head CI result. |
-| Frontend tests/build | `npm test` and `npm run build` in workflow | PENDING branch-head CI result. |
-| Fresh database application startup | Spring Boot health check against clean MySQL 8.4 schema in workflow | PENDING branch-head CI result. |
-| Browser security regression | Playwright E2E in workflow against fresh MySQL-backed app | PENDING branch-head CI result. |
+| External transport source/dependency/compose scan | Manifest, Compose, worker inventory and repository-wide assertion in CI | PASS — whole-repository assertion completed successfully on final branch HEAD. |
+| Old-chain vs single-baseline schema diff | `mysql-migrations` CI job: old 14-migration chain vs consolidated V1 on MySQL 8.4 | PASS — run 43089380154; artifact 13888520692 contains `PASS: old V1-V14 schema and the single baseline are identical.` |
+| Backend build/tests | `mvn --batch-mode --no-transfer-progress clean verify` in workflow | PASS — 274 tests run, 0 failures, 0 errors, 0 skipped; `BUILD SUCCESS` on final branch HEAD. |
+| Frontend tests/build | `npm test` and `npm run build` in workflow | PASS — component tests and production typecheck/build steps succeeded on final branch HEAD. |
+| Fresh database application startup | Spring Boot health check against clean MySQL 8.4 schema in workflow | PASS — application packaged, started against fresh MySQL 8.4 and health endpoint verified. |
+| Browser security regression | Playwright E2E in workflow against fresh MySQL-backed app | PASS — browser-level tenant filter tampering suite succeeded. |
 | Local clone | `git clone --branch cleanup/final-code-cleanup --single-branch https://github.com/rambrij/saumya-solar-energy-product.git` | BLOCKED — DNS lookup for `github.com` failed in this execution environment despite user authorization. |
 
-CI run results, schema diff artifact identifier, job test counts and final commit SHA will be added here after a successful workflow run on the final branch head. A queued, cancelled or earlier-head run is not accepted as verification.
+### Final branch-head verification — 2026-11-12
+
+**Workflow:** [run 43089380154](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/43089380154)  
+**Commit:** `deb61269572b19799bcc72685475c92c2e4f9a5e`  
+**Conclusion:** SUCCESS — all four jobs passed.
+
+| Job | Result and evidence |
+|---|---|
+| Backend compile and tests | PASS — targeted security/tenant/messaging tests, `mvn clean verify`, 274 tests, 0 failures/errors/skips, and runtime endpoint authorization evidence all passed. |
+| Frontend typecheck and production build | PASS — dependency install, component tests and production build completed. |
+| Validate Flyway migrations on MySQL 8.4 | PASS — exactly one baseline, old V1–V14 and new V1 clean-database schema dumps identical, tenant schema/FK/index/NULL audit passed. Final artifact [cleanup-schema-equivalence, 13888520692](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/43089380154) contains the exact PASS result. |
+| Start Spring Boot against MySQL 8.4 and Mailpit | PASS — package, concurrent SLA/warranty/integration scheduler tests, application health, tenant-integrity preflight and browser tenant-filter tampering tests all succeeded. |
+
+Additional runtime authorization evidence from the backend job: 260 runtime mappings reconciled (239 protected and 21 public), 239 positive applicable-account probes, 106 zero-permission GET probes and 133 zero-permission mutation probes. Every runtime mapping received an explicit authentication/public classification; every protected mapping received positive applicable-account and least-privilege evidence. The checker reports 38 runtime-only mappings not listed in the narrower historical `PHASE_2_ENDPOINT_MATRIX.md`; these are identified in the expanded API traceability inventory and do not fail the runtime authorization gate.
+
+The repository-wide prohibited-transport scan passed on this final commit. The active Flyway directory contains exactly one file, `V1__baseline.sql`. The baseline schema comparison reported zero differences. No production database or external cloud account was accessed or changed.
+
+### Remaining evidence limitation
+
+The connected GitHub checkout/Actions runner successfully checked out this branch and executed all CI commands. A separate clone from this assistant execution host continued to fail DNS resolution for `github.com`, so local Maven/npm commands were not run from this session. The source/reference inventory was completed through repository tree, code, controller mapping and caller searches; however, no exhaustive static Java symbol reachability/dead-code proof or complete Maven/npm unused-dependency report was available here. In accordance with the keep-on-ambiguity rule, no dependency, application property, domain class, service or fixture with uncertain use was deleted. The only runtime contract removal was the proven undocumented settings alias, and V2–V14 were consolidated rather than their schema effects removed.
