@@ -53,6 +53,6 @@ CREATE TABLE payment_reconciliation_line(
   CONSTRAINT fk_payment_reconciliation_line_tenant FOREIGN KEY(tenant_id) REFERENCES tenant(id),
   CONSTRAINT fk_payment_reconciliation_line_report FOREIGN KEY(tenant_id,report_id) REFERENCES payment_reconciliation_report(tenant_id,id),
   CONSTRAINT fk_payment_reconciliation_line_payment FOREIGN KEY(tenant_id,payment_id) REFERENCES payment(tenant_id,id),
-  UNIQUE KEY uq_payment_reconciliation_line(tenant_id,report_id,provider_reference,outcome),
-  INDEX ix_payment_reconciliation_line_tenant(tenant_id,provider_reference)
+  INDEX ix_payment_reconciliation_line_tenant(tenant_id,provider_reference),
+  INDEX ix_payment_reconciliation_line_report(tenant_id,report_id)
 );
