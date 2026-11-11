@@ -2054,3 +2054,16 @@ Read the complete business requirements (`saumya-solar-energy-solution-requireme
 ### Implementation status and guardrail
 
 This checkpoint records the audit and gap matrix only. It does not claim Phase 5 runtime implementation or test completion. No production data was accessed, no backfill or compatibility shim was added, and no new branch was created. Continue implementation on this same branch in additive, tested vertical slices. Do not mark a requirement complete until backend, frontend, migration, authorization/tenant tests and CI evidence exist.
+
+
+### Phase 5 initial implementation progress — 2026-11-11
+
+The audit-first matrix is in `docs/PHASE5_GAP_MATRIX.md`. Initial vertical slices now exist on this branch:
+
+- CMS: tenant-scoped content and immutable revisions, DRAFT/REVIEW/PUBLISHED/ARCHIVED service lifecycle, rollback-as-new-revision, public published-revision APIs, slug uniqueness, safe body/image validation and audit events; V6 schema migration and vendor authoring panel.
+- Inbox: a separate user-owned `user_notification` projection, unread/read APIs and frontend panel; existing delivery retry remains in `notification_delivery`. V7 schema and V8 `NOTIFICATION_VIEW` permission grant are additive.
+- Customer documents: a customer workspace aggregation over existing invoice, quotation, payment receipt and service attachment views/download routes; no binary duplication.
+- Platform analytics: aggregate-only platform overview API/UI for tenant lifecycle, date-bounded order totals/value and subscription status counts; existing tenant resource-usage report retained.
+- Roles: existing custom-role editor and service are reused; the inbox permission is included in the vendor custom-role allowlist and system-role grants.
+
+**Not complete:** platform settings persistence/API remains intentionally deferred pending approval of the exact safe typed keys; CMS public storefront integration/media upload/preview and full lifecycle E2E remain; unified customer documents remain a frontend aggregation rather than a backend aggregate API; vendor report/export coverage remains partial. The latest full release-validation workflow must pass before any Phase 5 slice is declared complete. Intermediate CI runs failed on inbox authorization, an ambiguous CMS test selector and the old V1–V5 migration-count assertion; corrective commits have been made and the latest workflow is the release gate.
