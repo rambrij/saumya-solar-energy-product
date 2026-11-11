@@ -33,7 +33,7 @@ The 84 tables include the original 74-table baseline plus ten tables introduced 
 
 ## Result
 
-<badge>Pending</badge>
+**Pending CI result**
 
 No schema equivalence claim is made until a successful MySQL 8.4 GitHub Actions run on the final branch HEAD is observed. After that run, this section will record its run URL, commit SHA, artifact name and the actual diff result. Any non-empty diff must be investigated and each accepted difference justified against the SRS/HLD before this document can be marked equivalent.
 
