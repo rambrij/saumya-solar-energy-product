@@ -2426,7 +2426,7 @@ class Release12TenantIntegrationTest {
                                 "/api/v1/leads/" + leadA.getId())
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\"stage\\":\\"CONTACTED\\"}"))
+                        .content("{\"stage\":\"CONTACTED\"}"))
                 .andExpect(status().isOk());
         assertEquals("CONTACTED", salesLeadRecords.findById(leadA.getId()).orElseThrow().getStage());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
@@ -2442,14 +2442,14 @@ class Release12TenantIntegrationTest {
                                 "/api/v1/surveys/" + surveyA.getId())
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\"findings\\":\\"Branch A assessment\\"}"))
+                        .content("{\"findings\":\"Branch A assessment\"}"))
                 .andExpect(status().isOk());
         assertEquals("Branch A assessment", surveys.findById(surveyA.getId()).orElseThrow().getFindings());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
                                 "/api/v1/surveys/" + surveyB.getId())
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\"findings\\":\\"Unauthorized branch B assessment\\"}"))
+                        .content("{\"findings\":\"Unauthorized branch B assessment\"}"))
                 .andExpect(status().isNotFound());
         assertNotEquals("Unauthorized branch B assessment",
                 surveys.findById(surveyB.getId()).orElseThrow().getFindings(),
