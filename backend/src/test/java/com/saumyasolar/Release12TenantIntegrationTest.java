@@ -3121,10 +3121,25 @@ class Release12TenantIntegrationTest {
 
         AppUser readOnly = createPermissionMatrixUser("finance-readonly", List.of("INVOICE_VIEW", "PAYMENT_VIEW"));
         String readOnlyToken = accessToken(readOnly.getEmail(), "Matrix-Password-2026");
+        int paymentCountBeforeDeniedWrites = payments.findByTenantIdAndInvoiceId(vendorTenantId, ownInvoice.getId()).size();
+        int creditNoteCountBeforeDeniedWrites = creditNoteRecords.findByTenantIdAndInvoiceIdOrderByCreatedAtDesc(
+                vendorTenantId, ownInvoice.getId()).size();
         mvc.perform(post("/api/v1/payments/" + ownPayment.getId() + "/refund")
                         .header("Authorization", "Bearer " + readOnlyToken).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"amount\":\"1.00\",\"reason\":\"missing refund permission\"}"))
                 .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/payments").header("Authorization", "Bearer " + readOnlyToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"invoiceId\":\"" + ownInvoice.getId() + "\",\"amount\":\"1.00\",\"method\":\"CASH\",\"paidAt\":\"" + Instant.now().minusSeconds(10) + "\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/invoices/" + ownInvoice.getId() + "/credit-notes")
+                        .header("Authorization", "Bearer " + readOnlyToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":\"1.00\",\"reason\":\"missing credit note permission\"}"))
+                .andExpect(status().isForbidden());
+        assertEquals(paymentCountBeforeDeniedWrites,
+                payments.findByTenantIdAndInvoiceId(vendorTenantId, ownInvoice.getId()).size());
+        assertEquals(creditNoteCountBeforeDeniedWrites,
+                creditNoteRecords.findByTenantIdAndInvoiceIdOrderByCreatedAtDesc(vendorTenantId, ownInvoice.getId()).size());
         assertEquals(1, refundRecords.findByTenantIdAndPaymentId(vendorTenantId, ownPayment.getId()).size());
     }
 
