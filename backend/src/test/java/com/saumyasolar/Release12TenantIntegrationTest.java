@@ -2333,7 +2333,7 @@ class Release12TenantIntegrationTest {
         role.setId(UUID.randomUUID());
         role.setTenantId(vendorTenantId);
         role.setName("BRANCH_SCOPE_TEST_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10));
-        for (String code : List.of("LEAD_VIEW", "LEAD_UPDATE", "SURVEY_VIEW", "SURVEY_COMPLETE", "QUOTATION_VIEW", "ORDER_VIEW", "BRANCH_MANAGE", "INVOICE_VIEW", "INVOICE_VOID", "SERVICE_VIEW", "SERVICE_ASSIGN", "SERVICE_CLOSE", "INSTALLATION_VIEW", "INSTALLATION_ASSIGN", "INSTALLATION_UPDATE", "INVENTORY_VIEW")) {
+        for (String code : List.of("LEAD_VIEW", "LEAD_UPDATE", "SURVEY_VIEW", "SURVEY_COMPLETE", "QUOTATION_VIEW", "ORDER_VIEW", "BRANCH_MANAGE", "INVOICE_VIEW", "INVOICE_CREATE", "INVOICE_VOID", "SERVICE_VIEW", "SERVICE_ASSIGN", "SERVICE_CLOSE", "INSTALLATION_VIEW", "INSTALLATION_ASSIGN", "INSTALLATION_UPDATE", "INVENTORY_VIEW")) {
             Permission permission = permissions.findByCode(code).orElseThrow();
             role.getPermissions().add(permission);
         }
@@ -2377,9 +2377,22 @@ class Release12TenantIntegrationTest {
 
         CustomerOrder orderA = order(vendorTenantId, branchA.getId(), quoteA.getId(), branchCustomer.profile().getId());
         CustomerOrder orderB = order(vendorTenantId, branchB.getId(), quoteB.getId(), branchCustomer.profile().getId());
+        orderA.setStatus("CONFIRMED");
+        orderB.setStatus("CONFIRMED");
         customerOrders.saveAllAndFlush(List.of(orderA, orderB));
 
         String token = accessToken(member.getEmail(), "Branch-Member-Password-2026");
+        String billableOrders = mvc.perform(get("/api/v1/finance/orders-awaiting-invoice")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(billableOrders.contains(orderA.getId().toString()));
+        assertFalse(billableOrders.contains(orderB.getId().toString()));
+        mvc.perform(post("/api/v1/invoices").header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"orderId\":\"" + orderB.getId() + "\"}"))
+                .andExpect(status().isNotFound());
+        assertTrue(invoices.findByOrderIdAndTenantId(orderB.getId(), vendorTenantId).isEmpty(),
+                "A branch-A member must not create an invoice for a branch-B order");
         assertBranchListContainsOnly(mvc.perform(get("/api/v1/enquiries?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), enquiryA.getId(), enquiryB.getId());
         assertBranchListContainsOnly(mvc.perform(get("/api/v1/leads?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
