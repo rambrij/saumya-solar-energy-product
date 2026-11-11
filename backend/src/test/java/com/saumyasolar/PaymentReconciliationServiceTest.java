@@ -50,6 +50,15 @@ class PaymentReconciliationServiceTest {
         assertEquals(4, report.getMismatchCount());
         assertEquals(new BigDecimal("100.00"), report.getMatchedTotal());
         verify(lines, times(5)).save(any());
+        when(reports.findByTenantIdAndProviderAndReportReference(tenant, "MOCK_GATEWAY", "report-1"))
+                .thenReturn(Optional.of(report));
+        PaymentReconciliationReport replay = service.reconcile("MOCK_GATEWAY", "report-1", "INR", input, actor);
+        assertEquals(report.getId(), replay.getId());
+        verify(lines, times(5)).save(any());
+        List<PaymentReconciliationService.SettlementLine> changed = new ArrayList<>(input);
+        changed.set(0, new PaymentReconciliationService.SettlementLine("p1", new BigDecimal("101.00"), "INR"));
+        assertThrows(ResponseStatusException.class, () -> service.reconcile("MOCK_GATEWAY", "report-1", "INR", changed, actor));
+
     }
 
     @Test
