@@ -32,30 +32,30 @@ for line in lines[exact_header + 1:]:
     exact_lines.append(line)
 exact_rows = list(csv.DictReader(exact_lines, delimiter="\t"))
 
-if len(base_rows) != 74:
-    raise SystemExit(f"FAIL: expected 74 base tables, found {len(base_rows)}")
+if len(base_rows) != 84:
+    raise SystemExit(f"FAIL: expected 84 base tables, found {len(base_rows)}")
 tenant_tables = [row for row in base_rows if len(row) >= 3 and row[2].upper() != "MISSING"]
-if len(tenant_tables) != 64 or len(exact_rows) != 64:
-    raise SystemExit(f"FAIL: expected 64 tenant_id-bearing tables, found inventory={len(tenant_tables)}, exact_counts={len(exact_rows)}")
+if len(tenant_tables) != 74 or len(exact_rows) != 74:
+    raise SystemExit(f"FAIL: expected 74 tenant_id-bearing tables, found inventory={len(tenant_tables)}, exact_counts={len(exact_rows)}")
 
 nullable = {row["table_name"]: int(row["null_tenant_rows"]) for row in exact_rows
             if row["column_is_nullable"].upper() == "YES"}
 not_null = [row for row in exact_rows if row["column_is_nullable"].upper() == "NO"]
-expected_nullable = {"app_user", "role", "audit_event", "notification_delivery"}
+expected_nullable = {"app_user", "role", "audit_event", "notification_delivery", "order_transition_policy", "user_notification"}
 if set(nullable) != expected_nullable:
     raise SystemExit(f"FAIL: nullable tenant_id columns differ from approved mixed-scope set: {sorted(nullable)}")
-if len(not_null) != 60:
-    raise SystemExit(f"FAIL: expected 60 NOT NULL tenant_id columns, found {len(not_null)}")
+if len(not_null) != 68:
+    raise SystemExit(f"FAIL: expected 68 NOT NULL tenant_id columns, found {len(not_null)}")
 
 nonzero_not_null = {row["table_name"]: int(row["null_tenant_rows"]) for row in not_null
                     if int(row["null_tenant_rows"]) != 0}
 if nonzero_not_null:
     raise SystemExit(f"FAIL: tenant-owned NOT NULL tables contain NULL tenant IDs: {nonzero_not_null}")
 
-expected_nullable_nulls = {"app_user": 0, "role": 3, "audit_event": 0, "notification_delivery": 0}
+expected_nullable_nulls = {"app_user": 0, "role": 3, "audit_event": 0, "notification_delivery": 0, "order_transition_policy": 36, "user_notification": 0}
 if nullable != expected_nullable_nulls:
     raise SystemExit(f"FAIL: mixed-scope NULL row counts differ from the reviewed CI fixture: {nullable}")
 
-print("PASS: 74 base tables; 64 tenant_id tables; 60 NOT NULL with zero NULL rows.")
-print("PASS: four mixed-scope nullable tables; exact disposable-CI NULL counts:", nullable)
+print("PASS: 84 base tables; 74 tenant_id tables; 68 NOT NULL with zero NULL rows.")
+print("PASS: six mixed-scope nullable tables; exact disposable-CI NULL counts:", nullable)
 print("NOTE: these assertions apply only to disposable CI data; production requires the protected preflight and owner/DBA approval.")
