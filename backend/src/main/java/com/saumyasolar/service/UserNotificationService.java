@@ -50,16 +50,24 @@ public class UserNotificationService {
         notifications.save(row);
     }
 
-    public Page<UserNotification> list(Principal actor, int page, int size, boolean unreadOnly) {
+    public Page<NotificationView> list(Principal actor, int page, int size, boolean unreadOnly) {
         validate(actor, page, size);
         PageRequest request = PageRequest.of(page, size);
+        Page<UserNotification> pageResult;
         if (actor.tenantId() == null)
-            return unreadOnly
+            pageResult = unreadOnly
                     ? notifications.findByUserIdAndTenantIdIsNullAndReadAtIsNullOrderByCreatedAtDesc(actor.userId(), request)
                     : notifications.findByUserIdAndTenantIdIsNullOrderByCreatedAtDesc(actor.userId(), request);
-        return unreadOnly
-                ? notifications.findByUserIdAndTenantIdAndReadAtIsNullOrderByCreatedAtDesc(actor.userId(), actor.tenantId(), request)
-                : notifications.findByUserIdAndTenantIdOrderByCreatedAtDesc(actor.userId(), actor.tenantId(), request);
+        else
+            pageResult = unreadOnly
+                    ? notifications.findByUserIdAndTenantIdAndReadAtIsNullOrderByCreatedAtDesc(actor.userId(), actor.tenantId(), request)
+                    : notifications.findByUserIdAndTenantIdOrderByCreatedAtDesc(actor.userId(), actor.tenantId(), request);
+        return pageResult.map(this::view);
+    }
+
+    private NotificationView view(UserNotification row) {
+        return new NotificationView(row.getId(), row.getEventType(), row.getTitle(), row.getBody(),
+                row.getCreatedAt(), row.getReadAt());
     }
 
     public long unreadCount(Principal actor) {
@@ -92,6 +100,9 @@ public class UserNotificationService {
                 ? notifications.markAllPlatformRead(actor.userId(), now)
                 : notifications.markAllTenantRead(actor.userId(), actor.tenantId(), now);
     }
+
+    public record NotificationView(UUID id, String eventType, String title, String body,
+                                   Instant createdAt, Instant readAt) { }
 
     private void validate(Principal actor, int page, int size) {
         if (actor == null || actor.userId() == null)
