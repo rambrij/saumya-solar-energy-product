@@ -17,25 +17,25 @@ import java.util.UUID;
 @NoArgsConstructor
 public class CmsContentRevision {
     @Id
-    UUID id;
+    private UUID id;
     @Column(name = "tenant_id", nullable = false)
-    UUID tenantId;
+    private UUID tenantId;
     @Column(name = "content_id", nullable = false)
-    UUID contentId;
+    private UUID contentId;
     @Column(name = "revision_number", nullable = false)
-    int revisionNumber;
+    private int revisionNumber;
     @Column(nullable = false, length = 180)
-    String title;
+    private String title;
     @Column(nullable = false, columnDefinition = "LONGTEXT")
-    String body;
+    private String body;
     @Column(name = "seo_title", length = 180)
-    String seoTitle;
+    private String seoTitle;
     @Column(name = "seo_description", length = 320)
-    String seoDescription;
+    private String seoDescription;
     @Column(name = "social_image_url", length = 1024)
-    String socialImageUrl;
+    private String socialImageUrl;
     @Column(name = "created_by", nullable = false)
-    UUID createdBy;
+    private UUID createdBy;
     @Column(name = "created_at", nullable = false)
-    Instant createdAt;
+    private Instant createdAt;
 }
