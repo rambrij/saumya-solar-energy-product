@@ -6,7 +6,7 @@ CREATE TABLE user_notification (
   event_type VARCHAR(60) NOT NULL,
   title VARCHAR(255) NOT NULL,
   body VARCHAR(4000) NOT NULL,
-  dedupe_key CHAR(36) NOT NULL,
+  dedupe_key VARCHAR(64) NOT NULL,
   created_at TIMESTAMP(6) NOT NULL,
   read_at TIMESTAMP(6) NULL,
   CONSTRAINT uq_user_notification_dedupe UNIQUE (dedupe_key),
