@@ -108,4 +108,36 @@ class PaymentGatewayCheckoutServiceTest {
         assertEquals("GATEWAY", saved.getValue().getSource());
         assertEquals(tenant, saved.getValue().getTenantId());
     }
+    @Test
+    void selectsConfiguredMockAdapterWithoutTenantProviderConnection() throws Exception {
+        UUID tenant = UUID.randomUUID(), user = UUID.randomUUID(), invoiceId = UUID.randomUUID();
+        Invoice invoice = new Invoice();
+        invoice.setId(invoiceId); invoice.setTenantId(tenant); invoice.setOrderId(UUID.randomUUID());
+        invoice.setStatus("ISSUED"); invoice.setGrandTotal(new BigDecimal("1250.00")); invoice.setCurrency("INR");
+        InvoiceRepository invoices = mock(InvoiceRepository.class);
+        when(invoices.findForUpdate(invoiceId, tenant)).thenReturn(Optional.of(invoice));
+        IntegrationConnectionRepository connections = mock(IntegrationConnectionRepository.class);
+        when(connections.findByTenantIdAndIntegrationTypeAndStatus(tenant, "PAYMENT_GATEWAY", "ACTIVE")).thenReturn(List.of());
+        PaymentRepository payments = mock(PaymentRepository.class);
+        when(payments.findByTenantIdAndIdempotencyKey(tenant, "mock-key-123456")).thenReturn(Optional.empty());
+        when(payments.findByTenantIdAndInvoiceId(tenant, invoiceId)).thenReturn(List.of());
+        PaymentGatewayAdapter adapter = mock(PaymentGatewayAdapter.class);
+        when(adapter.providerCode()).thenReturn("MOCK_GATEWAY");
+        when(adapter.createPayment(any(BigDecimal.class), eq("INR"), anyString(), anyMap()))
+                .thenReturn(new PaymentGatewayAdapter.GatewayPayment("mock-ref", "https://localhost/mock", "PENDING"));
+        PaymentGatewayCheckoutService service = new PaymentGatewayCheckoutService(
+                invoices, payments, mock(RefundRepository.class), mock(CustomerProfileRepository.class),
+                mock(CustomerOrderRepository.class), connections, new PaymentGatewayRegistry(List.of(adapter)),
+                mock(EnterpriseSaasService.class), mock(AuditEventRepository.class), new ObjectMapper(), true);
+        Principal actor = new Principal(user, tenant, "vendor@example.test", "VENDOR",
+                Set.of("VENDOR_ADMIN"), Set.of("PAYMENT_RECORD"), 0);
+
+        PaymentGatewayCheckoutService.CheckoutResult result =
+                service.create(invoiceId, null, "mock-key-123456", actor);
+
+        assertEquals("MOCK_GATEWAY", result.providerCode());
+        assertEquals("PENDING", result.status());
+        verify(adapter).createPayment(any(BigDecimal.class), eq("INR"), anyString(), anyMap());
+    }
+
 }
