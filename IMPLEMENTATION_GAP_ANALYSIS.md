@@ -1693,7 +1693,7 @@ This section supersedes earlier statements that no latest CI validation had been
 
 - The latest repository scanner output from run `42967893781` found seven Spring scheduled triggers, two `@Async` application listeners, one bounded event executor, two startup runners and a database-backed integration queue; no checked-in third-party managed-queue worker client or separate language/container worker was found. The checked-in source/config inventory is **MET** for the scanned commit.
 - The connected Render workspace returned one web service, `soumya-solar-api`, but it points to the older `rambrij/soumya-solar-energy-solution` repository. The connected Vercel team returned one similarly named project linked to that older repository; available Vercel connector operations did not expose its cron inventory. No AWS account/organization or target Kubernetes/other production control plane was connected.
-- This does not establish that the production environment for `saumya-solar-energy-product` has no external workers. Infrastructure-owner exports/sign-off for AWS managed event sources and schedules, Lambda triggers, ECS/EKS jobs, SQS/DLQ/SNS, Vercel Cron, Render jobs, GitHub schedules and other provider registrations remain **PENDING**. **Acceptance item 5 is NOT COMPLETE.**
+- This does not establish that the production environment for `saumya-solar-energy-product` has no external workers. Infrastructure-owner exports/sign-off for AWS managed event sources and schedules, Lambda triggers, ECS/EKS jobs, managed queue and event-subscription resources, Vercel Cron, Render jobs, GitHub schedules and other provider registrations remain **PENDING**. **Acceptance item 5 is NOT COMPLETE.**
 
 ### CI status
 
