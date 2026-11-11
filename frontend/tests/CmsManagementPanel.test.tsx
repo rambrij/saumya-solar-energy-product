@@ -26,7 +26,7 @@ describe('CMS management panel',()=>{
   fireEvent.click(screen.getByRole('button',{name:/Create content/i}));
   fireEvent.change(screen.getByLabelText('Title'),{target:{value:'Solar FAQ'}});
   fireEvent.change(screen.getByLabelText('Slug'),{target:{value:'solar-faq'}});
-  fireEvent.change(screen.getByLabelText(/Content/),{target:{value:'How solar works'}});
+  fireEvent.change(screen.getByLabelText(/Content \(plain text/),{target:{value:'How solar works'}});
   fireEvent.click(screen.getByRole('button',{name:'Save draft revision'}));
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(call=>String(call[0]).endsWith('/cms/content')&&call[1]?.method==='POST')).toBe(true));
  });
