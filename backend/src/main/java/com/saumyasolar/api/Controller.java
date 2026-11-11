@@ -239,12 +239,12 @@ public class Controller {
         return s.list(type, p(a));
     }
     
-    @GetMapping({ "/tenant/settings", "/settings" })
+    @GetMapping("/tenant/settings")
     Tenant tenantSettings(Authentication a) {
         return s.tenantSettings(p(a));
     }
     
-    @PatchMapping({ "/tenant/settings/discount-threshold", "/settings/discount-threshold" })
+    @PatchMapping("/tenant/settings/discount-threshold")
     Tenant discountThreshold(@RequestBody Input x, Authentication a) {
         return s.updateDiscountApprovalThreshold(x.discountPercent(), p(a));
     }
