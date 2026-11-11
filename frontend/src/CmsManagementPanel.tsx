@@ -4,7 +4,7 @@ const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
 type Props={s:{accessToken:string;user:{permissions:string[]}};error:(message:string)=>void};
 export default function CmsManagementPanel({s,error}:Props){
  const [rows,setRows]=useState<any[]>([]),[selected,setSelected]=useState<any>(null),[revision,setRevision]=useState<any>(null);
- const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[filter,setFilter]=useState('ALL');
+ const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[uploading,setUploading]=useState(false),[mediaFile,setMediaFile]=useState<File|null>(null),[preview,setPreview]=useState(''),[filter,setFilter]=useState('ALL');
  const [form,setForm]=useState<any>({type:'BLOG',title:'',slug:'',body:'',seoTitle:'',seoDescription:'',socialImageUrl:''});
  const canCreate=s.user.permissions.includes('CMS_CREATE'),canUpdate=s.user.permissions.includes('CMS_UPDATE'),canPublish=s.user.permissions.includes('CMS_PUBLISH');
  const request=useCallback(async(path:string,init:RequestInit={})=>{
@@ -20,8 +20,10 @@ export default function CmsManagementPanel({s,error}:Props){
   finally{setLoading(false)}
  },[request,filter,error]);
  useEffect(()=>{void load()},[load]);
+ useEffect(()=>{if(!mediaFile){setPreview('');return}const url=URL.createObjectURL(mediaFile);setPreview(url);return()=>URL.revokeObjectURL(url)},[mediaFile]);
  const reset=()=>{setSelected(null);setRevision(null);setForm({type:'BLOG',title:'',slug:'',body:'',seoTitle:'',seoDescription:'',socialImageUrl:''})};
  const edit=async(row:any)=>{try{const data=await request('/cms/content/'+row.id);setSelected(data.content);setRevision(data.versions||[]);const r=data.revision||{};setForm({type:data.content.type,title:r.title||data.content.title,slug:data.content.slug,body:r.body||'',seoTitle:r.seoTitle||'',seoDescription:r.seoDescription||'',socialImageUrl:r.socialImageUrl||''})}catch(e:any){error(e.message)}};
+ const uploadMedia=async()=>{if(!mediaFile)return;setUploading(true);try{const data=await request('/cms/media',{method:'POST',body:(()=>{const form=new FormData();form.append('file',mediaFile);return form})()});setForm((v:any)=>({...v,socialImageUrl:data.imageUrl}));setMediaFile(null)}catch(e:any){error(e.message||'Unable to upload CMS image')}finally{setUploading(false)}};
  const submit=async(e:React.FormEvent)=>{e.preventDefault();setSaving(true);try{const path=selected?'/cms/content/'+selected.id:'/cms/content';await request(path,{method:selected?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(form)});reset();await load()}catch(e:any){error(e.message)}finally{setSaving(false)}};
  const transition=async(row:any,status:string)=>{try{await request('/cms/content/'+row.id+'/transition',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});await load()}catch(e:any){error(e.message)}};
  const rollback=async(row:any,number:number)=>{try{await request('/cms/content/'+row.id+'/rollback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({revisionNumber:number})});await load();await edit(row)}catch(e:any){error(e.message)}};
@@ -34,7 +36,11 @@ export default function CmsManagementPanel({s,error}:Props){
    <label>Content (plain text / Markdown; HTML is not accepted)<textarea rows={10} maxLength={100000} required value={form.body} onChange={e=>setForm({...form,body:e.target.value})}/></label>
    <label>SEO title<input maxLength={180} value={form.seoTitle} onChange={e=>setForm({...form,seoTitle:e.target.value})}/></label>
    <label>SEO description<textarea rows={2} maxLength={320} value={form.seoDescription} onChange={e=>setForm({...form,seoDescription:e.target.value})}/></label>
-   <label>Social image URL<input maxLength={1024} type="url" placeholder="https://…" value={form.socialImageUrl} onChange={e=>setForm({...form,socialImageUrl:e.target.value})}/></label>
+   <label>Upload social image (JPEG, PNG or WebP, max 5 MB)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>setMediaFile(e.target.files?.[0]||null)}/></label>
+   {preview&&<img className="cms-media-preview" src={preview} alt="Selected CMS media preview"/>}
+   <button type="button" className="secondary" disabled={!mediaFile||uploading} onClick={()=>void uploadMedia()}>{uploading?'Uploading…':'Upload and use image'}</button>
+   <label>Social image URL<input maxLength={1024} type="url" placeholder="https://… or uploaded image" value={form.socialImageUrl} onChange={e=>setForm({...form,socialImageUrl:e.target.value})}/></label>
+   {form.socialImageUrl&&<img className="cms-media-preview" src={form.socialImageUrl.startsWith('/')?API_BASE+form.socialImageUrl:form.socialImageUrl} alt="CMS social image preview" onError={e=>{e.currentTarget.style.display='none'}}/>}
    <div className="form-actions"><button disabled={saving||(!selected.id&&!canCreate)||(selected.id&&!canUpdate)}>{saving?'Saving…':'Save draft revision'}</button><button type="button" className="secondary" onClick={reset}>Cancel</button></div>
    {Array.isArray(revision)&&revision.length>0&&<div><h3>Immutable revision history</h3>{revision.map((r:any)=><article key={r.id}><span>Revision {r.revisionNumber} · {new Date(r.createdAt).toLocaleString()}</span><button type="button" className="secondary" onClick={()=>void rollback(selected,r.revisionNumber)}>Restore as new draft</button></article>)}</div>}
   </form>}
