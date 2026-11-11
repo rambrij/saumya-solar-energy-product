@@ -43,10 +43,11 @@ test('published CMS page and blog render publicly and uploaded media is served',
   }
 });
 
-test('customer document downloads are restricted to the owning customer',async({page})=>{
+test('customer document downloads are restricted to the owning customer',async({page,baseURL})=>{
   test.setTimeout(60_000);
-  const owner=await login(page,baseURL!,'customer@saumya.local','Customer@123');
-  const invoiceResponse=await page.request.get(baseURL!+'/api/v1/invoices',{headers:{Authorization:'Bearer '+owner.accessToken}});
+  if(!baseURL)throw new Error('E2E_BASE_URL is required');
+  const owner=await login(page,baseURL,'customer@saumya.local','Customer@123');
+  const invoiceResponse=await page.request.get(baseURL+'/api/v1/invoices',{headers:{Authorization:'Bearer '+owner.accessToken}});
   expect(invoiceResponse.ok()).toBeTruthy();
   const invoices=await invoiceResponse.json();
   expect(invoices.length,'seeded customer must have an invoice fixture').toBeGreaterThan(0);
@@ -55,7 +56,7 @@ test('customer document downloads are restricted to the owning customer',async({
   const registration=await page.request.post(baseURL!+'/api/v1/auth/register',{data:{storeSlug:'saumya-solar',name:'Phase 5 foreign customer',email:'phase5-owner-'+suffix+'@example.test',password:'Phase5Customer-Password-2026'}});
   expect(registration.ok()).toBeTruthy();
   const other=await registration.json();
-  const foreignList=await page.request.get('/api/v1/invoices',{headers:{Authorization:'Bearer '+other.accessToken}});
+  const foreignList=await page.request.get(baseURL+'/api/v1/invoices',{headers:{Authorization:'Bearer '+other.accessToken}});
   expect(foreignList.ok()).toBeTruthy();
   const rows=await foreignList.json();
   expect(rows.some((row:any)=>row.id===invoiceId)).toBe(false);
