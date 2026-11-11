@@ -61,26 +61,28 @@ SRS/HLD §11 is the screen catalogue. Confirmed frontend entry point is `fronten
 
 ## Database and migration traceability
 
-The configured migration system is Flyway at `backend/src/main/resources/db/migration`. The branch tree contains exactly the following 14 versioned SQL migrations at this audit checkpoint:
+The configured migration system is Flyway at `backend/src/main/resources/db/migration`. The **post-cleanup branch contains exactly one active versioned migration**:
 
-| Migration | Current role recorded by migration name / prior decisions |
+| Migration | Scope |
 |---|---|
-| V1__baseline.sql | Initial application schema and reference data |
-| V2__phase3_reservation_expiry.sql | Reservation expiry |
-| V3__phase3_order_policy_and_tenant_lifecycle.sql | Order transition policy and tenant lifecycle |
-| V4__phase3_order_policy_permission_grant.sql | Order-policy permission grant |
-| V5__phase4_finance_provider_reconciliation.sql | Payment provider-neutral state, refund and reconciliation schema |
-| V6__phase5_cms_content_revisions.sql | CMS content and immutable revisions |
-| V7__phase5_user_notification_inbox.sql | User notification inbox |
-| V8__phase5_notification_view_permission.sql | Notification-view permission catalogue/grants |
-| V9__phase5_platform_analytics_indexes.sql | Platform analytics indexes |
-| V10__phase5_typed_platform_settings.sql | Typed platform settings |
-| V11__phase5_operational_analytics_indexes.sql | Operational analytics indexes |
-| V12__phase6_notification_outbox_preferences_provider_events.sql | Notification outbox, preferences and provider events |
-| V13__phase6_provider_accepted_delivery_status.sql | Provider-accepted delivery status |
-| V14__phase6_enforce_tenant_bound_notification_references.sql | Tenant-bound notification foreign keys |
+| `V1__baseline.sql` | Complete clean-install schema, constraints, indexes, triggers, permissions/reference data and seed initialization |
 
-This is a source-tree inventory, not a schema equivalence result. V1 already exists as a large baseline, but V2–V14 carry required later functionality. Consolidation is not authorized until the old migration chain and the proposed single baseline are both applied to clean MySQL 8.4 databases and their normalized schema dumps are diffed. Flyway history-table handling and clean-database-only scope must be documented. No existing migration is deleted in Phase 0.
+The baseline consolidates the original active V1–V14 migration chain. The initial source-tree inventory had 14 migration files; V2–V14 were removed from the active directory after their full SQL statements were incorporated into V1. The baseline was generated from all 14 source files and preserves their statements in execution order, while grouping schema DDL before reference/seed DML.
+
+| Consolidated SQL group | Statement count |
+|---|---:|
+| `CREATE TABLE` | 84 |
+| `ALTER TABLE` (columns/checks/foreign keys/table constraints) | 14 |
+| Standalone `CREATE INDEX` | 6 |
+| `CREATE TRIGGER` | 8 |
+| Reference and initialization DML (`INSERT`, `UPDATE`, `DELETE`, etc.) | 67 |
+| Unclassified SQL statements | 0 |
+
+The 84 tables include all 74 original baseline tables plus the ten later domain tables: `order_transition_policy`; `payment_reconciliation_report` and `payment_reconciliation_line`; `cms_content` and `cms_content_revision`; `user_notification`; `platform_setting`; `notification_outbox`, `notification_preference` and `notification_provider_event`.
+
+Tenant isolation constraints, including the composite tenant foreign keys from notification outbox/provider events to delivery records, remain represented in the consolidated schema. The append-only order-status and CMS-revision triggers, order transition policy seed, permission catalogue/grants, notification status checks, indexes and all other previous V2–V14 effects are retained in V1.
+
+**Schema equivalence is a CI gate, not yet a claim:** `.github/workflows/release-validation.yml` fetches the pre-cleanup `audit/implementation-gap-analysis` branch, applies its original 14 migrations to an empty MySQL 8.4 database, applies the new V1 baseline to a separate empty database, dumps both schemas (including triggers), normalizes generated AUTO_INCREMENT counters and diffs the dumps. See `docs/CLEANUP_SCHEMA_DIFF.md` for the run record. The baseline remains intended for fresh installations only; no production database migration or Flyway history transformation is performed.
 
 ## Configuration and delivery traceability
 
