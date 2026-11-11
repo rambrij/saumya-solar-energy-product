@@ -550,10 +550,11 @@ jobs:
           DB_PASSWORD: solarpass
           JWT_SECRET: ci-only-secret-with-at-least-sixty-four-characters-for-hmac-sha256-signing-key
           CORS_ORIGINS: http://localhost:5173
-          MAIL_HOST: 127.0.0.1
-          MAIL_PORT: 1025
-          MAIL_SMTP_AUTH: 'false'
-          MAIL_SMTP_STARTTLS: 'false'
+          SPRING_MAIL_HOST: 127.0.0.1
+          SPRING_MAIL_PORT: 1025
+          SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: 'false'
+          SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: 'false'
+          MAILPIT_BASE_URL: http://127.0.0.1:8025
           SEED_DATA_ENABLED: 'true'
           PLATFORM_BOOTSTRAP_ENABLED: 'false'
           APP_AUTH_PLATFORM_MFA_ENABLED: 'false'
