@@ -35,7 +35,7 @@ public class NotificationOutboxDispatcher {
             service.processPendingDelivery(row.getDeliveryId(),tenantId);
             delivery=deliveries.findByIdAndTenantId(row.getDeliveryId(),tenantId).orElseThrow();
             row.setStatus("DELIVERED".equals(delivery.getStatus())?"SUCCEEDED":"DEAD_LETTER".equals(delivery.getStatus())?"DEAD_LETTER":"RETRY");
-            row.setAttemptCount(delivery.getAttemptCount()); row.setNextAttemptAt(delivery.getNextAttemptAt()); row.setLastError(delivery.getLastError());
+            row.setAttemptCount(delivery.getAttemptCount()); row.setNextAttemptAt(delivery.getNextAttemptAt()!=null?delivery.getNextAttemptAt():("PENDING".equals(delivery.getStatus())?Instant.now().plusSeconds(30):null)); row.setLastError(delivery.getLastError());
           } catch(RuntimeException ex) { row.setStatus(row.getAttemptCount()>=5?"DEAD_LETTER":"RETRY"); row.setLastError("Outbox dispatch failed"); row.setNextAttemptAt(Instant.now().plusSeconds(Math.min(3600,60L << Math.min(row.getAttemptCount(),5)))); }
           row.setUpdatedAt(Instant.now()); outbox.save(row);
         }
