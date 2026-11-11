@@ -7,5 +7,5 @@ public class MockMessagingNotificationAdapter implements NotificationChannelAdap
  private final boolean enabled;
  public MockMessagingNotificationAdapter(@Value("${app.messaging.mock.enabled:true}") boolean enabled){this.enabled=enabled;}
  public boolean supports(String c){return "SMS".equals(c)||"WHATSAPP".equals(c);} public String providerCode(){return "MOCK-MESSAGING";}
- public void dispatch(NotificationDelivery d){if(!enabled)throw new IllegalStateException("Mock messaging adapter is disabled");if(d.getMessageBody()!=null&&d.getMessageBody().contains("[[MOCK_FAIL]]"))throw new IllegalStateException("Mock provider simulated transient failure");}
+ public void dispatch(NotificationDelivery d){if(!enabled)throw new IllegalStateException("Mock messaging adapter is disabled");if(d.getMessageBody()!=null&&d.getMessageBody().contains("[[MOCK_FAIL]]"))throw new IllegalStateException("Mock provider simulated transient failure");String key=d.getIdempotencyKey()==null?d.getId().toString():d.getIdempotencyKey();d.setProviderMessageId("mock-"+key);}
 }
