@@ -128,9 +128,9 @@ jobs:
       - name: Restore the pre-cleanup migration chain for schema comparison
         run: |
           set -euo pipefail
-          git fetch --no-tags origin audit/implementation-gap-analysis
+          git fetch --no-tags origin 589d7b838f1745570abab6e4f1c756e32747612a
           mkdir -p /tmp/pre-cleanup-source
-          git archive origin/audit/implementation-gap-analysis backend/src/main/resources/db/migration | tar -x -C /tmp/pre-cleanup-source
+          git archive 589d7b838f1745570abab6e4f1c756e32747612a backend/src/main/resources/db/migration | tar -x -C /tmp/pre-cleanup-source
           OLD_MIGRATIONS=/tmp/pre-cleanup-source/backend/src/main/resources/db/migration
           test "$(find "$OLD_MIGRATIONS" -maxdepth 1 -type f -name 'V*.sql' | wc -l)" = "14"
           echo "PASS: captured the fourteen-migration pre-cleanup Flyway chain."
