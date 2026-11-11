@@ -332,6 +332,10 @@ public class CmsService {
         catch (Exception ex) { return "{}"; }
     }
 
+    public void requireMediaUpload(Principal actor) {
+        requireVendor(actor, "CMS_UPDATE");
+    }
+
     public void recordMediaUpload(String imageUrl, Principal actor) {
         UUID tenantId = requireVendor(actor, "CMS_UPDATE");
         AuditEvent event = new AuditEvent();
