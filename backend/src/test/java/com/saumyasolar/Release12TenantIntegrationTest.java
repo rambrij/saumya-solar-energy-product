@@ -163,6 +163,8 @@ class Release12TenantIntegrationTest {
     @Autowired
     com.saumyasolar.service.ExportService exportService;
     @Autowired
+    com.saumyasolar.repo.ExportJobRepository exportJobs;
+    @Autowired
     SurveyAttachmentService surveyAttachments;
     @Autowired
     InstallationJobRepository installationJobs;
@@ -2744,6 +2746,7 @@ class Release12TenantIntegrationTest {
                                 """))
                 .andExpect(status().isForbidden());
 
+        long exportJobsBeforeDeniedRequests = exportJobs.count();
         for (String token : List.of(inventoryToken, accountantToken, engineerToken)) {
             mvc.perform(post("/api/v1/exports").header("Authorization", "Bearer " + token)
                             .contentType(MediaType.APPLICATION_JSON)
@@ -2753,6 +2756,8 @@ class Release12TenantIntegrationTest {
                             .header("Authorization", "Bearer " + token))
                     .andExpect(status().isForbidden());
         }
+        assertEquals(exportJobsBeforeDeniedRequests, exportJobs.count(),
+                "Denied export creation must not persist an export job");
     }
 
     private AppUser createPermissionMatrixUser(String suffix, List<String> permissionCodes) {
