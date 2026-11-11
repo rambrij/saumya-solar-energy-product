@@ -96,7 +96,7 @@ public class ExportService {
     }
 
     private FilePayload render(Map<String,Object> report, ExportJob job) throws Exception {
-        return switch(job.getFormat()) { case "CSV" -> csv(report); case "XLSX" -> xlsx(report); case "PDF" -> pdf(report,job); default -> throw new IllegalArgumentException("Unsupported format"); };
+        return switch(job.getFormat()) { case "CSV" -> csv(report); case "XLSX" -> xlsx(report,job.getReportType()); case "PDF" -> pdf(report,job); default -> throw new IllegalArgumentException("Unsupported format"); };
     }
     private Map<String,Object> selectReport(String type, Map<String,Object> full) {
         Map<String,Object> out=new LinkedHashMap<>();
@@ -139,7 +139,7 @@ public class ExportService {
             return "\""+s.replace("\"","\"\"")+"\"";
         return s;
     }
-    private FilePayload xlsx(Map<String,Object> report) throws Exception {
+    private FilePayload xlsx(Map<String,Object> report, String reportType) throws Exception {
         try(ByteArrayOutputStream out=new ByteArrayOutputStream(); XSSFWorkbook wb=new XSSFWorkbook()) {
             var summary=wb.createSheet("Summary");var header=summary.createRow(0);
             header.createCell(0).setCellValue("Metric");header.createCell(1).setCellValue("Value");int row=1;
@@ -157,7 +157,7 @@ public class ExportService {
             }
             // Keep the generic Summary sheet for existing consumers and expose the
             // Operations report under its stable, report-specific worksheet name.
-            if ("OPERATIONS".equalsIgnoreCase(String.valueOf(report.get("reportType")))) {
+            if ("OPERATIONS".equalsIgnoreCase(reportType)) {
                 var operations=wb.createSheet("Operations");
                 var operationsHeader=operations.createRow(0);
                 operationsHeader.createCell(0).setCellValue("Metric");
