@@ -115,7 +115,7 @@ jobs:
           cat > /usr/local/bin/mysql <<'MYSQL_WRAPPER'
           #!/usr/bin/env bash
           set -euo pipefail
-          exec docker exec -i "$MYSQL_SERVICE_CONTAINER" mysql --local-infile=1 "$@"
+          exec docker exec -i "$MYSQL_SERVICE_CONTAINER" mysql --default-character-set=utf8mb4 --local-infile=1 "$@"
           MYSQL_WRAPPER
           chmod +x /usr/local/bin/mysql
       - name: Restore historical migrations for equivalence validation
