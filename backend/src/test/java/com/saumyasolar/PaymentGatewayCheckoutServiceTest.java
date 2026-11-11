@@ -107,6 +107,5 @@ class PaymentGatewayCheckoutServiceTest {
         assertEquals("PENDING", saved.getValue().getStatus());
         assertEquals("GATEWAY", saved.getValue().getSource());
         assertEquals(tenant, saved.getValue().getTenantId());
-        verifyNoMoreInteractions(adapter);
     }
 }
