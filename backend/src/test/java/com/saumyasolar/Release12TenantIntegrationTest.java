@@ -2333,7 +2333,7 @@ class Release12TenantIntegrationTest {
         role.setId(UUID.randomUUID());
         role.setTenantId(vendorTenantId);
         role.setName("BRANCH_SCOPE_TEST_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10));
-        for (String code : List.of("LEAD_VIEW", "LEAD_UPDATE", "SURVEY_VIEW", "SURVEY_COMPLETE", "QUOTATION_VIEW", "ORDER_VIEW", "BRANCH_MANAGE", "INVOICE_VIEW", "INVOICE_CREATE", "INVOICE_VOID", "SERVICE_VIEW", "SERVICE_ASSIGN", "SERVICE_CLOSE", "INSTALLATION_VIEW", "INSTALLATION_ASSIGN", "INSTALLATION_UPDATE", "INVENTORY_VIEW")) {
+        for (String code : List.of("LEAD_VIEW", "LEAD_UPDATE", "SURVEY_VIEW", "SURVEY_COMPLETE", "QUOTATION_VIEW", "ORDER_VIEW", "BRANCH_MANAGE", "INVOICE_VIEW", "INVOICE_CREATE", "INVOICE_VOID", "PAYMENT_VIEW", "PAYMENT_REFUND", "SERVICE_VIEW", "SERVICE_ASSIGN", "SERVICE_CLOSE", "INSTALLATION_VIEW", "INSTALLATION_ASSIGN", "INSTALLATION_UPDATE", "INVENTORY_VIEW")) {
             Permission permission = permissions.findByCode(code).orElseThrow();
             role.getPermissions().add(permission);
         }
@@ -2519,6 +2519,71 @@ class Release12TenantIntegrationTest {
                         .content("{\"reason\":\"unauthorized branch B finance test\"}"))
                 .andExpect(status().isNotFound());
         assertEquals("ISSUED", invoices.findByIdAndTenantId(invoiceB.getId(), vendorTenantId).orElseThrow().getStatus());
+
+        com.saumyasolar.domain.Payment paymentA = new com.saumyasolar.domain.Payment();
+        paymentA.setId(UUID.randomUUID());
+        paymentA.setTenantId(vendorTenantId);
+        paymentA.setInvoiceId(invoiceA.getId());
+        paymentA.setOrderId(orderA.getId());
+        paymentA.setAmount(new BigDecimal("5.00"));
+        paymentA.setCurrency("INR");
+        paymentA.setMethod("CASH");
+        paymentA.setSource("MANUAL");
+        paymentA.setStatus("CONFIRMED");
+        paymentA.setReference("BRANCH-A-PAY-" + UUID.randomUUID());
+        paymentA.setPaidAt(Instant.now());
+        paymentA.setCreatedAt(Instant.now());
+        com.saumyasolar.domain.Payment paymentB = new com.saumyasolar.domain.Payment();
+        paymentB.setId(UUID.randomUUID());
+        paymentB.setTenantId(vendorTenantId);
+        paymentB.setInvoiceId(invoiceB.getId());
+        paymentB.setOrderId(orderB.getId());
+        paymentB.setAmount(new BigDecimal("5.00"));
+        paymentB.setCurrency("INR");
+        paymentB.setMethod("CASH");
+        paymentB.setSource("MANUAL");
+        paymentB.setStatus("CONFIRMED");
+        paymentB.setReference("BRANCH-B-PAY-" + UUID.randomUUID());
+        paymentB.setPaidAt(Instant.now());
+        paymentB.setCreatedAt(Instant.now());
+        payments.saveAllAndFlush(List.of(paymentA, paymentB));
+        com.saumyasolar.domain.Refund refundA = new com.saumyasolar.domain.Refund();
+        refundA.setId(UUID.randomUUID());
+        refundA.setTenantId(vendorTenantId);
+        refundA.setPaymentId(paymentA.getId());
+        refundA.setAmount(BigDecimal.ONE);
+        refundA.setReason("branch A refund fixture");
+        refundA.setStatus("RECORDED");
+        refundA.setRecordedBy(member.getId());
+        refundA.setCreatedAt(Instant.now());
+        com.saumyasolar.domain.Refund refundB = new com.saumyasolar.domain.Refund();
+        refundB.setId(UUID.randomUUID());
+        refundB.setTenantId(vendorTenantId);
+        refundB.setPaymentId(paymentB.getId());
+        refundB.setAmount(BigDecimal.ONE);
+        refundB.setReason("branch B refund fixture");
+        refundB.setStatus("RECORDED");
+        refundB.setRecordedBy(member.getId());
+        refundB.setCreatedAt(Instant.now());
+        refundRecords.saveAllAndFlush(List.of(refundA, refundB));
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/payments").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), paymentA.getId(), paymentB.getId());
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/refunds").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), refundA.getId(), refundB.getId());
+        mvc.perform(get("/api/v1/payments/" + paymentA.getId()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/payments/" + paymentB.getId()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/payments/" + paymentB.getId() + "/receipt.pdf")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        int branchBRefundsBefore = refundRecords.findByTenantIdAndPaymentId(vendorTenantId, paymentB.getId()).size();
+        mvc.perform(post("/api/v1/payments/" + paymentB.getId() + "/refund")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":\"1.00\",\"reason\":\"branch B refund must be denied\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("CONFIRMED", payments.findByIdAndTenantId(paymentB.getId(), vendorTenantId).orElseThrow().getStatus());
+        assertEquals(branchBRefundsBefore, refundRecords.findByTenantIdAndPaymentId(vendorTenantId, paymentB.getId()).size());
 
         ticketA.setStatus("CUSTOMER_CONFIRMED");
         ticketB.setStatus("CUSTOMER_CONFIRMED");
