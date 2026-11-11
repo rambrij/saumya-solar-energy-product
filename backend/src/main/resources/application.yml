@@ -68,7 +68,7 @@ app:
     from: ${MAIL_FROM:no-reply@saumya.local}
   public-base-url: ${PUBLIC_BASE_URL:http://localhost:3000}
   messaging:
-    twilio-account-sid: ${TWILIO_ACCOUNT_SID:}
-    twilio-auth-token: ${TWILIO_AUTH_TOKEN:}
-    sms-from: ${TWILIO_SMS_FROM:}
-    whatsapp-from: ${TWILIO_WHATSAPP_FROM:}
+    mock:
+      enabled: true
+      webhook-secret: ${MOCK_NOTIFICATION_WEBHOOK_SECRET:local-mock-notification-secret-change-me}
+    outbox-interval-ms: ${NOTIFICATION_OUTBOX_INTERVAL_MS:15000}
