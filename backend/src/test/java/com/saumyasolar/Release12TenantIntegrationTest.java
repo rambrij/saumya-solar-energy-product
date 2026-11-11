@@ -224,7 +224,9 @@ class Release12TenantIntegrationTest {
         assertTrue(new String(tenantPdf, 0, 5, java.nio.charset.StandardCharsets.US_ASCII).startsWith("%PDF-"));
 
         mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\"email\\":\\""+adminEmail+"\\",\\"password\\":\\""+adminPassword+"\\"}"))
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(adminEmail,adminPassword)))
                 .andExpect(status().isUnauthorized());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/tenants/" + tenantId + "/status")
                         .header("Authorization", "Bearer " + platformToken).contentType(MediaType.APPLICATION_JSON)
