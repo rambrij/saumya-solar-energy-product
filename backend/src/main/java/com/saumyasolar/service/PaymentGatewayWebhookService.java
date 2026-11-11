@@ -48,11 +48,15 @@ public class PaymentGatewayWebhookService {
                 || event.providerReference() == null || event.providerReference().isBlank()
                 || event.amount() == null || event.amount().signum() <= 0
                 || event.currency() == null || !event.currency().matches("[A-Z]{3}")
+                || event.tenantId() == null || event.tenantId().isBlank()
                 || !(paymentEvents.contains(event.status()) || refundEvents.contains(event.status())))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment provider event is incomplete or unsupported");
 
         String code = provider.toUpperCase(Locale.ROOT);
-        Payment payment = payments.findByProviderAndProviderReference(code, event.providerReference()).orElse(null);
+        UUID eventTenant;
+        try { eventTenant = UUID.fromString(event.tenantId()); }
+        catch (IllegalArgumentException ex) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid payment tenant metadata"); }
+        Payment payment = payments.findByTenantIdAndProviderAndProviderReference(eventTenant, code, event.providerReference()).orElse(null);
         if (payment == null) return Map.of("accepted", false, "matched", false, "retryable", true);
         if (!payment.getCurrency().equalsIgnoreCase(event.currency()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Payment provider currency does not match the tenant payment");
