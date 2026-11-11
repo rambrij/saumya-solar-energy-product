@@ -106,8 +106,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Install MySQL client
-        run: sudo apt-get update && sudo apt-get install -y default-mysql-client
+      - name: Use MySQL client from the MySQL 8.4 service container
+        shell: bash
+        run: |
+          MYSQL_CONTAINER="$(docker ps --filter 'ancestor=mysql:8.4' --format '{{.ID}}' | head -n 1)"
+          test -n "$MYSQL_CONTAINER"
+          echo "MYSQL_SERVICE_CONTAINER=$MYSQL_CONTAINER" >> "$GITHUB_ENV"
+          cat > /usr/local/bin/mysql <<'MYSQL_WRAPPER'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec docker exec -i "$MYSQL_SERVICE_CONTAINER" mysql --local-infile=1 "$@"
+          MYSQL_WRAPPER
+          chmod +x /usr/local/bin/mysql
       - name: Restore historical migrations for equivalence validation
         run: |
           mkdir -p /tmp/historical-source
@@ -122,7 +132,7 @@ jobs:
             echo "Baseline must declare all columns and indexes inside CREATE TABLE statements."
             exit 1
           fi
-          echo "PASS: one V1 baseline plus additive V2 through V9 migrations; baseline retains 74 table definitions."
+          echo "PASS: one V1 baseline plus additive V2 through V11 migrations; baseline retains 74 table definitions."
       - name: Apply V1 schema
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass -e "CREATE DATABASE solar_migration_test"
