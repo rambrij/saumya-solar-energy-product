@@ -4,19 +4,23 @@ import {cleanup,render,screen,fireEvent,waitFor} from '@testing-library/react';
 import PlatformAnalyticsPanel from '../src/PlatformAnalyticsPanel';
 
 const usage={items:[{tenantId:'tenant-1',tenantName:'Saumya Solar',tenantSlug:'saumya-solar',tenantStatus:'ACTIVE',planName:'Professional',subscriptionStatus:'ACTIVE',users:{used:4,limit:10},products:{used:12,limit:100},branches:{used:2,limit:3},warehouses:{used:1,limit:2},storageMb:{used:25,limit:512}}],page:0,size:100,total:1,totalPages:1};
+const overview={tenants:{totalTenants:1,activeTenants:1},orders:{orderCount:3,orderValue:12000,orderingTenants:1},subscriptions:{activeSubscriptions:1,trialSubscriptions:0,pastDueSubscriptions:0},scope:'PLATFORM_AGGREGATE_ONLY'};
 describe('Platform analytics page',()=>{
- beforeEach(()=>vi.stubGlobal('fetch',vi.fn(async()=>({ok:true,status:200,json:async()=>usage}))));
+ beforeEach(()=>vi.stubGlobal('fetch',vi.fn(async(input:any)=>({ok:true,status:200,json:async()=>String(input).includes('/overview')?overview:usage}))));
  afterEach(()=>{cleanup();vi.unstubAllGlobals()});
  it('loads tenant usage from the platform analytics endpoint, not subscription plans',async()=>{
   render(<PlatformAnalyticsPanel s={{accessToken:'test-token',user:{permissions:['SUBSCRIPTION_MANAGE']}}}/>);
   expect(await screen.findByText('Tenant resource usage')).toBeTruthy();
   expect(screen.getByText('Saumya Solar')).toBeTruthy();
+  expect(screen.getByText('Orders in period')).toBeTruthy();
+  expect(screen.getByText('₹12,000')).toBeTruthy();
   const calls=vi.mocked(fetch).mock.calls.map(call=>String(call[0]));
   expect(calls.some(url=>url.includes('/platform/analytics/tenant-usage'))).toBe(true);
+  expect(calls.some(url=>url.includes('/platform/analytics/overview'))).toBe(true);
   expect(calls.some(url=>url.includes('/platform/subscription-plans'))).toBe(false);
  });
  it('shows an empty state when there are no tenants',async()=>{
-  vi.mocked(fetch).mockResolvedValue({ok:true,status:200,json:async()=>({...usage,items:[],total:0,totalPages:0})} as any);
+  vi.mocked(fetch).mockImplementation(async(input:any)=>({ok:true,status:200,json:async()=>String(input).includes('/overview')?overview:{...usage,items:[],total:0,totalPages:0}} as any));
   render(<PlatformAnalyticsPanel s={{accessToken:'test-token',user:{permissions:['SUBSCRIPTION_MANAGE']}}}/>);
   expect(await screen.findByText('No tenant usage data')).toBeTruthy();
  });
