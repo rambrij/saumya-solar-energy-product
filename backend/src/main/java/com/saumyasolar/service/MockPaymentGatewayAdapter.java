@@ -32,6 +32,7 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
     private final Map<String, GatewayPaymentStatus> payments = new ConcurrentHashMap<>();
     private final Map<String, GatewayRefund> refunds = new ConcurrentHashMap<>();
     private final Map<String, String> outcomes = new ConcurrentHashMap<>();
+    private final Map<String, String> tenants = new ConcurrentHashMap<>();
 
     public MockPaymentGatewayAdapter(
             ObjectMapper mapper,
@@ -64,13 +65,15 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
                                         Map<String, String> metadata) {
         if (amount == null || amount.signum() <= 0 || currency == null || !currency.matches("[A-Z]{3}")
                 || internalReference == null || internalReference.isBlank()
-                || metadata == null || metadata.get("idempotencyKey") == null) {
+                || metadata == null || metadata.get("idempotencyKey") == null
+                || metadata.get("tenantId") == null || metadata.get("paymentId") == null) {
             throw new IllegalArgumentException("Mock checkout requires amount, currency, reference and idempotency metadata");
         }
         String reference = "mock_pay_" + sha256(metadata.get("tenantId") + ":" + metadata.get("idempotencyKey")).substring(0, 32);
         GatewayPaymentStatus status = new GatewayPaymentStatus(reference, "PENDING", amount, currency);
         payments.putIfAbsent(reference, status);
         outcomes.putIfAbsent(reference, checkoutOutcome);
+        tenants.putIfAbsent(reference, metadata.get("tenantId"));
         return new GatewayPayment(reference, frontendBaseUrl + "/?mockCheckoutPaymentId=" + metadata.get("paymentId"), outcomes.get(reference));
     }
 
@@ -126,17 +129,18 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
     /** Used only by the dev/test simulator to produce a provider-authentic signed webhook body. */
     public String signedEvent(String eventId, String providerReference, BigDecimal amount, String currency, String status)
             throws Exception {
-        return signedEvent(eventId, providerReference, amount, currency, status, null);
+        return signedEvent(eventId, providerReference, amount, currency, status, null, tenantFor(providerReference));
     }
 
     public String signedEvent(String eventId, String providerReference, BigDecimal amount, String currency,
                               String status, String providerRefundReference) throws Exception {
-        return signedEvent(eventId, providerReference, amount, currency, status, providerRefundReference, null);
+        return signedEvent(eventId, providerReference, amount, currency, status, providerRefundReference, tenantFor(providerReference));
     }
 
     public String signedEvent(String eventId, String providerReference, BigDecimal amount, String currency,
                               String status, String providerRefundReference, String tenantId) throws Exception {
         Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        if (tenantId == null || tenantId.isBlank()) throw new IllegalArgumentException("Tenant metadata is required for signed mock events");
         payload.put("eventId", eventId);
         payload.put("providerReference", providerReference);
         payload.put("amount", amount.toPlainString());
@@ -145,6 +149,12 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
         if (providerRefundReference != null) payload.put("providerRefundReference", providerRefundReference);
         if (tenantId != null) payload.put("tenantId", tenantId);
         return mapper.writeValueAsString(payload);
+    }
+
+    private String tenantFor(String providerReference) {
+        String tenant = tenants.get(providerReference);
+        if (tenant == null) throw new IllegalArgumentException("Unknown mock payment reference");
+        return tenant;
     }
 
     public String checkoutOutcome(String providerReference) {
