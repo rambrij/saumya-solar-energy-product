@@ -100,3 +100,21 @@ GitHub Actions run [43025279559](https://github.com/rambrij/saumya-solar-energy-
 - V9: indexes for date-filtered cross-tenant order aggregates and subscription status counts.
 
 All are additive; no production data backfill or destructive migration is intended. The release-validation workflow was extended to assert V1–V8 on a clean MySQL 8.4 database.
+
+
+### Phase 5 remaining-scope implementation decisions
+
+9. Platform settings use a finite allowlist rather than generic configuration storage. V10 stores typed non-secret values only: platform default currency/time zone/language, support email/phone and a public banner message. Writes require PLATFORM_SUPER_ADMIN plus PLATFORM_MANAGE, expectedVersion and an audit event. Tenant branding, tax, invoice numbering and discount thresholds remain in existing tenant settings. Provider secrets remain in the secret provider.
+10. CMS media reuses PackageImageStorageService's JPEG/PNG/WebP validation and private file-write mechanics for intentionally public website media. The CMS API returns only a normalized app-relative /uploads path; CMS body remains plain text/Markdown and rejects HTML. The public site renders CMS text as text, never as injected HTML.
+11. CMS public routes resolve the active tenant from storeSlug and expose only the published revision. Public PAGE and BLOG routes, blog listing, banners and testimonials are now connected to the React storefront. No scheduled publication window was added because the current CMS schema has no scheduling model.
+12. Vendor operational analytics is a new tenant-scoped report projection, not a replacement for the existing sales analytics. It uses the authenticated tenant, validates branch ownership, filters assigned engineer IDs within tenant-owned rows, and returns only aggregates/report fields. V11 adds indexes for the date/assignee predicates.
+13. Asynchronous exports reuse ExportJob, ExportService, private object storage, REPORT_EXPORT, owner checks and expiry. Supported report types are OPERATIONS, SALES, INSTALLATIONS, SERVICE, INVENTORY and FINANCE. CSV renders detail sections; XLSX renders summary and detail sheets; PDF renders summary and detail tables. The source report projections exclude customer contact/address fields.
+14. Customer documents remain a frontend aggregation over existing invoice, quotation, payment receipt and service evidence routes. Do not introduce a second file registry or duplicate binary store. Browser E2E explicitly checks cross-customer invoice list/download denial; remaining document families need fixtures and evidence.
+15. The release workflow validates V1–V11 on clean MySQL 8.4, starts Spring Boot against MySQL and runs the Playwright browser suite. A queued or in-progress run is not acceptance evidence; only the latest branch-head workflow with all jobs successful can close Phase 5.
+
+### Phase 5 schema additions
+
+- V10: typed allow-listed platform_setting table with optimistic version, actor and timestamp.
+- V11: tenant/assignee/date indexes used by installation, service, invoice and order reporting.
+
+No production data backfill, destructive migration or live provider integration was introduced.
