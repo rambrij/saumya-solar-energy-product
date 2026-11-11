@@ -14,7 +14,7 @@ import static org.mockito.Mockito.*;
 
 class PaymentGatewayWebhookServiceTest {
     @Test
-    void capturesPaymentOnlyAfterValidSignedTenantBoundEvent() {
+    void capturesPaymentOnlyAfterValidSignedTenantBoundEvent() throws Exception {
         UUID tenant = UUID.randomUUID(), paymentId = UUID.randomUUID(), invoiceId = UUID.randomUUID();
         Payment payment = payment(tenant, paymentId, invoiceId);
         Invoice invoice = invoice(tenant, invoiceId);
@@ -58,7 +58,7 @@ class PaymentGatewayWebhookServiceTest {
     }
 
     @Test
-    void rejectsAmountMismatchBeforePersistingIdempotencyRecord() {
+    void rejectsAmountMismatchBeforePersistingIdempotencyRecord() throws Exception {
         UUID tenant = UUID.randomUUID(), paymentId = UUID.randomUUID(), invoiceId = UUID.randomUUID();
         Payment payment = payment(tenant, paymentId, invoiceId);
         PaymentGatewayAdapter adapter = mock(PaymentGatewayAdapter.class);
@@ -77,7 +77,7 @@ class PaymentGatewayWebhookServiceTest {
     }
 
     @Test
-    void processesRefundWebhookAndRecalculatesPaymentBalance() {
+    void processesRefundWebhookAndRecalculatesPaymentBalance() throws Exception {
         UUID tenant = UUID.randomUUID(), paymentId = UUID.randomUUID(), invoiceId = UUID.randomUUID();
         Payment payment = payment(tenant, paymentId, invoiceId);
         payment.setStatus("CONFIRMED");
