@@ -43,13 +43,16 @@ public class MockPaymentGatewaySimulatorController {
         authorize(payment, actor);
         if (!"MOCK_GATEWAY".equals(payment.getProvider()) || !"GATEWAY".equals(payment.getSource()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only mock gateway payments can be simulated");
-        String eventStatus = switch (request.outcome()) {
+        MockPaymentGatewayAdapter adapter = (MockPaymentGatewayAdapter) gateways.require("MOCK_GATEWAY");
+        String outcome = request == null || request.outcome() == null || request.outcome().isBlank()
+                ? adapter.checkoutOutcome(payment.getProviderReference()) : request.outcome();
+        if ("PENDING".equals(outcome)) return Map.of("accepted", true, "matched", true, "status", "PENDING");
+        String eventStatus = switch (outcome) {
             case "SUCCESS" -> "PAYMENT_CAPTURED";
             case "FAILURE" -> "PAYMENT_FAILED";
             case "CANCELLED" -> "PAYMENT_CANCELLED";
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Outcome must be SUCCESS, FAILURE or CANCELLED");
         };
-        MockPaymentGatewayAdapter adapter = (MockPaymentGatewayAdapter) gateways.require("MOCK_GATEWAY");
         String eventId = "mock_checkout_" + payment.getId() + "_" + eventStatus;
         String raw = adapter.signedEvent(eventId, payment.getProviderReference(), payment.getAmount(),
                 payment.getCurrency(), eventStatus, null, payment.getTenantId().toString());
@@ -67,7 +70,8 @@ public class MockPaymentGatewaySimulatorController {
         authorize(payment, actor);
         if (!"MOCK_GATEWAY".equals(refund.getProvider()) || refund.getProviderRefundReference() == null)
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only mock provider refunds can be simulated");
-        String eventStatus = switch (request.outcome()) {
+        String outcome = request == null ? null : request.outcome();
+        String eventStatus = switch (outcome == null ? "" : outcome) {
             case "SUCCESS" -> "REFUND_PROCESSED";
             case "FAILURE" -> "REFUND_FAILED";
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Refund outcome must be SUCCESS or FAILURE");
