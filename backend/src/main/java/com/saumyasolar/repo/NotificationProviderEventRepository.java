@@ -6,4 +6,5 @@ import java.util.UUID;
 
 public interface NotificationProviderEventRepository extends JpaRepository<NotificationProviderEvent,UUID> {
     boolean existsByProviderCodeAndProviderEventId(String providerCode,String providerEventId);
+    java.util.Optional<NotificationProviderEvent> findByProviderCodeAndProviderEventId(String providerCode,String providerEventId);
 }
