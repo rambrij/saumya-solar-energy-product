@@ -99,3 +99,99 @@ The exact property-to-bean, environment-variable-to-property, and workflow-to-sc
 - No runtime, configuration, SQL, test, CI, or existing documentation file was removed or modified in this phase. The existing `docs/CLEANUP_DECISIONS.md` was preserved and extended separately.
 - The initial branch-tree inventory confirms V1–V14 and the listed major controllers/screens. A complete route-annotation inventory, full dependency/property reference graph, and migration equivalence run are still required before phases 1–3.
 - A local clone was attempted but this execution environment could not resolve `github.com`; therefore local Maven/npm/MySQL/Playwright commands cannot be honestly reported as executed from this session. GitHub Actions remains the available execution/verification route.
+
+
+## Complete REST controller and endpoint inventory
+
+The inventory below was extracted from every Java class under `backend/src/main/java/com/saumyasolar/api/` that declares a Spring HTTP mapping. The `/api/v1` prefix is declared at the controller class level where shown. It is an implementation inventory; it does not imply that undocumented paths are required by the SRS. No endpoint in this inventory is removable without a caller/reference search and a documented-contract comparison.
+
+| Controller | Base path | Methods and endpoint paths (relative to base where applicable) | Requirement group |
+|---|---|---|---|
+| `Controller.java` | `/api/v1` | POST `/auth/login`, `/auth/mfa/verify`, `/auth/refresh`, `/auth/logout`, `/auth/register`, `/auth/forgot-password`, `/auth/reset-password`; GET `/auth/csrf`, `/me`; PATCH `/users/{userId}/role`, `/users/{id}/enabled`, `/users/{id}`; POST `/users`; GET `/users` is not declared in this class-level list; GET `/roles`, `/permissions`; POST `/roles`; PATCH `/roles/{roleId}`; DELETE `/roles/{roleId}`; POST `/customer/enquiries`; GET `/platform/tenants`, `/platform/tenants/{id}`, `/platform/tenants/export` (CSV), `/platform/tenants/export.pdf`; PATCH `/platform/tenants/{id}`; POST `/tenants`; POST `/{type:categories|products|packages|customers|enquiries}`; PATCH `/tenants/{id}/status`, `/packages/{id}`, `/leads/{id}`, `/categories/{id}`, `/products/{id}`, `/customers/{id}`; POST `/platform/tenants/{id}/lifecycle`; DELETE `/packages/{id}`, `/products/{id}`, `/categories/{id}`, `/customers/{id}`; POST `/enquiries/{id}/convert`, `/surveys`, `/quotations`, `/quotations/{id}/{action:approve|reject-approval|send|accept|reject}`, `/quotations/{id}/convert-to-order`, `/quotations/{id}/revisions`, `/packages/{id}/image`, `/public/{storeSlug}/enquiries`, `/catalog/products`, `/customer/product-orders`; GET `/leads/{id}/history`, `/quotations/{id}/revisions`, `/quotations/{id}/pdf`, `/public/{storeSlug}/packages`, `/public/{storeSlug}/products`, `/customer/product-orders`, `/warehouses`, `/inventory/balances`, `/inventory/reservations`, `/inventory/transactions`, `/inventory/low-stock`, `/orders/transition-options`, `/orders/transition-policy`, `/orders/{id}/history`, `/installation-teams`, `/installation-checklist-templates`, `/installations`, `/installations/{id}/checklist`, `/installations/{id}/schedule-history`, `/warranties`, `/customer/installations`, `/customer/warranties`; PUT `/orders/transition-policy`; POST `/warehouses`, `/inventory/transactions/{id}/reverse`, `/inventory/receipts`, `/inventory/returns`, `/inventory/issues`, `/inventory/damages`, `/inventory/adjustments`, `/inventory/transfers`, `/orders/{id}/reserve`, `/orders/{id}/release-reservation`, `/orders/{id}/transition`, `/installation-teams`, `/installations`, `/installations/{id}/reschedule`, `/installations/{id}/cancel`, `/installations/{id}/complete`, `/installations/{id}/commission`; PATCH `/installation-teams/{id}`, `/installations/{id}/checklist/{itemId}`; DELETE `/installation-checklist-templates/{id}` | Auth, users/RBAC, vendors/tenants, catalogue, CRM, quotation, orders, inventory, installation, customer portal |
+| `EnterpriseSaasController.java` | `/api/v1` | GET/POST `/integrations`; PATCH `/integrations/{id}/status`; GET/POST `/integrations/{id}/sync-jobs`; POST `/integrations/sync-jobs/{jobId}/retry`; GET/POST `/approval-workflows`; GET `/approval-instances`, `/approval-instances/{id}`, `/approval-instances/{id}/decisions`; POST `/approval-instances/{id}/decisions`; GET/PATCH `/vendor/branding`; GET `/public/{slug}/branding`, `/public/store-context`; GET/POST `/vendor/domains`; POST `/vendor/domains/{id}/verify`; GET/POST `/branches`; PUT `/branches/{id}`; POST `/branches/{id}/activate`, `/branches/{id}/deactivate`, `/branches/{id}/users`; GET `/branches/{id}/users`; DELETE `/branches/{id}/users/{userId}`; GET `/subscription-plans`, `/platform/subscription-plans`, `/platform/subscription-plans/{planId}`, `/platform/tenants/search`, `/platform/tenants/{tenantId}/subscriptions`, `/platform/tenants/{tenantId}/subscriptions/{subscriptionId}`, `/platform/tenants/{tenantId}/subscription-history`, `/subscription`, `/platform/analytics/tenant-usage`, `/audit-events`; PUT `/platform/tenants/{tenantId}/subscriptions/{subscriptionId}`, `/branches/{id}/users`; POST `/platform/subscription-plans`, `/platform/subscription-plans/{planId}/activate`, `/platform/subscription-plans/{planId}/deactivate`, `/platform/tenants/{tenantId}/subscriptions/{subscriptionId}/cancel`, `/platform/tenants/{tenantId}/subscriptions`; PATCH `/warehouses/{id}/branch`; DELETE `/platform/subscription-plans/{planId}` | Integration, approval workflows, vendor, branches, subscriptions, platform analytics, audit |
+| `CustomerAccountController.java` | `/api/v1/customer` | GET/PATCH `/profile`; GET/POST `/addresses`; PUT/DELETE `/addresses/{id}` | Customer identity/profile/address |
+| `FinanceController.java` | `/api/v1` | GET `/finance/orders-awaiting-invoice`, `/invoices`, `/invoices/{id}/items`, `/payments`, `/payments/{id}/receipt.pdf`, `/refunds`, `/service-requests`, `/service-requests/{id}`, `/service-requests/{id}/visits`, `/service-requests/{id}/history`, `/service-customers`, `/service-engineers`, `/service-sla-policies`; POST `/invoices`, `/invoices/{id}/credit-notes`, `/invoices/{id}/void`, `/payments`, `/payments/{id}/refund`, `/payment-webhooks/{provider}`, `/service-requests`, `/service-requests/{id}/assign`, `/service-requests/{id}/visits`, `/service-requests/{id}/visits/{visitId}/start`, `/service-requests/{id}/visits/{visitId}/complete`, `/service-requests/{id}/sla/pause`, `/service-requests/{id}/sla/resume`, `/service-requests/{id}/confirm`, `/service-requests/{id}/close`, `/service-requests/{id}/reopen`, `/service-settings/reopen-policy`, `/service-sla-policies`; GET `/invoices/{id}/pdf`; GET `/invoices/{id}/credit-notes` | Invoices, payments, refunds, receipts, service and SLA |
+| `CmsController.java` | `/api/v1` | POST `/cms/media`, `/cms/content`, `/cms/content/{id}/transition`, `/cms/content/{id}/rollback`; GET `/cms/content`, `/cms/content/{id}`, `/public/{storeSlug}/content/{type}`, `/public/{storeSlug}/content/{type}/{slug}`; PATCH `/cms/content/{id}` | CMS/blog/public storefront |
+| `ExportController.java` | `/api/v1/exports` | POST base path; GET `/{exportId}`, `/{exportId}/download` | Asynchronous CSV/XLSX/PDF exports and private downloads |
+| `BranchAnalyticsController.java` | `/api/v1/branches` | GET `/{branchId}/analytics` | Branch-scoped reporting |
+| `VendorAnalyticsController.java` | `/api/v1/vendor/analytics` | GET `/breakdowns`, `/trends`, `/operations`, `/rankings` | Vendor analytics and operations reports |
+| `PlatformBusinessAnalyticsController.java` | `/api/v1/platform/analytics` | GET `/overview` | Aggregate-only platform analytics |
+| `PlatformSettingsController.java` | `/api/v1/platform/settings` | GET base path; PUT `/{key}` | Typed platform settings |
+| `Phase2OperationsController.java` | `/api/v1` | GET/POST `/engineers`; GET/PATCH `/customer/messaging-consent`; GET `/warranty-claims`, `/customer/warranty-claims`; POST `/customer/warranty-claims`, `/warranty-claims/{id}/approve`, `/warranty-claims/{id}/reject`, `/warranty-claims/{id}/resolve`; GET `/reports/operations` | Engineers, warranty claims, messaging consent, reports |
+| `ServiceAttachmentController.java` | `/api/v1/service-requests/{ticketId}/attachments` | POST base path; GET base path and `/{attachmentId}` | Private service attachments |
+| `ServiceCommentController.java` | `/api/v1/service-requests/{ticketId}/comments` | GET/POST base path | Service-ticket collaboration/history |
+| `SurveyLifecycleController.java` | `/api/v1/surveys` | GET `/{id}`, `/{id}/history`; PATCH `/{id}`; POST `/{id}/start`, `/{id}/submit`, `/{id}/approve`, `/{id}/reject`, `/{id}/cancel` | Site surveys and approval lifecycle |
+| `SurveyAttachmentController.java` | `/api/v1/surveys/{surveyId}/attachments` | POST base path; GET base path and `/{attachmentId}` | Private survey attachments |
+| `WarrantyClaimAttachmentController.java` | `/api/v1/warranty-claims/{claimId}/attachments` | POST base path; GET base path and `/{attachmentId}` | Private warranty evidence |
+| `UserNotificationController.java` | `/api/v1/notifications` | GET base path, `/unread-count`; PATCH `/{id}/read`; POST `/read-all` | User-owned in-app inbox |
+| `NotificationPreferenceController.java` | `/api/v1/notifications/preferences` | GET/PUT base path | Per-user/channel notification preference and consent |
+| `NotificationOperationsController.java` | `/api/v1/notifications/operations` | GET `/deliveries`, `/outbox`, `/integration-jobs` | Tenant-scoped notification/integration monitoring |
+| `NotificationWebhookController.java` | `/api/v1/notification-webhooks/mock` | POST base path; class is dev/test profile only | Mock delivery callback for tests/development |
+| `OfflineSyncController.java` | `/api/v1/offline-sync` | POST/GET `/operations` | Offline operation synchronization |
+| `PaymentGatewayController.java` | `/api/v1/payment-gateways` | GET `/availability`; POST `/invoices/{invoiceId}/checkout` | Provider-neutral checkout |
+| `PaymentGatewayWebhookController.java` | `/api/v1/payment-gateway-webhooks` | POST `/{provider}` | Verified provider-neutral payment callback |
+| `PaymentReconciliationController.java` | `/api/v1/finance/reconciliations` | POST base path; GET base path and `/{reportId}/lines` | Settlement reconciliation |
+| `MockPaymentGatewaySimulatorController.java` | `/api/v1/payment-gateways/mock` | POST `/payments/{paymentId}/complete`, `/refunds/{refundId}/complete`; class is dev/test profile only | Deterministic mock payment lifecycle |
+| `MockSettlementFixtureController.java` | `/api/v1/payment-gateways/mock` | POST `/settlement-fixtures`; class is dev/test profile only | Deterministic reconciliation fixtures |
+| `SubscriptionUsageController.java` | `/api/v1/subscription` | GET `/usage`, `/storage` | Tenant subscription limits/usage |
+| `IntegrationAdapterCapabilitiesController.java` | `/api/v1` | GET mapping path is not duplicated here; class path and exact mapping are retained in source | Integration adapter capability discovery |
+| `ApiExceptionHandler.java` | Not an HTTP controller | Global exception-to-Problem-Details mapping | Common error contract |
+
+## Screen and frontend component inventory
+
+The frontend tree contains the following active route/screen components; the main route/menu composition and role guards are in `frontend/src/main.tsx` and `frontend/src/RoleNavigation.tsx`.
+
+| Screen / component | Main responsibility | Backend API families |
+|---|---|---|
+| `PublicHome.tsx`, `PublicSiteHeader.tsx`, `BrandLogo.tsx` | Public home, storefront content and navigation | `/public/{storeSlug}/...`, public branding and CMS content |
+| `EnterpriseSaasPanel.tsx` | Vendors, plans, subscriptions, integrations, branches | `EnterpriseSaasController`, tenant APIs |
+| `CmsManagementPanel.tsx` | Content authoring, revision, publish and media | `CmsController` |
+| `RoleManagementPanel.tsx`, `RoleNavigation.tsx` | Custom roles, permissions, role-based menus | `/roles`, `/permissions`, identity/session APIs |
+| `OperationsPanel.tsx` | CRM, site survey, orders, inventory, installations, warranty/service operations | `Controller`, `Phase2OperationsController`, `SurveyLifecycleController`, attachment/comment APIs |
+| `FinanceServicePanel.tsx` | Invoices, payments, refunds, credit notes, reconciliation and service | `FinanceController`, payment gateway and reconciliation APIs |
+| `NotificationInboxPanel.tsx` | User inbox, read state, preferences and delivery status | `UserNotificationController`, preference and operations APIs |
+| `OfflineSyncPanel.tsx` | Offline operation submission and status | `OfflineSyncController` |
+| `VendorAnalyticsPanel.tsx` | Vendor/branch/operations analytics and exports | `VendorAnalyticsController`, `BranchAnalyticsController`, exports |
+| `PlatformAnalyticsPanel.tsx` | Platform aggregate analytics | `PlatformBusinessAnalyticsController` |
+| `PlatformSettingsPanel.tsx` | Typed platform configuration | `PlatformSettingsController` |
+| `Phase2AdminPanel.tsx` | Platform/vendor administration and operational settings | `Controller`, `EnterpriseSaasController`, role/menu configuration |
+| `RecordEditor.tsx`, `PackageImageUpload.tsx` | Shared CRUD form and catalogue/media upload components | Catalogue/package/media APIs |
+| `authenticatedFetch.ts` | Credentialed/CSRF-aware API calls and session refresh | Authentication/session APIs and all protected API calls |
+
+Frontend tests are in `frontend/tests/` and browser-level suites are in `frontend/e2e/`; the exact files are enumerated by the branch tree: component tests cover the screen components above and E2E covers auth/session security, two-tenant filter isolation, tenant workspace switching, CMS and customer document flows.
+
+## Complete V1 table inventory and later schema objects
+
+V1 declares 74 tables. The table list below is extracted from `V1__baseline.sql` and maps to the corresponding Java domain/repository pair under `backend/src/main/java/com/saumyasolar/domain/` and `repo/` (or a shared aggregate in `AppService`/service packages).
+
+- **Identity/tenant/security:** `tenant`, `permission`, `role`, `role_permission`, `app_user`, `user_role`, `refresh_token`, `password_reset_token`, `mfa_challenge`, `auth_rate_limit_bucket`, `audit_event`.
+- **Vendor/SaaS:** `subscription_plan`, `tenant_subscription`, `subscription_usage`, `subscription_assignment_history`, `tenant_domain`, `tenant_storage_ledger`, `branch`, `branch_user`, `warehouse`.
+- **Catalogue/inventory:** `product_category`, `product`, `solar_package`, `package_item`, `inventory_balance`, `inventory_reservation`, `inventory_transaction`.
+- **Customer/CRM/sales:** `customer_profile`, `customer_address`, `enquiry`, `sales_lead`, `lead_history`, `site_survey`, `site_survey_history`, `site_survey_attachment`, `quotation`, `quotation_item`, `customer_order`, `order_item`, `order_status_history`, `idempotency_record`.
+- **Installation/service/warranty:** `installation_team`, `installation_checklist_template`, `installation_job`, `installation_checklist_item`, `installation_schedule_history`, `engineer_profile`, `service_sla_policy`, `service_request`, `service_visit`, `service_event`, `service_attachment`, `service_comment`, `warranty`, `warranty_claim`, `warranty_claim_attachment`.
+- **Finance:** `invoice_sequence`, `invoice`, `invoice_item`, `payment`, `payment_webhook_event`, `payment_refund`, `credit_note`.
+- **Integrations/communications:** `integration_connection`, `integration_secret_reference`, `integration_webhook_event`, `integration_sync_job`, `notification_delivery`, `offline_sync_operation`, `offline_sync_attachment`.
+- **Reporting/approvals/exports:** `export_job`, `approval_workflow`, `approval_instance`, `approval_decision`.
+
+Later migrations add the following required tables: `order_transition_policy` (V3), `payment_reconciliation_report` and `payment_reconciliation_line` (V5), `cms_content` and `cms_content_revision` (V6), `user_notification` (V7), `platform_setting` (V10), `notification_outbox`, `notification_preference` and `notification_provider_event` (V12). V2–V14 also add required columns, checks, indexes, triggers, permission catalogue rows/grants and tenant-bound composite foreign keys. These later schema objects must be absorbed into the consolidated baseline.
+
+## Repository inventory scope
+
+The Git tree API returned the following checked-in inventory on this branch (generated/dependency build outputs are not counted as source files):
+
+| Area | Files |
+|---|---:|
+| Backend (Java, resources, tests, Maven descriptor, Dockerfile) | 353 |
+| Frontend (source, tests, E2E, package/build config, public assets, Dockerfile) | 48 |
+| Docs (excluding root-level source-of-truth/analysis docs counted separately) | 20 |
+| GitHub workflows | 2 |
+| Scripts | 4 |
+
+All backend files are organized under `api/`, `config/`, `domain/`, `repo/`, `security/`, `service/`, `resources/`, and `test/`; the recursive tree inventory was reviewed. The 48 frontend files are grouped as `src/`, `tests/`, `e2e/`, and `public/`. The 4 scripts are the two audit shell/Python pairs. Root files additionally include Docker Compose, the three source documents, existing analysis matrices, and the development start script.
+
+## Phase 0 usage-search findings and removal candidate
+
+- API mapping search found only one multi-path compatibility alias: `GET /settings` and `PATCH /settings/discount-threshold` are aliases of `/tenant/settings` and `/tenant/settings/discount-threshold` in `Controller.java`.
+- Frontend source search found the two alias paths called only from `frontend/src/main.tsx` (vendor settings load and save). No other controller, frontend component, E2E/component test, or source mapping was found in the targeted caller search.
+- The documented SRS/HLD API catalogue §13 does not list either `/settings` alias; tenant/vendor configuration belongs to the vendor/tenant administration API group. Since there is no production deployment and the frontend is the only discovered caller, Phase 1 will switch this caller to the explicit tenant-scoped path and remove the alias mappings. This is a path cleanup only; the underlying settings data and behavior remain unchanged.
+- No old DTO version or explicitly deprecated API version was positively identified by the recursive path inventory. No undocumented route is to be deleted solely because it is not listed in the SRS; those remain pending caller/requirement evidence.
