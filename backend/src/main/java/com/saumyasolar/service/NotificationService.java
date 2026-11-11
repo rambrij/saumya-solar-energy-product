@@ -243,7 +243,7 @@ public class NotificationService {
         } catch (Exception ex) {
             int attempts = record.getAttemptCount() + 1;
             record.setAttemptCount(attempts);
-            record.setStatus("FAILED");
+            record.setStatus(attempts >= 5 ? "DEAD_LETTER" : "FAILED");
             record.setLastError("Delivery attempt failed");
             record.setNextAttemptAt(attempts >= 5 ? null
                     : Instant.now().plusSeconds(Math.min(3600, 60L * (1L << Math.min(attempts, 5)))));
@@ -342,16 +342,7 @@ public class NotificationService {
                 message.setText(record.getMessageBody());
                 mailSender.send(message);
             } else {
-                if (twilioSid.isBlank() || twilioToken.isBlank())
-                    throw new IllegalStateException("Messaging provider is not configured");
-                String to = record.getRecipient();
-                String sender = "SMS".equals(record.getChannel()) ? smsFrom : ( whatsappFrom.startsWith("whatsapp:") ? whatsappFrom : "whatsapp:" + whatsappFrom );
-                String form = "To=" + encForm(to) + "&From=" + encForm(sender) + "&Body=" + encForm(record.getMessageBody());
-                String auth = Base64.getEncoder().encodeToString(( twilioSid + ":" + twilioToken ).getBytes(StandardCharsets.UTF_8));
-                HttpRequest request = HttpRequest.newBuilder(URI.create("https://api.twilio.com/2010-04-01/Accounts/" + twilioSid + "/Messages.json")).timeout(Duration.ofSeconds(10)).header("Authorization", "Basic " + auth).header("Content-Type", "application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(form)).build();
-                HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() < 200 || response.statusCode() >= 300)
-                    throw new IllegalStateException("Messaging provider returned HTTP " + response.statusCode());
+                sendProviderDelivery(record);
             }
             record.setAttemptCount(record.getAttemptCount() + 1);
             record.setStatus("DELIVERED");
@@ -361,7 +352,7 @@ public class NotificationService {
         } catch (Exception ex) {
             int attempts = record.getAttemptCount() + 1;
             record.setAttemptCount(attempts);
-            record.setStatus("FAILED");
+            record.setStatus(attempts >= 5 ? "DEAD_LETTER" : "FAILED");
             record.setLastError("Delivery retry failed");
             record.setNextAttemptAt(attempts >= 5 ? null : Instant.now().plusSeconds(Math.min(3600, 60L * ( 1L << Math.min(attempts, 5) ))));
         }
