@@ -128,7 +128,7 @@ jobs:
       - name: Restore the pre-cleanup migration chain for schema comparison
         run: |
           set -euo pipefail
-          git fetch --no-tags origin 589d7b838f1745570abab6e4f1c756e32747612a
+          git cat-file -e 589d7b838f1745570abab6e4f1c756e32747612a^{commit}
           mkdir -p /tmp/pre-cleanup-source
           git archive 589d7b838f1745570abab6e4f1c756e32747612a backend/src/main/resources/db/migration | tar -x -C /tmp/pre-cleanup-source
           OLD_MIGRATIONS=/tmp/pre-cleanup-source/backend/src/main/resources/db/migration
