@@ -1829,3 +1829,31 @@ The finance integration tests create only `source=MANUAL` ledger records for off
 ### Remaining acceptance qualification
 
 These additions close the specifically requested role and workflow gaps with persisted fixtures and database-state assertions. They do not by themselves prove every runtime HTTP mapping, every permission catalogue entry, or every CRUD verb/resource combination in the entire platform. The generated runtime mapping reconciliation and the full route-by-route evidence matrix remain separate Phase 2 release gates. Any untested combinations remain **Unverified**, not Met.
+
+
+### Final verification update — 2026-11-11
+
+**Verified source commit:** `65172df0984d0952ba18c31fbd161a042cf365a0`  
+**CI run:** [42985206403](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42985206403) — **success**
+
+The final run for the verified code head completed all four jobs successfully:
+
+- Backend compile and full test suite: **224 tests, 0 failures, 0 errors, 0 skipped**. `Release12TenantIntegrationTest`: 45 tests, all passing.
+- Flyway migrations against MySQL 8.4: passed.
+- Spring Boot against MySQL 8.4 and Mailpit: passed.
+- Frontend typecheck and production build: passed.
+
+Additional final evidence in `Release12TenantIntegrationTest.branchAssignedMemberListsOnlyAssignedBranchEnquiriesLeadsSurveysQuotationsAndOrders` now includes:
+- branch-scoped billable-order visibility and denied invoice creation for another branch;
+- invoice item and void boundaries;
+- payment/refund list filtering, receipt PDF ownership, denied out-of-branch refund with unchanged payment/refund rows;
+- service attachment listing/upload denial for another branch;
+- service visit scheduling denial for another branch with no visit row created;
+- installation checklist read/update denial for another branch with the denied checklist item unchanged;
+- service ticket close and installation cancellation denials with unchanged resource state.
+
+`Release12TenantIntegrationTest.assignedAndUnassignedServiceEngineersHaveFixtureBackedReadAndMutationBoundaries` also verifies assigned/unassigned visit list, start and completion access, persisted engineer notes/resolution/evidence, and no completion timestamp after denied mutation. `FinanceService.scheduleVisit` now checks ticket assignment and branch scope before creating a visit.
+
+**Payment restriction remains unchanged:** all payment/refund HTTP integration tests use manual/offline ledger records only; the adapter-only checkout test uses a mock adapter. No external payment provider or real charge/refund is invoked.
+
+The requested remaining role/resource scenarios are verified by the passing run. The broader runtime route-to-evidence reconciliation remains its own release gate; untested route/role combinations outside these explicitly named scenarios must still be classified as Unverified rather than assumed Met.
