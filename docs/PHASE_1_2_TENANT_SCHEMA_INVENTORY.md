@@ -91,3 +91,33 @@ The downloaded MySQL 8.4 schema audit artifact `phase-1-2-tenant-schema-inventor
 This is complete schema and NULL-row evidence for the **disposable CI MySQL 8.4 database only**. It is not production evidence and does not constitute owner approval for the three global role rows or any other classification. Production must be audited with the same read-only SQL and reviewed by the data owner/DBA before release.
 
 The workflow run above has successful MySQL migration/schema jobs, but the overall run's backend test job failed on the then-present public CSRF probe test; do not describe that whole run as green. A later current-head run must pass the full suite.
+
+
+---
+
+## Cleanup baseline inventory addendum — 2026-11-12
+
+The historical counts above describe the earlier 74-table schema before the Phase 3–6 tables were consolidated into the single clean-install baseline. The new consolidated baseline contains **84 base tables**. The MySQL 8.4 schema-audit artifact from cleanup run [43087397175](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/43087397175), artifact [cleanup-tenant-schema-inventory, 13886987530](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/43087397175), records the following actual disposable-CI shape:
+
+| Item | Observed baseline |
+|---|---:|
+| Base tables | 84 |
+| Tables with `tenant_id` | 74 |
+| `tenant_id` columns declared NOT NULL | 68 |
+| `tenant_id` columns declared nullable | 6 |
+| NULL rows in NOT NULL tenant tables | 0 |
+
+The six nullable tenant columns and exact test-fixture counts are:
+
+| Table | NULL tenant rows | Reason / scope |
+|---|---:|---|
+| `app_user` | 0 | Shared platform/vendor/customer identity model |
+| `role` | 3 | Global platform/customer role rows; the separate CI assertion restricts these to the approved global roles |
+| `audit_event` | 0 | Platform and tenant audit-event scope |
+| `notification_delivery` | 0 | Platform security delivery and tenant business notification scope |
+| `order_transition_policy` | 36 | Global default transition rules alongside tenant-configurable rules |
+| `user_notification` | 0 | User inbox projection supports platform and tenant identity scopes |
+
+The ten tables without a `tenant_id` column are `role_permission`, `user_role`, `auth_rate_limit_bucket`, `permission`, `subscription_plan`, `tenant`, `platform_setting`, `mfa_challenge`, `password_reset_token` and `refresh_token`. Join-table scope is inherited from parent identity/role rows; platform-global catalogue/configuration tables are explicitly not tenant-owned; user-scoped security tables resolve ownership through the user identity.
+
+These values are evidence from an empty, disposable MySQL 8.4 CI database only. They are not production row counts, production FK approval or a production data-owner sign-off. The production preflight remains manual and read-only/guarded; no production database was queried or changed by this cleanup.
