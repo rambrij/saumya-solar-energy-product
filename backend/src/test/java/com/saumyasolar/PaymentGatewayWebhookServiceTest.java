@@ -73,7 +73,7 @@ class PaymentGatewayWebhookServiceTest {
 
     @Test
     void refusesCrossTenantProviderReferenceAndLeavesEventRetryable() throws Exception {
-        UUID ownerTenant = UUID.randomUUID(), claimedTenant = UUID.randomUUID();
+        UUID claimedTenant = UUID.randomUUID();
         PaymentGatewayAdapter adapter = mock(PaymentGatewayAdapter.class);
         when(adapter.providerCode()).thenReturn("MOCK_GATEWAY");
         when(adapter.verifyWebhook("payload", "sig")).thenReturn(true);
