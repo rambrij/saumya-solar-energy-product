@@ -19,6 +19,7 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
 
+@Profile({"dev","test"})
 @RestController @RequestMapping("/api/v1/notification-webhooks/mock")
 public class NotificationWebhookController {
   private final NotificationDeliveryRepository deliveries; private final NotificationProviderEventRepository events; private final ObjectMapper mapper; private final String secret;
