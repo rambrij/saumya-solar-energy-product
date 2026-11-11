@@ -2080,3 +2080,86 @@ The Phase 5 gap matrix is maintained in docs/PHASE5_GAP_MATRIX.md. Beyond the in
 - Playwright E2E coverage for CMS upload/publish/public render and cross-customer invoice list/download denial. V11 adds operational report indexes. Release validation applies V1–V11 on MySQL 8.4.
 
 **Still pending acceptance:** latest full release-validation must pass. Additional MySQL-backed tests are required for report payment/status semantics, settings optimistic conflicts/audit persistence, CMS concurrent revision/publish behavior and all customer document families. The role × endpoint evidence for the new CMS/settings/export APIs must be reconciled before Phase 5 is closed. This branch is not declared Phase 5 complete while the latest workflow is queued, in progress or failed.
+
+
+---
+
+## Phase 6 notifications and integrations — branch audit baseline (2026-11-11)
+
+**Branch:** `audit/phase-6-notifications-integrations`  
+**Base:** `audit/phase-4-finance-provider-impl`
+
+The Phase 6 audit reuses the existing Phase 5 inbox and integration synchronization infrastructure. It does not treat the inbox as a delivery queue, nor payment webhooks as notification-provider delivery events.
+
+| Requirement | Status | Evidence / gap |
+|---|---|---|
+| Notification delivery persistence | PARTIAL | `NotificationDelivery` and repository persist channel, attempt count, status, next-attempt time, provider message ID and last error |
+| In-app inbox/read state | IMPLEMENTED (Phase 5) | `UserNotification`, `UserNotificationService` and V7/V8; retain and extend |
+| Transactional outbox | MISSING | No dedicated outbox and transactional enqueue boundary established |
+| Integration job state/scheduler | PARTIAL | `IntegrationSyncJob` and `IntegrationSyncScheduler` already support tenant-scoped claim, retry and dead-letter states |
+| Notification provider adapter ports | MISSING | SMTP and Twilio-specific network calls remain in `NotificationService` |
+| Mock-only adapter selection | MISSING / BLOCKING | Current inspected notification service can make direct SMTP/Twilio requests; Phase 6 requires mock adapters and no real provider calls |
+| Notification retry/dead-letter | PARTIAL | Five-attempt retry/backoff exists; explicit terminal dead-letter and safe redrive/monitoring remain unverified |
+| Integration retry monitoring | PARTIAL | Persisted job status/error/attempt data exists; admin API/UI and authorization evidence remain unverified |
+| Per-user/per-channel preferences and consent | PARTIAL | Customer SMS/WhatsApp consent flags exist; full preference model and UI absent/unverified |
+| Provider delivery webhook/event state | MISSING / NOT PROVEN | No notification provider event ledger and signature-verified delivery callback path established |
+| SLA escalation | PARTIAL / POLICY BLOCKED | Service SLA breach evaluation exists; escalation thresholds, targets and cadence are not specified |
+| Notification preferences UI and delivery status UI | MISSING / PARTIAL | Phase 5 inbox exists; preferences and channel-delivery status are not established |
+| Phase 6 tests | PARTIAL | Added preference consent, mock adapter, webhook signature/replay/tenant binding and outbox dispatch/suppression tests; full backend CI, MySQL 8.4 migration, Spring Boot startup and browser evidence must pass on final branch HEAD |
+
+### Phase 6 implementation status
+
+**Phase 6 is not complete.** The branch creation and source audit are complete; runtime implementation, migrations, frontend changes, targeted tests and CI evidence are outstanding. Do not mark the Phase 6 gap as done until each row is implemented and verified.
+
+Blocking policy decisions are recorded as NOT-OQ-01 through NOT-OQ-10 in `docs/CLEANUP_DECISIONS.md`. In particular, notification SLA escalation thresholds/targets, mandatory-vs-optional event preferences, consent evidence, provider callback contract, retention, retry policy and admin visibility must not be invented.
+
+No new provider SDK, credentials, live messaging call, migration, data backfill or compatibility shim was added in this audit checkpoint.
+### Phase 6 implementation update — partial (2026-11-11)
+
+| Requirement | Current status | Implementation evidence / remaining gate |
+|---|---|---|
+| Transactional outbox | PARTIAL | V12 `notification_outbox`; NotificationService enqueue transaction; outbox scheduler. Verify commit rollback and concurrent dispatch tests in CI. |
+| Existing inbox reuse | IMPLEMENTED | Phase 5 UserNotification retained; IN_APP preference checked before creation. |
+| Mailpit email adapter | PARTIAL | Mailpit adapter and local compose service; verify local app profile and CI tests. |
+| SMS/WhatsApp mock adapters | IMPLEMENTED (mock only) | Deterministic adapter; no real network provider. |
+| Retry/backoff/dead-letter | PARTIAL | Existing attempt/backoff retained and DEAD_LETTER status added; dispatcher/retry concurrency needs integration tests. |
+| Provider webhook/event ledger | PARTIAL | HMAC-verified mock callback, provider event persistence and replay hash check; automated signature/tenant/replay tests still required. |
+| Preferences and consent | PARTIAL | Tenant/user/channel preference API and UI; SMS/WhatsApp explicit consent; consent evidence lifecycle and mandatory categories remain open. |
+| Delivery/outbox/integration monitoring APIs | PARTIAL | Tenant-scoped read APIs; platform-wide view and manual redrive not included. |
+| Frontend preferences and delivery status | PARTIAL | NotificationInboxPanel extended; browser tests and full design/role review pending. |
+| SLA escalation | DEFERRED | No approved thresholds, targets or cadence; see NOT-OQ-01 and NOT-OQ-02. |
+| Phase 6 full verification | NOT VERIFIED | Branch-head full CI and migration/startup/browser evidence pending. |
+
+**Phase 6 remains PARTIAL, not done.** Do not merge/release until build, backend/frontend tests, V12 migration validation, webhook/tenant/idempotency tests and browser verification pass. Open policy decisions remain in `docs/CLEANUP_DECISIONS.md`.
+### Phase 6 latest implementation checkpoint
+
+- V12 is the Phase 6 notification outbox/preferences/provider-event schema migration. The release-validation workflow now includes V12 on its clean MySQL 8.4 path.
+- Mailpit is the only email transport. Its deterministic Message-ID is searched through the local Mailpit API before resend, allowing retries to recognize a previously captured email. SMS/WhatsApp use mock-only adapters; mock delivery webhooks are dev/test profile-only.
+- Adapter selection is through the notification channel adapter registry. The mock messaging adapter is disabled by default and enabled only in dev/test configuration.
+- Vendor self-delivery visibility remains separate from tenant-wide operations monitoring: outbox and integration job monitoring require VENDOR_ADMIN; integration error details are not returned verbatim.
+- Current phase status remains PARTIAL until final branch-head CI is green. SLA escalation, notification template administration, manual redrive and platform cross-tenant provider monitoring remain deferred under NOT-OQ-01/02 and NOT-OQ-11/14.
+---
+
+## Phase 6 notifications and integrations — implementation status (2026-11-11)
+
+The following status supersedes the initial audit baseline above.
+
+| Requirement | Current status | Implementation/evidence |
+|---|---|---|
+| Transactional outbox | IMPLEMENTED | V12 `notification_outbox`; V14 tenant-matched composite FKs; `NotificationService.sendBusinessNotification` writes delivery + outbox transactionally; event-driven bypass removed |
+| In-app inbox | IMPLEMENTED | Existing Phase 5 inbox retained; projection now participates in business transaction |
+| Email adapter | IMPLEMENTED (local only) | `MailpitEmailNotificationAdapter` uses local Mailpit SMTP and Message-ID idempotency lookup |
+| SMS/WhatsApp provider abstraction | IMPLEMENTED (mock) | `NotificationChannelAdapter`, registry, deterministic `MockMessagingNotificationAdapter` |
+| Twilio swap point | IMPLEMENTED (fail-closed seam) | `app.messaging.provider=mock|twilio`; reserved Twilio adapter makes no network calls and fails closed |
+| Retry/backoff/dead-letter | IMPLEMENTED | Single outbox dispatch path; five attempts, bounded exponential backoff, dead-letter; stale processing recovery |
+| Provider callback/event ledger | IMPLEMENTED (mock only) | Dev/test HMAC webhook, unique provider event ID, payload-hash replay validation, tenant-bound delivery and outbox update |
+| User/channel preferences and consent | IMPLEMENTED (conservative opt-in) | V12 preference table/API; explicit SMS/WhatsApp consent; dispatcher suppresses missing/withdrawn consent |
+| Delivery/outbox/integration monitoring | IMPLEMENTED | Existing tenant-scoped operations APIs and Notifications UI |
+| Frontend preference and delivery status | IMPLEMENTED | Existing inbox panel extended/corrected; frontend consent test added |
+| SLA escalation policy | DEFERRED — Open Questions | Thresholds, target matrix and cadence are not defined in requirements |
+| Real Twilio provider integration | OUT OF SCOPE | Explicit no-real-provider rule; adapter seam fails closed |
+| Phase 6 automated tests | ADDED, EXECUTION PENDING | Backend and frontend test sources added/updated; workflow includes MySQL V13 check |
+
+### Phase 6 acceptance gate
+
+**Implementation status: code changes applied; verification not yet confirmed.** Maven full verify, frontend tests/build, MySQL 8.4 Flyway validation and Playwright browser tests must pass in GitHub Actions before Phase 6 can be marked fully complete. SLA escalation and live Twilio remain deferred as documented open questions/out-of-scope decisions.

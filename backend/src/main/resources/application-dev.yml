@@ -1,4 +1,17 @@
+spring:
+  mail:
+    host: localhost
+    port: 1025
+    username: ""
+    password: ""
 app:
+  mailpit:
+    base-url: http://localhost:8025
+  messaging:
+    provider: mock
+    mock:
+      enabled: true
+      webhook-secret: dev-only-mock-notification-webhook-secret
   payment:
     mock:
       enabled: ${MOCK_PAYMENT_ENABLED:true}
