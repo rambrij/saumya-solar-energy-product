@@ -66,3 +66,19 @@ For every discovered worker or scheduled registration, confirm:
 - Owner approval / date:
 
 **Current status: NOT CONFIRMED.** No production cloud account, cluster, queue or scheduler registration was queried during the repository audit. Do not convert the source-only scan into an external-runtime PASS.
+
+
+## Connected provider inspection — 2026-11-11
+
+The repository audit session inspected the provider accounts exposed through the connected Render and Vercel integrations. This is useful evidence about the connected workspaces only; it is not proof that all production accounts, organizations or cloud projects were connected.
+
+| Provider | Connected scope inspected | Observed resources | Worker / schedule finding | Target repository match | Status |
+|---|---|---|---|---|---|
+| Render | Workspace **My Workspace** (tea-dbkn6fvf3r2c73fcnu80) | One service: **soumya-solar-api**, type **web_service**, branch **main**, repository **rambrij/soumya-solar-energy-solution**, region Singapore | The service inventory returned no separate cron job, background worker, private worker or queue consumer in this accessible workspace. The listed resource is a web service only. | **No** — the service points to the older soumya-solar-energy-solution repository, not saumya-solar-energy-product. | OBSERVED — not target-project sign-off |
+| Vercel | Team **rambrij2010-2011's projects** (team_hs3I9BOSOsksJMvAnrYVIS26) | One Git-linked project: **soumya-solar-energy-solution** (prj_KDK4keKw5NWqkmJdDxjEp6LZ6Guk), Vite; project detail reports live=false and a latest deployment with production target READY. | The project detail response does not expose cron registration inventory. No positive or negative claim about Vercel Cron is made from this response. Inspect the Vercel project's Cron Jobs dashboard/API and repository vercel.json/function config before closure. | **No** — the linked project points to the older soumya-solar-energy-solution repository. | PARTIAL — schedule evidence still pending |
+| AWS | No AWS account/organization connection was available in this session | Not queried | EventBridge/Scheduler, Lambda event-source mappings, ECS scheduled tasks, EKS CronJobs/Jobs, SQS/DLQs, SNS subscriptions and other AWS resources remain unverified. | Not established | PENDING — AWS owner confirmation required |
+| Kubernetes / other cloud / vendors | No additional connected control plane was available | Not queried | Production namespaces, provider cron jobs, managed queues, webhooks/retries and any external worker deployment remain unverified. | Not established | PENDING — infrastructure owner confirmation required |
+
+**Evidence boundary:** Render's service listing covered the accessible workspace, not every possible Render workspace. Vercel's linked-project listing covered the connected team; the project metadata did not enumerate Cron Jobs. Both observed projects point to the older repository, so neither establishes the deployment topology for saumya-solar-energy-product. The checked-in source inventory remains complete for repository code/config only.
+
+**Release gate:** keep external worker discovery NOT CONFIRMED until the infrastructure owner supplies the production AWS/other cloud account and Vercel/Render schedule exports for the environment actually serving saumya-solar-energy-product, or signs an explicit NONE — verified for each control plane. Attach export timestamps, resource identifiers, owner and tenant-context/idempotency evidence to the table above.
