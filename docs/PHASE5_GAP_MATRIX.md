@@ -100,8 +100,7 @@ The first implementation vertical slices are committed on this branch. This is a
 
 ### Initial implementation commits
 
-- Audit-first matrix: `27e7da1c49207f36fdc1b66a0a6b3e470aae4131`
-- CMS and inbox backend/UI, migrations V6–V8, aggregate platform analytics, tests, and CI migration updates are subsequent commits on this same branch. The branch head and latest workflow status must be taken from GitHub Actions at review time.
+CMS and inbox backend/UI, migrations V6–V8, aggregate platform analytics, tests, and CI migration updates are committed on this same branch. Use the branch commit history and the latest GitHub Actions run as the authoritative implementation and validation record.
 
 ### Known validation issues observed and corrective work
 
