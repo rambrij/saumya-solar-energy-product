@@ -1,0 +1,5 @@
+app:
+  payment:
+    mock:
+      enabled: true
+      signing-secret: test-only-mock-payment-signing-secret-32-chars
