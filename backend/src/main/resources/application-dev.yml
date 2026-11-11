@@ -1,0 +1,5 @@
+app:
+  payment:
+    mock:
+      enabled: ${MOCK_PAYMENT_ENABLED:true}
+      signing-secret: ${MOCK_PAYMENT_SIGNING_SECRET:dev-only-mock-payment-signing-secret-change-me}
