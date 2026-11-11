@@ -54,7 +54,7 @@ class UserNotificationServiceTest {
         UserNotificationService service = new UserNotificationService(repository, mock(AppUserRepository.class));
         UUID userId = UUID.randomUUID(), tenantId = UUID.randomUUID();
         Principal actor = new Principal(userId, tenantId, "vendor@example.test", "VENDOR",
-                Set.of("VENDOR_ADMIN"), Set.of(), 0);
+                Set.of("VENDOR_ADMIN"), Set.of("NOTIFICATION_VIEW"), 0);
         when(repository.markAllTenantRead(eq(userId), eq(tenantId), any(Instant.class))).thenReturn(3);
         assertEquals(3, service.markAllRead(actor));
         verify(repository).markAllTenantRead(eq(userId), eq(tenantId), any(Instant.class));
