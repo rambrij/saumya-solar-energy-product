@@ -280,7 +280,7 @@ This section supersedes the initial audit's statement that Phase 6 runtime work 
 | Any application property or environment variable | Could be stale. | Trace property binding, `@Value`, `@ConfigurationProperties`, compose/workflow/script references and deployment docs. | KEEP pending evidence |
 | Any SQL file outside the active Flyway chain | Could be a one-off, rollback or duplicate seed script. | Search all scripts, workflows, test resources and documentation for invocation; compare schema/data effects. | KEEP pending evidence |
 | Any script or test fixture | Could be orphaned. | Search workflow/package/compose references and test imports; prove no required behavior/test evidence is lost. | KEEP pending evidence |
-| Any messaging/broker dependency or transport | The user explicitly requests zero broker usage. | Search all source, build manifests, lockfiles, properties, env files, compose, CI, scripts, docs and tests for broker clients and endpoint/config references; distinguish broker transport from required DB outbox, async executor, scheduler and integration jobs. | KEEP until complete evidence; remove transport only |
+| Any third-party message queue dependency or transport | The user explicitly requests zero third-party message-queue usage. | Search all source, build manifests, lockfiles, properties, env files, compose, CI, scripts, docs and tests for broker clients and endpoint/config references; distinguish broker transport from required DB outbox, async executor, scheduler and integration jobs. | KEEP until complete evidence; remove transport only |
 | Any migration V2–V14 | Candidate for consolidation, not unused functionality. | Reproduce all 14 active migrations on clean MySQL 8.4, compare against the proposed consolidated baseline and document exact schema/seed equivalence. | KEEP until schema diff passes |
 
 ## Contract Changes
@@ -306,7 +306,7 @@ This section supersedes the initial audit's statement that Phase 6 runtime work 
 | Required source documents | Full GitHub file fetch for all three named documents; heading inventory recorded in `docs/CLEANUP_TRACEABILITY.md` | PASS — source files fetched in full; README excluded |
 | Repository clone | `git clone --branch audit/implementation-gap-analysis --single-branch https://github.com/rambrij/saumya-solar-energy-product.git` | BLOCKED — execution environment could not resolve github.com |
 | Local build/tests/MySQL schema dump | Maven, npm, Docker Compose and MySQL commands | NOT RUN — no local repository clone/network resolution in this execution environment |
-| Repository-wide broker scan | Pending complete branch-ref source/config/docs search | NOT YET VERIFIED |
+| Repository-wide external transport scan | Pending complete branch-ref source/config/docs search | NOT YET VERIFIED |
 | Schema equivalence | Pending old migration chain vs single baseline MySQL 8.4 dump diff | NOT RUN |
 | Fresh database application startup | Pending baseline consolidation | NOT RUN |
 | CI branch policy | Pending Phase 3 workflow audit/change | NOT RUN |
@@ -318,12 +318,12 @@ No command is marked successful unless its output was observed. GitHub Actions m
 
 The following branch-head evidence was inspected after the initial inventory:
 
-- `backend/pom.xml` declares Spring Web, Security, Data JPA, Validation, Mail, Actuator, Flyway, OpenAPI, JWT, PDF/XLSX, MySQL and test dependencies. No Kafka, RabbitMQ, AMQP, JMS, SQS, SNS or EventBridge client dependency is declared in this manifest. This does not prove the absence of transitive or frontend/other build dependencies.
-- Root `docker-compose.yml` defines MySQL, Mailpit, backend and frontend services; no dedicated broker service is present in the inspected file.
+- `backend/pom.xml` declares Spring Web, Security, Data JPA, Validation, Mail, Actuator, Flyway, OpenAPI, JWT, PDF/XLSX, MySQL and test dependencies. No third-party message queue client dependency is declared in this manifest. This does not prove the absence of transitive or frontend/other build dependencies.
+- Root `docker-compose.yml` defines MySQL, Mailpit, backend and frontend services; no dedicated third-party message queue service is present in the inspected file.
 - `docs/PHASE_1_2_BACKGROUND_JOB_INVENTORY.md` records database-backed `IntegrationSyncJob` and `notification_outbox` processing, seven scheduled jobs, two in-process async listeners and a bounded executor. It also records that the static worker scan found no checked-in Kafka/RabbitMQ/AMQP/JMS/SQS/SNS/EventBridge producer/consumer clients on the documented audit checkpoint. This is supporting historical evidence, not a substitute for a fresh scan on this target branch.
 - The notification outbox, provider adapters, preferences and tenant-bound references are required functionality under business requirements §15 and SRS/HLD §§10.12, 17–18. These must remain. Only a proven external broker transport/configuration may be removed.
 - `.github/workflows/release-validation.yml` currently has audit-only push and pull-request branch filters (Phase 2, 3, 4 and 6 audit branches). Its migration job also contains historical migration application/equivalence steps. Both are planned Phase 2/3 work, not Phase 0 changes.
 - `.github/workflows/phase-2-production-preflight.yml` currently contains an `if` condition and checkout ref for `audit/phase-2-implementation-gap-analysis`. This is an additional stale branch-specific workflow reference to assess in Phase 3.
 - The release-validation workflow contains references to async-worker and legacy-authorization audit scripts. These are verification steps, not evidence of application runtime compatibility code; do not remove them solely because their names contain "legacy".
 
-These findings do not authorize a code/config/CI deletion in Phase 0. Full repository-wide reference search and fresh CI evidence remain mandatory before marking the broker scan complete.
+These findings do not authorize a code/config/CI deletion in Phase 0. Full repository-wide reference search and fresh CI evidence remain mandatory before marking the external transport scan complete.
