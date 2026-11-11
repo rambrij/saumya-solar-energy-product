@@ -83,3 +83,26 @@ Every privileged mutation records actor, tenant, action, resource, outcome and t
 7. Update OpenAPI/feature docs, gap analysis and cleanup decisions; run migration, tests, lint, typecheck and production build in CI.
 
 **Audit conclusion:** Phase 5 is not implemented. CMS/content versioning and the in-app inbox/read state are the clearest absent slices. Role management, delivery, customer documents, settings and analytics have reusable foundations and must be extended rather than replaced.
+
+## 7. Initial Phase 5 implementation progress — 2026-11-11
+
+The first implementation vertical slices are committed on this branch. This is an in-progress engineering checkpoint; it is not a Phase 5 completion declaration. Validation is pending the latest full CI run.
+
+| Slice | Files / behavior committed | Current limitation / remaining acceptance |
+|---|---|---|
+| CMS persistence and lifecycle | `CmsContent`, immutable `CmsContentRevision`, tenant-qualified repositories, `CmsService`, `CmsController`; V6 migration. Supports PAGE/BANNER/FAQ/TESTIMONIAL/BLOG, DRAFT/REVIEW/PUBLISHED/ARCHIVED, draft edits, immutable revisions and rollback-as-new-revision, publish pointer preserving the previously published revision during edits, public published-only routes, slug uniqueness, safe relative/HTTPS social image references, HTML-tag rejection and audit events. | Public storefront screens still need to consume CMS APIs; no media upload workflow/preview or review separation policy yet. Add integration tests for Flyway/JPA, lifecycle, concurrency and cross-tenant public reads; verify migration on MySQL CI. |
+| In-app inbox | `UserNotification`, repository/service/controller; V7 inbox table; V8 `NOTIFICATION_VIEW` catalogue grant; notification event path creates a self-scoped inbox entry while retaining existing delivery attempts. List, unread count, mark one and mark all read are available. | Delivery and inbox persistence failure isolation, duplicate-event behavior, account-type tests and browser E2E need CI confirmation. The current implementation adds an inbox record for business notifications with an identified tenant user; authentication recovery/MFA messages remain outside the inbox. |
+| CMS and inbox frontend | `CmsManagementPanel.tsx`, `NotificationInboxPanel.tsx`, vendor/customer navigation integration and component tests. | Verify build/tests; improve public-site CMS rendering and inbox polling/badge if product requires. |
+| Customer documents | Customer workspace now composes existing invoice PDFs, quotation PDFs, payment receipts and service attachments into one view; uses existing authenticated owner-checked download endpoints. | This is a frontend aggregation, not a new backend document aggregation API. Warranty/installation documents should be added only where an existing authorized source is present. E2E ownership tests remain. |
+| Platform analytics | New aggregate-only `/api/v1/platform/analytics/overview` endpoint and service for tenant lifecycle counts, order count/value by date range and subscription counts; platform super-admin + SUBSCRIPTION_MANAGE guard. Existing tenant-usage API remains. Platform analytics UI now combines both. | CI must validate SQL against MySQL 8.4; add export centre/report families (service, inventory, installations, outstanding payments) and negative platform role tests. Metrics are counts/aggregate order value, not audited revenue recognition. |
+| Roles | Existing editor and backend CRUD retained. `NOTIFICATION_VIEW` added to vendor custom-role allowlist and default system role grants. | Verify migration grants only intended system vendor roles and endpoint matrix; do not duplicate editor. |
+| Platform settings | Existing platform settings placeholder remains; no new arbitrary key/value or secret API added. | Safe setting keys, typed schema and product ownership decisions are still open; implementation intentionally deferred pending approval. |
+
+### Initial implementation commits
+
+- Audit-first matrix: `27e7da1c49207f36fdc1b66a0a6b3e470aae4131`
+- CMS and inbox backend/UI, migrations V6–V8, aggregate platform analytics, tests, and CI migration updates are subsequent commits on this same branch. The branch head and latest workflow status must be taken from GitHub Actions at review time.
+
+### Known validation issues observed and corrective work
+
+Earlier intermediate CI runs identified (a) the new inbox endpoints being accessible to a zero-permission vendor, (b) an ambiguous CMS test label selector, and (c) the release-validation migration-count assertion being hard-coded to five migrations. Corrective commits added `NOTIFICATION_VIEW` checks and role grants, narrowed the test selector, and extended clean-install migration validation to V6–V8. These intermediate failed runs are not final acceptance; the latest full workflow must pass.
