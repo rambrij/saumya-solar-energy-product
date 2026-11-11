@@ -23,6 +23,8 @@ services:
   backend:
     build: ./backend
     environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_MAIL_HOST: mailpit
       DB_URL: jdbc:mysql://mysql:3306/solar?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       DB_USER: solar
       DB_PASSWORD: solarpass
