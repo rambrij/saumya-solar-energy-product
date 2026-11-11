@@ -82,3 +82,26 @@ The repository audit session inspected the provider accounts exposed through the
 **Evidence boundary:** Render's service listing covered the accessible workspace, not every possible Render workspace. Vercel's linked-project listing covered the connected team; the project metadata did not enumerate Cron Jobs. Both observed projects point to the older repository, so neither establishes the deployment topology for saumya-solar-energy-product. The checked-in source inventory remains complete for repository code/config only.
 
 **Release gate:** keep external worker discovery NOT CONFIRMED until the infrastructure owner supplies the production AWS/other cloud account and Vercel/Render schedule exports for the environment actually serving saumya-solar-energy-product, or signs an explicit NONE — verified for each control plane. Attach export timestamps, resource identifiers, owner and tenant-context/idempotency evidence to the table above.
+
+
+## Refreshed source and connected-provider inventory — 2026-11-11
+
+**Source scan checkpoint:** GitHub Actions run [42967893781](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42967893781), commit `10287b76fc75e6bbf21eaee65f70d048b074cd1b`. The CI scanner was run again at this commit. It found:
+
+- **Seven Spring scheduled triggers:** authentication rate-limit cleanup, export recovery/expiry, subscription expiry, service SLA evaluation, notification retry, warranty expiry and integration sync dispatch.
+- **Two `@Async` application listeners:** business notification delivery and export event processing.
+- **One bounded `ThreadPoolTaskExecutor`** for application events.
+- **Two startup runners:** DataSeeder and PlatformAdminBootstrap; both are configuration/property gated and must remain disabled in production unless explicitly approved.
+- **No checked-in broker/managed-queue client or separate worker implementation** for Kafka, RabbitMQ/AMQP, JMS, SQS/SNS/EventBridge, Python/Go/Ruby task workers, BullMQ/Agenda/node-cron, or separate Docker worker containers. The browser-side `setTimeout` in the export panel is UI polling, not a server-side worker.
+- The integration sync queue is database-backed and dispatched by the checked-in scheduler. The CI inventory remains a source/config scan, not a production cloud control-plane export.
+
+### Connected workspace refresh performed during this audit
+
+| Provider | Exact connected scope inspected | Result | Acceptance interpretation |
+|---|---|---|---|
+| Render | Workspace `tea-dbkn6fvf3r2c73fcnu80` (My Workspace); `list_services` including previews | Exactly one resource returned: `soumya-solar-api`, type `web_service`, branch `main`, repository `rambrij/soumya-solar-energy-solution`, Singapore. No Cron Job/background-worker service appeared in this workspace listing. | **Not target-project confirmation.** The service is wired to the older repository, not `saumya-solar-energy-product`. Other Render workspaces are not proven absent. |
+| Vercel | Team `team_hs3I9BOSOsksJMvAnrYVIS26` and its project list/detail | Exactly one project: `soumya-solar-energy-solution`, linked to `rambrij/soumya-solar-energy-solution`; project detail reports `live=false` and latest production deployment `READY`. | **Not target-project confirmation.** The connected project points to the older repository. The connected Vercel tools available here did not expose a project Cron Job inventory, so no claim that Vercel Cron is absent is made. |
+| AWS | No AWS account/organization connector exposed in this audit | EventBridge/Scheduler, Lambda event sources, ECS scheduled tasks, EKS CronJobs, SQS/DLQs and SNS subscriptions were not queried. | **PENDING** — AWS infrastructure owner must provide account/region exports or explicitly sign `NONE — verified`. |
+| Kubernetes / other cloud / providers | No additional applicable production control plane was connected | Not queried. | **PENDING** — infrastructure owner must identify every production cluster, PaaS, scheduler, webhook relay and managed queue. |
+
+**Reconciliation result:** checked-in source/config discovery is refreshed and MET for the repository snapshot above. The accessible Render/Vercel workspaces were inspected, but they point to the older repository. There is therefore no proven mapping from those workspaces to the production environment serving `saumya-solar-energy-product`. External worker registration confirmation remains **NOT CONFIRMED** until the production infrastructure owner supplies the target environment inventory and signs this register.
