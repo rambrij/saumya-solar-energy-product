@@ -117,26 +117,26 @@ public class ExportService {
     }
 
     private FilePayload csv(Map<String,Object> report) {
-        StringBuilder out=new StringBuilder("Report,").append(cell(report.getOrDefault("reportType","OPERATIONS"))).append("\\r\\n");
-        out.append("Metric,Value\\r\\n");
+        StringBuilder out=new StringBuilder("Report,").append(cell(report.getOrDefault("reportType","OPERATIONS"))).append("\r\n");
+        out.append("Metric,Value\r\n");
         for(var entry:report.entrySet()) {
             if(entry.getValue() instanceof List<?> rows && !rows.isEmpty() && rows.get(0) instanceof Map<?,?> first) {
-                out.append("\\r\\n").append(cell(entry.getKey())).append("\\r\\n");
+                out.append("\r\n").append(cell(entry.getKey())).append("\r\n");
                 List<?> keys=new ArrayList<>(first.keySet());
-                out.append(keys.stream().map(this::cell).collect(java.util.stream.Collectors.joining(","))).append("\\r\\n");
+                out.append(keys.stream().map(this::cell).collect(java.util.stream.Collectors.joining(","))).append("\r\n");
                 for(Object item:rows) if(item instanceof Map<?,?> row)
-                    out.append(keys.stream().map(key->cell(row.get(key))).collect(java.util.stream.Collectors.joining(","))).append("\\r\\n");
+                    out.append(keys.stream().map(key->cell(row.get(key))).collect(java.util.stream.Collectors.joining(","))).append("\r\n");
             } else if(!(entry.getValue() instanceof List<?>)) {
-                out.append(cell(entry.getKey())).append(',').append(cell(entry.getValue())).append("\\r\\n");
+                out.append(cell(entry.getKey())).append(',').append(cell(entry.getValue())).append("\r\n");
             }
         }
         return new FilePayload(out.toString().getBytes(StandardCharsets.UTF_8),"text/csv; charset=UTF-8","csv");
     }
     private String cell(Object value) {
         String s=value==null?"":String.valueOf(value);
-        if (!(value instanceof Number) && s.matches("^[\\\\s]*[=+\\\\-@].*")) s="'"+s;
-        if (s.contains(",") || s.contains("\\\"") || s.contains("\\n") || s.contains("\\r"))
-            return "\\\""+s.replace("\\\"","\\\"\\\"")+"\\\"";
+        if (!(value instanceof Number) && s.matches("^[\\s]*[=+\\-@].*")) s="'"+s;
+        if (s.contains(",") || s.contains("\"") || s.contains("\n") || s.contains("\r"))
+            return "\""+s.replace("\"","\"\"")+"\"";
         return s;
     }
     private FilePayload xlsx(Map<String,Object> report) throws Exception {
@@ -145,7 +145,7 @@ public class ExportService {
             header.createCell(0).setCellValue("Metric");header.createCell(1).setCellValue("Value");int row=1;
             for(var entry:report.entrySet()) {
                 if(entry.getValue() instanceof List<?> rows && !rows.isEmpty() && rows.get(0) instanceof Map<?,?> first) {
-                    String sheetName=entry.getKey().replaceAll("[\\\\[\\\\]\\\\*?/\\\\\\\\:]","_");
+                    String sheetName=entry.getKey().replaceAll("[\\[\\]\\*?/\\\\:]","_");
                     var sheet=wb.createSheet(sheetName.substring(0,Math.min(31,sheetName.length())));
                     List<?> keys=new ArrayList<>(first.keySet());var h=sheet.createRow(0);
                     for(int i=0;i<keys.size();i++)h.createCell(i).setCellValue(String.valueOf(keys.get(i)));
