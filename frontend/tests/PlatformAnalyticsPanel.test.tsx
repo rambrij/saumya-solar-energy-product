@@ -29,6 +29,6 @@ describe('Platform analytics page',()=>{
   render(<PlatformAnalyticsPanel s={{accessToken:'test-token',user:{permissions:['SUBSCRIPTION_MANAGE']}}}/>);
   expect(await screen.findByText('Analytics could not be loaded')).toBeTruthy();
   fireEvent.click(screen.getByRole('button',{name:'Retry'}));
-  await waitFor(()=>expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2));
+  await waitFor(()=>expect(vi.mocked(fetch)).toHaveBeenCalledTimes(4));
  });
 });
