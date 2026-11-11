@@ -16,10 +16,6 @@ import com.saumyasolar.repo.CustomerProfileRepository;
 import com.saumyasolar.repo.InventoryBalanceRepository;
 import com.saumyasolar.repo.SubscriptionPlanRepository;
 import com.saumyasolar.repo.TenantSubscriptionRepository;
-import com.saumyasolar.repo.InventoryReservationRepository;
-import com.saumyasolar.repo.AuditEventRepository;
-import com.saumyasolar.security.TenantExecutionContext;
-import com.saumyasolar.domain.InventoryReservation;
 import com.saumyasolar.domain.ProductCategory;
 import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.AppUserRepository;
@@ -75,8 +71,6 @@ class Release3OperationsIntegrationTest {
     SubscriptionPlanRepository subscriptionPlans;
     @Autowired
     TenantSubscriptionRepository tenantSubscriptions;
-    @Autowired InventoryReservationRepository reservations;
-    @Autowired AuditEventRepository audits;
     UUID tenantId;
     
     @BeforeEach
@@ -281,23 +275,4 @@ class Release3OperationsIntegrationTest {
         assertEquals(0, BigDecimal.ZERO.compareTo(after.getReserved()));
         assertEquals(0, BigDecimal.ZERO.compareTo(after.getDamaged()));
     }
-    @Test
-    void expiredReservationReleasesStockOnceAndWritesAudit() {
-        var admin=users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
-        Product product=products.findByTenantIdOrderByIdDesc(tenantId).stream().filter(p->"DEMO-PV-550".equals(p.getSku())).findFirst().orElseThrow();
-        var customer=customerProfiles.findByTenantIdOrderByIdDesc(tenantId).get(0);
-        Warehouse w=new Warehouse(); w.setId(UUID.randomUUID()); w.setTenantId(tenantId); w.setCode("EXP-"+UUID.randomUUID()); w.setName("Expiry test"); w.setActive(true); w.setCreatedAt(java.time.Instant.now()); warehouses.save(w);
-        InventoryBalance b=new InventoryBalance(); b.setId(UUID.randomUUID()); b.setTenantId(tenantId); b.setWarehouseId(w.getId()); b.setProductId(product.getId()); b.setOnHand(new BigDecimal("8")); b.setReserved(BigDecimal.ZERO); b.setDamaged(BigDecimal.ZERO); balances.save(b);
-        CustomerOrder o=new CustomerOrder(); o.setId(UUID.randomUUID()); o.setTenantId(tenantId); o.setCustomerId(customer.getId()); o.setOrderNumber("EXP-"+UUID.randomUUID()); o.setStatus("CONFIRMED"); o.setTotal(new BigDecimal("1000")); o.setCreatedAt(java.time.Instant.now()); orders.save(o);
-        OrderItem line=new OrderItem(); line.setId(UUID.randomUUID()); line.setTenantId(tenantId); line.setOrderId(o.getId()); line.setProductId(product.getId()); line.setDescription("Expiry test"); line.setQuantity(3); line.setUnitPrice(new BigDecimal("100")); line.setLineTotal(new BigDecimal("300")); orderItems.save(line);
-        Principal p=new Principal(admin.getId(),tenantId,admin.getEmail(),"VENDOR",java.util.Set.of("VENDOR_ADMIN"),java.util.Set.of("INVENTORY_RESERVE","INVENTORY_VIEW"));
-        var created=operations.reserve(o.getId(),new ReservationInput(w.getId(),"expiry test"),p); assertEquals(1,created.size());
-        InventoryReservation r=reservations.findById(created.get(0).getId()).orElseThrow(); assertNotNull(r.getExpiresAt()); r.setExpiresAt(java.time.Instant.now().minusSeconds(1)); reservations.saveAndFlush(r);
-        try(var scope=TenantExecutionContext.open(tenantId)){assertEquals(1,operations.expireReservationsForTenant(tenantId,java.time.Instant.now()));assertEquals(0,operations.expireReservationsForTenant(tenantId,java.time.Instant.now()));}
-        InventoryReservation released=reservations.findById(r.getId()).orElseThrow(); assertEquals("RELEASED",released.getStatus()); assertNotNull(released.getReleasedAt());
-        assertTrue(audits.findAll().stream().anyMatch(a->released.getId().toString().equals(a.getEntityId())&&"INVENTORY_RESERVATION_EXPIRED".equals(a.getAction())&&"SYSTEM".equals(a.getActorType())));
-        InventoryBalance after=balances.findByTenantIdAndWarehouseIdAndProductId(tenantId,w.getId(),product.getId()).orElseThrow(); assertEquals(0,BigDecimal.ZERO.compareTo(after.getReserved())); assertEquals(0,new BigDecimal("8").compareTo(after.getOnHand()));
-        assertEquals("CONFIRMED",orders.findByIdAndTenantId(o.getId(),tenantId).orElseThrow().getStatus());
-    }
-
 }

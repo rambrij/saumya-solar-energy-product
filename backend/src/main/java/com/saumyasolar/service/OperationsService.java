@@ -1,6 +1,8 @@
 package com.saumyasolar.service;
 
 import com.saumyasolar.api.OperationsModels.*;
+import com.saumyasolar.api.OrderPolicyModels.*;
+import com.saumyasolar.config.OrderTransitionPolicyDefaults;
 import com.saumyasolar.domain.*;
 import com.saumyasolar.repo.*;
 import com.saumyasolar.security.Principal;
@@ -42,6 +44,7 @@ public class OperationsService {
     private final EnterpriseSaasService enterpriseSaas;
     private final AuditEventRepository audits;
     private final Duration reservationTtl;
+    private final OrderTransitionPolicyRepository transitionPolicies;
     
     public OperationsService(
             CustomerOrderRepository a,
@@ -67,7 +70,8 @@ public class OperationsService {
             NotificationService notifications,
             EnterpriseSaasService enterpriseSaas,
             AuditEventRepository audits,
-            @Value("${app.inventory.reservation-ttl:PT24H}") Duration reservationTtl
+            @Value("${app.inventory.reservation-ttl:PT24H}") Duration reservationTtl,
+            OrderTransitionPolicyRepository transitionPolicies
     ) {
         orders = a;
         orderItems = b;
@@ -93,6 +97,7 @@ public class OperationsService {
         this.enterpriseSaas = enterpriseSaas;
         this.audits = audits;
         this.reservationTtl = reservationTtl;
+        this.transitionPolicies = transitionPolicies;
     }
     
     private void notifyCustomer(CustomerOrder o, String event, String subject, String body) {
@@ -433,7 +438,7 @@ public class OperationsService {
             InventoryReservation r=new InventoryReservation(); r.setId(UUID.randomUUID()); r.setTenantId(t); r.setOrderId(orderId); r.setWarehouseId(w.getId()); r.setProductId(e.getKey()); r.setQuantity(e.getValue()); r.setStatus("RESERVED"); r.setCreatedAt(now); r.setUpdatedAt(now); r.setExpiresAt(expires); r.setPreReservationOrderStatus(previous); out.add(reservations.save(r));
             movement(t,w.getId(),e.getKey(),orderId,null,"RESERVATION",e.getValue().negate(),"Order reservation: "+x.reason(),p.userId());
         }
-        String old=o.getStatus(); o.setStatus("MATERIAL_RESERVED"); orders.save(o); status(o,old,p,"Stock reserved: "+x.reason()); return out;
+        transitionOrder(o,"MATERIAL_RESERVED","Stock reserved: "+x.reason(),p); return out;
     }
 
     public List<InventoryReservation> reservations(Principal p) {
@@ -450,8 +455,8 @@ public class OperationsService {
         if(rows.isEmpty()) throw new ResponseStatusException(HttpStatus.CONFLICT,"No active reservations");
         if(!"MATERIAL_RESERVED".equals(o.getStatus())) throw new ResponseStatusException(HttpStatus.CONFLICT,"Reservations can only be released before installation scheduling");
         for(InventoryReservation r:rows) { warehouse(r.getWarehouseId(),t,p); releaseReservationRow(t,o,r,reason,p.userId(),"USER"); }
-        String old=o.getStatus(); String prior=rows.stream().map(InventoryReservation::getPreReservationOrderStatus).filter(Objects::nonNull).findFirst().orElse("CONFIRMED");
-        o.setStatus(prior); orders.save(o); status(o,old,p,reason); return rows;
+        String prior=rows.stream().map(InventoryReservation::getPreReservationOrderStatus).filter(Objects::nonNull).findFirst().orElse("CONFIRMED");
+        transitionOrder(o,prior,reason,p); return rows;
     }
 
     private void releaseReservationRow(UUID t,CustomerOrder o,InventoryReservation r,String reason,UUID actor,String actorType) {
@@ -474,8 +479,8 @@ public class OperationsService {
             CustomerOrder o=orders.findForUpdate(r.getOrderId(),t).orElse(null); if(o==null||!"MATERIAL_RESERVED".equals(o.getStatus())) continue;
             releaseReservationRow(t,o,r,"Reservation expired at "+r.getExpiresAt(),null,"SYSTEM"); released++;
             if(!reservations.existsByTenantIdAndOrderIdAndStatus(t,o.getId(),"RESERVED")) {
-                String old=o.getStatus(), prior=r.getPreReservationOrderStatus()==null?"CONFIRMED":r.getPreReservationOrderStatus(); o.setStatus(prior); orders.save(o);
-                OrderStatusHistory h=new OrderStatusHistory(); h.setId(UUID.randomUUID()); h.setTenantId(t); h.setOrderId(o.getId()); h.setOldStatus(old); h.setNewStatus(prior); h.setReason("All order reservations expired; stock was released"); h.setActorType("SYSTEM"); h.setCreatedAt(Instant.now()); orderHistory.save(h);
+                String prior=r.getPreReservationOrderStatus()==null?"CONFIRMED":r.getPreReservationOrderStatus();
+                transitionOrder(o,prior,"All order reservations expired; stock was released",null);
             }
         }
         return released;
@@ -510,27 +515,94 @@ public class OperationsService {
 
     @Transactional
     public CustomerOrder transition(UUID id, OrderTransitionInput x, Principal p) {
-        UUID t = tenant(p);
-        CustomerOrder o = order(id, t);
-        String old = o.getStatus(), next = x.status().toUpperCase(Locale.ROOT);
-        if ("CANCELLED".equals(next)) {
-            permission(p, "ORDER_CANCEL");
-            if (x.reason() == null || x.reason().isBlank())
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order cancellation reason is required");
-        } else {
-            permission(p, "ORDER_UPDATE");
-        }
-        Map<String, Set<String>> allowed = Map.of("CONFIRMED", Set.of("PAYMENT_PENDING", "PAID", "ON_HOLD", "CANCELLED"), "PAYMENT_PENDING", Set.of("PAYMENT_PARTIAL", "PAID", "ON_HOLD", "CANCELLED"), "PAYMENT_PARTIAL", Set.of("PAID", "ON_HOLD", "CANCELLED"), "PAID", Set.of("MATERIAL_RESERVED", "ON_HOLD", "CANCELLED"), "MATERIAL_RESERVED", Set.of("INSTALLATION_SCHEDULED", "CONFIRMED", "ON_HOLD", "CANCELLED"), "INSTALLATION_SCHEDULED", Set.of("INSTALLATION_IN_PROGRESS", "MATERIAL_RESERVED", "ON_HOLD", "CANCELLED"), "INSTALLATION_IN_PROGRESS", Set.of("INSTALLATION_SCHEDULED", "ON_HOLD"), "INSTALLED", Set.of("COMMISSIONED"), "COMMISSIONED", Set.of("CLOSED"));
-        if (!allowed.getOrDefault(old, Set.of()).contains(next))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Order cannot move from " + old + " to " + next);
-        if ("CANCELLED".equals(next) && reservations.findByTenantIdAndOrderId(t, id).stream().anyMatch(r -> "RESERVED".equals(r.getStatus())))
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Release reserved stock before cancellation");
-        o.setStatus(next);
-        orders.save(o);
-        status(o, old, p, x.reason());
-        return o;
+        UUID t=tenant(p);
+        CustomerOrder o=orders.findForUpdate(id,t).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Order not found"));
+        enterpriseSaas.assertBranchAccess(o.getBranchId(),p);
+        return transitionOrder(o,x.status(),x.reason(),p);
     }
-    
+
+    public List<TransitionOption> transitionOptions(Principal p) {
+        UUID t=tenant(p); permission(p,"ORDER_VIEW");
+        Set<String> granted=p.permissions()==null?Set.of():p.permissions();
+        return effectiveTransitionRules(t).stream()
+                .filter(OrderTransitionPolicy::isEnabled)
+                .filter(rule->granted.contains(rule.getRequiredPermission()))
+                .map(rule->new TransitionOption(rule.getFromStatus(),rule.getToStatus(),rule.getRequiredPermission()))
+                .toList();
+    }
+
+    public List<PolicyRule> transitionPolicy(Principal p) {
+        UUID t=tenant(p); permission(p,"ORDER_POLICY_MANAGE");
+        return effectiveTransitionRules(t).stream()
+                .map(rule->new PolicyRule(rule.getFromStatus(),rule.getToStatus(),rule.getRequiredPermission(),rule.isEnabled()))
+                .toList();
+    }
+
+    @Transactional
+    public List<PolicyRule> updateTransitionPolicy(TransitionPolicyUpdate input, Principal p) {
+        UUID t=tenant(p); permission(p,"ORDER_POLICY_MANAGE");
+        Set<String> seen=new HashSet<>();
+        for (PolicyToggle toggle:input.transitions()) {
+            String from=toggle.fromStatus().trim().toUpperCase(Locale.ROOT);
+            String to=toggle.toStatus().trim().toUpperCase(Locale.ROOT);
+            String key=from+"->"+to;
+            if(!seen.add(key)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Duplicate transition policy entry: "+key);
+            OrderTransitionPolicyDefaults.Rule baseline=OrderTransitionPolicyDefaults.RULES.stream()
+                    .filter(rule->rule.fromStatus().equals(from)&&rule.toStatus().equals(to)).findFirst()
+                    .orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"Unsupported order transition: "+key));
+            OrderTransitionPolicy policy=transitionPolicies.findByTenantIdAndFromStatusAndToStatus(t,from,to)
+                    .orElseGet(()->{
+                        OrderTransitionPolicy created=new OrderTransitionPolicy();
+                        created.setId(UUID.randomUUID()); created.setTenantId(t); created.setFromStatus(from);
+                        created.setToStatus(to); created.setRequiredPermission(baseline.permission());
+                        created.setCreatedAt(Instant.now()); return created;
+                    });
+            // The permission required for an edge is code-owned; tenant configuration can only enable/disable it.
+            if(!baseline.permission().equals(policy.getRequiredPermission()))
+                throw new IllegalStateException("Stored order transition permission differs from the approved permission catalogue");
+            policy.setEnabled(toggle.enabled()); policy.setUpdatedAt(Instant.now()); transitionPolicies.save(policy);
+        }
+        return transitionPolicy(p);
+    }
+
+    private List<OrderTransitionPolicy> effectiveTransitionRules(UUID tenantId) {
+        List<OrderTransitionPolicy> effective=new ArrayList<>();
+        for(OrderTransitionPolicyDefaults.Rule baseline:OrderTransitionPolicyDefaults.RULES) {
+            OrderTransitionPolicy row=transitionPolicies.findByTenantIdAndFromStatusAndToStatus(
+                    tenantId,baseline.fromStatus(),baseline.toStatus()).orElseGet(()->transitionPolicies
+                    .findByTenantIdIsNullAndFromStatusAndToStatus(baseline.fromStatus(),baseline.toStatus())
+                    .orElseGet(()->{
+                        OrderTransitionPolicy fallback=new OrderTransitionPolicy();
+                        fallback.setFromStatus(baseline.fromStatus()); fallback.setToStatus(baseline.toStatus());
+                        fallback.setRequiredPermission(baseline.permission()); fallback.setEnabled(true); return fallback;
+                    }));
+            effective.add(row);
+        }
+        return effective;
+    }
+
+    private CustomerOrder transitionOrder(CustomerOrder order,String requestedStatus,String reason,Principal actor) {
+        String from=order.getStatus();
+        String to=requestedStatus==null?"":requestedStatus.trim().toUpperCase(Locale.ROOT);
+        OrderTransitionPolicy policy=transitionPolicies.findByTenantIdAndFromStatusAndToStatus(
+                order.getTenantId(),from,to).orElseGet(()->transitionPolicies
+                .findByTenantIdIsNullAndFromStatusAndToStatus(from,to).orElse(null));
+        if(policy==null)
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Order cannot move from "+from+" to "+to);
+        if(!policy.isEnabled() && actor!=null)
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Order transition "+from+" → "+to+" is disabled by this vendor's policy");
+        if(actor!=null) permission(actor,policy.getRequiredPermission());
+        if("CANCELLED".equals(to)&&(reason==null||reason.isBlank()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Order cancellation reason is required");
+        order.setStatus(to); orders.save(order);
+        OrderStatusHistory h=new OrderStatusHistory(); h.setId(UUID.randomUUID()); h.setTenantId(order.getTenantId());
+        h.setOrderId(order.getId()); h.setOldStatus(from); h.setNewStatus(to);
+        h.setReason(reason==null||reason.isBlank()?"System lifecycle transition":reason.trim());
+        h.setActorId(actor==null?null:actor.userId()); h.setActorType(actor==null?"SYSTEM":"USER");
+        h.setCreatedAt(Instant.now()); orderHistory.save(h);
+        return order;
+    }
+
     public List<OrderStatusHistory> orderHistory(UUID id, Principal p) {
         UUID t = tenant(p);
         permission(p, "ORDER_VIEW");
@@ -749,10 +821,7 @@ public class OperationsService {
             ci.setMandatory(a.isMandatory());
             checklist.save(ci);
         }
-        String old = o.getStatus();
-        o.setStatus("INSTALLATION_SCHEDULED");
-        orders.save(o);
-        status(o, old, p, "Installation scheduled");
+        transitionOrder(o,"INSTALLATION_SCHEDULED","Installation scheduled",p);
         notifyCustomer(o, "INSTALLATION_SCHEDULED", "Installation scheduled", "Your solar installation is scheduled for " + j.getScheduledAt() + " at " + j.getSiteAddress() + ".");
         return j;
     }
@@ -787,10 +856,7 @@ public class OperationsService {
             j.setStatus("IN_PROGRESS");
             CustomerOrder o = order(j.getOrderId(), t);
             if ("INSTALLATION_SCHEDULED".equals(o.getStatus())) {
-                String old = o.getStatus();
-                o.setStatus("INSTALLATION_IN_PROGRESS");
-                orders.save(o);
-                status(o, old, p, "Field execution started");
+                transitionOrder(o,"INSTALLATION_IN_PROGRESS","Field execution started",p);
             }
         }
         installations.save(j);
@@ -856,10 +922,7 @@ public class OperationsService {
         InstallationJob saved = installations.save(j);
         CustomerOrder order = order(j.getOrderId(), t);
         if (Set.of("INSTALLATION_SCHEDULED", "INSTALLATION_IN_PROGRESS").contains(order.getStatus())) {
-            String oldStatus = order.getStatus();
-            order.setStatus("MATERIAL_RESERVED");
-            orders.save(order);
-            status(order, oldStatus, p, "Installation cancelled: " + reason);
+            transitionOrder(order,"MATERIAL_RESERVED","Installation cancelled: " + reason,p);
         }
         InstallationScheduleHistory h = new InstallationScheduleHistory();
         h.setId(UUID.randomUUID());
@@ -911,10 +974,7 @@ public class OperationsService {
         j.setStatus("COMPLETED");
         j.setCompletedAt(Instant.now());
         installations.save(j);
-        String old = o.getStatus();
-        o.setStatus("INSTALLED");
-        orders.save(o);
-        status(o, old, p, reason);
+        transitionOrder(o,"INSTALLED",reason,p);
         return j;
     }
     
@@ -965,10 +1025,7 @@ public class OperationsService {
                 for (EquipmentInput e : equipment) createWarranty(o, j, pr, 1, e.serialNumber().trim());
             } else createWarranty(o, j, pr, entry.getValue(), null);
         }
-        String old = o.getStatus();
-        o.setStatus("COMMISSIONED");
-        orders.save(o);
-        status(o, old, p, "Commissioned with customer sign-off");
+        transitionOrder(o,"COMMISSIONED","Commissioned with customer sign-off",p);
         notifyCustomer(o, "INSTALLATION_COMMISSIONED", "Solar installation commissioned", "Your solar installation has been commissioned. Product warranties are now activated.");
         return j;
     }
@@ -1059,15 +1116,10 @@ public class OperationsService {
     @Transactional
     public CustomerOrder decideCustomerOrder(UUID id, OrderDecisionInput x, Principal p) {
         UUID t = tenant(p);
-        permission(p, "ORDER_UPDATE");
         CustomerOrder o = order(id, t);
         if (!"PENDING_VENDOR_ACCEPTANCE".equals(o.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only a pending customer order can be accepted or rejected");
-        String old = o.getStatus();
-        o.setStatus("ACCEPT".equals(x.decision()) ? "CONFIRMED" : "REJECTED");
-        orders.save(o);
-        status(o, old, p, x.reason());
-        return o;
+        return transitionOrder(o,"ACCEPT".equals(x.decision())?"CONFIRMED":"REJECTED",x.reason(),p);
     }
     
     public List<CustomerOrder> customerOrders(Principal p) {
