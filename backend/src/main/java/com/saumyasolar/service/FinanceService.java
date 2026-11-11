@@ -597,6 +597,7 @@ public class FinanceService {
         record.setEventId(event.eventId());
         record.setPayloadHash(HexFormat.of().formatHex(hash(raw)));
         record.setProcessingStatus("RECEIVED");
+        record.setEventType(event.status());
         record.setReceivedAt(Instant.now());
         webhookEvents.saveAndFlush(record);
         if ("SUCCEEDED".equals(event.status())) {
