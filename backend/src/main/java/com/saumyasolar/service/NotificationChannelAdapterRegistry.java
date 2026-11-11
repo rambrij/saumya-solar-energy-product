@@ -4,8 +4,8 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 @Component
 public class NotificationChannelAdapterRegistry {
- private final MailpitEmailNotificationAdapter email; private final MockMessagingNotificationAdapter messaging;
- public NotificationChannelAdapterRegistry(MailpitEmailNotificationAdapter email,MockMessagingNotificationAdapter messaging){this.email=email;this.messaging=messaging;}
- public String providerCode(String channel){return "EMAIL".equals(channel)?email.providerCode():messaging.providerCode();}
- public void dispatch(NotificationDelivery delivery) throws Exception {if("EMAIL".equals(delivery.getChannel())){email.dispatch(delivery);return;}if(messaging.supports(delivery.getChannel())){messaging.dispatch(delivery);return;}throw new IllegalArgumentException("Unsupported notification channel");}
+ private final List<NotificationChannelAdapter> adapters;
+ public NotificationChannelAdapterRegistry(List<NotificationChannelAdapter> adapters){this.adapters=List.copyOf(adapters);}
+ public String providerCode(String channel){return adapters.stream().filter(a->a.supports(channel)).map(NotificationChannelAdapter::providerCode).findFirst().orElseThrow(()->new IllegalArgumentException("Unsupported notification channel"));}
+ public void dispatch(NotificationDelivery delivery) throws Exception {adapters.stream().filter(a->a.supports(delivery.getChannel())).findFirst().orElseThrow(()->new IllegalArgumentException("Unsupported notification channel")).dispatch(delivery);}
 }
