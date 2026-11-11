@@ -1,6 +1,6 @@
 import React,{useCallback,useEffect,useState} from 'react';
 import {authenticatedFetch,type AuthSession} from './authenticatedFetch';
-const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\\/+$/,'');
+const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
 type Setting={key:string;type:string;value:string;version:number;updatedAt?:string|null};
 const labels:Record<string,string>={PLATFORM_DEFAULT_CURRENCY:'Default currency',PLATFORM_DEFAULT_TIME_ZONE:'Default time zone',PLATFORM_DEFAULT_LANGUAGE:'Default language',PLATFORM_SUPPORT_EMAIL:'Platform support email',PLATFORM_SUPPORT_PHONE:'Platform support phone',PLATFORM_BANNER_MESSAGE:'Platform announcement'};
 export default function PlatformSettingsPanel({s}: {s:AuthSession}){
