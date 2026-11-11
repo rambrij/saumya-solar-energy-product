@@ -69,7 +69,10 @@ public class PaymentGatewayCheckoutService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         List<String> available = connections.findByTenantIdAndIntegrationTypeAndStatus(actor.tenantId(), "PAYMENT_GATEWAY", "ACTIVE")
                 .stream().map(IntegrationConnection::getProviderCode).filter(code -> adapters.find(code).isPresent()).distinct().toList();
-        if (mockEnabled && adapters.find("MOCK_GATEWAY").isPresent()) available = new java.util.ArrayList<>(available) {{ add("MOCK_GATEWAY"); }};
+        if (mockEnabled && adapters.find("MOCK_GATEWAY").isPresent()) {
+            available = new java.util.ArrayList<>(available);
+            available.add("MOCK_GATEWAY");
+        }
         return Map.of("available", !available.isEmpty(), "providers", available);
     }
     
