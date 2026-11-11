@@ -2844,4 +2844,261 @@ class Release12TenantIntegrationTest {
         }
         throw new AssertionError("Timed out waiting for asynchronous " + format + " export");
     }
+
+
+    @Test
+    void fixtureBackedCrudAuthorizationAcrossCrmQuotesOrdersInventoryInstallationsServiceWarrantyFinanceAndExports()
+            throws Exception {
+        // Build real same-tenant and foreign-tenant resource graphs. Every denied mutation below
+        // is followed by a repository assertion proving that the foreign row was not changed.
+        Tenant foreignTenant = newTenant();
+        AppUser vendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        CustomerFixture ownCustomer = createCustomer(vendorTenantId, "crud-own");
+        CustomerFixture foreignCustomer = createCustomer(foreignTenant.getId(), "crud-foreign");
+        Branch ownBranch = branch(vendorTenantId, "CRUD-OWN-" + UUID.randomUUID().toString().substring(0, 6));
+        Branch foreignBranch = branch(foreignTenant.getId(), "CRUD-FOR-" + UUID.randomUUID().toString().substring(0, 6));
+        branches.saveAllAndFlush(List.of(ownBranch, foreignBranch));
+
+        Enquiry ownEnquiry = enquiry(vendorTenantId, ownBranch.getId(), "own-" + UUID.randomUUID());
+        Enquiry foreignEnquiry = enquiry(foreignTenant.getId(), foreignBranch.getId(), "foreign-" + UUID.randomUUID());
+        enquiries.saveAllAndFlush(List.of(ownEnquiry, foreignEnquiry));
+        SalesLead ownLead = lead(vendorTenantId, ownBranch.getId(), vendor.getId(), ownEnquiry.getId());
+        SalesLead foreignLead = lead(foreignTenant.getId(), foreignBranch.getId(), vendor.getId(), foreignEnquiry.getId());
+        leads.saveAllAndFlush(List.of(ownLead, foreignLead));
+
+        SiteSurvey ownSurvey = survey(vendorTenantId, ownBranch.getId(), vendor.getId(), ownLead.getId());
+        ownSurvey.setPropertyType("RESIDENTIAL");
+        ownSurvey.setRoofType("RCC");
+        SiteSurvey foreignSurvey = survey(foreignTenant.getId(), foreignBranch.getId(), vendor.getId(), foreignLead.getId());
+        foreignSurvey.setPropertyType("RESIDENTIAL");
+        foreignSurvey.setRoofType("RCC");
+        surveys.saveAllAndFlush(List.of(ownSurvey, foreignSurvey));
+
+        Quotation ownQuote = quotation(vendorTenantId, ownBranch.getId(), vendor.getId(), ownLead.getId(), ownCustomer.profile().getId());
+        Quotation foreignQuote = quotation(foreignTenant.getId(), foreignBranch.getId(), vendor.getId(),
+                foreignLead.getId(), foreignCustomer.profile().getId());
+        quotations.saveAllAndFlush(List.of(ownQuote, foreignQuote));
+        CustomerOrder ownOrder = order(vendorTenantId, ownBranch.getId(), ownQuote.getId(), ownCustomer.profile().getId());
+        ownOrder.setStatus("CONFIRMED");
+        CustomerOrder foreignOrder = order(foreignTenant.getId(), foreignBranch.getId(), foreignQuote.getId(),
+                foreignCustomer.profile().getId());
+        foreignOrder.setStatus("CONFIRMED");
+        customerOrders.saveAllAndFlush(List.of(ownOrder, foreignOrder));
+
+        Product ownProduct = productRecords.findByTenantIdOrderByIdDesc(vendorTenantId).stream()
+                .findFirst().orElseThrow();
+        ProductCategory foreignCategory = new ProductCategory();
+        foreignCategory.setId(UUID.randomUUID());
+        foreignCategory.setTenantId(foreignTenant.getId());
+        foreignCategory.setName("CRUD foreign category " + UUID.randomUUID());
+        foreignCategory.setActive(true);
+        categories.saveAndFlush(foreignCategory);
+        Product foreignProduct = new Product();
+        foreignProduct.setId(UUID.randomUUID());
+        foreignProduct.setTenantId(foreignTenant.getId());
+        foreignProduct.setCategoryId(foreignCategory.getId());
+        foreignProduct.setSku("CRUD-FOREIGN-" + UUID.randomUUID());
+        foreignProduct.setName("CRUD foreign product");
+        foreignProduct.setPrice(BigDecimal.TEN);
+        foreignProduct.setTaxPercent(BigDecimal.ZERO);
+        foreignProduct.setActive(true);
+        products.saveAndFlush(foreignProduct);
+        Warehouse ownWarehouse = branchWarehouse(vendorTenantId, ownBranch.getId(), "OWN");
+        Warehouse foreignWarehouse = branchWarehouse(foreignTenant.getId(), foreignBranch.getId(), "FOREIGN");
+        warehouseRecords.saveAllAndFlush(List.of(ownWarehouse, foreignWarehouse));
+        InventoryBalance ownBalance = branchBalance(vendorTenantId, ownWarehouse.getId(), ownProduct.getId());
+        InventoryBalance foreignBalance = branchBalance(foreignTenant.getId(), foreignWarehouse.getId(), foreignProduct.getId());
+        inventoryBalances.saveAllAndFlush(List.of(ownBalance, foreignBalance));
+        InventoryTransaction ownMovement = branchMovement(vendorTenantId, ownWarehouse.getId(), ownProduct.getId(), vendor.getId());
+        InventoryTransaction foreignMovement = branchMovement(foreignTenant.getId(), foreignWarehouse.getId(),
+                foreignProduct.getId(), vendor.getId());
+        inventoryTransactions.saveAllAndFlush(List.of(ownMovement, foreignMovement));
+
+        Invoice ownInvoice = branchInvoice(vendorTenantId, ownBranch.getId(), ownOrder.getId(), vendor.getId());
+        Invoice foreignInvoice = branchInvoice(foreignTenant.getId(), foreignBranch.getId(), foreignOrder.getId(), vendor.getId());
+        invoices.saveAllAndFlush(List.of(ownInvoice, foreignInvoice));
+
+        ServiceRequest ownTicket = branchTicket(vendorTenantId, ownBranch.getId(), ownCustomer.profile().getId());
+        ServiceRequest foreignTicket = branchTicket(foreignTenant.getId(), foreignBranch.getId(),
+                foreignCustomer.profile().getId());
+        serviceRequests.saveAllAndFlush(List.of(ownTicket, foreignTicket));
+
+        InstallationJob ownInstallation = branchInstallation(vendorTenantId, ownBranch.getId(), ownOrder.getId(),
+                ownCustomer.profile().getId(), vendor.getId());
+        InstallationJob foreignInstallation = branchInstallation(foreignTenant.getId(), foreignBranch.getId(),
+                foreignOrder.getId(), foreignCustomer.profile().getId(), vendor.getId());
+        installationJobs.saveAllAndFlush(List.of(ownInstallation, foreignInstallation));
+
+        Warranty ownWarranty = new Warranty();
+        ownWarranty.setId(UUID.randomUUID());
+        ownWarranty.setTenantId(vendorTenantId);
+        ownWarranty.setOrderId(ownOrder.getId());
+        ownWarranty.setInstallationId(ownInstallation.getId());
+        ownWarranty.setCustomerId(ownCustomer.profile().getId());
+        ownWarranty.setProductId(ownProduct.getId());
+        ownWarranty.setQuantity(1);
+        ownWarranty.setStartDate(java.time.LocalDate.now().minusDays(1));
+        ownWarranty.setEndDate(java.time.LocalDate.now().plusDays(365));
+        ownWarranty.setStatus("ACTIVE");
+        ownWarranty.setActivatedAt(Instant.now());
+        Warranty foreignWarranty = new Warranty();
+        foreignWarranty.setId(UUID.randomUUID());
+        foreignWarranty.setTenantId(foreignTenant.getId());
+        foreignWarranty.setOrderId(foreignOrder.getId());
+        foreignWarranty.setInstallationId(foreignInstallation.getId());
+        foreignWarranty.setCustomerId(foreignCustomer.profile().getId());
+        foreignWarranty.setProductId(foreignProduct.getId());
+        foreignWarranty.setQuantity(1);
+        foreignWarranty.setStartDate(java.time.LocalDate.now().minusDays(1));
+        foreignWarranty.setEndDate(java.time.LocalDate.now().plusDays(365));
+        foreignWarranty.setStatus("ACTIVE");
+        foreignWarranty.setActivatedAt(Instant.now());
+        warranties.saveAllAndFlush(List.of(ownWarranty, foreignWarranty));
+        WarrantyClaim ownClaim = warrantyClaim(vendorTenantId, ownCustomer.profile().getId(), ownWarranty.getId());
+        WarrantyClaim foreignClaim = warrantyClaim(foreignTenant.getId(), foreignCustomer.profile().getId(),
+                foreignWarranty.getId());
+        warrantyClaims.saveAllAndFlush(List.of(ownClaim, foreignClaim));
+
+        String vendorToken = accessToken("admin@saumya.local", "Admin@123");
+        String auth = "Bearer " + vendorToken;
+
+        // CRM: same-tenant lead read/update succeeds; foreign update is non-disclosing and immutable.
+        mvc.perform(get("/api/v1/leads/" + ownLead.getId() + "/history").header("Authorization", auth))
+                .andExpect(status().isOk());
+        mvc.perform(patch("/api/v1/leads/" + ownLead.getId()).header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"stage\":\"CONTACTED\",\"priority\":\"HIGH\"}"))
+                .andExpect(status().isOk());
+        assertEquals("CONTACTED", leads.findByIdAndTenantId(ownLead.getId(), vendorTenantId).orElseThrow().getStage());
+        mvc.perform(patch("/api/v1/leads/" + foreignLead.getId()).header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"stage\":\"CONTACTED\",\"priority\":\"HIGH\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("NEW", leads.findByIdAndTenantId(foreignLead.getId(), foreignTenant.getId()).orElseThrow().getStage());
+
+        // Quotations: fixture-backed same-tenant revisions are readable; a foreign action cannot send or mutate it.
+        mvc.perform(get("/api/v1/quotations/" + ownQuote.getId() + "/revisions").header("Authorization", auth))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/quotations/" + foreignQuote.getId() + "/revisions").header("Authorization", auth))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/quotations/" + foreignQuote.getId() + "/send").header("Authorization", auth))
+                .andExpect(status().isNotFound());
+        assertEquals("DRAFT", quotations.findByIdAndTenantId(foreignQuote.getId(), foreignTenant.getId())
+                .orElseThrow().getStatus());
+
+        // Orders: same-tenant state transition persists; foreign transition is rejected without a status/history change.
+        mvc.perform(get("/api/v1/orders/" + ownOrder.getId() + "/history").header("Authorization", auth))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/orders/" + ownOrder.getId() + "/transition").header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"PAYMENT_PENDING\",\"reason\":\"CRUD authorization fixture\"}"))
+                .andExpect(status().isOk());
+        assertEquals("PAYMENT_PENDING", customerOrders.findByIdAndTenantId(ownOrder.getId(), vendorTenantId)
+                .orElseThrow().getStatus());
+        mvc.perform(post("/api/v1/orders/" + foreignOrder.getId() + "/transition").header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"PAYMENT_PENDING\",\"reason\":\"must not cross tenant\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("CONFIRMED", customerOrders.findByIdAndTenantId(foreignOrder.getId(), foreignTenant.getId())
+                .orElseThrow().getStatus());
+
+        // Inventory: own transaction can be compensated; foreign transaction cannot alter its balance or ledger.
+        String balanceRows = mvc.perform(get("/api/v1/inventory/balances").header("Authorization", auth))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(balanceRows.contains(ownBalance.getId().toString()));
+        assertFalse(balanceRows.contains(foreignBalance.getId().toString()));
+        mvc.perform(post("/api/v1/inventory/transactions/" + ownMovement.getId() + "/reverse")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"same-tenant reversal fixture\"}"))
+                .andExpect(status().isOk());
+        assertEquals(0, inventoryBalances.findById(ownBalance.getId()).orElseThrow().getOnHand()
+                .compareTo(BigDecimal.ZERO));
+        mvc.perform(post("/api/v1/inventory/transactions/" + foreignMovement.getId() + "/reverse")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"cross-tenant reversal attempt\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals(0, inventoryBalances.findById(foreignBalance.getId()).orElseThrow().getOnHand()
+                .compareTo(BigDecimal.TEN));
+        assertFalse(inventoryTransactions.existsByTenantIdAndReversalOfTransactionId(
+                foreignTenant.getId(), foreignMovement.getId()));
+
+        // Installations: same-tenant cancellation is persisted; foreign cancellation is a non-disclosing 404.
+        mvc.perform(get("/api/v1/installations/" + ownInstallation.getId() + "/checklist")
+                        .header("Authorization", auth)).andExpect(status().isOk());
+        mvc.perform(post("/api/v1/installations/" + ownInstallation.getId() + "/cancel")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"same-tenant cancellation fixture\"}"))
+                .andExpect(status().isOk());
+        assertEquals("CANCELLED", installationJobs.findById(ownInstallation.getId()).orElseThrow().getStatus());
+        mvc.perform(post("/api/v1/installations/" + foreignInstallation.getId() + "/cancel")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"cross-tenant cancellation attempt\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("SCHEDULED", installationJobs.findById(foreignInstallation.getId()).orElseThrow().getStatus());
+
+        // Service: same-tenant detail is available; foreign detail and mutation are both denied without changing state.
+        mvc.perform(get("/api/v1/service-requests/" + ownTicket.getId()).header("Authorization", auth))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/service-requests/" + foreignTicket.getId()).header("Authorization", auth))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/service-requests/" + foreignTicket.getId() + "/close")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"cross-tenant closure attempt\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("OPEN", serviceRequests.findById(foreignTicket.getId()).orElseThrow().getStatus());
+
+        // Warranty: same-tenant claim decision persists; foreign claim decision leaves status and timestamps intact.
+        mvc.perform(get("/api/v1/warranty-claims").header("Authorization", auth))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[*].id")
+                        .value(org.hamcrest.Matchers.hasItem(ownClaim.getId().toString())));
+        mvc.perform(post("/api/v1/warranty-claims/" + ownClaim.getId() + "/approve")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"same-tenant claim approval fixture\"}"))
+                .andExpect(status().isOk());
+        assertEquals("APPROVED", warrantyClaims.findById(ownClaim.getId()).orElseThrow().getStatus());
+        mvc.perform(post("/api/v1/warranty-claims/" + foreignClaim.getId() + "/approve")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"cross-tenant claim approval attempt\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("SUBMITTED", warrantyClaims.findById(foreignClaim.getId()).orElseThrow().getStatus());
+
+        // Finance: same-tenant invoice items and void work; foreign invoice item/void operations cannot leak or mutate.
+        mvc.perform(get("/api/v1/invoices/" + ownInvoice.getId() + "/items").header("Authorization", auth))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/invoices/" + foreignInvoice.getId() + "/items").header("Authorization", auth))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/invoices/" + ownInvoice.getId() + "/void")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"same-tenant void fixture\"}"))
+                .andExpect(status().isOk());
+        assertEquals("VOID", invoices.findByIdAndTenantId(ownInvoice.getId(), vendorTenantId).orElseThrow().getStatus());
+        mvc.perform(post("/api/v1/invoices/" + foreignInvoice.getId() + "/void")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"cross-tenant void attempt\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("ISSUED", invoices.findByIdAndTenantId(foreignInvoice.getId(), foreignTenant.getId())
+                .orElseThrow().getStatus());
+
+        // Exports: creator can read their own job; another tenant cannot read it by guessing its UUID.
+        String ownExportBody = mvc.perform(post("/api/v1/exports").header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reportType\":\"OPERATIONS\",\"format\":\"CSV\"}"))
+                .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
+        UUID ownExportId = UUID.fromString(json.readTree(ownExportBody).get("id").asText());
+        mvc.perform(get("/api/v1/exports/" + ownExportId).header("Authorization", auth))
+                .andExpect(status().isOk());
+        AppUser foreignExporter = createPermissionMatrixUser(foreignTenant.getId(), "foreign-exporter",
+                List.of("REPORT_EXPORT"));
+        String foreignExporterToken = accessToken(foreignExporter.getEmail(), "Matrix-Password-2026");
+        mvc.perform(get("/api/v1/exports/" + ownExportId)
+                        .header("Authorization", "Bearer " + foreignExporterToken))
+                .andExpect(status().isNotFound());
+        assertEquals(vendorTenantId, exportService.status(ownExportId,
+                new com.saumyasolar.security.Principal(vendor.getId(), vendorTenantId, vendor.getEmail(), "VENDOR",
+                        vendor.getRoles().stream().map(Role::getName).collect(java.util.stream.Collectors.toSet()),
+                        vendor.getRoles().stream().flatMap(role -> role.getPermissions().stream())
+                                .map(Permission::getCode).collect(java.util.stream.Collectors.toSet()),
+                        vendor.getTokenVersion())).getTenantId());
+    }
 }
