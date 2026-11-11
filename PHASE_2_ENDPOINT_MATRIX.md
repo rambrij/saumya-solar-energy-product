@@ -377,3 +377,18 @@ The source inventory remains 222 controller method-mapping declarations (224 exp
 - Private evidence families: service attachments, site-survey attachments and warranty-claim attachments, including owner bytes, wrong-customer/tenant denial and denial before private storage access.
 
 This is broad HTTP-level evidence for the checked-in export/download families. Final completeness still requires a final route-to-test reconciliation against the current runtime mapping inventory and review of any newly added mapping after this checkpoint.
+
+
+## Runtime mapping reconciliation — strengthened evidence contract
+
+The CI validator `scripts/audit/assert-endpoint-authorization-evidence.py` now reconciles the exact `(HTTP method, Spring route pattern)` identity across all four CSVs emitted by `EndpointAuthenticationMatrixTest`. It rejects duplicate or missing mapping rows, failed probes, unknown result values, missing protected-route positive-gate evidence, missing verb-specific zero-permission evidence, and static matrix declarations that no longer exist in the runtime registry.
+
+Every successful CI run writes `backend/target/phase2-endpoint-evidence/runtime-route-authorization-reconciliation.csv`, one row per current runtime mapping, with handler class/method, public/protected classification, anonymous result, applicable-account positive gate, verb-appropriate zero-permission result, static-matrix match and evidence-strength classification. Runtime-only mappings are explicitly reported instead of silently disappearing; this is important for the later-added `ExportController` routes.
+
+**Evidence-strength rules:** a public route is marked `PUBLIC_BOUNDARY`; an explicit focused-test delegation is marked `FOCUSED_TEST_DELEGATION`; a 404 result is marked `NON_DISCLOSING_NOT_FOUND_PROBE`; self-service GET exceptions are marked `SELF_SERVICE_EXCEPTION`; and ordinary broad permission denials are marked `ACCOUNT_PERMISSION_GATE_ONLY`. The latter categories do not claim fixture-backed CRUD. The route-level reconciliation makes the gap visible rather than treating a zero-permission synthetic-ID 404 as proof that the endpoint's resource authorization is correct.
+
+**Remaining acceptance distinction:** the dynamic runtime matrix establishes complete authentication and broad account/permission-gate coverage. It does not make the full named-role × resource-fixture × CRUD acceptance criterion Met. Existing resource-specific integration tests remain the source of fixture-backed CRUD evidence. A route is only complete for resource authorization when its relevant test exercises a real same-tenant/foreign-tenant or assigned/unassigned resource and asserts the expected response and unchanged persisted state for denied mutations.
+
+## Payment gateway scope constraint
+
+For the current Phase 2 validation, gateway integration is adapter-only. `PaymentGatewayCheckoutServiceTest.createsPendingCheckoutThroughMockAdapterOnlyWithoutContactingARealProvider` verifies the provider-neutral adapter contract with a Mockito adapter and asserts a pending payment record; it does not configure a production provider, make a network call, capture funds, refund, or settle a payment. No actual payment is required or authorized by this test suite. Real provider credentials, live checkout, webhook settlement and refunds remain disabled/deferred pending product approval.
