@@ -2,6 +2,9 @@ package com.saumyasolar.api;
 
 import com.saumyasolar.security.Principal;
 import com.saumyasolar.service.CmsService;
+import com.saumyasolar.service.PackageImageStorageService;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.MediaType;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -14,9 +17,19 @@ import java.util.UUID;
 @RequestMapping("/api/v1")
 public class CmsController {
     private final CmsService cms;
+    private final PackageImageStorageService images;
 
-    public CmsController(CmsService cms) {
+    public CmsController(CmsService cms, PackageImageStorageService images) {
         this.cms = cms;
+        this.images = images;
+    }
+
+    @PostMapping(value = "/cms/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Object uploadMedia(@RequestPart("file") MultipartFile file, Authentication authentication) {
+        Principal actor = principal(authentication);
+        String imageUrl = images.store(file);
+        cms.recordMediaUpload(imageUrl, actor);
+        return java.util.Map.of("imageUrl", imageUrl);
     }
 
     @GetMapping("/cms/content")
