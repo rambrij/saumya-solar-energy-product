@@ -155,6 +155,23 @@ public class ExportService {
                     var data=summary.createRow(row++);data.createCell(0).setCellValue(entry.getKey());data.createCell(1).setCellValue(entry.getValue()==null?"":String.valueOf(entry.getValue()));
                 }
             }
+            // Keep the generic Summary sheet for existing consumers and expose the
+            // Operations report under its stable, report-specific worksheet name.
+            if ("OPERATIONS".equalsIgnoreCase(String.valueOf(report.get("reportType")))) {
+                var operations=wb.createSheet("Operations");
+                var operationsHeader=operations.createRow(0);
+                operationsHeader.createCell(0).setCellValue("Metric");
+                operationsHeader.createCell(1).setCellValue("Value");
+                int operationsRow=1;
+                for (var entry : report.entrySet()) {
+                    if (!(entry.getValue() instanceof List<?>)) {
+                        var data=operations.createRow(operationsRow++);
+                        data.createCell(0).setCellValue(entry.getKey());
+                        data.createCell(1).setCellValue(entry.getValue()==null?"":String.valueOf(entry.getValue()));
+                    }
+                }
+                operations.autoSizeColumn(0);operations.autoSizeColumn(1);
+            }
             summary.autoSizeColumn(0);summary.autoSizeColumn(1);wb.write(out);
             return new FilePayload(out.toByteArray(),"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","xlsx");
         }
