@@ -2067,3 +2067,16 @@ The audit-first matrix is in `docs/PHASE5_GAP_MATRIX.md`. Initial vertical slice
 - Roles: existing custom-role editor and service are reused; the inbox permission is included in the vendor custom-role allowlist and system-role grants.
 
 **Not complete:** platform settings persistence/API remains intentionally deferred pending approval of the exact safe typed keys; CMS public storefront integration/media upload/preview and full lifecycle E2E remain; unified customer documents remain a frontend aggregation rather than a backend aggregate API; vendor report/export coverage remains partial. The latest full release-validation workflow must pass before any Phase 5 slice is declared complete. Intermediate CI runs failed on inbox authorization, an ambiguous CMS test selector and the old V1–V5 migration-count assertion; corrective commits have been made and the latest workflow is the release gate.
+
+
+### Phase 5 follow-up implementation — 2026-11-11
+
+The Phase 5 gap matrix is maintained in docs/PHASE5_GAP_MATRIX.md. Beyond the initial CMS/inbox/customer-document/platform-analytics slices, the latest implementation adds:
+
+- A finite typed platform settings API and PlatformSettingsPanel. The six supported non-secret keys are platform default currency, time zone, language, support email, support phone and public banner message. Platform Super Admin + PLATFORM_MANAGE is required; values are validated, updates require expectedVersion and are audited. V10 is additive.
+- Public CMS rendering for PAGE and BLOG detail routes, blog listing, BANNER and TESTIMONIAL sections. Authenticated media upload reuses the existing image validator/storage service and returns safe app-relative paths; authoring includes upload and preview.
+- Vendor operational analytics at /api/v1/vendor/analytics/operations: installation/service status, low stock, outstanding invoices and employee performance with tenant/date/branch/employee filters.
+- Existing async export infrastructure now supports OPERATIONS, SALES, INSTALLATIONS, SERVICE, INVENTORY and FINANCE in CSV/XLSX/PDF with private owner-scoped downloads and expiry. Report projections contain operational fields, not customer contact details.
+- Playwright E2E coverage for CMS upload/publish/public render and cross-customer invoice list/download denial. V11 adds operational report indexes. Release validation applies V1–V11 on MySQL 8.4.
+
+**Still pending acceptance:** latest full release-validation must pass. Additional MySQL-backed tests are required for report payment/status semantics, settings optimistic conflicts/audit persistence, CMS concurrent revision/publish behavior and all customer document families. The role × endpoint evidence for the new CMS/settings/export APIs must be reconciled before Phase 5 is closed. This branch is not declared Phase 5 complete while the latest workflow is queued, in progress or failed.
