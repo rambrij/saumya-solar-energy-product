@@ -27,6 +27,7 @@ public class CmsController {
     @PostMapping(value = "/cms/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Object uploadMedia(@RequestPart("file") MultipartFile file, Authentication authentication) {
         Principal actor = principal(authentication);
+        cms.requireMediaUpload(actor);
         String storedUrl = images.store(file);
         java.net.URI storedUri = java.net.URI.create(storedUrl);
         String imageUrl = storedUri.isAbsolute() ? storedUri.getRawPath() : storedUrl;
