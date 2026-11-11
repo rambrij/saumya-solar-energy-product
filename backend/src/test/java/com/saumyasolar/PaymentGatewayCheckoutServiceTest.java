@@ -42,7 +42,7 @@ class PaymentGatewayCheckoutServiceTest {
         PaymentGatewayCheckoutService service = new PaymentGatewayCheckoutService(
                 invoices, payments, mock(RefundRepository.class),
                 mock(CustomerProfileRepository.class), mock(CustomerOrderRepository.class), connections,
-                new PaymentGatewayRegistry(List.of()), entitlements, mock(AuditEventRepository.class), new ObjectMapper()
+                new PaymentGatewayRegistry(List.of()), entitlements, mock(AuditEventRepository.class), new ObjectMapper(), false
         );
         Principal actor = new Principal(user, tenant, "vendor@example.test", "VENDOR", Set.of("VENDOR_ADMIN"), Set.of("PAYMENT_RECORD"), 0);
         ResponseStatusException ex = assertThrows(
@@ -90,7 +90,7 @@ class PaymentGatewayCheckoutServiceTest {
                 invoices, payments, mock(RefundRepository.class),
                 mock(CustomerProfileRepository.class), mock(CustomerOrderRepository.class), connections,
                 new PaymentGatewayRegistry(List.of(adapter)), entitlements, mock(AuditEventRepository.class),
-                new ObjectMapper()
+                new ObjectMapper(), false
         );
         Principal actor = new Principal(user, tenant, "vendor@example.test", "VENDOR",
                 Set.of("VENDOR_ADMIN"), Set.of("PAYMENT_RECORD"), 0);
