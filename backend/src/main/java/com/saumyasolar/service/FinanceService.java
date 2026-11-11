@@ -492,8 +492,6 @@ public class FinanceService {
         assertInvoiceBranchAccess(invoice(pay.getInvoiceId(), p.tenantId()), p);
         List<Refund> prior = refunds.findByTenantIdAndPaymentId(p.tenantId(), pay.getId());
         if ("GATEWAY".equals(pay.getSource())) {
-            if (!Set.of("CONFIRMED", "PARTIALLY_REFUNDED").contains(pay.getStatus()))
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Only captured payments can be refunded");
             if (paymentGateways == null)
                 throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Payment gateway adapter is not configured");
             if (x.idempotencyKey() == null || !x.idempotencyKey().matches("[A-Za-z0-9._:-]{8,160}"))
@@ -501,10 +499,13 @@ public class FinanceService {
             Optional<Refund> previous = refunds.findByTenantIdAndIdempotencyKey(p.tenantId(), x.idempotencyKey());
             if (previous.isPresent()) {
                 Refund existing = previous.get();
-                if (!existing.getPaymentId().equals(pay.getId()) || existing.getAmount().compareTo(x.amount()) != 0)
+                if (!existing.getPaymentId().equals(pay.getId()) || existing.getAmount().compareTo(x.amount()) != 0
+                        || !existing.getReason().equals(x.reason().trim()))
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency-Key was already used for another refund");
                 return existing;
             }
+            if (!Set.of("CONFIRMED", "PARTIALLY_REFUNDED").contains(pay.getStatus()))
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Only captured payments can be refunded");
             BigDecimal reserved = prior.stream().filter(r -> Set.of("RECORDED", "PENDING", "PROCESSED").contains(r.getStatus()))
                     .map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
             if (reserved.add(x.amount()).compareTo(pay.getAmount()) > 0)
