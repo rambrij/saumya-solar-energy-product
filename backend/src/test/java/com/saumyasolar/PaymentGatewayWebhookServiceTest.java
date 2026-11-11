@@ -25,6 +25,7 @@ class PaymentGatewayWebhookServiceTest {
                 "evt-capture", "provider-ref", new BigDecimal("100.00"), "INR", "PAYMENT_CAPTURED", null, tenant.toString()));
         PaymentRepository payments = mock(PaymentRepository.class);
         when(payments.findByTenantIdAndProviderAndProviderReference(tenant, "MOCK_GATEWAY", "provider-ref")).thenReturn(Optional.of(payment));
+        when(payments.findForUpdate(paymentId, tenant)).thenReturn(Optional.of(payment));
         when(payments.findByTenantIdAndInvoiceId(tenant, invoiceId)).thenReturn(List.of(payment));
         InvoiceRepository invoices = mock(InvoiceRepository.class);
         when(invoices.findForUpdate(invoiceId, tenant)).thenReturn(Optional.of(invoice));
@@ -150,7 +151,7 @@ class PaymentGatewayWebhookServiceTest {
         InvoiceRepository invoices = mock(InvoiceRepository.class);
         when(invoices.findForUpdate(invoiceId, tenant)).thenReturn(Optional.of(invoice));
         RefundRepository refunds = mock(RefundRepository.class);
-        when(refunds.findByTenantIdAndProviderAndProviderRefundReference(tenant, "MOCK_GATEWAY", "refund-ref")).thenReturn(Optional.of(refund));
+        when(refunds.findForUpdateByTenantAndProviderReference(tenant, "MOCK_GATEWAY", "refund-ref")).thenReturn(Optional.of(refund));
         when(refunds.findByTenantIdAndPaymentId(tenant, paymentId)).thenReturn(List.of(refund));
         PaymentWebhookEventRepository events = mock(PaymentWebhookEventRepository.class);
         when(events.findByTenantIdAndProviderAndEventId(tenant, "MOCK_GATEWAY", "evt-refund")).thenReturn(Optional.empty());
