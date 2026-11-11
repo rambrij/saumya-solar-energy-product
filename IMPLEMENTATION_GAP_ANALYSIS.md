@@ -2026,4 +2026,4 @@ Added `V5__phase4_finance_provider_reconciliation.sql` after the existing Phase 
 
 ### Verification
 
-The Phase 4 GitHub Actions workflow validates frontend typecheck/build, MySQL 8.4 migrations including V5, Spring Boot startup/schema validation and backend tests. The latest revision's workflow is still pending; do not mark the branch release-ready until that exact head SHA passes all jobs.
+The Phase 4 GitHub Actions workflow validates frontend tests/typecheck/build, MySQL 8.4 migrations including V5, Spring Boot startup/schema validation, backend tests, runtime endpoint authorization evidence and browser-level tenant filter tampering. Runtime implementation commit `24c1e88` passed all four jobs. Documentation-only commit `e6de31a` also passed all four jobs. Verified results: 238 backend tests passed; 24 frontend tests passed; V5 migration on MySQL 8.4 passed; Spring Boot startup against MySQL 8.4 passed; runtime endpoint authorization evidence and browser-level tenant filter tampering tests passed.
