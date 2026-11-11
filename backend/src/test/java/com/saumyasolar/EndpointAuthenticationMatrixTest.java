@@ -485,8 +485,11 @@ class EndpointAuthenticationMatrixTest {
             for (String pattern : info.getPatternValues()) {
                 if (isPublic(pattern)) continue;
                 for (var method : methods) {
-                    // These routes intentionally delegate authorization to an existing resource's
-                    // owner/assignment policy; dedicated tests provide real resource fixtures.
+                    if (method == org.springframework.web.bind.annotation.RequestMethod.GET
+                            || method == org.springframework.web.bind.annotation.RequestMethod.OPTIONS
+                            || method == org.springframework.web.bind.annotation.RequestMethod.HEAD) continue;
+                    // These mutation routes intentionally delegate authorization to an existing
+                    // resource's owner/assignment policy; focused integration tests provide real fixtures.
                     if (pattern.startsWith("/api/v1/quotations/{id}/{action:")
                             || pattern.equals("/api/v1/offline-sync/operations")) {
                         evidence.add(new String[] {method.name(), pattern, handler.getBeanType().getSimpleName(),
@@ -495,9 +498,6 @@ class EndpointAuthenticationMatrixTest {
                                 "NOT_PROBED", "DELEGATED"});
                         continue;
                     }
-                    if (method == org.springframework.web.bind.annotation.RequestMethod.GET
-                            || method == org.springframework.web.bind.annotation.RequestMethod.OPTIONS
-                            || method == org.springframework.web.bind.annotation.RequestMethod.HEAD) continue;
                     String path = probePath(pattern, handler);
                     MockHttpServletRequestBuilder builder = mutationRequest(method, path, handler, mapper);
                     builder.header("Authorization", "Bearer " + token);
