@@ -2901,6 +2901,7 @@ class Release12TenantIntegrationTest {
 
 
 
+    @org.springframework.transaction.annotation.Transactional
     @Test
     void salesManagerCanManageUnassignedLeadsWhileSalesEmployeeIsRestrictedToAssignedLeads() throws Exception {
         AppUser employee = createPermissionMatrixUser("sales-employee-scope",
@@ -2952,6 +2953,7 @@ class Release12TenantIntegrationTest {
         assertEquals("NEW", leads.findByIdAndTenantId(foreign.getId(), foreignTenant.getId()).orElseThrow().getStage());
     }
 
+    @org.springframework.transaction.annotation.Transactional
     @Test
     void assignedAndUnassignedServiceEngineersHaveFixtureBackedReadAndMutationBoundaries() throws Exception {
         AppUser assignedEngineer = createPermissionMatrixUser("assigned-engineer",
@@ -3024,6 +3026,7 @@ class Release12TenantIntegrationTest {
         assertEquals("CUSTOMER_CONFIRMED", serviceRequests.findById(foreign.getId()).orElseThrow().getStatus());
     }
 
+    @org.springframework.transaction.annotation.Transactional
     @Test
     void financePaymentRefundAndCreditNoteMutationsAreTenantAndPermissionScoped() throws Exception {
         Tenant foreignTenant = newTenant();
@@ -3143,6 +3146,7 @@ class Release12TenantIntegrationTest {
         assertEquals(1, refundRecords.findByTenantIdAndPaymentId(vendorTenantId, ownPayment.getId()).size());
     }
 
+    @org.springframework.transaction.annotation.Transactional
     @Test
     void installationChecklistAndCommissioningAreRestrictedToAssignedEngineerAndPersistEvidence() throws Exception {
         Branch ownBranch = branch(vendorTenantId, "INSTALL-SCOPE-" + UUID.randomUUID().toString().substring(0, 6));
@@ -3221,6 +3225,7 @@ class Release12TenantIntegrationTest {
         assertEquals("COMMISSIONED", customerOrders.findByIdAndTenantId(order.getId(), vendorTenantId).orElseThrow().getStatus());
     }
 
+    @org.springframework.transaction.annotation.Transactional
     @Test
     void fixtureBackedCrudAuthorizationAcrossCrmQuotesOrdersInventoryInstallationsServiceWarrantyFinanceAndExports()
             throws Exception {
