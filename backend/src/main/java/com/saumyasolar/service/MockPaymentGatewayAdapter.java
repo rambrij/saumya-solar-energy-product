@@ -126,40 +126,20 @@ public class MockPaymentGatewayAdapter implements PaymentGatewayAdapter {
         return refunds.computeIfAbsent(key, ignored -> new GatewayRefund("mock_ref_" + key.substring(0, 32), "PENDING"));
     }
 
-    /** Used only by the dev/test simulator to produce a provider-authentic signed webhook body. */
-    public String signedEvent(String eventId, String providerReference, BigDecimal amount, String currency, String status)
-            throws Exception {
-        return signedEvent(eventId, providerReference, amount, currency, status, null, tenantFor(providerReference));
-    }
-
-    public String signedEvent(String eventId, String providerReference, BigDecimal amount, String currency,
-                              String status, String providerRefundReference) throws Exception {
-        return signedEvent(eventId, providerReference, amount, currency, status, providerRefundReference, tenantFor(providerReference));
-    }
-
+    /** Used only by the dev/test simulator to produce provider-authentic signed webhook bodies. */
     public String signedEvent(String eventId, String providerReference, BigDecimal amount, String currency,
                               String status, String providerRefundReference, String tenantId) throws Exception {
+        if (tenantId == null || tenantId.isBlank())
+            throw new IllegalArgumentException("Tenant metadata is required for signed mock events");
         Map<String, Object> payload = new java.util.LinkedHashMap<>();
-        if (tenantId == null || tenantId.isBlank()) throw new IllegalArgumentException("Tenant metadata is required for signed mock events");
         payload.put("eventId", eventId);
         payload.put("providerReference", providerReference);
         payload.put("amount", amount.toPlainString());
         payload.put("currency", currency);
         payload.put("status", status);
         if (providerRefundReference != null) payload.put("providerRefundReference", providerRefundReference);
-        if (tenantId != null) payload.put("tenantId", tenantId);
+        payload.put("tenantId", tenantId);
         return mapper.writeValueAsString(payload);
-    }
-
-    private String tenantFor(String providerReference) {
-        String tenant = tenants.get(providerReference);
-        if (tenant == null) throw new IllegalArgumentException("Unknown mock payment reference");
-        return tenant;
-    }
-
-    public String checkoutOutcome(String providerReference) {
-        if (!outcomes.containsKey(providerReference)) throw new IllegalArgumentException("Unknown mock payment reference");
-        return outcomes.get(providerReference);
     }
 
     public String sign(String rawPayload) {
