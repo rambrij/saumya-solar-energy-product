@@ -42,7 +42,7 @@ public class PaymentGatewayWebhookService {
         PaymentGatewayAdapter.GatewayWebhookEvent event;
         try { event = adapter.parseWebhook(raw); }
         catch (Exception ex) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid payment provider event"); }
-        Set<String> paymentEvents = Set.of("PAYMENT_CAPTURED", "PAYMENT_FAILED", "SUCCEEDED", "FAILED");
+        Set<String> paymentEvents = Set.of("PAYMENT_CAPTURED", "PAYMENT_FAILED", "PAYMENT_CANCELLED", "SUCCEEDED", "FAILED");
         Set<String> refundEvents = Set.of("REFUND_PROCESSED", "REFUND_FAILED");
         if (event == null || event.eventId() == null || event.eventId().isBlank() || event.eventId().length() > 180
                 || event.providerReference() == null || event.providerReference().isBlank()
@@ -96,6 +96,8 @@ public class PaymentGatewayWebhookService {
                     payment.setStatus("CONFIRMED");
                     payment.setPaidAt(Instant.now());
                 }
+            } else if ("PAYMENT_CANCELLED".equals(event.status()) && "PENDING".equals(payment.getStatus())) {
+                payment.setStatus("CANCELLED");
             } else if (("PAYMENT_FAILED".equals(event.status()) || "FAILED".equals(event.status()))
                     && "PENDING".equals(payment.getStatus())) {
                 payment.setStatus("FAILED");
