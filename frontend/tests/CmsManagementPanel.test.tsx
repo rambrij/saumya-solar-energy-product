@@ -20,6 +20,15 @@ describe('CMS management panel',()=>{
   expect(screen.getByRole('button',{name:'Submit review'})).toBeTruthy();
   expect(screen.getByRole('button',{name:'Archive'})).toBeTruthy();
  });
+ it('uploads CMS media through the authenticated image endpoint',async()=>{
+  render(<CmsManagementPanel s={{accessToken:'token',user:{permissions:['CMS_VIEW','CMS_CREATE','CMS_UPDATE']}}} error={vi.fn()}/>);
+  await screen.findByText('Solar guide');
+  fireEvent.click(screen.getByRole('button',{name:/Create content/i}));
+  const file=new File(['image-bytes'],'solar.png',{type:'image/png'});
+  fireEvent.change(screen.getByLabelText(/Upload social image/),{target:{files:[file]}});
+  fireEvent.click(screen.getByRole('button',{name:'Upload and use image'}));
+  await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(call=>String(call[0]).endsWith('/cms/media')&&call[1]?.method==='POST')).toBe(true));
+ });
  it('creates content through the authenticated CMS API',async()=>{
   render(<CmsManagementPanel s={{accessToken:'token',user:{permissions:['CMS_VIEW','CMS_CREATE']}}} error={vi.fn()}/>);
   await screen.findByText('Solar guide');
