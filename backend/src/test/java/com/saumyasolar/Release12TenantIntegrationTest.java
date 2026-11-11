@@ -159,6 +159,8 @@ class Release12TenantIntegrationTest {
     @Autowired
     com.saumyasolar.repo.ServiceAttachmentRepository serviceAttachmentRecords;
     @Autowired
+    com.saumyasolar.repo.ServiceVisitRepository serviceVisitRecords;
+    @Autowired
     com.saumyasolar.service.ExportService exportService;
     @Autowired
     SurveyAttachmentService surveyAttachments;
@@ -3035,9 +3037,9 @@ class Release12TenantIntegrationTest {
     @Test
     void assignedAndUnassignedServiceEngineersHaveFixtureBackedReadAndMutationBoundaries() throws Exception {
         AppUser assignedEngineer = createPermissionMatrixUser("assigned-engineer",
-                List.of("SERVICE_VIEW", "SERVICE_UPDATE", "SERVICE_CLOSE"));
+                List.of("SERVICE_VIEW", "SERVICE_UPDATE", "SERVICE_RESOLVE", "SERVICE_CLOSE"));
         AppUser otherEngineer = createPermissionMatrixUser("unassigned-engineer",
-                List.of("SERVICE_VIEW", "SERVICE_UPDATE", "SERVICE_CLOSE"));
+                List.of("SERVICE_VIEW", "SERVICE_UPDATE", "SERVICE_RESOLVE", "SERVICE_CLOSE"));
         Tenant foreignTenant = newTenant();
         CustomerFixture ownCustomer = createCustomer(vendorTenantId, "engineer-own-customer");
         CustomerFixture foreignCustomer = createCustomer(foreignTenant.getId(), "engineer-foreign-customer");
@@ -3085,6 +3087,64 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isForbidden());
         assertEquals(1, serviceAttachmentRecords.findByTenantIdAndServiceRequestIdOrderByCreatedAtAsc(
                 vendorTenantId, assigned.getId()).size());
+
+        ServiceRequest visitTicket = branchTicket(vendorTenantId, null, ownCustomer.profile().getId());
+        visitTicket.setAssignedEngineerId(assignedEngineer.getId());
+        visitTicket.setStatus("VISIT_SCHEDULED");
+        ServiceRequest otherVisitTicket = branchTicket(vendorTenantId, null, ownCustomer.profile().getId());
+        otherVisitTicket.setAssignedEngineerId(otherEngineer.getId());
+        otherVisitTicket.setStatus("VISIT_SCHEDULED");
+        serviceRequests.saveAllAndFlush(List.of(visitTicket, otherVisitTicket));
+        com.saumyasolar.domain.ServiceVisit assignedVisit = new com.saumyasolar.domain.ServiceVisit();
+        assignedVisit.setId(UUID.randomUUID());
+        assignedVisit.setTenantId(vendorTenantId);
+        assignedVisit.setServiceRequestId(visitTicket.getId());
+        assignedVisit.setEngineerId(assignedEngineer.getId());
+        assignedVisit.setScheduledAt(Instant.now().plusSeconds(1800));
+        com.saumyasolar.domain.ServiceVisit otherVisit = new com.saumyasolar.domain.ServiceVisit();
+        otherVisit.setId(UUID.randomUUID());
+        otherVisit.setTenantId(vendorTenantId);
+        otherVisit.setServiceRequestId(otherVisitTicket.getId());
+        otherVisit.setEngineerId(otherEngineer.getId());
+        otherVisit.setScheduledAt(Instant.now().plusSeconds(3600));
+        serviceVisitRecords.saveAllAndFlush(List.of(assignedVisit, otherVisit));
+
+        mvc.perform(get("/api/v1/service-requests/" + visitTicket.getId() + "/visits")
+                        .header("Authorization", "Bearer " + assignedToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(assignedVisit.getId().toString()));
+        mvc.perform(get("/api/v1/service-requests/" + visitTicket.getId() + "/visits")
+                        .header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/service-requests/" + visitTicket.getId() + "/visits/" + assignedVisit.getId() + "/start")
+                        .header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isForbidden());
+        assertNull(serviceVisitRecords.findByIdAndTenantIdAndServiceRequestId(
+                assignedVisit.getId(), vendorTenantId, visitTicket.getId()).orElseThrow().getStartedAt());
+        mvc.perform(post("/api/v1/service-requests/" + visitTicket.getId() + "/visits/" + assignedVisit.getId() + "/start")
+                        .header("Authorization", "Bearer " + assignedToken))
+                .andExpect(status().isOk());
+        assertNotNull(serviceVisitRecords.findByIdAndTenantIdAndServiceRequestId(
+                assignedVisit.getId(), vendorTenantId, visitTicket.getId()).orElseThrow().getStartedAt());
+        String deniedCompletion = "{\"engineerNotes\":\"not assigned\",\"resolution\":\"unauthorized\",\"evidenceUrl\":\"private.pdf\",\"parts\":[]}";
+        mvc.perform(post("/api/v1/service-requests/" + visitTicket.getId() + "/visits/" + assignedVisit.getId() + "/complete")
+                        .header("Authorization", "Bearer " + otherToken).contentType(MediaType.APPLICATION_JSON)
+                        .content(deniedCompletion))
+                .andExpect(status().isForbidden());
+        assertNull(serviceVisitRecords.findByIdAndTenantIdAndServiceRequestId(
+                assignedVisit.getId(), vendorTenantId, visitTicket.getId()).orElseThrow().getCompletedAt());
+        mvc.perform(post("/api/v1/service-requests/" + visitTicket.getId() + "/visits/" + assignedVisit.getId() + "/complete")
+                        .header("Authorization", "Bearer " + assignedToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"engineerNotes\":\"inspected inverter\",\"resolution\":\"replaced loose connector\",\"evidenceUrl\":\"s3://private/visit-proof.pdf\",\"parts\":[]}"))
+                .andExpect(status().isOk());
+        com.saumyasolar.domain.ServiceVisit completedVisit = serviceVisitRecords.findByIdAndTenantIdAndServiceRequestId(
+                assignedVisit.getId(), vendorTenantId, visitTicket.getId()).orElseThrow();
+        assertNotNull(completedVisit.getCompletedAt());
+        assertEquals("inspected inverter", completedVisit.getEngineerNotes());
+        assertEquals("replaced loose connector", completedVisit.getResolution());
+        assertEquals("s3://private/visit-proof.pdf", completedVisit.getEvidenceUrl());
+        assertEquals("RESOLVED", serviceRequests.findById(visitTicket.getId()).orElseThrow().getStatus());
+
         mvc.perform(get("/api/v1/service-requests/" + unassigned.getId()).header("Authorization", "Bearer " + assignedToken))
                 .andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/service-requests/" + unassigned.getId() + "/close")
