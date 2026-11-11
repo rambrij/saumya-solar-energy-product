@@ -183,3 +183,21 @@ No production data backfill, destructive migration or live provider integration 
 ### Verification status
 
 This commit records the Phase 6 source audit and decisions only. It does not claim Phase 6 runtime implementation or test completion. No migration, adapter, API, UI or provider webhook implementation is included in this audit checkpoint. Full build/test/CI verification remains outstanding.
+### Phase 6 implementation progress (2026-11-11)
+
+Implemented in this branch (runtime verification pending):
+- V12 adds tenant-owned `notification_outbox`, `notification_preference` and `notification_provider_event`; it extends the notification delivery status check for `DEAD_LETTER` and `SUPPRESSED`.
+- Existing `NotificationDelivery` and Phase 5 `UserNotification` remain the delivery attempt and inbox aggregates; the new outbox references the delivery row rather than duplicating its payload.
+- Business notification enqueueing now writes delivery and outbox rows in the same Spring transaction. Existing after-commit event dispatch remains as a low-latency path; a tenant-aware scheduled outbox dispatcher recovers pending/retry work after restart.
+- Email adapter is pinned to local Mailpit (SMTP port 1025; Docker web UI port 8025). The development profile uses localhost:1025. SMS and WhatsApp use deterministic mock adapters only; no Twilio HTTP call or provider SDK is retained in NotificationService.
+- Channel preferences are stored per tenant/user/channel, require explicit SMS/WhatsApp consent to enable, and are checked before dispatch. In-app preference is checked before inbox projection creation.
+- A mock delivery webhook verifies HMAC-SHA256 over the raw request bytes, persists a provider event, rejects event-ID reuse with a changed payload hash, and updates only a delivery belonging to the supplied tenant.
+- Tenant-scoped delivery, outbox and integration-job monitoring APIs were added. The existing notification inbox UI now includes preference controls and delivery status.
+- Release validation now includes the Phase 6 branch and applies V12 in its clean MySQL 8.4 migration path.
+
+### Remaining verification and policy gates
+- This is not a production-provider implementation. Mock SMS/WhatsApp simulate acceptance and transient failure; they do not send messages.
+- Runtime build, all backend/frontend tests, MySQL 8.4 Flyway execution and browser tests have not yet been observed passing on this branch. Do not close Phase 6 until branch-head CI is green.
+- Integration job monitoring is tenant-scoped and read-only; manual retry/redrive API, provider configuration administration and platform-wide cross-tenant dashboard remain deferred pending role/scope approval.
+- The mock webhook endpoint is a test contract only. Do not expose it as a production provider callback endpoint.
+- NOT-OQ-01 through NOT-OQ-10 remain open. SLA escalation policy is not implemented because thresholds, targets and cadence are unspecified.
