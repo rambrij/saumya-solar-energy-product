@@ -297,8 +297,9 @@ class Release12TenantIntegrationTest {
         order.setStatus("CONFIRMED"); order.setTotal(new java.math.BigDecimal("100")); order.setCreatedAt(Instant.now());
         customerOrders.saveAndFlush(order);
         String token=accessToken("admin@saumya.local","Admin@123");
-        mvc.perform(get("/api/v1/orders/transition-options").header("Authorization","Bearer "+token))
-                .andExpect(status().isOk()).andExpect(jsonPath("$[?(@.fromStatus == 'CONFIRMED' && @.toStatus == 'PAYMENT_PENDING')]").exists());
+        String initialOptions=mvc.perform(get("/api/v1/orders/transition-options").header("Authorization","Bearer "+token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(json.readTree(initialOptions).findValuesAsText("toStatus").contains("PAYMENT_PENDING"));
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/orders/transition-policy")
                         .header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"transitions\":[{\"fromStatus\":\"CONFIRMED\",\"toStatus\":\"PAYMENT_PENDING\",\"enabled\":false}]}"))
@@ -308,12 +309,16 @@ class Release12TenantIntegrationTest {
                         .content("{\"status\":\"PAYMENT_PENDING\",\"reason\":\"disabled edge test\"}"))
                 .andExpect(status().isConflict());
         assertEquals("CONFIRMED",customerOrders.findByIdAndTenantId(order.getId(),vendorTenantId).orElseThrow().getStatus());
+        String disabledOptions=mvc.perform(get("/api/v1/orders/transition-options").header("Authorization","Bearer "+token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(json.readTree(disabledOptions).findValuesAsText("toStatus").contains("PAYMENT_PENDING"));
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/orders/transition-policy")
                         .header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"transitions\":[{\"fromStatus\":\"CONFIRMED\",\"toStatus\":\"PAYMENT_PENDING\",\"enabled\":true}]}"))
                 .andExpect(status().isOk());
-        mvc.perform(get("/api/v1/orders/transition-options").header("Authorization","Bearer "+token))
-                .andExpect(status().isOk()).andExpect(jsonPath("$[?(@.toStatus == 'PAYMENT_PENDING')]").exists());
+        String restoredOptions=mvc.perform(get("/api/v1/orders/transition-options").header("Authorization","Bearer "+token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(json.readTree(restoredOptions).findValuesAsText("toStatus").contains("PAYMENT_PENDING"));
     }
 
     @Test

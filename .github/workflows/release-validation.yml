@@ -122,6 +122,18 @@ jobs:
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass -e "CREATE DATABASE solar_migration_test"
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V1__complete_release2.sql
+      - name: Validate current V1 plus Phase 3 V2 and V3 migrations on clean MySQL 8.4 schema
+        run: |
+          mysql -h 127.0.0.1 -uroot -prootpass -e "CREATE DATABASE phase3_clean_install"
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V1__baseline.sql
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V2__phase3_reservation_expiry.sql
+          mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install < backend/src/main/resources/db/migration/V3__phase3_order_policy_and_tenant_lifecycle.sql
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='phase3_clean_install' AND table_name='inventory_reservation' AND column_name IN ('expires_at','released_at','release_reason','pre_reservation_order_status','released_by')")" = "5"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='phase3_clean_install' AND table_name='tenant' AND column_name IN ('verified_at','verified_by','activated_at','activated_by','suspended_at','suspended_by','closed_at','closed_by','lifecycle_reason')")" = "9"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM order_transition_policy WHERE tenant_id IS NULL")" = "36"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM permission WHERE code='ORDER_POLICY_MANAGE'")" = "1"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass phase3_clean_install -Nse "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema='phase3_clean_install' AND trigger_name IN ('trg_order_status_history_no_update','trg_order_status_history_no_delete')")" = "2"
+
       - name: Verify additive V2 permission migration
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -e "INSERT INTO tenant(id,name,slug,status) VALUES(UUID_TO_BIN(UUID()),'Migration tenant','migration-tenant','ACTIVE'); SET @tenant_id=(SELECT id FROM tenant WHERE slug='migration-tenant'); INSERT INTO role(id,tenant_id,name) VALUES(UUID_TO_BIN(UUID()),@tenant_id,'VENDOR_ADMIN');"
