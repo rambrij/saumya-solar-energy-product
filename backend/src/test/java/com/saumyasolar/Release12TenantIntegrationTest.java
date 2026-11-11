@@ -2572,10 +2572,11 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), paymentA.getId(), paymentB.getId());
         assertBranchListContainsOnly(mvc.perform(get("/api/v1/refunds").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), refundA.getId(), refundB.getId());
-        mvc.perform(get("/api/v1/payments/" + paymentA.getId()).header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk());
-        mvc.perform(get("/api/v1/payments/" + paymentB.getId()).header("Authorization", "Bearer " + token))
-                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/payments/" + paymentA.getId() + "/receipt.pdf")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .contentType(MediaType.APPLICATION_PDF));
         mvc.perform(get("/api/v1/payments/" + paymentB.getId() + "/receipt.pdf")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
