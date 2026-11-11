@@ -1,3 +1,18 @@
+-- Consolidated clean-install baseline for MySQL 8.4.
+
+-- This is the only active Flyway migration. It contains the former V1-V14 schema and seed changes.
+
+-- DDL order: tables (dependency order), table extensions/constraints, standalone indexes, triggers, then seed/reference data.
+
+-- No runtime feature, permission grant, tenant constraint, status check, or seed operation from the former chain is intentionally omitted.
+
+-- Existing deployments are not in scope; this baseline is for a fresh database only.
+
+
+
+-- TABLES
+
+-- Source: V1__baseline.sql
 -- Clean-install MySQL 8.4 baseline.
 -- All columns, indexes, primary/unique keys, checks and foreign keys are declared at table creation.
 -- Tables are ordered by foreign-key dependency; no post-creation table alterations are needed.
@@ -25,11 +40,13 @@ CREATE TABLE tenant(
   KEY ix_tenant_status_created (status, created_at)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE permission(
   id BINARY(16) PRIMARY KEY,
   code VARCHAR(80) NOT NULL UNIQUE
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE role(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16),
@@ -37,6 +54,7 @@ CREATE TABLE role(
   UNIQUE(tenant_id,name)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE solar_package(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -52,6 +70,7 @@ CREATE TABLE solar_package(
   CONSTRAINT uq_solar_package_tenant_id UNIQUE (tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE idempotency_record(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -61,6 +80,7 @@ CREATE TABLE idempotency_record(
   UNIQUE(tenant_id,operation_name,idempotency_key)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE payment_webhook_event(
   id BINARY(16) PRIMARY KEY,
   provider VARCHAR(60) NOT NULL,
@@ -72,6 +92,7 @@ CREATE TABLE payment_webhook_event(
   UNIQUE KEY uq_payment_webhook_provider_event(provider,event_id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE subscription_plan (
   id BINARY(16) PRIMARY KEY,
   plan_code VARCHAR(50) NOT NULL,
@@ -99,6 +120,7 @@ CREATE TABLE subscription_plan (
   CONSTRAINT chk_subscription_plan_extended_limits CHECK(max_products>=1 AND max_customers>=1 AND trial_period_days>=0)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE auth_rate_limit_bucket (
   bucket_key CHAR(64) NOT NULL PRIMARY KEY,
   window_started_at TIMESTAMP(6) NOT NULL,
@@ -107,6 +129,7 @@ CREATE TABLE auth_rate_limit_bucket (
   INDEX ix_auth_rate_limit_updated (updated_at)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE role_permission(
   role_id BINARY(16),
   permission_id BINARY(16),
@@ -115,6 +138,7 @@ CREATE TABLE role_permission(
   FOREIGN KEY(permission_id) REFERENCES permission(id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE app_user(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16),
@@ -132,6 +156,7 @@ CREATE TABLE app_user(
   CONSTRAINT uq_app_user_tenant_id UNIQUE (tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE product_category(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -143,6 +168,7 @@ CREATE TABLE product_category(
   CONSTRAINT uq_product_category_tenant_id UNIQUE (tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE installation_team(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -156,6 +182,7 @@ CREATE TABLE installation_team(
   CONSTRAINT uq_installation_team_tenant_id UNIQUE (tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE installation_checklist_template(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -169,6 +196,7 @@ CREATE TABLE installation_checklist_template(
   INDEX ix_check_template_tenant_active(tenant_id,active)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE invoice_sequence(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -178,6 +206,7 @@ CREATE TABLE invoice_sequence(
   CONSTRAINT fk_invoice_sequence_tenant FOREIGN KEY(tenant_id) REFERENCES tenant(id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE service_sla_policy(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -197,6 +226,7 @@ CREATE TABLE service_sla_policy(
   CHECK(response_minutes>0 AND resolution_minutes>=response_minutes)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE branch (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -214,6 +244,7 @@ CREATE TABLE branch (
   INDEX ix_branch_tenant_active (tenant_id,active)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE subscription_usage (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -228,6 +259,7 @@ CREATE TABLE subscription_usage (
   INDEX ix_subscription_usage_tenant_period(tenant_id,period_start,period_end)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE tenant_domain (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -242,6 +274,7 @@ CREATE TABLE tenant_domain (
   INDEX ix_tenant_domain_tenant_status (tenant_id,status)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE approval_workflow (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -258,6 +291,7 @@ CREATE TABLE approval_workflow (
   INDEX ix_approval_workflow_tenant_entity (tenant_id,entity_type,active)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE integration_connection (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -276,6 +310,7 @@ CREATE TABLE integration_connection (
   INDEX ix_integration_connection_tenant_type(tenant_id,integration_type,status)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE integration_webhook_event (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -290,6 +325,7 @@ CREATE TABLE integration_webhook_event (
   INDEX ix_integration_webhook_tenant_received(tenant_id,received_at)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE tenant_storage_ledger (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -305,6 +341,7 @@ CREATE TABLE tenant_storage_ledger (
   INDEX ix_storage_ledger_object (tenant_id, object_key)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE user_role(
   user_id BINARY(16),
   role_id BINARY(16),
@@ -313,6 +350,7 @@ CREATE TABLE user_role(
   FOREIGN KEY(role_id) REFERENCES role(id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE product(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -343,6 +381,7 @@ CREATE TABLE product(
   CONSTRAINT fk_product_category_tenant FOREIGN KEY (tenant_id,category_id) REFERENCES product_category(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE customer_profile(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -362,6 +401,7 @@ CREATE TABLE customer_profile(
   CONSTRAINT fk_customer_profile_user_tenant FOREIGN KEY (tenant_id,user_id) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE refresh_token(
   id BINARY(16) PRIMARY KEY,
   user_id BINARY(16) NOT NULL,
@@ -377,6 +417,7 @@ CREATE TABLE refresh_token(
   CONSTRAINT fk_refresh_token_replacement FOREIGN KEY (replaced_by_token_id) REFERENCES refresh_token(id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE password_reset_token(
   id BINARY(16) PRIMARY KEY,
   user_id BINARY(16) NOT NULL,
@@ -386,6 +427,7 @@ CREATE TABLE password_reset_token(
   FOREIGN KEY(user_id) REFERENCES app_user(id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE warehouse(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -403,6 +445,7 @@ CREATE TABLE warehouse(
   CONSTRAINT uq_warehouse_tenant_id UNIQUE (tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE notification_delivery (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NULL,
@@ -431,6 +474,7 @@ CREATE TABLE notification_delivery (
   UNIQUE KEY uq_notification_delivery_tenant_idempotency (tenant_id, idempotency_key)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE mfa_challenge (
   id BINARY(16) PRIMARY KEY,
   user_id BINARY(16) NOT NULL,
@@ -444,6 +488,7 @@ CREATE TABLE mfa_challenge (
   INDEX ix_mfa_challenge_expiry (expires_at)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE engineer_profile (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -465,6 +510,7 @@ CREATE TABLE engineer_profile (
   CONSTRAINT fk_engineer_profile_user_tenant FOREIGN KEY (tenant_id,user_id) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE branch_user (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -479,6 +525,7 @@ CREATE TABLE branch_user (
   CONSTRAINT fk_branch_user_user_tenant FOREIGN KEY (tenant_id,user_id) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE tenant_subscription (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -506,6 +553,7 @@ CREATE TABLE tenant_subscription (
   CONSTRAINT chk_subscription_billing_cycle CHECK(billing_cycle IN ('MONTHLY','YEARLY'))
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE audit_event (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16),
@@ -534,6 +582,7 @@ CREATE TABLE audit_event (
   CONSTRAINT fk_audit_event_branch_tenant FOREIGN KEY (tenant_id,branch_id) REFERENCES branch(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE approval_instance (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -555,6 +604,7 @@ CREATE TABLE approval_instance (
   CONSTRAINT fk_approval_instance_requester_tenant FOREIGN KEY (tenant_id,requested_by) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE integration_sync_job (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -578,6 +628,7 @@ CREATE TABLE integration_sync_job (
   INDEX ix_integration_job_tenant_entity(tenant_id,entity_type,entity_id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE offline_sync_operation (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -611,6 +662,7 @@ CREATE TABLE offline_sync_operation (
   CONSTRAINT fk_offline_sync_actor_tenant FOREIGN KEY (tenant_id,actor_id) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE integration_secret_reference (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -631,6 +683,7 @@ CREATE TABLE integration_secret_reference (
   CONSTRAINT fk_secret_reference_connection_tenant FOREIGN KEY (tenant_id,integration_connection_id) REFERENCES integration_connection(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE export_job (
   id BINARY(16) NOT NULL PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -657,6 +710,7 @@ CREATE TABLE export_job (
   INDEX ix_export_job_expiry (status, expires_at)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE package_item(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -670,6 +724,7 @@ CREATE TABLE package_item(
   CONSTRAINT fk_package_item_product_tenant FOREIGN KEY (tenant_id,product_id) REFERENCES product(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE inventory_balance(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -689,6 +744,7 @@ CREATE TABLE inventory_balance(
   CONSTRAINT fk_inventory_balance_product_tenant FOREIGN KEY (tenant_id,product_id) REFERENCES product(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE approval_decision (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -705,6 +761,7 @@ CREATE TABLE approval_decision (
   CONSTRAINT fk_approval_decision_actor_tenant FOREIGN KEY (tenant_id,actor_id) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE offline_sync_attachment (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -730,6 +787,7 @@ CREATE TABLE offline_sync_attachment (
   CONSTRAINT fk_offline_attachment_operation_tenant FOREIGN KEY (tenant_id,operation_id) REFERENCES offline_sync_operation(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE subscription_assignment_history (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -749,6 +807,7 @@ CREATE TABLE subscription_assignment_history (
   INDEX ix_sub_history_subscription_time(subscription_id,created_at)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE customer_address (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -770,6 +829,7 @@ CREATE TABLE customer_address (
   INDEX ix_customer_address_owner_default (tenant_id,customer_id,is_default,created_at)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE enquiry(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -795,6 +855,7 @@ CREATE TABLE enquiry(
   CONSTRAINT uq_enquiry_tenant_id UNIQUE (tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE sales_lead(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -818,6 +879,7 @@ CREATE TABLE sales_lead(
   KEY ix_sales_lead_tenant_enquiry (tenant_id,enquiry_id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE lead_history(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -836,6 +898,7 @@ CREATE TABLE lead_history(
   CONSTRAINT fk_lead_history_actor_tenant FOREIGN KEY (tenant_id,actor_id) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE site_survey(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -875,6 +938,7 @@ CREATE TABLE site_survey(
   CONSTRAINT fk_site_survey_reviewer_tenant FOREIGN KEY (tenant_id,reviewed_by) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE quotation(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -911,6 +975,7 @@ CREATE TABLE quotation(
   KEY ix_quotation_tenant_customer (tenant_id,customer_id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE site_survey_history (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -929,6 +994,7 @@ CREATE TABLE site_survey_history (
   CONSTRAINT fk_survey_history_actor_tenant FOREIGN KEY (tenant_id,actor_id) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE site_survey_attachment (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -949,6 +1015,7 @@ CREATE TABLE site_survey_attachment (
   CONSTRAINT fk_survey_attachment_uploader_tenant FOREIGN KEY (tenant_id,uploaded_by) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE quotation_item(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -969,6 +1036,7 @@ CREATE TABLE quotation_item(
   CONSTRAINT fk_quotation_item_package_tenant FOREIGN KEY (tenant_id,package_id) REFERENCES solar_package(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE customer_order(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -992,6 +1060,7 @@ CREATE TABLE customer_order(
   KEY ix_customer_order_tenant_customer (tenant_id,customer_id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE order_item(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1013,6 +1082,7 @@ CREATE TABLE order_item(
   CONSTRAINT fk_order_item_package_tenant FOREIGN KEY (tenant_id,package_id) REFERENCES solar_package(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE order_status_history(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1028,6 +1098,7 @@ CREATE TABLE order_status_history(
   CONSTRAINT fk_order_history_actor_tenant FOREIGN KEY (tenant_id,actor_id) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE inventory_reservation(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1049,6 +1120,7 @@ CREATE TABLE inventory_reservation(
   CONSTRAINT fk_inventory_reservation_product_tenant FOREIGN KEY (tenant_id,product_id) REFERENCES product(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE installation_job(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1088,6 +1160,7 @@ CREATE TABLE installation_job(
   CONSTRAINT fk_install_job_team_tenant FOREIGN KEY (tenant_id,team_id) REFERENCES installation_team(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE invoice(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1127,6 +1200,7 @@ CREATE TABLE invoice(
   CONSTRAINT fk_invoice_created_by_tenant FOREIGN KEY (tenant_id,created_by) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE installation_checklist_item(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1148,6 +1222,7 @@ CREATE TABLE installation_checklist_item(
   CONSTRAINT fk_checklist_completed_by_tenant FOREIGN KEY (tenant_id,completed_by) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE warranty(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1177,6 +1252,7 @@ CREATE TABLE warranty(
   CONSTRAINT fk_warranty_product_tenant FOREIGN KEY (tenant_id,product_id) REFERENCES product(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE invoice_item(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1198,6 +1274,7 @@ CREATE TABLE invoice_item(
   KEY ix_invoice_item_tenant_product (tenant_id,product_id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE payment(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1228,6 +1305,7 @@ CREATE TABLE payment(
   CONSTRAINT fk_payment_recorded_by_tenant FOREIGN KEY (tenant_id,recorded_by) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE service_request(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1275,6 +1353,7 @@ CREATE TABLE service_request(
   KEY ix_service_request_tenant_customer (tenant_id,customer_id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE credit_note(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1293,6 +1372,7 @@ CREATE TABLE credit_note(
   CONSTRAINT fk_credit_note_created_by_tenant FOREIGN KEY (tenant_id,created_by) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE installation_schedule_history (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1311,6 +1391,7 @@ CREATE TABLE installation_schedule_history (
   CONSTRAINT fk_install_schedule_actor_tenant FOREIGN KEY (tenant_id,actor_id) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE inventory_transaction(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1345,6 +1426,7 @@ CREATE TABLE inventory_transaction(
   CONSTRAINT fk_inventory_tx_actor_tenant FOREIGN KEY (tenant_id,actor_id) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE payment_refund(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1361,6 +1443,7 @@ CREATE TABLE payment_refund(
   CONSTRAINT fk_refund_recorded_by_tenant FOREIGN KEY (tenant_id,recorded_by) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE service_visit(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1383,6 +1466,7 @@ CREATE TABLE service_visit(
   CONSTRAINT fk_service_visit_engineer_tenant FOREIGN KEY (tenant_id,engineer_id) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE service_event(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1400,6 +1484,7 @@ CREATE TABLE service_event(
   CONSTRAINT fk_service_event_actor_tenant FOREIGN KEY (tenant_id,actor_id) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE service_attachment(
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1418,6 +1503,7 @@ CREATE TABLE service_attachment(
   CONSTRAINT fk_service_attachment_uploader_tenant FOREIGN KEY (tenant_id,uploaded_by) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE warranty_claim (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1449,6 +1535,7 @@ CREATE TABLE warranty_claim (
   KEY ix_warranty_claim_tenant_customer (tenant_id,customer_id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE service_comment (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1466,6 +1553,7 @@ CREATE TABLE service_comment (
   CONSTRAINT fk_service_comment_author_tenant FOREIGN KEY (tenant_id,author_id) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V1__baseline.sql
 CREATE TABLE warranty_claim_attachment (
   id BINARY(16) PRIMARY KEY,
   tenant_id BINARY(16) NOT NULL,
@@ -1486,6 +1574,366 @@ CREATE TABLE warranty_claim_attachment (
   CONSTRAINT fk_warranty_attachment_uploader_tenant FOREIGN KEY (tenant_id,uploaded_by) REFERENCES app_user(tenant_id,id)
 );
 
+-- Source: V3__phase3_order_policy_and_tenant_lifecycle.sql
+CREATE TABLE order_transition_policy (
+    id BINARY(16) NOT NULL PRIMARY KEY,
+    tenant_id BINARY(16) NULL,
+    from_status VARCHAR(40) NOT NULL,
+    to_status VARCHAR(40) NOT NULL,
+    required_permission VARCHAR(64) NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at TIMESTAMP(6) NULL,
+    CONSTRAINT fk_order_transition_policy_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(id),
+    CONSTRAINT uq_order_transition_policy_tenant_edge UNIQUE (tenant_id, from_status, to_status),
+    INDEX ix_order_transition_policy_tenant (tenant_id, from_status)
+);
+
+-- Source: V5__phase4_finance_provider_reconciliation.sql
+CREATE TABLE payment_reconciliation_report(
+  id BINARY(16) PRIMARY KEY,
+  tenant_id BINARY(16) NOT NULL,
+  provider VARCHAR(60) NOT NULL,
+  report_reference VARCHAR(160) NOT NULL,
+  currency CHAR(3) NOT NULL,
+  reported_total DECIMAL(19,4) NOT NULL,
+  matched_total DECIMAL(19,4) NOT NULL DEFAULT 0,
+  mismatch_count INT NOT NULL DEFAULT 0,
+  status VARCHAR(24) NOT NULL,
+  payload_hash VARCHAR(64) NOT NULL,
+  created_by BINARY(16) NOT NULL,
+  created_at TIMESTAMP(6) NOT NULL,
+  processed_at TIMESTAMP(6) NULL,
+  CONSTRAINT fk_payment_reconciliation_tenant FOREIGN KEY(tenant_id) REFERENCES tenant(id),
+  CONSTRAINT fk_payment_reconciliation_created_by FOREIGN KEY(tenant_id,created_by) REFERENCES app_user(tenant_id,id),
+  CONSTRAINT uq_payment_reconciliation_report UNIQUE(tenant_id,provider,report_reference),
+  CONSTRAINT uq_payment_reconciliation_tenant_id UNIQUE(tenant_id,id),
+  INDEX ix_payment_reconciliation_tenant_created(tenant_id,created_at)
+);
+
+-- Source: V5__phase4_finance_provider_reconciliation.sql
+CREATE TABLE payment_reconciliation_line(
+  id BINARY(16) PRIMARY KEY,
+  tenant_id BINARY(16) NOT NULL,
+  report_id BINARY(16) NOT NULL,
+  provider_reference VARCHAR(150) NOT NULL,
+  amount DECIMAL(19,4) NOT NULL,
+  currency CHAR(3) NOT NULL,
+  outcome VARCHAR(32) NOT NULL,
+  payment_id BINARY(16) NULL,
+  details VARCHAR(500) NULL,
+  CONSTRAINT fk_payment_reconciliation_line_tenant FOREIGN KEY(tenant_id) REFERENCES tenant(id),
+  CONSTRAINT fk_payment_reconciliation_line_report FOREIGN KEY(tenant_id,report_id) REFERENCES payment_reconciliation_report(tenant_id,id),
+  CONSTRAINT fk_payment_reconciliation_line_payment FOREIGN KEY(tenant_id,payment_id) REFERENCES payment(tenant_id,id),
+  INDEX ix_payment_reconciliation_line_tenant(tenant_id,provider_reference),
+  INDEX ix_payment_reconciliation_line_report(tenant_id,report_id)
+);
+
+-- Source: V6__phase5_cms_content_revisions.sql
+-- Phase 5 CMS content and immutable revision history.
+-- Additive only; no existing production rows or historical content are backfilled.
+CREATE TABLE cms_content (
+  id BINARY(16) PRIMARY KEY,
+  tenant_id BINARY(16) NOT NULL,
+  content_type VARCHAR(24) NOT NULL,
+  title VARCHAR(180) NOT NULL,
+  slug VARCHAR(180) NOT NULL,
+  status VARCHAR(20) NOT NULL,
+  current_revision_id BINARY(16) NULL,
+  published_revision_id BINARY(16) NULL,
+  published_at TIMESTAMP(6) NULL,
+  created_by BINARY(16) NOT NULL,
+  updated_by BINARY(16) NOT NULL,
+  created_at TIMESTAMP(6) NOT NULL,
+  updated_at TIMESTAMP(6) NOT NULL,
+  version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT uq_cms_content_tenant_id UNIQUE (tenant_id,id),
+  CONSTRAINT uq_cms_content_tenant_type_slug UNIQUE (tenant_id,content_type,slug),
+  CONSTRAINT fk_cms_content_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(id),
+  CONSTRAINT fk_cms_content_created_by FOREIGN KEY (tenant_id,created_by) REFERENCES app_user(tenant_id,id),
+  CONSTRAINT fk_cms_content_updated_by FOREIGN KEY (tenant_id,updated_by) REFERENCES app_user(tenant_id,id),
+  INDEX ix_cms_content_public (tenant_id,content_type,status,published_at),
+  INDEX ix_cms_content_updated (tenant_id,updated_at)
+);
+
+-- Source: V6__phase5_cms_content_revisions.sql
+CREATE TABLE cms_content_revision (
+  id BINARY(16) PRIMARY KEY,
+  tenant_id BINARY(16) NOT NULL,
+  content_id BINARY(16) NOT NULL,
+  revision_number INT NOT NULL,
+  title VARCHAR(180) NOT NULL,
+  body LONGTEXT NOT NULL,
+  seo_title VARCHAR(180) NULL,
+  seo_description VARCHAR(320) NULL,
+  social_image_url VARCHAR(1024) NULL,
+  created_by BINARY(16) NOT NULL,
+  created_at TIMESTAMP(6) NOT NULL,
+  CONSTRAINT uq_cms_revision_tenant_id UNIQUE (tenant_id,id),
+  CONSTRAINT uq_cms_revision_number UNIQUE (tenant_id,content_id,revision_number),
+  CONSTRAINT fk_cms_revision_content FOREIGN KEY (tenant_id,content_id) REFERENCES cms_content(tenant_id,id),
+  CONSTRAINT fk_cms_revision_created_by FOREIGN KEY (tenant_id,created_by) REFERENCES app_user(tenant_id,id),
+  INDEX ix_cms_revision_content (tenant_id,content_id,revision_number)
+);
+
+-- Source: V7__phase5_user_notification_inbox.sql
+-- User-facing inbox projection; separate from provider delivery attempts in notification_delivery.
+CREATE TABLE user_notification (
+  id BINARY(16) PRIMARY KEY,
+  tenant_id BINARY(16) NULL,
+  user_id BINARY(16) NOT NULL,
+  event_type VARCHAR(60) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  body VARCHAR(4000) NOT NULL,
+  dedupe_key VARCHAR(64) NOT NULL,
+  created_at TIMESTAMP(6) NOT NULL,
+  read_at TIMESTAMP(6) NULL,
+  CONSTRAINT uq_user_notification_dedupe UNIQUE (dedupe_key),
+  CONSTRAINT fk_user_notification_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(id),
+  CONSTRAINT fk_user_notification_user FOREIGN KEY (tenant_id,user_id) REFERENCES app_user(tenant_id,id),
+  INDEX ix_user_notification_inbox (tenant_id,user_id,created_at),
+  INDEX ix_user_notification_unread (tenant_id,user_id,read_at,created_at)
+);
+
+-- Source: V10__phase5_typed_platform_settings.sql
+CREATE TABLE platform_setting (
+  setting_key VARCHAR(60) NOT NULL PRIMARY KEY,
+  value_type VARCHAR(20) NOT NULL,
+  value_text VARCHAR(500) NOT NULL,
+  version INT NOT NULL DEFAULT 0,
+  updated_by BINARY(16) NOT NULL,
+  updated_at TIMESTAMP(6) NOT NULL,
+  CONSTRAINT fk_platform_setting_actor FOREIGN KEY (updated_by) REFERENCES app_user(id),
+  CONSTRAINT chk_platform_setting_type CHECK (value_type IN ('STRING','EMAIL','PHONE','CURRENCY','TIME_ZONE','LANGUAGE')),
+  CONSTRAINT chk_platform_setting_version CHECK (version >= 0)
+);
+
+-- Source: V12__phase6_notification_outbox_preferences_provider_events.sql
+CREATE TABLE notification_outbox (
+  id BINARY(16) PRIMARY KEY,
+  tenant_id BINARY(16) NOT NULL,
+  delivery_id BINARY(16) NOT NULL,
+  status VARCHAR(20) NOT NULL,
+  attempt_count INT NOT NULL DEFAULT 0,
+  next_attempt_at TIMESTAMP(6) NULL,
+  last_error VARCHAR(1000) NULL,
+  created_at TIMESTAMP(6) NOT NULL,
+  updated_at TIMESTAMP(6) NOT NULL,
+  CONSTRAINT uq_notification_outbox_delivery UNIQUE (delivery_id),
+  CONSTRAINT fk_notification_outbox_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(id),
+  CONSTRAINT fk_notification_outbox_delivery FOREIGN KEY (delivery_id) REFERENCES notification_delivery(id),
+  INDEX ix_notification_outbox_dispatch (status,next_attempt_at,created_at),
+  INDEX ix_notification_outbox_tenant (tenant_id,status,created_at)
+);
+
+-- Source: V12__phase6_notification_outbox_preferences_provider_events.sql
+CREATE TABLE notification_preference (
+  id BINARY(16) PRIMARY KEY,
+  tenant_id BINARY(16) NOT NULL,
+  user_id BINARY(16) NOT NULL,
+  channel VARCHAR(20) NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  consented BOOLEAN NOT NULL DEFAULT FALSE,
+  consent_updated_at TIMESTAMP(6) NULL,
+  updated_at TIMESTAMP(6) NOT NULL,
+  CONSTRAINT uq_notification_preference UNIQUE (tenant_id,user_id,channel),
+  CONSTRAINT fk_notification_preference_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(id),
+  CONSTRAINT fk_notification_preference_user FOREIGN KEY (tenant_id,user_id) REFERENCES app_user(tenant_id,id),
+  INDEX ix_notification_preference_user (tenant_id,user_id)
+);
+
+-- Source: V12__phase6_notification_outbox_preferences_provider_events.sql
+CREATE TABLE notification_provider_event (
+  id BINARY(16) PRIMARY KEY,
+  tenant_id BINARY(16) NOT NULL,
+  delivery_id BINARY(16) NOT NULL,
+  provider_code VARCHAR(40) NOT NULL,
+  provider_event_id VARCHAR(160) NOT NULL,
+  event_type VARCHAR(40) NOT NULL,
+  delivery_status VARCHAR(20) NOT NULL,
+  payload_hash VARCHAR(64) NOT NULL,
+  received_at TIMESTAMP(6) NOT NULL,
+  CONSTRAINT uq_notification_provider_event UNIQUE (provider_code,provider_event_id),
+  CONSTRAINT fk_notification_provider_event_tenant FOREIGN KEY (tenant_id) REFERENCES tenant(id),
+  CONSTRAINT fk_notification_provider_event_delivery FOREIGN KEY (delivery_id) REFERENCES notification_delivery(id),
+  INDEX ix_notification_provider_event_delivery (tenant_id,delivery_id,received_at)
+);
+
+
+
+-- COLUMN, CHECK, FOREIGN KEY AND TABLE CONSTRAINT EXTENSIONS
+
+-- Source: V2__phase3_reservation_expiry.sql
+-- Phase 3: inventory reservation expiry and immutable release metadata.
+-- Existing active reservations receive a fresh 24-hour grace window on upgrade.
+ALTER TABLE inventory_reservation
+    ADD COLUMN expires_at TIMESTAMP(6) NULL,
+    ADD COLUMN pre_reservation_order_status VARCHAR(40) NULL,
+    ADD COLUMN released_at TIMESTAMP(6) NULL,
+    ADD COLUMN release_reason VARCHAR(500) NULL,
+    ADD COLUMN released_by BINARY(16) NULL,
+    ADD KEY ix_reservation_expiry (tenant_id, status, expires_at);
+
+-- Source: V2__phase3_reservation_expiry.sql
+-- Scheduler-originated order history entries have no human actor.
+ALTER TABLE order_status_history
+    MODIFY COLUMN actor_id BINARY(16) NULL,
+    ADD COLUMN actor_type VARCHAR(20) NOT NULL DEFAULT 'USER';
+
+-- Source: V3__phase3_order_policy_and_tenant_lifecycle.sql
+-- Phase 3: tenant lifecycle and persisted, tenant-overridable order transition policy.
+ALTER TABLE tenant
+    ADD COLUMN verified_at TIMESTAMP(6) NULL,
+    ADD COLUMN verified_by BINARY(16) NULL,
+    ADD COLUMN activated_at TIMESTAMP(6) NULL,
+    ADD COLUMN activated_by BINARY(16) NULL,
+    ADD COLUMN suspended_at TIMESTAMP(6) NULL,
+    ADD COLUMN suspended_by BINARY(16) NULL,
+    ADD COLUMN closed_at TIMESTAMP(6) NULL,
+    ADD COLUMN closed_by BINARY(16) NULL,
+    ADD COLUMN lifecycle_reason VARCHAR(500) NULL;
+
+-- Source: V5__phase4_finance_provider_reconciliation.sql
+-- Phase 4 finance/provider lifecycle: clean-install schema extension.
+-- The application is not deployed; existing event rows do not require a data backfill.
+ALTER TABLE payment
+    MODIFY COLUMN paid_at TIMESTAMP(6) NULL;
+
+-- Source: V5__phase4_finance_provider_reconciliation.sql
+ALTER TABLE payment_webhook_event
+    ADD COLUMN tenant_id BINARY(16) NOT NULL AFTER id,
+    ADD COLUMN provider_reference VARCHAR(150) NOT NULL AFTER provider,
+    ADD COLUMN event_type VARCHAR(32) NOT NULL AFTER processing_status,
+    ADD COLUMN provider_refund_reference VARCHAR(150) NULL AFTER event_type,
+    DROP INDEX uq_payment_webhook_provider_event,
+    ADD CONSTRAINT fk_payment_webhook_tenant FOREIGN KEY(tenant_id) REFERENCES tenant(id),
+    ADD UNIQUE KEY uq_payment_webhook_tenant_provider_event(tenant_id, provider, event_id),
+    ADD INDEX ix_payment_webhook_tenant_received(tenant_id, received_at);
+
+-- Source: V5__phase4_finance_provider_reconciliation.sql
+ALTER TABLE payment_refund
+    ADD COLUMN provider VARCHAR(60) NULL AFTER recorded_by,
+    ADD COLUMN provider_refund_reference VARCHAR(150) NULL AFTER provider,
+    ADD COLUMN idempotency_key VARCHAR(160) NULL AFTER provider_refund_reference,
+    ADD COLUMN processed_at TIMESTAMP(6) NULL AFTER idempotency_key,
+    ADD UNIQUE KEY uq_payment_refund_tenant_idempotency(tenant_id, payment_id, idempotency_key),
+    ADD UNIQUE KEY uq_payment_refund_provider_reference(tenant_id, provider, provider_refund_reference);
+
+-- Source: V6__phase5_cms_content_revisions.sql
+ALTER TABLE cms_content
+  ADD CONSTRAINT fk_cms_content_current_revision
+    FOREIGN KEY (tenant_id,current_revision_id) REFERENCES cms_content_revision(tenant_id,id),
+  ADD CONSTRAINT fk_cms_content_published_revision
+    FOREIGN KEY (tenant_id,published_revision_id) REFERENCES cms_content_revision(tenant_id,id);
+
+-- Source: V12__phase6_notification_outbox_preferences_provider_events.sql
+ALTER TABLE notification_delivery DROP CHECK chk_notification_delivery_status;
+
+-- Source: V12__phase6_notification_outbox_preferences_provider_events.sql
+ALTER TABLE notification_delivery ADD CONSTRAINT chk_notification_delivery_status CHECK (status IN ('PENDING','DELIVERED','FAILED','DEAD_LETTER','SUPPRESSED'));
+
+-- Source: V13__phase6_provider_accepted_delivery_status.sql
+-- Messaging adapter acceptance is distinct from a delivery receipt callback.
+ALTER TABLE notification_delivery DROP CHECK chk_notification_delivery_status;
+
+-- Source: V13__phase6_provider_accepted_delivery_status.sql
+ALTER TABLE notification_delivery
+  ADD CONSTRAINT chk_notification_delivery_status
+  CHECK (status IN ('PENDING','SENT','DELIVERED','FAILED','DEAD_LETTER','SUPPRESSED'));
+
+-- Source: V14__phase6_enforce_tenant_bound_notification_references.sql
+-- Prevent an outbox/provider event from referencing a delivery belonging to another tenant.
+ALTER TABLE notification_delivery
+  ADD UNIQUE KEY uq_notification_delivery_tenant_id (tenant_id, id);
+
+-- Source: V14__phase6_enforce_tenant_bound_notification_references.sql
+ALTER TABLE notification_outbox
+  DROP FOREIGN KEY fk_notification_outbox_delivery,
+  ADD CONSTRAINT fk_notification_outbox_delivery_tenant
+    FOREIGN KEY (tenant_id, delivery_id)
+    REFERENCES notification_delivery (tenant_id, id);
+
+-- Source: V14__phase6_enforce_tenant_bound_notification_references.sql
+ALTER TABLE notification_provider_event
+  DROP FOREIGN KEY fk_notification_provider_event_delivery,
+  ADD CONSTRAINT fk_notification_provider_event_delivery_tenant
+    FOREIGN KEY (tenant_id, delivery_id)
+    REFERENCES notification_delivery (tenant_id, id);
+
+
+
+-- STANDALONE INDEXES
+
+-- Source: V9__phase5_platform_analytics_indexes.sql
+-- Support bounded cross-tenant aggregate queries without returning tenant-level rows.
+CREATE INDEX ix_customer_order_created_at ON customer_order(created_at);
+
+-- Source: V9__phase5_platform_analytics_indexes.sql
+CREATE INDEX ix_tenant_subscription_status ON tenant_subscription(status);
+
+-- Source: V11__phase5_operational_analytics_indexes.sql
+-- Cover the tenant-scoped date and assignee predicates used by the Phase 5 operations reports.
+CREATE INDEX ix_installation_tenant_assignee_schedule ON installation_job(tenant_id,assigned_engineer_id,scheduled_at);
+
+-- Source: V11__phase5_operational_analytics_indexes.sql
+CREATE INDEX ix_service_tenant_assignee_created ON service_request(tenant_id,assigned_engineer_id,created_at);
+
+-- Source: V11__phase5_operational_analytics_indexes.sql
+CREATE INDEX ix_invoice_tenant_created ON invoice(tenant_id,created_at);
+
+-- Source: V11__phase5_operational_analytics_indexes.sql
+CREATE INDEX ix_order_tenant_created ON customer_order(tenant_id,created_at);
+
+
+
+-- TRIGGERS
+
+-- Source: V1__baseline.sql
+CREATE TRIGGER trg_audit_event_no_update BEFORE UPDATE ON audit_event
+FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='audit_event is append-only';
+
+-- Source: V1__baseline.sql
+CREATE TRIGGER trg_audit_event_no_delete BEFORE DELETE ON audit_event
+FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='audit_event is append-only';
+
+-- Source: V1__baseline.sql
+CREATE TRIGGER trg_subscription_assignment_history_no_update
+BEFORE UPDATE ON subscription_assignment_history
+FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='subscription_assignment_history is append-only';
+
+-- Source: V1__baseline.sql
+CREATE TRIGGER trg_subscription_assignment_history_no_delete
+BEFORE DELETE ON subscription_assignment_history
+FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='subscription_assignment_history is append-only';
+
+-- Source: V2__phase3_reservation_expiry.sql
+CREATE TRIGGER trg_order_status_history_no_update
+BEFORE UPDATE ON order_status_history
+FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='order_status_history is append-only';
+
+-- Source: V2__phase3_reservation_expiry.sql
+CREATE TRIGGER trg_order_status_history_no_delete
+BEFORE DELETE ON order_status_history
+FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='order_status_history is append-only';
+
+-- Source: V6__phase5_cms_content_revisions.sql
+-- Revision snapshots are immutable even if an application path is accidentally added later.
+CREATE TRIGGER trg_cms_revision_no_update
+BEFORE UPDATE ON cms_content_revision
+FOR EACH ROW
+SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'CMS content revisions are immutable';
+
+-- Source: V6__phase5_cms_content_revisions.sql
+CREATE TRIGGER trg_cms_revision_no_delete
+BEFORE DELETE ON cms_content_revision
+FOR EACH ROW
+SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'CMS content revisions are immutable';
+
+
+
+-- REFERENCE DATA AND SEED / INITIALIZATION STATEMENTS (original migration order)
+
+-- Source: V1__baseline.sql
 INSERT INTO permission (id, code)
 SELECT UUID_TO_BIN(UUID()), 'USER_MANAGE'
 WHERE EXISTS (
@@ -1495,6 +1943,7 @@ AND NOT EXISTS (
     SELECT 1 FROM permission WHERE code = 'USER_MANAGE'
 );
 
+-- Source: V1__baseline.sql
 INSERT INTO role_permission (role_id, permission_id)
 SELECT r.id, p.id
 FROM role r
@@ -1506,6 +1955,7 @@ WHERE r.name = 'VENDOR_ADMIN'
       WHERE rp.role_id = r.id AND rp.permission_id = p.id
   );
 
+-- Source: V1__baseline.sql
 INSERT INTO permission (id, code)
 SELECT UUID_TO_BIN(UUID()), src.code FROM (
  SELECT 'PLATFORM_MANAGE' code UNION ALL SELECT 'CATALOG_MANAGE' UNION ALL SELECT 'CUSTOMER_MANAGE'
@@ -1515,6 +1965,7 @@ SELECT UUID_TO_BIN(UUID()), src.code FROM (
  UNION ALL SELECT 'FINANCE_MANAGE' UNION ALL SELECT 'REPORT_VIEW'
 ) src LEFT JOIN permission p ON p.code=src.code WHERE p.id IS NULL;
 
+-- Source: V1__baseline.sql
 INSERT INTO role (id,tenant_id,name)
 SELECT UUID_TO_BIN(UUID()),t.id,r.name FROM tenant t CROSS JOIN (
  SELECT 'VENDOR_ADMIN' name UNION ALL SELECT 'SALES_EXECUTIVE' UNION ALL SELECT 'SALES_MANAGER'
@@ -1522,15 +1973,18 @@ SELECT UUID_TO_BIN(UUID()),t.id,r.name FROM tenant t CROSS JOIN (
  UNION ALL SELECT 'ACCOUNTANT' UNION ALL SELECT 'INSTALLER' UNION ALL SELECT 'OPERATIONS_MANAGER'
 ) r LEFT JOIN role existing ON existing.tenant_id=t.id AND existing.name=r.name WHERE existing.id IS NULL;
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id,permission_id)
 SELECT r.id,p.id FROM role r JOIN permission p
 WHERE r.tenant_id IS NOT NULL AND r.name='VENDOR_ADMIN' AND p.code IN
 ('CATALOG_MANAGE','CUSTOMER_MANAGE','LEAD_MANAGE','SURVEY_MANAGE','QUOTATION_MANAGE','DISCOUNT_APPROVE','ORDER_CREATE','USER_VIEW','USER_MANAGE','INVENTORY_MANAGE','SERVICE_MANAGE','FINANCE_MANAGE','REPORT_VIEW');
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id,permission_id)
 SELECT r.id,p.id FROM role r JOIN permission p
 WHERE r.tenant_id IS NULL AND r.name='PLATFORM_SUPER_ADMIN' AND p.code='PLATFORM_MANAGE';
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id,permission_id)
 SELECT r.id,p.id FROM role r JOIN permission p WHERE r.tenant_id IS NOT NULL AND (
 (r.name='SALES_EXECUTIVE' AND p.code IN ('CUSTOMER_MANAGE','LEAD_MANAGE','SURVEY_MANAGE','QUOTATION_MANAGE','ORDER_CREATE')) OR
@@ -1541,6 +1995,7 @@ SELECT r.id,p.id FROM role r JOIN permission p WHERE r.tenant_id IS NOT NULL AND
 (r.name='OPERATIONS_MANAGER' AND p.code IN ('ORDER_CREATE','SURVEY_MANAGE','INVENTORY_MANAGE','SERVICE_MANAGE','REPORT_VIEW'))
 );
 
+-- Source: V1__baseline.sql
 INSERT INTO product_category(id,tenant_id,name,description,active)
 SELECT UUID_TO_BIN(UUID()),t.id,c.name,'Solar catalogue category',TRUE
 FROM tenant t CROSS JOIN (
@@ -1550,61 +2005,75 @@ FROM tenant t CROSS JOIN (
 ) c LEFT JOIN product_category existing ON existing.tenant_id=t.id AND existing.name=c.name
 WHERE existing.id IS NULL;
 
+-- Source: V1__baseline.sql
 UPDATE product p
 JOIN (SELECT tenant_id, MIN(id) category_id FROM product_category GROUP BY tenant_id) c
 ON c.tenant_id=p.tenant_id
 SET p.category_id=c.category_id
 WHERE p.category_id IS NULL;
 
+-- Source: V1__baseline.sql
 INSERT INTO permission(id,code)
 SELECT UUID_TO_BIN(UUID()),'CATALOG_VIEW'
 WHERE NOT EXISTS (SELECT 1 FROM permission WHERE code='CATALOG_VIEW');
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id,permission_id)
 SELECT r.id,p.id FROM role r JOIN permission p ON p.code='CATALOG_VIEW'
 WHERE r.tenant_id IS NOT NULL AND r.name IN ('SALES_EXECUTIVE','SALES_MANAGER','MANAGER');
 
+-- Source: V1__baseline.sql
 INSERT INTO permission(id,code)
 SELECT UUID_TO_BIN(UUID()),'DISCOUNT_POLICY_MANAGE'
 WHERE NOT EXISTS (SELECT 1 FROM permission WHERE code='DISCOUNT_POLICY_MANAGE');
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id,permission_id)
 SELECT r.id,p.id
 FROM role r JOIN permission p ON p.code='DISCOUNT_POLICY_MANAGE'
 WHERE r.tenant_id IS NOT NULL AND r.name='VENDOR_ADMIN';
 
+-- Source: V1__baseline.sql
 INSERT INTO role(id,tenant_id,name)
 SELECT UUID_TO_BIN(UUID()),NULL,'PLATFORM_SUPER_ADMIN'
 WHERE NOT EXISTS (SELECT 1 FROM role WHERE tenant_id IS NULL AND name='PLATFORM_SUPER_ADMIN');
 
+-- Source: V1__baseline.sql
 INSERT INTO role(id,tenant_id,name)
 SELECT UUID_TO_BIN(UUID()),NULL,'CUSTOMER'
 WHERE NOT EXISTS (SELECT 1 FROM role WHERE tenant_id IS NULL AND name='CUSTOMER');
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id,permission_id)
 SELECT r.id,p.id FROM role r JOIN permission p ON p.code='PLATFORM_MANAGE'
 WHERE r.tenant_id IS NULL AND r.name='PLATFORM_SUPER_ADMIN';
 
+-- Source: V1__baseline.sql
 INSERT INTO role(id,tenant_id,name)
 SELECT UUID_TO_BIN(UUID()),t.id,'TECHNICIAN' FROM tenant t
 WHERE NOT EXISTS(SELECT 1 FROM role r WHERE r.tenant_id=t.id AND r.name='TECHNICIAN');
 
+-- Source: V1__baseline.sql
 INSERT INTO role(id,tenant_id,name)
 SELECT UUID_TO_BIN(UUID()),t.id,'SERVICE_MANAGER' FROM tenant t
 WHERE NOT EXISTS(SELECT 1 FROM role r WHERE r.tenant_id=t.id AND r.name='SERVICE_MANAGER');
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id,permission_id)
 SELECT r.id,p.id FROM role r JOIN permission p ON p.code IN ('SURVEY_MANAGE','SERVICE_MANAGE')
 WHERE r.tenant_id IS NOT NULL AND r.name IN ('TECHNICIAN','SERVICE_MANAGER');
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id,permission_id)
 SELECT r.id,p.id FROM role r JOIN permission p ON p.code='REPORT_VIEW'
 WHERE r.tenant_id IS NOT NULL AND r.name='SERVICE_MANAGER';
 
+-- Source: V1__baseline.sql
 INSERT INTO permission (id, code)
 SELECT UUID_TO_BIN(UUID()), 'PLATFORM_MANAGE'
 WHERE NOT EXISTS (SELECT 1 FROM permission WHERE code = 'PLATFORM_MANAGE');
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.id, p.id
 FROM role r
@@ -1612,16 +2081,20 @@ JOIN permission p ON p.code = 'PLATFORM_MANAGE'
 WHERE r.tenant_id IS NULL
   AND r.name = 'PLATFORM_SUPER_ADMIN';
 
+-- Source: V1__baseline.sql
 UPDATE tenant SET updated_at=created_at WHERE updated_at IS NULL;
 
+-- Source: V1__baseline.sql
 INSERT INTO permission(id,code)
 SELECT UUID_TO_BIN(UUID()),'PAYMENT_REFUND'
 WHERE NOT EXISTS(SELECT 1 FROM permission WHERE code='PAYMENT_REFUND');
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id,permission_id)
 SELECT r.id,p.id FROM role r JOIN permission p ON p.code='PAYMENT_REFUND'
 WHERE r.tenant_id IS NOT NULL AND r.name IN ('VENDOR_ADMIN','ACCOUNTANT');
 
+-- Source: V1__baseline.sql
 UPDATE customer_order co
 JOIN quotation q ON q.id = co.quotation_id AND q.tenant_id = co.tenant_id
 SET co.subtotal = q.subtotal,
@@ -1630,51 +2103,56 @@ SET co.subtotal = q.subtotal,
     co.tax_total = q.tax_amount
 WHERE co.quotation_id IS NOT NULL;
 
+-- Source: V1__baseline.sql
 UPDATE inventory_transaction
 SET transaction_reference = CONCAT('INV-', UPPER(REPLACE(UUID(), '-', '')))
 WHERE transaction_reference IS NULL;
 
-CREATE TRIGGER trg_audit_event_no_update BEFORE UPDATE ON audit_event
-FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='audit_event is append-only';
-
-CREATE TRIGGER trg_audit_event_no_delete BEFORE DELETE ON audit_event
-FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='audit_event is append-only';
-
+-- Source: V1__baseline.sql
 INSERT INTO permission(id,code)
 SELECT UUID_TO_BIN(UUID()),src.code FROM (
  SELECT 'BRANCH_MANAGE' code UNION ALL SELECT 'SUBSCRIPTION_MANAGE' UNION ALL SELECT 'AUDIT_VIEW'
 ) src LEFT JOIN permission p ON p.code=src.code WHERE p.id IS NULL;
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id,permission_id)
 SELECT r.id,p.id FROM role r JOIN permission p
 WHERE r.tenant_id IS NOT NULL AND r.name='VENDOR_ADMIN' AND p.code IN ('BRANCH_MANAGE','AUDIT_VIEW');
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id,permission_id)
 SELECT r.id,p.id FROM role r JOIN permission p
 WHERE r.tenant_id IS NULL AND r.name='PLATFORM_SUPER_ADMIN' AND p.code IN ('SUBSCRIPTION_MANAGE','AUDIT_VIEW');
 
+-- Source: V1__baseline.sql
 INSERT INTO permission(id,code)
 SELECT UUID_TO_BIN(UUID()),'BRANDING_MANAGE'
 WHERE NOT EXISTS (SELECT 1 FROM permission WHERE code='BRANDING_MANAGE');
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id,permission_id)
 SELECT r.id,p.id FROM role r JOIN permission p
 WHERE r.tenant_id IS NOT NULL AND r.name='VENDOR_ADMIN' AND p.code='BRANDING_MANAGE';
 
+-- Source: V1__baseline.sql
 INSERT INTO permission(id,code)
 SELECT UUID_TO_BIN(UUID()),'APPROVAL_WORKFLOW_MANAGE'
 WHERE NOT EXISTS (SELECT 1 FROM permission WHERE code='APPROVAL_WORKFLOW_MANAGE');
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id,permission_id)
 SELECT r.id,p.id FROM role r JOIN permission p
 WHERE r.tenant_id IS NOT NULL AND r.name='VENDOR_ADMIN' AND p.code='APPROVAL_WORKFLOW_MANAGE';
 
+-- Source: V1__baseline.sql
 INSERT INTO permission(id,code) SELECT UUID_TO_BIN(UUID()),'INTEGRATION_MANAGE'
 WHERE NOT EXISTS(SELECT 1 FROM permission WHERE code='INTEGRATION_MANAGE');
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id,permission_id)
 SELECT r.id,p.id FROM role r JOIN permission p WHERE r.tenant_id IS NOT NULL AND r.name='VENDOR_ADMIN' AND p.code='INTEGRATION_MANAGE';
 
+-- Source: V1__baseline.sql
 INSERT INTO subscription_plan
 (id,plan_code,name,description,billing_cycle,price,currency,max_users,max_branches,max_warehouses,max_storage_mb,entitlements_json,active,created_at,updated_at)
 SELECT UUID_TO_BIN(UUID()),src.plan_code,src.name,src.description,src.billing_cycle,src.price,'INR',
@@ -1695,31 +2173,28 @@ FROM (
 LEFT JOIN subscription_plan existing ON existing.plan_code=src.plan_code
 WHERE existing.id IS NULL;
 
+-- Source: V1__baseline.sql
 UPDATE tenant_subscription ts JOIN subscription_plan p ON p.id=ts.plan_id SET ts.billing_cycle=p.billing_cycle;
 
+-- Source: V1__baseline.sql
 INSERT INTO subscription_assignment_history(id,tenant_id,subscription_id,actor_id,action,previous_status,new_status,previous_plan_id,new_plan_id,details_json,created_at)
 SELECT UUID_TO_BIN(UUID()),tenant_id,id,created_by,'MIGRATED',NULL,status,NULL,plan_id,
        JSON_OBJECT('source','V46 migration','externalReference',external_reference),created_at
 FROM tenant_subscription;
 
+-- Source: V1__baseline.sql
 UPDATE subscription_plan SET
  max_products=CASE plan_code WHEN 'STARTER' THEN 100 WHEN 'PROFESSIONAL' THEN 1000 WHEN 'ENTERPRISE' THEN 10000 ELSE max_products END,
  max_customers=CASE plan_code WHEN 'STARTER' THEN 100 WHEN 'PROFESSIONAL' THEN 1000 WHEN 'ENTERPRISE' THEN 10000 ELSE max_customers END,
  trial_period_days=CASE plan_code WHEN 'STARTER' THEN 14 WHEN 'PROFESSIONAL' THEN 14 WHEN 'ENTERPRISE' THEN 30 ELSE trial_period_days END,
  display_order=CASE plan_code WHEN 'STARTER' THEN 1 WHEN 'PROFESSIONAL' THEN 2 WHEN 'ENTERPRISE' THEN 3 ELSE display_order END;
 
+-- Source: V1__baseline.sql
 UPDATE subscription_plan
 SET max_warehouses=3,entitlements_json=JSON_SET(entitlements_json,'$.multiWarehouse',TRUE),updated_at=CURRENT_TIMESTAMP(6)
 WHERE plan_code='STARTER' AND max_warehouses=1;
 
-CREATE TRIGGER trg_subscription_assignment_history_no_update
-BEFORE UPDATE ON subscription_assignment_history
-FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='subscription_assignment_history is append-only';
-
-CREATE TRIGGER trg_subscription_assignment_history_no_delete
-BEFORE DELETE ON subscription_assignment_history
-FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='subscription_assignment_history is append-only';
-
+-- Source: V1__baseline.sql
 INSERT INTO permission (id, code)
 SELECT UUID_TO_BIN(UUID()), src.code
 FROM (
@@ -1730,6 +2205,7 @@ FROM (
 LEFT JOIN permission existing ON existing.code = src.code
 WHERE existing.id IS NULL;
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.id, p.id
 FROM role r
@@ -1737,8 +2213,10 @@ JOIN permission p ON p.code IN ('REPORT_VIEW', 'BRANCH_MANAGE')
 WHERE r.tenant_id IS NOT NULL
   AND r.name = 'VENDOR_ADMIN';
 
+-- Source: V1__baseline.sql
 UPDATE refresh_token SET family_id = UUID_TO_BIN(UUID()) WHERE family_id IS NULL;
 
+-- Source: V1__baseline.sql
 INSERT INTO permission(id, code)
 SELECT UUID_TO_BIN(UUID()), src.code
 FROM (
@@ -1762,28 +2240,33 @@ FROM (
 LEFT JOIN permission existing ON existing.code = src.code
 WHERE existing.id IS NULL;
 
+-- Source: V1__baseline.sql
 INSERT INTO role(id, tenant_id, name)
 SELECT UUID_TO_BIN(UUID()), t.id, 'CONTENT_MANAGER'
 FROM tenant t
 LEFT JOIN role r ON r.tenant_id=t.id AND r.name='CONTENT_MANAGER'
 WHERE r.id IS NULL;
 
+-- Source: V1__baseline.sql
 INSERT INTO role(id, tenant_id, name)
 SELECT UUID_TO_BIN(UUID()), NULL, 'PLATFORM_SUPPORT'
 WHERE NOT EXISTS (SELECT 1 FROM role WHERE tenant_id IS NULL AND name='PLATFORM_SUPPORT');
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id, permission_id)
 SELECT r.id, p.id
 FROM role r JOIN permission p
 WHERE r.tenant_id IS NULL AND r.name='PLATFORM_SUPER_ADMIN'
   AND p.code IN ('PLATFORM_MANAGE','SUBSCRIPTION_MANAGE','AUDIT_VIEW','TENANT_VIEW','TENANT_UPDATE');
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id, permission_id)
 SELECT r.id, p.id
 FROM role r JOIN permission p
 WHERE r.tenant_id IS NOT NULL AND r.name='VENDOR_ADMIN'
   AND p.code NOT IN ('PLATFORM_MANAGE','SUBSCRIPTION_MANAGE','TENANT_UPDATE');
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id, permission_id)
 SELECT r.id, p.id FROM role r JOIN permission p
 WHERE r.tenant_id IS NOT NULL AND (
@@ -1797,6 +2280,7 @@ WHERE r.tenant_id IS NOT NULL AND (
  (r.name='CONTENT_MANAGER' AND p.code IN ('CMS_VIEW','CMS_CREATE','CMS_UPDATE','CMS_PUBLISH','PRODUCT_VIEW','PACKAGE_VIEW'))
 );
 
+-- Source: V1__baseline.sql
 DELETE rp
 FROM role_permission rp
 JOIN role r ON r.id = rp.role_id
@@ -1813,6 +2297,7 @@ WHERE r.tenant_id IS NOT NULL
       'INVENTORY_MANAGE', 'SERVICE_MANAGE', 'FINANCE_MANAGE'
   );
 
+-- Source: V1__baseline.sql
 DELETE rp
 FROM role_permission rp
 JOIN role r ON r.id = rp.role_id
@@ -1824,18 +2309,21 @@ WHERE r.tenant_id IS NOT NULL
     'USER_MANAGE','INVENTORY_MANAGE','SERVICE_MANAGE','FINANCE_MANAGE'
   );
 
+-- Source: V1__baseline.sql
 INSERT INTO role(id, tenant_id, name)
 SELECT UUID_TO_BIN(UUID()), NULL, 'PLATFORM_SUPPORT'
 WHERE NOT EXISTS (
     SELECT 1 FROM role WHERE tenant_id IS NULL AND name = 'PLATFORM_SUPPORT'
 );
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id, permission_id)
 SELECT r.id, p.id
 FROM role r
 JOIN permission p ON p.code IN ('AUDIT_VIEW', 'TENANT_VIEW')
 WHERE r.tenant_id IS NULL AND r.name = 'PLATFORM_SUPPORT';
 
+-- Source: V1__baseline.sql
 DELETE rp
 FROM role_permission rp
 JOIN role r ON r.id = rp.role_id
@@ -1843,31 +2331,123 @@ JOIN permission p ON p.id = rp.permission_id
 WHERE r.tenant_id IS NOT NULL
   AND p.code IN ('PLATFORM_MANAGE','SUBSCRIPTION_MANAGE','TENANT_VIEW','TENANT_UPDATE');
 
+-- Source: V1__baseline.sql
 INSERT INTO permission(id, code)
 SELECT UUID_TO_BIN(UUID()), src.code
 FROM (SELECT 'AUDIT_VIEW' code UNION ALL SELECT 'BRANCH_MANAGE') src
 LEFT JOIN permission existing ON existing.code=src.code
 WHERE existing.id IS NULL;
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id, permission_id)
 SELECT r.id, p.id
 FROM role r JOIN permission p ON p.code='AUDIT_VIEW'
 WHERE r.tenant_id IS NULL AND r.name IN ('PLATFORM_SUPER_ADMIN', 'PLATFORM_SUPPORT');
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission(role_id, permission_id)
 SELECT r.id, p.id
 FROM role r JOIN permission p ON p.code='BRANCH_MANAGE'
 WHERE r.tenant_id IS NOT NULL AND r.name='VENDOR_ADMIN';
 
+-- Source: V1__baseline.sql
 INSERT INTO permission (id, code)
 VALUES
     (UUID_TO_BIN(UUID()), 'INTEGRATION_MANAGE'),
     (UUID_TO_BIN(UUID()), 'APPROVAL_WORKFLOW_MANAGE')
 ON DUPLICATE KEY UPDATE code = VALUES(code);
 
+-- Source: V1__baseline.sql
 INSERT IGNORE INTO role_permission (role_id, permission_id)
 SELECT r.id, p.id
 FROM role r
 JOIN permission p ON p.code IN ('INTEGRATION_MANAGE', 'APPROVAL_WORKFLOW_MANAGE')
 WHERE r.tenant_id IS NOT NULL
   AND r.name = 'VENDOR_ADMIN';
+
+-- Source: V2__phase3_reservation_expiry.sql
+UPDATE inventory_reservation
+SET expires_at = DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 24 HOUR)
+WHERE status = 'RESERVED' AND expires_at IS NULL;
+
+-- Source: V3__phase3_order_policy_and_tenant_lifecycle.sql
+-- Existing active tenants predate onboarding verification. Preserve access and record
+-- the migration as their historical verification/activation time.
+UPDATE tenant
+SET verified_at = COALESCE(verified_at, created_at),
+    activated_at = COALESCE(activated_at, created_at)
+WHERE status = 'ACTIVE';
+
+-- Source: V3__phase3_order_policy_and_tenant_lifecycle.sql
+INSERT INTO order_transition_policy
+(id,tenant_id,from_status,to_status,required_permission,enabled)
+VALUES
+(UUID_TO_BIN(UUID()),NULL,'PENDING_VENDOR_ACCEPTANCE','CONFIRMED','ORDER_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'PENDING_VENDOR_ACCEPTANCE','REJECTED','ORDER_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'CONFIRMED','PAYMENT_PENDING','ORDER_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'CONFIRMED','PAID','ORDER_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'CONFIRMED','MATERIAL_RESERVED','INVENTORY_RESERVE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'CONFIRMED','ON_HOLD','ORDER_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'CONFIRMED','CANCELLED','ORDER_CANCEL',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'PAYMENT_PENDING','PAYMENT_PARTIAL','ORDER_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'PAYMENT_PENDING','PAID','ORDER_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'PAYMENT_PENDING','MATERIAL_RESERVED','INVENTORY_RESERVE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'PAYMENT_PENDING','ON_HOLD','ORDER_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'PAYMENT_PENDING','CANCELLED','ORDER_CANCEL',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'PAYMENT_PARTIAL','PAID','ORDER_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'PAYMENT_PARTIAL','MATERIAL_RESERVED','INVENTORY_RESERVE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'PAYMENT_PARTIAL','ON_HOLD','ORDER_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'PAYMENT_PARTIAL','CANCELLED','ORDER_CANCEL',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'PAID','MATERIAL_RESERVED','INVENTORY_RESERVE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'PAID','ON_HOLD','ORDER_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'PAID','CANCELLED','ORDER_CANCEL',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'MATERIAL_RESERVED','CONFIRMED','INVENTORY_RESERVE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'MATERIAL_RESERVED','PAYMENT_PENDING','INVENTORY_RESERVE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'MATERIAL_RESERVED','PAYMENT_PARTIAL','INVENTORY_RESERVE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'MATERIAL_RESERVED','PAID','INVENTORY_RESERVE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'MATERIAL_RESERVED','INSTALLATION_SCHEDULED','INSTALLATION_SCHEDULE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'MATERIAL_RESERVED','ON_HOLD','ORDER_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'MATERIAL_RESERVED','CANCELLED','ORDER_CANCEL',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'INSTALLATION_SCHEDULED','INSTALLATION_IN_PROGRESS','INSTALLATION_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'INSTALLATION_SCHEDULED','MATERIAL_RESERVED','INSTALLATION_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'INSTALLATION_SCHEDULED','ON_HOLD','ORDER_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'INSTALLATION_SCHEDULED','CANCELLED','ORDER_CANCEL',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'INSTALLATION_IN_PROGRESS','INSTALLATION_SCHEDULED','INSTALLATION_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'INSTALLATION_IN_PROGRESS','MATERIAL_RESERVED','INSTALLATION_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'INSTALLATION_IN_PROGRESS','ON_HOLD','ORDER_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'INSTALLATION_IN_PROGRESS','INSTALLED','INSTALLATION_UPDATE',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'INSTALLED','COMMISSIONED','INSTALLATION_COMMISSION',TRUE),
+(UUID_TO_BIN(UUID()),NULL,'COMMISSIONED','CLOSED','ORDER_UPDATE',TRUE);
+
+-- Source: V3__phase3_order_policy_and_tenant_lifecycle.sql
+INSERT INTO permission (id,code)
+VALUES (UUID_TO_BIN(UUID()),'ORDER_POLICY_MANAGE')
+ON DUPLICATE KEY UPDATE code=VALUES(code);
+
+-- Source: V4__phase3_order_policy_permission_grant.sql
+-- Backfill the order policy editor permission for existing vendor administrators.
+INSERT INTO role_permission (role_id, permission_id)
+SELECT r.id, p.id FROM role r JOIN permission p ON p.code = 'ORDER_POLICY_MANAGE'
+WHERE r.name = 'VENDOR_ADMIN' AND r.tenant_id IS NOT NULL
+AND NOT EXISTS (SELECT 1 FROM role_permission rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
+
+-- Source: V8__phase5_notification_view_permission.sql
+-- Least-privilege access to each authenticated vendor user's own inbox.
+INSERT INTO permission(id,code)
+SELECT UUID_TO_BIN(UUID()),'NOTIFICATION_VIEW'
+WHERE NOT EXISTS (SELECT 1 FROM permission WHERE code='NOTIFICATION_VIEW');
+
+-- Source: V8__phase5_notification_view_permission.sql
+INSERT INTO role_permission(role_id,permission_id)
+SELECT r.id,p.id
+FROM role r
+JOIN permission p ON p.code='NOTIFICATION_VIEW'
+WHERE r.tenant_id IS NOT NULL
+  AND r.name IN (
+    'VENDOR_ADMIN','SALES_EXECUTIVE','SALES_MANAGER','MANAGER','INVENTORY_MANAGER',
+    'SERVICE_ENGINEER','ACCOUNTANT','INSTALLER','TECHNICIAN','SERVICE_MANAGER',
+    'OPERATIONS_MANAGER','CONTENT_MANAGER'
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM role_permission rp WHERE rp.role_id=r.id AND rp.permission_id=p.id
+  );
