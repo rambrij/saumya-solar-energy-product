@@ -9,4 +9,8 @@ public interface RefundRepository extends JpaRepository<Refund, UUID> {
     List<Refund> findByTenantIdOrderByCreatedAtDesc(UUID tenantId);
     
     List<Refund> findByTenantIdAndPaymentId(UUID tenantId, UUID paymentId);
+
+    Optional<Refund> findByTenantIdAndProviderAndProviderRefundReference(UUID tenantId, String provider, String reference);
+
+    Optional<Refund> findByTenantIdAndIdempotencyKey(UUID tenantId, String idempotencyKey);
 }
