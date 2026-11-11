@@ -191,9 +191,9 @@ public class PaymentGatewayCheckoutService {
     private BigDecimal netPaid(UUID tenantId, UUID invoiceId) {
         BigDecimal total = BigDecimal.ZERO;
         for (Payment payment : payments.findByTenantIdAndInvoiceId(tenantId, invoiceId)) {
-            if (!Set.of("CONFIRMED", "PARTIALLY_REFUNDED").contains(payment.getStatus())) continue;
+            if (!Set.of("CONFIRMED", "PARTIALLY_REFUNDED", "REFUNDED").contains(payment.getStatus())) continue;
             BigDecimal refunded = refunds.findByTenantIdAndPaymentId(tenantId, payment.getId()).stream()
-                    .filter(r -> "RECORDED".equals(r.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+                    .filter(r -> Set.of("RECORDED", "PROCESSED").contains(r.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
             total = total.add(payment.getAmount().subtract(refunded));
         }
         return total;
