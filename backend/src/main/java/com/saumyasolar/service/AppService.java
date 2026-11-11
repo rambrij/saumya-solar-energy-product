@@ -647,7 +647,8 @@ public class AppService {
     public SalesLead updateLead(UUID id, Input x, Principal p) {
         vendor(p);
         requirePermission(p, "LEAD_UPDATE");
-        var l = leads.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
+        var l = leads.findByIdAndTenantId(id, p.tenantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found"));
         assertSalesLeadScope(l, p);
         if (!hasPermission(p, "LEAD_ASSIGN")
                 && x.assignedUserId() != null && !Objects.equals(x.assignedUserId(), p.userId()))
@@ -863,10 +864,17 @@ public class AppService {
     @Transactional
     public Quotation action(UUID id, String action, Principal p) {
         if (p.tenantId() == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-        var q = quotes.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
+        var q = quotes.findByIdAndTenantId(id, p.tenantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Quotation not found"));
         if ("CUSTOMER".equals(p.accountType())) {
-            var c = customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(x -> p.userId().equals(x.getUserId())).findFirst().orElseThrow();
-            if (!q.getCustomerId().equals(c.getId()) || !"SENT".equals(q.getStatus()) || q.getValidUntil().isBefore(LocalDate.now()))
+            var c = customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
+                    .filter(x -> p.userId().equals(x.getUserId())).findFirst().orElseThrow();
+            // Hide the existence of another customer's quotation before evaluating state or expiry.
+            // A guessed foreign ID must be indistinguishable from a missing quotation.
+            if (!q.getCustomerId().equals(c.getId()))
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+            if (!"SENT".equals(q.getStatus()) || q.getValidUntil() == null
+                    || q.getValidUntil().isBefore(LocalDate.now()))
                 throw new ResponseStatusException(HttpStatus.CONFLICT);
             if (!"accept".equals(action) && !"reject".equals(action))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN);

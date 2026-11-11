@@ -27,5 +27,9 @@ public interface ExportJobRepository extends JpaRepository<ExportJob, UUID> {
     int claim(@Param("id") UUID id, @Param("tenantId") UUID tenantId, @Param("now") Instant now,
               @Param("staleBefore") Instant staleBefore);
 
-    List<ExportJob> findTop100ByStatusAndExpiresAtBeforeOrderByExpiresAtAsc(String status, Instant before);
+    @Query("select distinct j.tenantId from ExportJob j where j.status = 'COMPLETED' and j.expiresAt < :before")
+    List<UUID> findDistinctTenantIdsForExpiry(@Param("before") Instant before);
+
+    List<ExportJob> findTop100ByTenantIdAndStatusAndExpiresAtBeforeOrderByExpiresAtAsc(
+            UUID tenantId, String status, Instant before);
 }

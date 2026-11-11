@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Run the V57/V58 relationship-integrity and V60 tenant_id NOT NULL preflight against the production MySQL database before applying the tenant-integrity migrations. V60 tightens nine tenant-owned tables only after this preflight proves there are no NULL tenant IDs. The SQL checks legacy tenant-owned relationships for orphaned and cross-tenant references. It fails closed on the first detected violation.
+Run the V57/V58 relationship-integrity and V60 tenant_id NOT NULL preflight against the production MySQL database before applying the tenant-integrity migrations. V60 tightens the eight tenant-owned columns identified by the MySQL 8.4 schema audit only after this preflight proves there are no NULL tenant IDs. The SQL checks legacy tenant-owned relationships for orphaned and cross-tenant references. It fails closed on the first detected violation.
 
 ## Important safety properties
 
@@ -40,7 +40,7 @@ For this repository's non-production validation, `.github/workflows/release-vali
    - `V57 catalogue tenant-integrity preflight: PASS`
    - `V58 operational tenant-integrity preflight: PASS`
    - `V60 tenant-owned tenant_id NOT NULL preflight: PASS`
-5. Review the tenant-schema-audit-output.txt result in full. Every base table must be classified as TENANT_OWNED, PLATFORM_GLOBAL or MIXED by the data owner. Every TENANT_OWNED table must show tenant_id IS_NULLABLE=NO and null_tenant_rows=0. Every table without tenant_id and every mixed-scope table must have a documented owner-approved rationale and tenant relationship. Reconcile every FK and unique index.
+5. Review the tenant-schema-audit-output.txt result in full. Every base table must be classified as TENANT_OWNED, PLATFORM_GLOBAL or MIXED by the data owner. Every TENANT_OWNED table must show tenant_id IS_NULLABLE=NO and null_tenant_rows=0. The currently audited eight V60 columns are a migration-specific assertion, not a substitute for reviewing all tenant_id-bearing tables and any newly introduced table. Every table without tenant_id and every mixed-scope table must have a documented owner-approved rationale and tenant relationship. Reconcile every FK and unique index.
 6. Record the run URL, run ID, database/schema identifier, execution timestamp, operator, reviewer approval and archived audit artifact in the change ticket. Do not record credentials.
 
 ## Failure and remediation procedure
@@ -55,4 +55,4 @@ For this repository's non-production validation, `.github/workflows/release-vali
 
 ## Current execution record
 
-**Not executed in this branch session.** No production database connection or protected environment secrets were available to this session. No production data was read or modified. The production workflow now runs both the V57/V58 relationship preflight and the separate SELECT-only tenant schema/NOT NULL audit using a dedicated read-only account. A passing MySQL 8.4 CI migration/scheduler run is not a substitute for this production data preflight.
+**Not executed in this branch session.** No production database connection or protected environment secrets were available to this session. In addition, GitHub requires a workflow_dispatch workflow to exist on the repository default branch before it can be manually dispatched; this branch-only workflow must first pass review and be merged through the normal PR process. Do not merge or bypass review solely to trigger the preflight. No production data was read or modified. The production workflow now runs both the V57/V58 relationship preflight and the separate SELECT-only tenant schema/NOT NULL audit using a dedicated read-only account. A passing MySQL 8.4 CI migration/scheduler run is not a substitute for this production data preflight.

@@ -746,6 +746,7 @@ public class OperationsService {
         InstallationJob j = installations.findByIdAndTenantId(id, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Installation not found"));
         if ((p.permissions() == null || !p.permissions().contains("INSTALLATION_ASSIGN")) && !Objects.equals(j.getAssignedEngineerId(), p.userId()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        enterpriseSaas.assertBranchAccess(j.getBranchId(), p);
         return j;
     }
     

@@ -3,10 +3,10 @@ name: Release 1-4 and Phase 2 tenant-isolation validation (final verification)
 on:
   push:
     branches:
-      - cleanup/code-cleanup
+      - audit/phase-2-implementation-gap-analysis
   pull_request:
     branches:
-      - cleanup/code-cleanup
+      - audit/phase-2-implementation-gap-analysis
 
 permissions:
   contents: read
@@ -24,8 +24,24 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      # The standalone audit utilities were removed during repository cleanup.
-      # Keep maintained regression coverage in the backend test suite.
+      - name: Scan repository asynchronous and scheduled execution boundaries
+        run: |
+          bash scripts/audit/scan-async-workers.sh | tee /tmp/phase2-async-worker-inventory.txt
+      - name: Upload asynchronous worker inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-async-worker-inventory
+          path: /tmp/phase2-async-worker-inventory.txt
+          retention-days: 30
+      - name: Scan legacy authorization and role-name checks
+        run: |
+          bash scripts/audit/scan-legacy-authz.sh | tee /tmp/phase2-legacy-authz-inventory.txt
+      - name: Upload legacy authorization inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-legacy-authz-inventory
+          path: /tmp/phase2-legacy-authz-inventory.txt
+          retention-days: 30
       - name: Run backend security, tenant-context and messaging regression tests
         working-directory: backend
         run: >
@@ -35,6 +51,16 @@ jobs:
       - name: Compile and test
         working-directory: backend
         run: mvn --batch-mode --no-transfer-progress clean verify
+      - name: Validate complete runtime endpoint authorization evidence
+        run: python3 scripts/audit/assert-endpoint-authorization-evidence.py backend/target/phase2-endpoint-evidence
+      - name: Upload runtime endpoint authorization evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-endpoint-authorization-evidence
+          path: backend/target/phase2-endpoint-evidence/*.csv
+          if-no-files-found: warn
+          retention-days: 30
 
   frontend:
     name: Frontend typecheck and production build
@@ -345,6 +371,7 @@ jobs:
         run: |
           mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test < /tmp/historical-source/backend/src/main/resources/db/migration/V60__enforce_tenant_id_not_null_on_tenant_owned_tables.sql
           test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND column_name='tenant_id' AND table_name IN ('customer_order','order_item','quotation','quotation_item','site_survey','lead_history','integration_webhook_event','idempotency_record') AND is_nullable='NO'")" = "8"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='solar_migration_test' AND column_name='tenant_id' AND table_name IN ('app_user','role','audit_event','notification_delivery') AND is_nullable='YES'")" = "4"
 
       - name: Apply V61 integration and approval permission catalogue
         run: |
@@ -392,6 +419,13 @@ jobs:
           path: /tmp/tenant-schema-audit.txt
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Assert exact tenant schema NULL-row inventory
+        run: |
+          python3 scripts/audit/assert-tenant-schema-audit.py /tmp/tenant-schema-audit.txt
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role WHERE tenant_id IS NULL AND name IN ('PLATFORM_SUPER_ADMIN','PLATFORM_SUPPORT','CUSTOMER')")" = "3"
+          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_migration_test -Nse "SELECT COUNT(*) FROM role WHERE tenant_id IS NULL AND name NOT IN ('PLATFORM_SUPER_ADMIN','PLATFORM_SUPPORT','CUSTOMER')")" = "0"
+          echo "PASS: all three nullable global role rows are explicitly classified; no unexpected global roles."
 
   mysql-app-startup:
     name: Start Spring Boot against MySQL 8.4 and Mailpit

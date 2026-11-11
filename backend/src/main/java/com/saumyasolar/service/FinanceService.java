@@ -129,6 +129,11 @@ public class FinanceService {
         return customers.findByTenantIdAndUserId(p.tenantId(), p.userId()).filter(CustomerProfile::isActive).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer profile not found"));
     }
     
+    private void assertInvoiceBranchAccess(Invoice invoice, Principal p) {
+        if ("VENDOR".equals(p.accountType()) && enterpriseSaas != null)
+            enterpriseSaas.assertBranchAccess(invoice.getBranchId(), p);
+    }
+
     private Invoice invoice(UUID id, UUID tenant) {
         return invoices.findByIdAndTenantId(id, tenant).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found"));
     }
@@ -150,10 +155,11 @@ public class FinanceService {
         financeAccess(p);
         permission(p, "INVOICE_CREATE");
         Set<String> eligible = Set.of("CONFIRMED", "PAYMENT_PENDING", "PAYMENT_PARTIAL", "PAID", "MATERIAL_RESERVED", "INSTALLATION_SCHEDULED", "INSTALLATION_IN_PROGRESS", "INSTALLED", "COMMISSIONED", "CLOSED");
-        return orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
+        List<CustomerOrder> rows = orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
                 .filter(o -> eligible.contains(o.getStatus()))
                 .filter(o -> invoices.findByOrderIdAndTenantId(o.getId(), p.tenantId()).isEmpty())
                 .toList();
+        return enterpriseSaas == null ? rows : enterpriseSaas.filterBranchRecords(rows, CustomerOrder::getBranchId, p);
     }
     
     @Transactional
@@ -162,6 +168,7 @@ public class FinanceService {
         permission(p, "INVOICE_CREATE");
         permission(p, "INVOICE_CREATE");
         CustomerOrder order = orders.findForUpdate(input.orderId(), tenant).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+        if (enterpriseSaas != null) enterpriseSaas.assertBranchAccess(order.getBranchId(), p);
         if (!Set.of("CONFIRMED", "PAYMENT_PENDING", "PAYMENT_PARTIAL", "PAID", "MATERIAL_RESERVED", "INSTALLATION_SCHEDULED", "INSTALLATION_IN_PROGRESS", "INSTALLED", "COMMISSIONED", "CLOSED").contains(order.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "An invoice can only be issued for a confirmed order milestone");
         var existing = invoices.findByOrderIdAndTenantId(order.getId(), tenant);
@@ -250,6 +257,7 @@ public class FinanceService {
         Invoice invoice = new Invoice();
         invoice.setId(UUID.randomUUID());
         invoice.setTenantId(tenant);
+        invoice.setBranchId(order.getBranchId());
         invoice.setOrderId(order.getId());
         invoice.setFiscalYear(fy);
         invoice.setInvoiceNumber(( t.getInvoicePrefix() == null ? "INV" : t.getInvoicePrefix() ) + "-" + fy + "-" + String.format(Locale.ROOT, "%06d", sequence));
@@ -310,6 +318,7 @@ public class FinanceService {
         financeAccess(p);
         permission(p, "INVOICE_VOID");
         Invoice i = invoices.findForUpdate(invoiceId, p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found"));
+        assertInvoiceBranchAccess(i, p);
         if (x.amount() == null || x.amount().signum() <= 0 || x.reason() == null || x.reason().isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Credit note amount and reason are required");
         if ("VOID".equals(i.getStatus()))
@@ -340,7 +349,10 @@ public class FinanceService {
             CustomerProfile cp = customer(p);
             if (!orders.findByIdAndTenantId(i.getOrderId(), p.tenantId()).map(o -> cp.getId().equals(o.getCustomerId())).orElse(false))
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        } else financeAccess(p);
+        } else {
+            financeAccess(p);
+            assertInvoiceBranchAccess(i, p);
+        }
         permission(p, "INVOICE_VIEW");
         return creditNotes.findByTenantIdAndInvoiceIdOrderByCreatedAtDesc(p.tenantId(), invoiceId);
     }
@@ -364,7 +376,8 @@ public class FinanceService {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         } else {
             financeAccess(p);
-        permission(p, "INVOICE_VIEW");
+            permission(p, "INVOICE_VIEW");
+            assertInvoiceBranchAccess(i, p);
         }
         return invoiceItems.findByTenantIdAndInvoiceId(p.tenantId(), id);
     }
@@ -376,6 +389,7 @@ public class FinanceService {
         if (reason == null || reason.isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Void reason is required");
         Invoice i = invoices.findForUpdate(id, p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found"));
+        assertInvoiceBranchAccess(i, p);
         if (!"ISSUED".equals(i.getStatus()) && !"PARTIALLY_PAID".equals(i.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only an issued, unpaid or partially paid invoice can be voided");
         if (payments.findByTenantIdAndInvoiceId(p.tenantId(), id).stream().anyMatch(x -> "CONFIRMED".equals(x.getStatus())))
@@ -392,6 +406,7 @@ public class FinanceService {
         if (x.paidAt() == null || x.paidAt().isAfter(Instant.now()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment date cannot be in the future");
         Invoice i = invoices.findForUpdate(x.invoiceId(), p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invoice not found"));
+        assertInvoiceBranchAccess(i, p);
         if (!Set.of("ISSUED", "PARTIALLY_PAID").contains(i.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Invoice is not open for payment");
         BigDecimal paid = netPaid(p.tenantId(), i.getId());
@@ -433,6 +448,10 @@ public class FinanceService {
     
     public Payment getPayment(UUID id, Principal p) {
         Payment payment = payments.findByIdAndTenantId(id, p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+        if ("VENDOR".equals(p.accountType())) {
+            Invoice paymentInvoice = invoice(payment.getInvoiceId(), p.tenantId());
+            assertInvoiceBranchAccess(paymentInvoice, p);
+        }
         if ("CUSTOMER".equals(p.accountType())) {
             if (listInvoices(p).stream().noneMatch(i -> i.getId().equals(payment.getInvoiceId())))
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND);
@@ -452,7 +471,12 @@ public class FinanceService {
         }
         financeAccess(p);
         permission(p, "PAYMENT_VIEW");
-        return payments.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
+        List<Payment> rows = payments.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
+        if (enterpriseSaas == null || p.roles() != null && p.roles().contains("VENDOR_ADMIN")) return rows;
+        Set<UUID> visibleInvoiceIds = enterpriseSaas.filterBranchRecords(
+                invoices.findByTenantIdOrderByCreatedAtDesc(p.tenantId()), Invoice::getBranchId, p)
+                .stream().map(Invoice::getId).collect(java.util.stream.Collectors.toSet());
+        return rows.stream().filter(payment -> visibleInvoiceIds.contains(payment.getInvoiceId())).toList();
     }
     
     @Transactional
@@ -462,6 +486,7 @@ public class FinanceService {
         if (x.amount() == null || x.amount().signum() <= 0 || x.reason() == null || x.reason().isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A positive refund amount and reason are required");
         Payment pay = payments.findForUpdate(x.paymentId(), p.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+        assertInvoiceBranchAccess(invoice(pay.getInvoiceId(), p.tenantId()), p);
         if (!"MANUAL".equals(pay.getSource()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Gateway refunds require a configured provider refund adapter; no gateway is configured");
         BigDecimal refunded = refunds.findByTenantIdAndPaymentId(p.tenantId(), pay.getId()).stream().filter(r -> "RECORDED".equals(r.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -573,6 +598,8 @@ public class FinanceService {
     }
 
     private void ensureTicketAccess(ServiceRequest t, Principal p) {
+        if ("VENDOR".equals(p.accountType()) && enterpriseSaas != null)
+            enterpriseSaas.assertBranchAccess(t.getBranchId(), p);
         if ("CUSTOMER".equals(p.accountType())) {
             CustomerProfile cp = customer(p);
             if (!cp.getId().equals(t.getCustomerId())) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
@@ -687,6 +714,7 @@ public class FinanceService {
         servicePermission(p);
         permission(p, "SERVICE_ASSIGN");
                 ServiceRequest t = ticket(id, p.tenantId());
+        ensureTicketAccess(t, p);
         if (!x.scheduledAt().isAfter(Instant.now()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Visit must be scheduled in the future");
         if (t.getAssignedEngineerId() == null || !t.getAssignedEngineerId().equals(x.engineerId()))
@@ -1008,7 +1036,15 @@ public class FinanceService {
     public List<Refund> listRefunds(Principal p) {
         financeAccess(p);
         permission(p, "PAYMENT_REFUND");
-        return refunds.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
+        List<Refund> rows = refunds.findByTenantIdOrderByCreatedAtDesc(p.tenantId());
+        if (enterpriseSaas == null || p.roles() != null && p.roles().contains("VENDOR_ADMIN")) return rows;
+        Set<UUID> visibleInvoiceIds = enterpriseSaas.filterBranchRecords(
+                invoices.findByTenantIdOrderByCreatedAtDesc(p.tenantId()), Invoice::getBranchId, p)
+                .stream().map(Invoice::getId).collect(java.util.stream.Collectors.toSet());
+        Set<UUID> visiblePaymentIds = payments.findByTenantIdOrderByCreatedAtDesc(p.tenantId()).stream()
+                .filter(payment -> visibleInvoiceIds.contains(payment.getInvoiceId()))
+                .map(Payment::getId).collect(java.util.stream.Collectors.toSet());
+        return rows.stream().filter(refund -> visiblePaymentIds.contains(refund.getPaymentId())).toList();
     }
     
     @Transactional

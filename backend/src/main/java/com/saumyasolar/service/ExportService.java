@@ -8,6 +8,7 @@ import com.saumyasolar.api.Phase2OperationsController;
 import com.saumyasolar.domain.ExportJob;
 import com.saumyasolar.repo.ExportJobRepository;
 import com.saumyasolar.security.Principal;
+import com.saumyasolar.security.TenantExecutionContext;
 import jakarta.transaction.Transactional;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Value;
@@ -142,11 +143,31 @@ public class ExportService {
     @Scheduled(fixedDelayString="\u0024{app.exports.recovery-interval-ms:60000}")
     public void recoverAndExpire() {
         Instant now=Instant.now(),stale=now.minusSeconds(Math.max(60,processingLeaseSeconds));
-        for(UUID tenant:jobs.findDistinctTenantIdsForRecovery(stale))
-            for(ExportJob job:jobs.findRecoverableByTenant(tenant,stale,org.springframework.data.domain.PageRequest.of(0,50))) publishAfterCommit(job.getId(),tenant);
-        for(ExportJob job:jobs.findTop100ByStatusAndExpiresAtBeforeOrderByExpiresAtAsc("COMPLETED",now)) {
-            if(job.getStorageKey()!=null) try{storage.delete(root,job.getStorageKey());}catch(Exception ignored){}
-            job.setStorageKey(null);job.setStatus("EXPIRED");job.setUpdatedAt(now);jobs.save(job);
+        for (UUID tenant : jobs.findDistinctTenantIdsForRecovery(stale)) {
+            try (TenantExecutionContext.Scope ignored = TenantExecutionContext.open(tenant)) {
+                for (ExportJob job : jobs.findRecoverableByTenant(
+                        tenant, stale, org.springframework.data.domain.PageRequest.of(0, 50))) {
+                    publishAfterCommit(job.getId(), tenant);
+                }
+            }
+        }
+        for (UUID tenantId : jobs.findDistinctTenantIdsForExpiry(now)) {
+            try (TenantExecutionContext.Scope ignored = TenantExecutionContext.open(tenantId)) {
+                for (ExportJob job : jobs.findTop100ByTenantIdAndStatusAndExpiresAtBeforeOrderByExpiresAtAsc(
+                        tenantId, "COMPLETED", now)) {
+                    if (job.getStorageKey() != null) {
+                        try { storage.delete(root, job.getStorageKey()); }
+                        catch (Exception deleteFailure) {
+                            // Keep the completed row and storage key so the next scheduler pass retries deletion.
+                            continue;
+                        }
+                    }
+                    job.setStorageKey(null);
+                    job.setStatus("EXPIRED");
+                    job.setUpdatedAt(now);
+                    jobs.save(job);
+                }
+            }
         }
     }
     public record FilePayload(byte[] bytes,String contentType,String extension){}
