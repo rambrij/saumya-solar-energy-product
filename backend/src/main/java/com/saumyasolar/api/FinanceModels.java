@@ -34,7 +34,6 @@ public final class FinanceModels {
     ) {
         public RefundCreate(UUID paymentId, BigDecimal amount, String reason) { this(paymentId, amount, reason, null); }
     }
-    }
     
     public record WebhookEvent(
             @NotBlank String eventId, @NotBlank String paymentReference,
