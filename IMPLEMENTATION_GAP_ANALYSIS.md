@@ -2114,3 +2114,20 @@ The Phase 6 audit reuses the existing Phase 5 inbox and integration synchronizat
 Blocking policy decisions are recorded as NOT-OQ-01 through NOT-OQ-10 in `docs/CLEANUP_DECISIONS.md`. In particular, notification SLA escalation thresholds/targets, mandatory-vs-optional event preferences, consent evidence, provider callback contract, retention, retry policy and admin visibility must not be invented.
 
 No new provider SDK, credentials, live messaging call, migration, data backfill or compatibility shim was added in this audit checkpoint.
+### Phase 6 implementation update — partial (2026-11-11)
+
+| Requirement | Current status | Implementation evidence / remaining gate |
+|---|---|---|
+| Transactional outbox | PARTIAL | V12 `notification_outbox`; NotificationService enqueue transaction; outbox scheduler. Verify commit rollback and concurrent dispatch tests in CI. |
+| Existing inbox reuse | IMPLEMENTED | Phase 5 UserNotification retained; IN_APP preference checked before creation. |
+| Mailpit email adapter | PARTIAL | Mailpit adapter and local compose service; verify local app profile and CI tests. |
+| SMS/WhatsApp mock adapters | IMPLEMENTED (mock only) | Deterministic adapter; no real network provider. |
+| Retry/backoff/dead-letter | PARTIAL | Existing attempt/backoff retained and DEAD_LETTER status added; dispatcher/retry concurrency needs integration tests. |
+| Provider webhook/event ledger | PARTIAL | HMAC-verified mock callback, provider event persistence and replay hash check; automated signature/tenant/replay tests still required. |
+| Preferences and consent | PARTIAL | Tenant/user/channel preference API and UI; SMS/WhatsApp explicit consent; consent evidence lifecycle and mandatory categories remain open. |
+| Delivery/outbox/integration monitoring APIs | PARTIAL | Tenant-scoped read APIs; platform-wide view and manual redrive not included. |
+| Frontend preferences and delivery status | PARTIAL | NotificationInboxPanel extended; browser tests and full design/role review pending. |
+| SLA escalation | DEFERRED | No approved thresholds, targets or cadence; see NOT-OQ-01 and NOT-OQ-02. |
+| Phase 6 full verification | NOT VERIFIED | Branch-head full CI and migration/startup/browser evidence pending. |
+
+**Phase 6 remains PARTIAL, not done.** Do not merge/release until build, backend/frontend tests, V12 migration validation, webhook/tenant/idempotency tests and browser verification pass. Open policy decisions remain in `docs/CLEANUP_DECISIONS.md`.
