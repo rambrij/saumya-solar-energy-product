@@ -15,14 +15,6 @@ public interface PaymentGatewayAdapter {
     record GatewayPaymentStatus(String providerReference, String status, BigDecimal amount, String currency) { }
 
     record GatewayWebhookEvent(String eventId, String providerReference, BigDecimal amount,
-            String currency, String status, String providerRefundReference, String tenantId) {
-        public GatewayWebhookEvent(String eventId, String providerReference, BigDecimal amount, String currency, String status) {
-            this(eventId, providerReference, amount, currency, status, null, null);
-        }
-        public GatewayWebhookEvent(String eventId, String providerReference, BigDecimal amount, String currency,
-                String status, String providerRefundReference) {
-            this(eventId, providerReference, amount, currency, status, providerRefundReference, null);
-        }
-    }
+            String currency, String status, String providerRefundReference, String tenantId) {}
     record GatewayRefund(String providerRefundReference, String status) { }
 }
