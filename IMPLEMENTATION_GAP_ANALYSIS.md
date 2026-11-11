@@ -1897,3 +1897,13 @@ The requested remaining role/resource scenarios are verified by the passing run.
 - Added/updated integration coverage for reservation expiry, order-policy disable/reenable and tenant onboarding, suspension, reactivation and terminal closure.
 
 **Verification state:** implementation has been committed to the Phase 3 branch, but the full CI run and MySQL 8.4 migration validation for this updated head are still pending. Do not mark Phase 3 production-ready until the updated workflow is green and the remaining external Phase 2 production preflight/DBA/infrastructure sign-offs are complete.
+
+
+### Phase 3 CI verification update — 2026-11-11
+
+- Backend CI on commit `e9bf590fd59fde7e02766bda0ade8f9b94c8817f`: **226 tests, 0 failures, 0 errors, 0 skipped**.
+- MySQL 8.4 validation: historical V1–V63 equivalence passed; clean current V1 + Phase 3 V2/V3 migration application and schema assertions passed.
+- Frontend component tests, typecheck and production build passed.
+- The MySQL application-startup job reached browser E2E and failed only in `frontend/e2e/tenant-react-ui.spec.ts`: its fixture creates a tenant and immediately attempts vendor-admin login. The Phase 3 lifecycle correctly leaves newly provisioned tenants in `PENDING`, so that login receives HTTP 401 until the fixture calls the existing lifecycle endpoint for `PENDING → VERIFIED → ACTIVE`. Update the fixture to perform those two platform-authorized transitions before logging in as the new vendor admin, then rerun the complete workflow.
+
+**Current acceptance:** Backend, frontend build and clean-install migration validation pass. Browser E2E is the remaining Phase 3 code/test acceptance item; Phase 3 is not marked fully verified or production-ready until that fixture is updated and the full workflow is green.
