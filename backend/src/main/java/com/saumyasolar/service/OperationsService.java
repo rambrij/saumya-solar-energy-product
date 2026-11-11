@@ -599,8 +599,13 @@ public class OperationsService {
         OrderTransitionPolicy policy=transitionPolicies.findByTenantIdAndFromStatusAndToStatus(
                 order.getTenantId(),from,to).orElseGet(()->transitionPolicies
                 .findByTenantIdIsNullAndFromStatusAndToStatus(from,to).orElse(null));
-        if(policy==null)
-            throw new ResponseStatusException(HttpStatus.CONFLICT,"Order cannot move from "+from+" to "+to);
+        if(policy==null) {
+            OrderTransitionPolicyDefaults.Rule baseline=OrderTransitionPolicyDefaults.RULES.stream()
+                    .filter(rule->rule.fromStatus().equals(from)&&rule.toStatus().equals(to)).findFirst().orElse(null);
+            if(baseline==null) throw new ResponseStatusException(HttpStatus.CONFLICT,"Order cannot move from "+from+" to "+to);
+            policy=new OrderTransitionPolicy(); policy.setFromStatus(from); policy.setToStatus(to);
+            policy.setRequiredPermission(baseline.permission()); policy.setEnabled(true);
+        }
         if(!policy.isEnabled() && actor!=null)
             throw new ResponseStatusException(HttpStatus.CONFLICT,"Order transition "+from+" → "+to+" is disabled by this vendor's policy");
         if(actor!=null) permission(actor,policy.getRequiredPermission());

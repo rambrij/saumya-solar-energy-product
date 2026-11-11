@@ -313,7 +313,8 @@ class Release12TenantIntegrationTest {
         assertEquals("CONFIRMED",customerOrders.findByIdAndTenantId(order.getId(),vendorTenantId).orElseThrow().getStatus());
         String disabledOptions=mvc.perform(get("/api/v1/orders/transition-options").header("Authorization","Bearer "+token))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertFalse(json.readTree(disabledOptions).findValuesAsText("toStatus").contains("PAYMENT_PENDING"));
+        assertFalse(java.util.stream.StreamSupport.stream(json.readTree(disabledOptions).spliterator(),false)
+                .anyMatch(node->"CONFIRMED".equals(node.path("fromStatus").asText())&&"PAYMENT_PENDING".equals(node.path("toStatus").asText())));
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/orders/transition-policy")
                         .header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"transitions\":[{\"fromStatus\":\"CONFIRMED\",\"toStatus\":\"PAYMENT_PENDING\",\"enabled\":true}]}"))

@@ -69,6 +69,17 @@ class Release4FinanceServiceAndPlatformTest {
         mvc.perform(post("/api/v1/tenants").header("Authorization", "Bearer " + platform).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Export Tenant\",\"slug\":\"" + exportSlug + "\",\"adminName\":\"Export Admin\",\"adminEmail\":\"" + exportEmail + "\",\"adminPassword\":\"ExportAdmin@2026\"}"))
                 .andExpect(status().isOk());
+        String createdTenantId=json.readTree(mvc.perform(get("/api/v1/platform/tenants")
+                        .header("Authorization","Bearer "+platform).param("search",exportSlug))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("items").get(0).path("id").asText();
+        mvc.perform(patch("/api/v1/tenants/"+createdTenantId+"/status").header("Authorization","Bearer "+platform)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"VERIFIED\",\"reason\":\"Integration test verification\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(patch("/api/v1/tenants/"+createdTenantId+"/status").header("Authorization","Bearer "+platform)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"ACTIVE\",\"reason\":\"Integration test activation\"}"))
+                .andExpect(status().isOk());
         String csv = mvc.perform(get("/api/v1/platform/tenants/export").header("Authorization", "Bearer " + platform).param("status", "ACTIVE"))
                 .andExpect(status().isOk()).andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("tenants-active-" + LocalDate.now()))).andExpect(content().contentTypeCompatibleWith("text/csv"))
                 .andReturn().getResponse().getContentAsString();
