@@ -1660,3 +1660,43 @@ These are significant family-level checks, but they do **not** establish exhaust
 | External production worker/queue/schedule reconciliation | BLOCKED / NOT CONFIRMED | Connected provider resources do not match this repository; AWS and actual target production control planes remain unverified. |
 
 **Release decision: NOT APPROVED for production.** Code-level CI is green, but final acceptance remains blocked on production schema/preflight and infrastructure-owner sign-off, plus completion or release-owner acceptance of the remaining role/resource CRUD and export/download coverage rows. Do not interpret the disposable CI schema PASS as production-data approval.
+
+
+---
+
+## Phase 2 final-acceptance work update — 2026-11-11
+
+This section supersedes earlier statements that no latest CI validation had been run. It does **not** waive production-only approvals or convert representative role coverage into exhaustive proof.
+
+### Runtime authorization checkpoint
+
+- GitHub Actions run [42967893781](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42967893781) passed all four jobs on commit `10287b76fc75e6bbf21eaee65f70d048b074cd1b`: backend (218 tests, zero failures/errors/skips), frontend typecheck/production build, MySQL 8.4 migration validation, and Spring Boot startup/health/Playwright validation.
+- The generated `phase2-endpoint-authorization-evidence` artifact (ID `13832047670`) was validated and uploaded. It records 228 expanded method/path rows: 210 protected anonymous-denial probes and 18 explicit public/exempt rows; 207 applicable-account positive authorization-gate probes with three analytics routes delegated to focused service tests; 83 zero-permission vendor GET denials with eight documented self-service exceptions; and 117 zero-permission vendor mutation denials with three resource-delegated routes.
+- The 222 declaration count in `PHASE_2_ENDPOINT_MATRIX.md` and 228 runtime evidence rows are different inventory dimensions: controller declarations versus expanded method/path evidence. Both are retained and reconciled in the evidence report.
+- This is evidence for authentication, applicable account-type gates, zero-permission denial, and separately delegated routes. It is **not** positive access proof for every named business role/resource/verb tuple. Platform Support, Vendor Admin, Sales, custom Sales, Inventory Viewer, Accountant, Service Engineer and Customer have representative role tests, but not every role × route × verb positive combination. **Acceptance item 1 remains PARTIAL.**
+
+### Customer, branch and export/download work added
+
+- Customer integration coverage already exercises address read/update/delete isolation; cross-customer order, quotation, invoice, payment, service, installation and warranty visibility; customer-owned quotation/invoice/receipt PDFs; service/survey/warranty evidence attachment ownership; and owner/foreign-customer upload/list/download behavior.
+- Additional HTTP negative assertions were added for guessed-ID customer quotation acceptance and invoice payment-gateway checkout. A foreign customer must receive 404, the quotation must remain `SENT`, and the payment count for the foreign invoice must remain unchanged. The test change is on this branch and requires the post-change CI run before it is treated as passing.
+- Branch membership is now enforced by `SurveyLifecycleService.requireSurvey` after tenant and engineer-assignment validation. Branch-scoped lead/survey mutation tests prove the assigned member can update branch-A records, cannot update branch-B records even where the same engineer is assigned, and leaves denied rows unchanged. These changes passed the 218-test run above.
+- Export/download coverage now includes asynchronous CSV/XLSX/PDF exports, operations CSV/XLSX/PDF, platform tenant exports, quotation/invoice/payment-receipt PDFs, and service/survey/warranty attachments. Owner bytes, cross-requester/cross-customer/cross-tenant denial, pending/expired states and no private-storage reads after denial are checked by HTTP/service tests. The final route-to-test review remains required for any mapping introduced after the static matrix was generated.
+- **Acceptance items 2 and 3 are substantially expanded but remain PARTIAL** until every applicable customer/branch resource operation and every current download mapping has a route-to-test reconciliation with no untested row. The newest quote-acceptance/checkout tests are subject to the pending run described in the current CI job.
+
+### Production schema and NULL-row evidence
+
+- The protected production preflight now requires V57, V58 and V60 PASS markers and creates a manifest containing workflow run/attempt, commit, UTC timestamp and SHA-256 hashes for the preflight SQL and output artifacts. The read-only schema audit emits exact tenant_id NULL counts, nullability, FK inventory, unique-index inventory and tables without tenant_id. The production sign-off register is `PHASE_2_PRODUCTION_DATA_SIGNOFF.md`.
+- The workflow is branch-only and must first be merged to the default branch through normal PR review before GitHub permits manual dispatch. It also requires protected production secrets, a read-only schema-audit account, a DBA-approved preflight identity (the V57/V58/V60 preflight creates/drops temporary stored procedures and therefore needs DBA-approved routine privileges), protected-environment review and production change approval.
+- No production database connection/query was made in this audit session. CI MySQL NULL counts are disposable test data and are not production evidence. Actual production counts, owner classification, artifact review and DBA/data-owner approval remain **BLOCKED**. **Acceptance item 4 is NOT COMPLETE.**
+
+### External worker registrations
+
+- The latest repository scanner output from run `42967893781` found seven Spring scheduled triggers, two `@Async` application listeners, one bounded event executor, two startup runners and a database-backed integration queue; no checked-in Kafka/Rabbit/JMS/SQS/SNS/EventBridge worker client or separate language/container worker was found. The checked-in source/config inventory is **MET** for the scanned commit.
+- The connected Render workspace returned one web service, `soumya-solar-api`, but it points to the older `rambrij/soumya-solar-energy-solution` repository. The connected Vercel team returned one similarly named project linked to that older repository; available Vercel connector operations did not expose its cron inventory. No AWS account/organization or target Kubernetes/other production control plane was connected.
+- This does not establish that the production environment for `saumya-solar-energy-product` has no external workers. Infrastructure-owner exports/sign-off for AWS EventBridge/Scheduler, Lambda triggers, ECS/EKS jobs, SQS/DLQ/SNS, Vercel Cron, Render jobs, GitHub schedules and other provider registrations remain **PENDING**. **Acceptance item 5 is NOT COMPLETE.**
+
+### CI status
+
+Run `42967893781` passed every job on commit `10287b76fc75e6bbf21eaee65f70d048b074cd1b`. Later customer authorization assertions and documentation refreshes have since advanced the branch, so the post-change workflow for the current head must pass before the “all CI jobs latest commit” criterion can be marked MET. **Acceptance item 6 is MET for that checkpoint and PENDING for the subsequent head until the latest run is green.**
+
+**Release decision:** Phase 2 remains **NOT APPROVED**. Do not release until the latest-head workflow is green, the remaining positive role/resource/verb matrix is reconciled, customer/branch/export mappings have zero untested applicable operations, the protected production preflight has archived exact production outputs with DBA/data-owner/security/release-owner approval, and the actual production infrastructure worker inventory is signed.
