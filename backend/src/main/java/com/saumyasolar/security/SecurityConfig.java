@@ -51,6 +51,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/**", "/api/v1/public/**", "/api/v1/payment-webhooks/**", "/api/v1/payment-gateway-webhooks/**", "/uploads/**",
                                 "/actuator/health", "/swagger-ui/**", "/v3/api-docs/**"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/cms/media").hasAuthority("CMS_UPDATE")
                         .anyRequest().authenticated())
                 .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
