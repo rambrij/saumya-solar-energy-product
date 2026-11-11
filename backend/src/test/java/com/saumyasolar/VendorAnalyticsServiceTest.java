@@ -76,10 +76,15 @@ class VendorAnalyticsServiceTest {
                 "VENDOR", Set.of("VENDOR_ADMIN"), Set.of("REPORT_VIEW", "BRANCH_MANAGE"), 0);
 
         assertDoesNotThrow(() -> service.breakdowns(admin, null, null, null, null, null));
+        verify(jdbc, times(2)).queryForList(anyString(), any(SqlParameterSource.class));
+        clearInvocations(jdbc);
+
         assertDoesNotThrow(() -> service.trends(admin, null, null, null, null, null, "DAY"));
+        verify(jdbc, times(4)).queryForList(anyString(), any(SqlParameterSource.class));
+        clearInvocations(jdbc);
+
         assertDoesNotThrow(() -> service.rankings(admin, null, null, null, null, null, "orders", 10));
         verify(jdbc, times(2)).queryForList(anyString(), any(SqlParameterSource.class));
-        verify(jdbc, times(4)).queryForList(anyString(), any(SqlParameterSource.class));
     }
 
     @Test
