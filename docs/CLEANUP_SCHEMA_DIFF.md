@@ -33,7 +33,7 @@ The 84 tables include the original 74-table baseline plus ten tables introduced 
 
 ## Result
 
-<badge>PASS</badge>
+**PASS**
 
 **Identical schema — zero differences.** Final branch-head GitHub Actions run [43089380154](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/43089380154), commit `deb61269572b19799bcc72685475c92c2e4f9a5e`, completed the full MySQL 8.4 migration job successfully. It applied the original V1–V14 chain and the consolidated V1 baseline to separate fresh databases, dumped both schemas including triggers, normalized generated AUTO_INCREMENT counters and found no diff.
 
