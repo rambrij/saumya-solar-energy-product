@@ -1,9 +1,7 @@
 -- Phase 4 finance/provider lifecycle: clean-install schema extension.
 -- The application is not deployed; existing event rows do not require a data backfill.
 ALTER TABLE payment
-    MODIFY COLUMN paid_at TIMESTAMP(6) NULL,
-    DROP INDEX uq_payment_provider_ref,
-    ADD UNIQUE KEY uq_payment_tenant_provider_ref(tenant_id, provider, provider_reference);
+    MODIFY COLUMN paid_at TIMESTAMP(6) NULL;
 
 ALTER TABLE payment_webhook_event
     ADD COLUMN tenant_id BINARY(16) NOT NULL AFTER id,
