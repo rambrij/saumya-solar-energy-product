@@ -1,6 +1,6 @@
 # Flyway schema equivalence — cleanup baseline
 
-**Schema comparison status:** PASS on MySQL 8.4; full workflow later failed on an outdated tenant-audit count assertion (subsequently updated)  
+**Schema comparison status:** PASS on final branch-head CI run 43089380154 (MySQL 8.4)  
 **Old schema source:** `audit/implementation-gap-analysis` active Flyway V1–V14 chain  
 **New schema source:** `backend/src/main/resources/db/migration/V1__baseline.sql`  
 **Database engine:** MySQL 8.4  
@@ -10,7 +10,7 @@
 
 The `mysql-migrations` job in `.github/workflows/release-validation.yml` performs the comparison:
 
-1. Fetches `audit/implementation-gap-analysis` and archives its original 14 active versioned migration files.
+1. Archives the original 14 active versioned migration files from the pinned base commit `589d7b838f1745570abab6e4f1c756e32747612a` (the requested `audit/implementation-gap-analysis` branch head).
 2. Creates two empty MySQL 8.4 databases: `solar_old_chain` and `solar_baseline_test`.
 3. Applies the old V1–V14 migrations in Flyway version order to `solar_old_chain`.
 4. Applies the consolidated V1 baseline to `solar_baseline_test`.
@@ -33,9 +33,17 @@ The 84 tables include the original 74-table baseline plus ten tables introduced 
 
 ## Result
 
-**PASS — identical schema.** GitHub Actions run [43087397175](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/43087397175), head `0e0a7bc45554ac57e1d69c35ee4b81ec784f126e`, completed both migration-chain applications and produced artifact [cleanup-schema-equivalence, artifact 13887136820](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/43087397175). The downloaded `schema-diff.txt` contains `PASS: old V1-V14 schema and the single baseline are identical.` No schema differences were found; no deviations from the source documents were required.
+<badge>PASS</badge>
 
-The overall `mysql-migrations` job subsequently failed at the tenant-schema inventory assertion because `scripts/audit/assert-tenant-schema-audit.py` still expected the pre-cleanup 74-table shape. The post-cleanup schema actually has 84 base tables, 74 tenant_id-bearing tables, 68 NOT NULL tenant_id columns, and six mixed-scope nullable tenant_id columns. The validator has been updated to those observed values in a follow-up commit; the full workflow must be rerun on the latest branch head before overall verification is complete.
+**Identical schema — zero differences.** Final branch-head GitHub Actions run [43089380154](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/43089380154), commit `deb61269572b19799bcc72685475c92c2e4f9a5e`, completed the full MySQL 8.4 migration job successfully. It applied the original V1–V14 chain and the consolidated V1 baseline to separate fresh databases, dumped both schemas including triggers, normalized generated AUTO_INCREMENT counters and found no diff.
+
+Final artifact: [cleanup-schema-equivalence, artifact 13888520692](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/43089380154). The downloaded `schema-diff.txt` contains exactly:
+
+```text
+PASS: old V1-V14 schema and the single baseline are identical.
+```
+
+The job also passed the one-baseline layout assertion and the updated tenant schema/foreign-key/index/NULL-row audit. No schema differences or documented-requirement deviations needed justification.
 
 ## Data and seed behavior
 
