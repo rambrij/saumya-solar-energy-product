@@ -90,7 +90,8 @@ class EndpointAuthenticationMatrixTest {
             "/api/v1/auth/", "/api/v1/public/", "/api/v1/payment-webhooks/",
             "/api/v1/payment-gateway-webhooks/", "/uploads/", "/swagger-ui/", "/v3/api-docs/"
     );
-    private static final Set<String> PUBLIC_EXACT = Set.of("/actuator/health", "/v3/api-docs");
+    private static final Set<String> PUBLIC_EXACT = Set.of(
+            "/actuator/health", "/v3/api-docs", "/swagger-ui.html");
 
     @Test
     @Transactional
@@ -403,9 +404,16 @@ class EndpointAuthenticationMatrixTest {
                     continue;
                 }
                 String path = probePath(pattern);
-                int status = mvc.perform(request(HttpMethod.GET, path)
-                                .header("Authorization", "Bearer " + token))
-                        .andReturn().getResponse().getStatus();
+                MockHttpServletRequestBuilder readProbe = request(HttpMethod.GET, path)
+                        .header("Authorization", "Bearer " + token);
+                // Supply valid required filters so authorization executes instead of parameter binding.
+                if (pattern.equals("/api/v1/audit-events")) {
+                    readProbe.param("from", "2030-01-01T00:00:00Z")
+                            .param("to", "2030-01-02T00:00:00Z");
+                } else if (pattern.equals("/api/v1/platform/tenants/search")) {
+                    readProbe.param("q", "matrix");
+                }
+                int status = mvc.perform(readProbe).andReturn().getResponse().getStatus();
                 checked.add("GET " + pattern);
                 boolean denied = status == 403 || status == 404;
                 evidence.add(new String[] {"GET", pattern, handler.getBeanType().getSimpleName(),
