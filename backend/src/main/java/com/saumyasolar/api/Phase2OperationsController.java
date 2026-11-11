@@ -336,6 +336,47 @@ public class Phase2OperationsController {
         result.put("invoicedAmount", invoiceRows.stream().map(Invoice::getGrandTotal).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add));
         result.put("paymentsReceived", paymentTotal);
         result.put("inventoryTransactions", stockRows.size());
+        result.put("salesOrders", orderRows.stream().map(x -> {
+            Map<String,Object> row = new LinkedHashMap<>();
+            row.put("orderNumber",x.getOrderNumber()); row.put("status",x.getStatus());
+            row.put("total",x.getTotal()); row.put("createdAt",x.getCreatedAt()); row.put("branchId",x.getBranchId());
+            return row;
+        }).toList());
+        result.put("installationDetails", installationRows.stream().map(x -> {
+            Map<String,Object> row = new LinkedHashMap<>();
+            row.put("status",x.getStatus()); row.put("scheduledAt",x.getScheduledAt());
+            row.put("completedAt",x.getCompletedAt()); row.put("capacityKw",x.getCapacityKw());
+            row.put("assignedEngineerId",x.getAssignedEngineerId()); row.put("branchId",x.getBranchId());
+            return row;
+        }).toList());
+        result.put("serviceTicketDetails", ticketRows.stream().map(x -> {
+            Map<String,Object> row = new LinkedHashMap<>();
+            row.put("ticketNumber",x.getTicketNumber()); row.put("status",x.getStatus());
+            row.put("priority",x.getPriority()); row.put("createdAt",x.getCreatedAt());
+            row.put("assignedEngineerId",x.getAssignedEngineerId()); row.put("branchId",x.getBranchId());
+            return row;
+        }).toList());
+        result.put("inventoryMovementDetails", stockRows.stream().map(x -> {
+            Map<String,Object> row = new LinkedHashMap<>();
+            row.put("transactionReference",x.getTransactionReference()); row.put("type",x.getType());
+            row.put("quantityDelta",x.getQuantityDelta()); row.put("createdAt",x.getCreatedAt());
+            row.put("warehouseId",x.getWarehouseId()); row.put("productId",x.getProductId());
+            return row;
+        }).toList());
+        result.put("invoiceDetails", invoiceRows.stream().map(x -> {
+            Map<String,Object> row = new LinkedHashMap<>();
+            row.put("invoiceNumber",x.getInvoiceNumber()); row.put("status",x.getStatus());
+            row.put("grandTotal",x.getGrandTotal()); row.put("currency",x.getCurrency());
+            row.put("issuedAt",x.getIssuedAt()); row.put("branchId",x.getBranchId());
+            return row;
+        }).toList());
+        result.put("paymentDetails", paymentRows.stream().map(x -> {
+            Map<String,Object> row = new LinkedHashMap<>();
+            row.put("amount",x.getAmount()); row.put("currency",x.getCurrency());
+            row.put("status",x.getStatus()); row.put("method",x.getMethod());
+            row.put("paidAt",x.getPaidAt()); row.put("invoiceId",x.getInvoiceId());
+            return row;
+        }).toList());
         return result;
     }
 
