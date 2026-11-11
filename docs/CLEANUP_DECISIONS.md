@@ -79,3 +79,23 @@ This record is a decision log, not evidence that Phase 4 code has been implement
 ### Phase 4 gate evidence
 
 GitHub Actions run [43025279559](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/43025279559) ran on `audit/phase-4-finance-provider-impl` at `d3a0f7656767d82a70f7f6dbedac5647d043aa31` and concluded `success`. All four jobs completed successfully, including backend tests, frontend tests/typecheck/build, MySQL 8.4 migration validation including V5, Spring Boot startup and browser tenant-filter tampering checks. This is branch CI verification, not production deployment or merge-to-main sign-off.
+
+
+### Phase 5 implementation decisions — initial vertical slice
+
+1. CMS body is stored as plain text/Markdown, not trusted HTML. Raw HTML tags are rejected by the service; the public API returns text fields only. A future rich-text editor requires an approved sanitizer/allowlist before HTML rendering.
+2. CMS revision rows are append-only. Updating a published item creates a draft revision while the published revision pointer continues serving the last published snapshot. Type/slug changes are rejected while a published snapshot is live; archive then create a new item for a new public identity.
+3. CMS public routes resolve the tenant from an ACTIVE store slug and read only a published revision. Authoring routes derive tenant from the authenticated vendor principal. Every mutation writes an audit event.
+4. Inbox records are separate from email/SMS/WhatsApp delivery attempts. The business notification path attempts an independent inbox write; provider delivery and existing retry behavior remain intact. Users can read only their own tenant inbox; vendor inbox routes require `NOTIFICATION_VIEW`, while customer/platform self-inbox scope does not expose other recipients.
+5. `NOTIFICATION_VIEW` is a least-privilege self-inbox grant, not a tenant-wide notification administration permission. V8 installs the catalogue code and grants it only to known built-in vendor roles; custom roles may opt in through the existing allowlisted role editor.
+6. Platform analytics returns aggregate counts/value only; it never returns tenant/customer rows. Order value is labelled as order value and must not be interpreted as recognized revenue.
+7. Customer document centre composes existing authenticated download routes; no duplicate document metadata or binary storage is created in this slice.
+8. Platform settings are not made arbitrary key/value storage. Implementation waits for approval of the exact typed non-secret setting keys; secret values remain in the secret provider.
+
+### Phase 5 migrations
+
+- V6: tenant-scoped CMS content and immutable revisions with composite tenant foreign keys.
+- V7: per-user in-app notification inbox table, separate from notification delivery.
+- V8: least-privilege `NOTIFICATION_VIEW` permission catalogue and built-in vendor role grants.
+
+All are additive; no production data backfill or destructive migration is intended. The release-validation workflow was extended to assert V1–V8 on a clean MySQL 8.4 database.
