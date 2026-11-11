@@ -21,7 +21,7 @@ public class PlatformSetting {
     @Column(name = "setting_key", length = 60)
     private String key;
 
-    @Column(name = "value_type", nullable = false, length = 16)
+    @Column(name = "value_type", nullable = false, length = 20)
     private String valueType;
 
     @Column(name = "value_text", nullable = false, length = 500)
@@ -31,7 +31,7 @@ public class PlatformSetting {
     @Column(nullable = false)
     private int version;
 
-    @Column(name = "updated_by")
+    @Column(name = "updated_by", nullable = false)
     private java.util.UUID updatedBy;
 
     @Column(name = "updated_at", nullable = false)
