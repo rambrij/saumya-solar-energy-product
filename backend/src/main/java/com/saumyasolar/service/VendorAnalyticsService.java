@@ -36,7 +36,7 @@ public class VendorAnalyticsService {
                 || actor.permissions() == null || !actor.permissions().contains("REPORT_VIEW") || !actor.permissions().contains("BRANCH_MANAGE"))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Vendor Admin analytics access required");
         Instant end = to == null ? Instant.now() : to, start = from == null ? end.minus(Duration.ofDays(90)) : from;
-        if (end.isBefore(start) || Duration.between(start, end).toDays() > 366)
+        if (end.isBefore(start) || Duration.between(start, end).compareTo(Duration.ofDays(366)) > 0)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Analytics date range must be valid and no longer than 366 days");
         if (branchId != null)
             branches.findByIdAndTenantId(branchId, actor.tenantId()).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Branch not found"));
