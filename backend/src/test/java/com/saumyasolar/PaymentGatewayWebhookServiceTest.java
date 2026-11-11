@@ -59,6 +59,7 @@ class PaymentGatewayWebhookServiceTest {
                 "evt-duplicate", "provider-ref", new BigDecimal("100.00"), "INR", "PAYMENT_CAPTURED", null, tenant.toString()));
         PaymentRepository payments = mock(PaymentRepository.class);
         when(payments.findByTenantIdAndProviderAndProviderReference(tenant, "MOCK_GATEWAY", "provider-ref")).thenReturn(Optional.of(payment));
+        when(payments.findForUpdate(paymentId, tenant)).thenReturn(Optional.of(payment));
         PaymentWebhookEventRepository events = mock(PaymentWebhookEventRepository.class);
         when(events.findByTenantIdAndProviderAndEventId(tenant, "MOCK_GATEWAY", "evt-duplicate")).thenReturn(Optional.of(prior));
         PaymentGatewayWebhookService service = new PaymentGatewayWebhookService(
@@ -121,6 +122,7 @@ class PaymentGatewayWebhookServiceTest {
                 "evt-mismatch", "provider-ref", new BigDecimal("101.00"), "INR", "PAYMENT_CAPTURED", null, tenant.toString()));
         PaymentRepository payments = mock(PaymentRepository.class);
         when(payments.findByTenantIdAndProviderAndProviderReference(tenant, "MOCK_GATEWAY", "provider-ref")).thenReturn(Optional.of(payment));
+        when(payments.findForUpdate(paymentId, tenant)).thenReturn(Optional.of(payment));
         PaymentWebhookEventRepository events = mock(PaymentWebhookEventRepository.class);
         PaymentGatewayWebhookService service = new PaymentGatewayWebhookService(
                 new PaymentGatewayRegistry(List.of(adapter)), payments, events, mock(InvoiceRepository.class),
@@ -146,6 +148,7 @@ class PaymentGatewayWebhookServiceTest {
                 "refund-ref", tenant.toString()));
         PaymentRepository payments = mock(PaymentRepository.class);
         when(payments.findByTenantIdAndProviderAndProviderReference(tenant, "MOCK_GATEWAY", "provider-ref")).thenReturn(Optional.of(payment));
+        when(payments.findForUpdate(paymentId, tenant)).thenReturn(Optional.of(payment));
         when(payments.findByTenantIdAndInvoiceId(tenant, invoiceId)).thenReturn(List.of(payment));
         Invoice invoice = invoice(tenant, invoiceId);
         InvoiceRepository invoices = mock(InvoiceRepository.class);
