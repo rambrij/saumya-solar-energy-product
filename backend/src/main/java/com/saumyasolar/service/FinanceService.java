@@ -440,7 +440,7 @@ public class FinanceService {
         BigDecimal total = BigDecimal.ZERO;
         for (Payment payment : payments.findByTenantIdAndInvoiceId(tenant, invoiceId)) {
             if ("CONFIRMED".equals(payment.getStatus())) total = total.add(payment.getAmount());
-            else if ("PARTIALLY_REFUNDED".equals(payment.getStatus())) {
+            else if (Set.of("PARTIALLY_REFUNDED", "REFUNDED").contains(payment.getStatus())) {
                 BigDecimal refunded = refunds.findByTenantIdAndPaymentId(tenant, payment.getId()).stream().filter(r -> Set.of("RECORDED", "PROCESSED").contains(r.getStatus())).map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
                 total = total.add(payment.getAmount().subtract(refunded));
             }
