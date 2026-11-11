@@ -1,6 +1,5 @@
 package com.saumyasolar.api;
 
-import com.saumyasolar.domain.UserNotification;
 import com.saumyasolar.security.Principal;
 import com.saumyasolar.service.UserNotificationService;
 import org.springframework.data.domain.Page;
@@ -16,7 +15,7 @@ public class UserNotificationController {
     public UserNotificationController(UserNotificationService notifications) { this.notifications = notifications; }
 
     @GetMapping
-    public Page<UserNotification> list(@RequestParam(defaultValue = "0") int page,
+    public Page<UserNotificationService.NotificationView> list(@RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "false") boolean unreadOnly, Authentication authentication) {
         return notifications.list(actor(authentication), page, size, unreadOnly);
@@ -28,8 +27,9 @@ public class UserNotificationController {
     }
 
     @PatchMapping("/{id}/read")
-    public UserNotification markRead(@PathVariable UUID id, Authentication authentication) {
-        return notifications.markRead(id, actor(authentication));
+    public UserNotificationService.NotificationView markRead(@PathVariable UUID id, Authentication authentication) {
+        var row = notifications.markRead(id, actor(authentication));
+        return new UserNotificationService.NotificationView(row.getId(), row.getEventType(), row.getTitle(), row.getBody(), row.getCreatedAt(), row.getReadAt());
     }
 
     @PostMapping("/read-all")
