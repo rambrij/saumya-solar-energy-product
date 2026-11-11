@@ -18,7 +18,7 @@ ALTER TABLE payment_refund
     ADD COLUMN provider_refund_reference VARCHAR(150) NULL AFTER provider,
     ADD COLUMN idempotency_key VARCHAR(160) NULL AFTER provider_refund_reference,
     ADD COLUMN processed_at TIMESTAMP(6) NULL AFTER idempotency_key,
-    ADD UNIQUE KEY uq_payment_refund_tenant_idempotency(tenant_id, idempotency_key),
+    ADD UNIQUE KEY uq_payment_refund_tenant_idempotency(tenant_id, payment_id, idempotency_key),
     ADD UNIQUE KEY uq_payment_refund_provider_reference(tenant_id, provider, provider_refund_reference);
 
 CREATE TABLE payment_reconciliation_report(
