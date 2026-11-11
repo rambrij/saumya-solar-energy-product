@@ -27,7 +27,11 @@ public class CmsController {
     @PostMapping(value = "/cms/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Object uploadMedia(@RequestPart("file") MultipartFile file, Authentication authentication) {
         Principal actor = principal(authentication);
-        String imageUrl = images.store(file);
+        String storedUrl = images.store(file);
+        java.net.URI storedUri = java.net.URI.create(storedUrl);
+        String imageUrl = storedUri.isAbsolute() ? storedUri.getRawPath() : storedUrl;
+        if (imageUrl == null || !imageUrl.matches("^/uploads/[A-Za-z0-9._-]+$"))
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Uploaded media path is invalid");
         cms.recordMediaUpload(imageUrl, actor);
         return java.util.Map.of("imageUrl", imageUrl);
     }
