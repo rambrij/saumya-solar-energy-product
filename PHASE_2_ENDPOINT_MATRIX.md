@@ -2,7 +2,7 @@
 
 **Branch:** `audit/phase-2-implementation-gap-analysis`  
 **Source:** Spring MVC controller annotations at the current Phase 2 branch HEAD  
-**Inventory generated:** 2026-11-10  
+**Static annotation inventory generated:** 2026-11-10; **runtime evidence refreshed:** 2026-11-11  
 **Scope:** Controller method mappings only. Public/authentication endpoints are retained in the inventory and identified by the SecurityConfig allowlist. This restored historical inventory predates the current ExportController; the current dynamic Spring mapping test remains the source of truth for newly added mappings.
 
 ## Inventory totals
@@ -16,6 +16,22 @@
 - After authentication, handlers/services must enforce the applicable account type, role, permission, tenant, customer ownership and (where relevant) branch membership. Missing privilege is expected to return HTTP 403; foreign or non-visible resource identifiers should be consistently hidden with HTTP 404. Public endpoints are exempt only for the specific public operation documented by their handler.
 - Each endpoint row below records the common unauthenticated and authenticated-denial contract. The evidence table records which authenticated negative scenarios are actually tested. `PENDING` means no endpoint/resource-specific negative test was found; it must not be interpreted as covered merely because the authentication gate passes.
 - CRUD/command coverage remains endpoint-specific; do not infer coverage from the existence of a route, role guard, frontend filter or dynamic authentication test.
+
+## Current runtime evidence overlay — CI run 42967893781 (2026-11-11)
+
+The table below is a static controller-annotation snapshot (222 method mapping declarations / 224 expanded route patterns) and predates the current `ExportController`. The current runtime registry generated **228 HTTP method + route-pattern rows**. Use the attached CI evidence CSV files as the current source of truth for runtime mappings rather than assuming the historical static row count is exhaustive.
+
+| Runtime evidence file | Rows | PASS | Explicit exemption / delegated | Interpretation |
+|---|---:|---:|---:|---|
+| `authentication-and-public-exceptions.csv` | 228 | 210 | 18 | All 210 protected runtime mappings rejected anonymous requests (401/403); 18 public/documentation exceptions classified. |
+| `positive-applicable-account-gates.csv` | 210 | 207 | 3 | Applicable VENDOR, PLATFORM or CUSTOMER actor with the catalogued grants passed 207 positive authorization-gate probes. Three vendor analytics routes delegate their positive gate to `VendorAnalyticsServiceTest`. |
+| `negative-vendor-get.csv` | 91 | 83 | 8 | 83 probed protected GET routes denied a zero-permission vendor with 403/404; eight self-service GET routes are explicitly exempt from this vendor-role denial sweep. |
+| `negative-vendor-mutations.csv` | 120 | 117 | 3 | 117 probed mutations denied a zero-permission vendor with 403/404; three routes are delegated to resource/target-specific tests. |
+
+**CI:** [run 42967893781](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42967893781), commit `10287b76fc75e6bbf21eaee65f70d048b074cd1b`. The evidence validator passed with no failed rows. [Download the four runtime authorization evidence CSVs](https://github.com/rambrij/saumya-solar-energy-product/actions/runs/42967893781/artifacts/13832047670).
+
+**Evidence interpretation:** these sweeps establish the authentication gate for every current protected mapping, applicable-account positive permission-gate evidence, and broad least-privilege vendor denial evidence. They are not a substitute for fixture-backed successful and denied CRUD on a real resource for every named role. Named business-role, customer ownership, branch membership/assignment, exports and attachment tests remain complementary evidence; their residual resource/verb coverage is tracked in the final acceptance register in `IMPLEMENTATION_GAP_ANALYSIS.md`.
+
 
 ## Focused tenant-negative coverage currently present
 
