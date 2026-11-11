@@ -97,5 +97,6 @@ GitHub Actions run [43025279559](https://github.com/rambrij/saumya-solar-energy-
 - V6: tenant-scoped CMS content and immutable revisions with composite tenant foreign keys.
 - V7: per-user in-app notification inbox table, separate from notification delivery.
 - V8: least-privilege `NOTIFICATION_VIEW` permission catalogue and built-in vendor role grants.
+- V9: indexes for date-filtered cross-tenant order aggregates and subscription status counts.
 
 All are additive; no production data backfill or destructive migration is intended. The release-validation workflow was extended to assert V1–V8 on a clean MySQL 8.4 database.
