@@ -21,7 +21,7 @@ public interface RefundRepository extends JpaRepository<Refund, UUID> {
     Optional<Refund> findForUpdateByTenantAndProviderReference(@Param("tenantId") UUID tenantId,
             @Param("provider") String provider, @Param("reference") String reference);
 
-    Optional<Refund> findByTenantIdAndIdempotencyKey(UUID tenantId, String idempotencyKey);
+    Optional<Refund> findByTenantIdAndPaymentIdAndIdempotencyKey(UUID tenantId, UUID paymentId, String idempotencyKey);
 
     Optional<Refund> findByIdAndTenantId(UUID id, UUID tenantId);
 }
