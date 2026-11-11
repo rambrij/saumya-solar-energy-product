@@ -13,6 +13,8 @@ public interface CmsContentRepository extends JpaRepository<CmsContent, UUID> {
     Optional<CmsContent> findByIdAndTenantId(UUID id, UUID tenantId);
     Optional<CmsContent> findByTenantIdAndTypeAndSlugAndPublishedRevisionIdIsNotNull(
             UUID tenantId, String type, String slug);
+    Page<CmsContent> findByTenantIdAndTypeAndPublishedRevisionIdIsNotNullAndStatusNotOrderByPublishedAtDesc(
+            UUID tenantId, String type, String excludedStatus, Pageable pageable);
     boolean existsByTenantIdAndTypeAndSlug(UUID tenantId, String type, String slug);
     boolean existsByTenantIdAndTypeAndSlugAndIdNot(UUID tenantId, String type, String slug, UUID id);
 }
