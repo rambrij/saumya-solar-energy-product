@@ -330,6 +330,22 @@ public class CmsService {
         catch (Exception ex) { return "{}"; }
     }
 
+    public void recordMediaUpload(String imageUrl, Principal actor) {
+        UUID tenantId = requireVendor(actor, "CMS_UPDATE");
+        AuditEvent event = new AuditEvent();
+        event.setId(UUID.randomUUID());
+        event.setTenantId(tenantId);
+        event.setActorId(actor.userId());
+        event.setActorType(actor.accountType());
+        event.setAction("CMS_MEDIA_UPLOADED");
+        event.setEntityType("CMS_MEDIA");
+        event.setEntityId(UUID.randomUUID().toString());
+        event.setOutcome("SUCCESS");
+        event.setAfterJson(json(Map.of("imageUrl", imageUrl)));
+        event.setCreatedAt(Instant.now());
+        audits.save(event);
+    }
+
     public record ContentInput(String type, String title, String slug, String body,
                                String seoTitle, String seoDescription, String socialImageUrl) { }
     public record ContentDetail(CmsContent content, CmsContentRevision revision,
