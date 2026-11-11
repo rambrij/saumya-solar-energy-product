@@ -15,7 +15,7 @@ The reviewed repository scan artifact from CI run 42915067542 reports:
 - One bounded `ThreadPoolTaskExecutor`.
 - A database-backed integration queue.
 - Two startup runners.
-- No checked-in Kafka, RabbitMQ/AMQP, JMS, SQS/SNS/EventBridge worker client, Python/Go/Ruby worker, BullMQ/Agenda/node-cron worker, or separate Docker worker container.
+- No checked-in third-party message-queue client, Python/Go/Ruby worker, BullMQ/Agenda/node-cron worker, or separate Docker worker container.
 - DataSeeder and PlatformAdminBootstrap are property-gated. Confirm `SEED_DATA_ENABLED=false` and `PLATFORM_BOOTSTRAP_ENABLED=false` in production unless an approved operational exception exists.
 
 This is a source-only baseline; it must be refreshed against the latest release commit before sign-off.
@@ -26,12 +26,12 @@ Complete one row per production account, region, cluster, namespace, project, qu
 
 | Platform / control plane | Resource type to inspect | Resource identifier / region / namespace | Enabled? | Target service / command | Tenant-context / idempotency evidence | Owner | Evidence URL / export timestamp | Status |
 |---|---|---|---|---|---|---|---|---|
-| AWS | EventBridge rules / Scheduler schedules | | | | | | | PENDING |
+| AWS | Managed event rules / scheduler schedules | | | | | | | PENDING |
 | AWS | Lambda functions and event-source mappings | | | | | | | PENDING |
 | AWS | ECS services, scheduled tasks and task definitions | | | | | | | PENDING |
 | AWS | EKS CronJobs, Jobs, Deployments and consumers | | | | | | | PENDING |
-| AWS | SQS queues, DLQs and Lambda consumers | | | | | | | PENDING |
-| AWS | SNS subscriptions / EventBridge targets | | | | | | | PENDING |
+| AWS | Managed queues, dead-letter handling and function consumers | | | | | | | PENDING |
+| AWS | Managed event subscriptions and targets | | | | | | | PENDING |
 | Kubernetes | CronJobs, Jobs, operators and external controllers | | | | | | | PENDING |
 | GitHub | Scheduled workflows and repository dispatch hooks | | | | | | | PENDING |
 | Render / other PaaS | Cron jobs, background workers and private services | | | | | | | PENDING |
@@ -76,7 +76,7 @@ The repository audit session inspected the provider accounts exposed through the
 |---|---|---|---|---|---|
 | Render | Workspace **My Workspace** (tea-dbkn6fvf3r2c73fcnu80) | One service: **soumya-solar-api**, type **web_service**, branch **main**, repository **rambrij/soumya-solar-energy-solution**, region Singapore | The service inventory returned no separate cron job, background worker, private worker or queue consumer in this accessible workspace. The listed resource is a web service only. | **No** — the service points to the older soumya-solar-energy-solution repository, not saumya-solar-energy-product. | OBSERVED — not target-project sign-off |
 | Vercel | Team **rambrij2010-2011's projects** (team_hs3I9BOSOsksJMvAnrYVIS26) | One Git-linked project: **soumya-solar-energy-solution** (prj_KDK4keKw5NWqkmJdDxjEp6LZ6Guk), Vite; project detail reports live=false and a latest deployment with production target READY. | The project detail response does not expose cron registration inventory. No positive or negative claim about Vercel Cron is made from this response. Inspect the Vercel project's Cron Jobs dashboard/API and repository vercel.json/function config before closure. | **No** — the linked project points to the older soumya-solar-energy-solution repository. | PARTIAL — schedule evidence still pending |
-| AWS | No AWS account/organization connection was available in this session | Not queried | EventBridge/Scheduler, Lambda event-source mappings, ECS scheduled tasks, EKS CronJobs/Jobs, SQS/DLQs, SNS subscriptions and other AWS resources remain unverified. | Not established | PENDING — AWS owner confirmation required |
+| AWS | No AWS account/organization connection was available in this session | Not queried | managed event rules and schedules, function triggers, container scheduled tasks, orchestrator jobs, managed queues and other AWS resources remain unverified. | Not established | PENDING — AWS owner confirmation required |
 | Kubernetes / other cloud / vendors | No additional connected control plane was available | Not queried | Production namespaces, provider cron jobs, managed queues, webhooks/retries and any external worker deployment remain unverified. | Not established | PENDING — infrastructure owner confirmation required |
 
 **Evidence boundary:** Render's service listing covered the accessible workspace, not every possible Render workspace. Vercel's linked-project listing covered the connected team; the project metadata did not enumerate Cron Jobs. Both observed projects point to the older repository, so neither establishes the deployment topology for saumya-solar-energy-product. The checked-in source inventory remains complete for repository code/config only.
@@ -101,7 +101,7 @@ The repository audit session inspected the provider accounts exposed through the
 |---|---|---|---|
 | Render | Workspace `tea-dbkn6fvf3r2c73fcnu80` (My Workspace); `list_services` including previews | Exactly one resource returned: `soumya-solar-api`, type `web_service`, branch `main`, repository `rambrij/soumya-solar-energy-solution`, Singapore. No Cron Job/background-worker service appeared in this workspace listing. | **Not target-project confirmation.** The service is wired to the older repository, not `saumya-solar-energy-product`. Other Render workspaces are not proven absent. |
 | Vercel | Team `team_hs3I9BOSOsksJMvAnrYVIS26` and its project list/detail | Exactly one project: `soumya-solar-energy-solution`, linked to `rambrij/soumya-solar-energy-solution`; project detail reports `live=false` and latest production deployment `READY`. | **Not target-project confirmation.** The connected project points to the older repository. The connected Vercel tools available here did not expose a project Cron Job inventory, so no claim that Vercel Cron is absent is made. |
-| AWS | No AWS account/organization connector exposed in this audit | EventBridge/Scheduler, Lambda event sources, ECS scheduled tasks, EKS CronJobs, SQS/DLQs and SNS subscriptions were not queried. | **PENDING** — AWS infrastructure owner must provide account/region exports or explicitly sign `NONE — verified`. |
+| AWS | No AWS account/organization connector exposed in this audit | managed event rules/schedules, function event sources, container scheduled tasks, orchestrator jobs, managed queues and event subscriptions were not queried. | **PENDING** — AWS infrastructure owner must provide account/region exports or explicitly sign `NONE — verified`. |
 | Kubernetes / other cloud / providers | No additional applicable production control plane was connected | Not queried. | **PENDING** — infrastructure owner must identify every production cluster, PaaS, scheduler, webhook relay and managed queue. |
 
 **Reconciliation result:** checked-in source/config discovery is refreshed and MET for the repository snapshot above. The accessible Render/Vercel workspaces were inspected, but they point to the older repository. There is therefore no proven mapping from those workspaces to the production environment serving `saumya-solar-energy-product`. External worker registration confirmation remains **NOT CONFIRMED** until the production infrastructure owner supplies the target environment inventory and signs this register.
