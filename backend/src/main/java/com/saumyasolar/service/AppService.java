@@ -647,7 +647,8 @@ public class AppService {
     public SalesLead updateLead(UUID id, Input x, Principal p) {
         vendor(p);
         requirePermission(p, "LEAD_UPDATE");
-        var l = leads.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
+        var l = leads.findByIdAndTenantId(id, p.tenantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found"));
         assertSalesLeadScope(l, p);
         if (!hasPermission(p, "LEAD_ASSIGN")
                 && x.assignedUserId() != null && !Objects.equals(x.assignedUserId(), p.userId()))
