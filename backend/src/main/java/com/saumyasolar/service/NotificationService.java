@@ -23,6 +23,8 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -31,6 +33,7 @@ import java.util.UUID;
 
 @Service
 public class NotificationService {
+    private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
     private final JavaMailSender mailSender;
     private final NotificationDeliveryRepository deliveries;
     private final String from;
@@ -111,7 +114,13 @@ public class NotificationService {
             String recipient, String subject, String body
     ) {
         if (tenantId == null) throw new IllegalArgumentException("Business notifications require a tenant");
-        if (inbox != null) inbox.createBusinessNotification(userId, tenantId, eventType, subject, body);
+        if (inbox != null) {
+            try {
+                inbox.createBusinessNotification(userId, tenantId, eventType, subject, body);
+            } catch (RuntimeException ex) {
+                log.error("Unable to persist in-app notification for tenant {} and event {}", tenantId, eventType, ex);
+            }
+        }
         if (eventPublisher == null) {
             return deliverBusinessNotification(userId, tenantId, eventType, recipient, subject, body);
         }
