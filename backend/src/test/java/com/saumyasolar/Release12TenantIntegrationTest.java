@@ -2433,7 +2433,7 @@ class Release12TenantIntegrationTest {
                                 "/api/v1/leads/" + leadB.getId())
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\\"stage\\":\\"CONTACTED\\"}"))
+                        .content("{\"stage\":\"CONTACTED\"}"))
                 .andExpect(status().isNotFound());
         assertEquals("NEW", salesLeadRecords.findById(leadB.getId()).orElseThrow().getStage(),
                 "A branch-A member cannot mutate a branch-B lead even when assignedUserId matches");
