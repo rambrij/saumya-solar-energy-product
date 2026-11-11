@@ -24,7 +24,7 @@ describe('in-app notification inbox',()=>{
  });
  it('records explicit opt-in before enabling SMS delivery',async()=>{
   render(<NotificationInboxPanel s={{accessToken:'token'}} error={vi.fn()}/>);
-  const consent=await screen.findByLabelText('I consent');
+  const consent=(await screen.findAllByLabelText('I consent'))[0];
   fireEvent.click(consent);
   await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(call=>{
    const url=String(call[0]),init=call[1]||{};
