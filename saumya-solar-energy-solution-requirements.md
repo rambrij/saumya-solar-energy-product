@@ -7,7 +7,7 @@
 | Product | Multi-tenant solar vendor marketplace and SaaS ERP |
 | Document | Business and Product Requirements |
 | Version | 2.0 |
-| Status | Approved architecture baseline for Commercial MVP planning |
+| Status | Approved implementation baseline — companion documents synchronized; release gates remain |
 | Effective branch | docs/marketplace-saas-v2.0 |
 | Backend | Java 21, Spring Boot 3.5, Maven |
 | Frontend | React 19, TypeScript, Vite |
@@ -359,6 +359,30 @@ Every transactional child record must preserve tenant ownership through tenant_i
 
 ## 14. Release governance
 
+The companion SRS/HLD is the technical authority for data constraints, API contracts, security controls and system workflows. The Product Requirements document is the business authority for actors, business rules and MVP scope. Both documents share the same Version 2.0 decisions and must be revised together when a binding decision changes.
+
 No requirement is complete solely because a menu, screen, controller, DTO, entity or adapter exists. Completion requires end-to-end traceability from UI action through API, validation, authorization, service logic, persistence, external adapter behavior and automated tests.
 
 The Product Owner must approve provider capabilities, tax/invoice rules, subscription grace policy, refund policy, vendor onboarding/KYC and legal/privacy text before production. In particular, tax-invoice triggers and statutory retention must be confirmed by a qualified tax/accounting adviser for each operating jurisdiction. This document defines the Version 2.0 requirements candidate; implementation scope must be tracked separately in release plans and acceptance evidence.
+
+
+## Appendix B. Version 2.0 synchronization review
+
+**Review date:** 2026-11-12  
+**Result:** Passed — companion Product Requirements and SRS/HLD synchronized for the Version 2.0 implementation baseline.
+
+| Finding | Resolution recorded in both documents |
+|---|---|
+| F01 — guest POS customer nullability | ONLINE requires customer_id; IN_STORE registered may reference global customer; IN_STORE guest permits NULL. tenant_id is always required. |
+| F02 — payment/order orphan risk | Persist idempotent draft, snapshots, stock reservation and payment attempt before provider initiation; verify outcome; finalize idempotently; release failed/expired reservations and reconcile ambiguous outcomes. |
+| F03 — branch/warehouse MVP boundary | One POS outlet/branch and one designated stock location are MVP minimums; additional branches, warehouses and transfers are later Operations scope. |
+| F04 — returns/refunds scope | Basic POS-originated return/exchange/refund and required statutory credit-note handling are MVP; advanced shipped-online returns and reverse logistics are later scope. |
+| F05 — cash received/applied/change | Separate cash_received, cash_applied and change_given; cash_applied = received - change. Drawer formula excludes double-counting cash_applied. |
+| F06 — external tender verification | Explicit pending/confirmed/failed/unknown-reconciliation states; references alone do not confirm; manual verification requires separate supervisor evidence and audit. |
+| F07 — tenant/branch/session integrity | Composite same-tenant branch, cashier, register, session and order constraints plus transactional OPEN-session checks are specified. |
+| F08 — first vendor customer association | Customer-initiated global OTP/authentication and consent; create only the active vendor relationship after verification. |
+| F09 — register/device semantics | POS register means till/cash drawer; payment terminal is a separate external device/reference; one active session per register. |
+| F10 — receipt vs tax invoice | Receipt for every completed POS sale; tax invoice/credit note conditional on applicable law and approved tax configuration; reprints preserve original identity. |
+| F11 — duplicated POS API matrix | Duplicate POS operation rows removed and replaced by canonical draft, tender, verification, finalization, customer association, receipt, cash and return rows. |
+
+This is a documentation synchronization approval only. It does not certify that application code, database migrations, automated tests, CI, provider integrations, tax/legal configuration or production operations have been implemented or passed. Those remain implementation and release gates.
