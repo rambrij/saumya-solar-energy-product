@@ -11,9 +11,16 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
+    boolean existsByTenantIdAndRoles_Id(UUID tenantId, UUID roleId);
     Optional<AppUser> findByEmailIgnoreCase(String email);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from AppUser u where lower(u.email)=lower(:email)")
+    Optional<AppUser> findForUpdateByEmailIgnoreCase(@Param("email") String email);
     
     List<AppUser> findByTenantId(UUID tenantId);
+
+    Optional<AppUser> findByIdAndTenantId(UUID id, UUID tenantId);
     
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from AppUser u where u.id=:id and u.tenantId=:tenantId")

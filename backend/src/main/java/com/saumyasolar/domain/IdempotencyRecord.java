@@ -1,5 +1,6 @@
 package com.saumyasolar.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import lombok.Getter;
@@ -14,6 +15,7 @@ import java.util.UUID;
 public class IdempotencyRecord {
     @Id
     UUID id;
+    @Column(nullable = false)
     UUID tenantId;
     String operationName;
     String idempotencyKey;

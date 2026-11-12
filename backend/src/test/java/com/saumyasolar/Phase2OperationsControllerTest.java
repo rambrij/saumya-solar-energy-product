@@ -91,7 +91,7 @@ class Phase2OperationsControllerTest {
         when(refunds.findByTenantIdAndPaymentId(tenantId, confirmedId)).thenReturn(List.of());
         when(refunds.findByTenantIdAndPaymentId(tenantId, partialId)).thenReturn(List.of(refund));
         
-        Authentication auth = auth(tenantId, "VENDOR", Set.of("VENDOR_ADMIN"), Set.of("SURVEY_MANAGE"));
+        Authentication auth = auth(tenantId, "VENDOR", Set.of("VENDOR_ADMIN"), Set.of("REPORT_VIEW"));
         Map<String, Object> result = controller.operationsReport(LocalDate.now().minusDays(1), LocalDate.now().plusDays(1), auth);
         
         assertEquals(new BigDecimal("130.00"), result.get("paymentsReceived"));
@@ -99,13 +99,45 @@ class Phase2OperationsControllerTest {
     
     @Test
     void customerCannotReadVendorOperationsReport() {
-        Authentication auth = auth(UUID.randomUUID(), "CUSTOMER", Set.of("CUSTOMER"), Set.of("SURVEY_MANAGE"));
+        Authentication auth = auth(UUID.randomUUID(), "CUSTOMER", Set.of("CUSTOMER"), Set.of("INSTALLATION_ASSIGN"));
         assertThrows(
                 ResponseStatusException.class,
                 () -> controller.operationsReport(LocalDate.now().minusDays(1), LocalDate.now(), auth)
         );
     }
     
+    @Test
+    void customRoleWithInstallationAssignPermissionCanViewEngineerDirectory() {
+        UUID tenantId = UUID.randomUUID();
+        UUID engineerId = UUID.randomUUID();
+        UUID profileId = UUID.randomUUID();
+        com.saumyasolar.domain.AppUser engineer = new com.saumyasolar.domain.AppUser();
+        engineer.setId(engineerId);
+        engineer.setTenantId(tenantId);
+        engineer.setName("Assigned engineer");
+        engineer.setEmail("engineer@example.test");
+        engineer.setEnabled(true);
+
+        com.saumyasolar.domain.EngineerProfile profile = new com.saumyasolar.domain.EngineerProfile();
+        profile.setId(profileId);
+        profile.setTenantId(tenantId);
+        profile.setUserId(engineerId);
+        profile.setActive(true);
+        profile.setMaxConcurrentJobs(3);
+
+        when(engineers.findByTenantIdAndActiveTrueOrderByCreatedAtDesc(tenantId)).thenReturn(List.of(profile));
+        when(users.findByIdAndTenantId(engineerId, tenantId)).thenReturn(java.util.Optional.of(engineer));
+        when(installations.findByTenantIdOrderByScheduledAtAsc(tenantId)).thenReturn(List.of());
+
+        Authentication customOperationsRole = auth(
+                tenantId, "VENDOR", Set.of("CUSTOM_OPERATIONS_ROLE"), Set.of("INSTALLATION_ASSIGN")
+        );
+        List<Map<String, Object>> result = controller.engineers(customOperationsRole);
+
+        assertEquals(1, result.size());
+        assertEquals(engineerId, result.get(0).get("userId"));
+    }
+
     private Payment payment(UUID id, UUID tenantId, String amount, String status, Instant createdAt) {
         Payment payment = new Payment();
         payment.setId(id);

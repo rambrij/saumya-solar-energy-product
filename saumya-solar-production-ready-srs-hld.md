@@ -662,12 +662,19 @@ Example error:
 |--------|-------------------------|----------------------------------------|
 | POST   | `/auth/register`        | Register customer                      |
 | POST   | `/auth/login`           | Authenticate user                      |
-| POST   | `/auth/refresh`         | Rotate refresh token                   |
-| POST   | `/auth/logout`          | Revoke current session                 |
+| POST   | `/auth/refresh`         | Rotate HttpOnly refresh cookie; require CSRF double-submit header |
+| POST   | `/auth/logout`          | Revoke HttpOnly cookie session; require CSRF double-submit header |
 | POST   | `/auth/forgot-password` | Request reset                          |
 | POST   | `/auth/reset-password`  | Complete reset                         |
 | POST   | `/auth/verify-email`    | Verify email                           |
 | GET    | `/me`                   | Current user and effective permissions |
+
+Browser session contract:
+- Login, registration and MFA verification return a short-lived access token and a non-secret CSRF token; the refresh token is issued only as an HttpOnly, Secure, SameSite cookie scoped to /api/v1/auth.
+- The browser keeps the access token in memory and the CSRF token in session storage. Neither access nor refresh tokens are persisted in local storage.
+- Refresh and logout send the CSRF token in the X-CSRF-Token header; the server compares it with the CSRF cookie using constant-time comparison.
+- Cross-origin browser clients must use credentialed requests and an explicit CORS_ORIGINS allowlist. SameSite=None requires Secure=true.
+
 
 ### 13.3 Vendor and user APIs
 
@@ -680,9 +687,12 @@ Example error:
 | GET/PATCH | `/vendor/profile`                       | Current vendor profile   |
 | GET/POST  | `/users`                                | List/invite tenant users |
 | GET/PATCH | `/users/{userId}`                       | View/update tenant user  |
-| POST      | `/users/{userId}/disable`               | Disable tenant user      |
-| GET/POST  | `/roles`                                | List/create roles        |
-| PATCH     | `/roles/{roleId}`                       | Update role permissions  |
+| PATCH     | `/users/{userId}/enabled`               | Activate/disable tenant user |
+| PATCH     | `/users/{userId}/role`                  | Assign a tenant role     |
+| GET       | `/permissions`                          | List assignable vendor permissions |
+| GET/POST  | `/roles`                                | List/create custom roles |
+| PATCH     | `/roles/{roleId}`                       | Update custom role permissions |
+| DELETE    | `/roles/{roleId}`                       | Delete an unused custom role |
 
 ### 13.4 Catalogue and package APIs
 
@@ -978,7 +988,7 @@ Security events must include:
 - Expose liveness, readiness and dependency health endpoints through Spring Boot Actuator with restricted detail.
 - Capture metrics for request latency, error rate, JVM, database pool, jobs, notifications and business workflows.
 - Use distributed tracing for external calls and asynchronous processing where supported.
-- Alerts should cover elevated 5xx errors, login abuse, database saturation, provider failure, queue backlog and backup
+- Alerts should cover elevated 5xx errors, login abuse, database saturation, provider failure, pending background-job backlog and backup
   failure.
 
 ### 16.6 Accessibility and usability

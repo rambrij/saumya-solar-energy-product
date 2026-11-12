@@ -75,7 +75,7 @@ public class EnterpriseSaasService {
     }
     
     private void platform(Principal p, String code) {
-        if (!"PLATFORM".equals(p.accountType()) || p.roles() == null || !p.roles().contains("PLATFORM_SUPER_ADMIN"))
+        if (!"PLATFORM".equals(p.accountType()) || p.roles() == null || p.roles().stream().noneMatch(Set.of("PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT")::contains))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform Super Admin required");
         permission(p, code);
     }
@@ -183,7 +183,7 @@ public class EnterpriseSaasService {
     public void assignUser(UUID branchId, UUID userId, Principal p) {
         UUID t = vendor(p, "BRANCH_MANAGE");
         branches.findByIdAndTenantId(branchId, t).filter(Branch::isActive).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Active branch not found"));
-        users.findById(userId).filter(u -> t.equals(u.getTenantId()) && u.isEnabled() && "VENDOR".equals(u.getAccountType())).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Enabled same-tenant vendor user not found"));
+        users.findByIdAndTenantId(userId, t).filter(u -> u.isEnabled() && "VENDOR".equals(u.getAccountType())).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Enabled same-tenant vendor user not found"));
         if (!memberships.existsByTenantIdAndBranchIdAndUserId(t, branchId, userId)) {
             BranchMembership m = new BranchMembership();
             m.setId(UUID.randomUUID());
@@ -575,6 +575,7 @@ public class EnterpriseSaasService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Customer limit reached for current plan");
     }
     
+    @Transactional
     public void enforceUserLimit(UUID t) {
         List<TenantSubscription> history = subscriptions.findByTenantIdOrderByCreatedAtDesc(t);
         if (history.isEmpty()) return; // Existing Phase 1/2 vendors remain grandfathered until subscription assignment.
@@ -602,8 +603,8 @@ public class EnterpriseSaasService {
     
     @Transactional
     public Warehouse assignWarehouseBranch(UUID warehouseId, UUID branchId, Principal p) {
-        UUID t = vendor(p, "INVENTORY_MANAGE");
-        if (( p.roles() == null || !p.roles().contains("VENDOR_ADMIN") ) && ( p.permissions() == null || !p.permissions().contains("BRANCH_MANAGE") ))
+        UUID t = vendor(p, "INVENTORY_TRANSFER");
+        if (p.permissions() == null || !p.permissions().contains("BRANCH_MANAGE"))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Branch management permission is required to move warehouses between branches");
         Warehouse w = warehouses.findByIdAndTenantId(warehouseId, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Warehouse not found"));
         if (branchId != null) branches.findByIdAndTenantId(branchId, t).filter(Branch::isActive)
@@ -745,6 +746,8 @@ public class EnterpriseSaasService {
         UUID tenant = null;
         if ("PLATFORM".equals(p.accountType())) platform(p, "AUDIT_VIEW");
         else tenant = vendor(p, "AUDIT_VIEW");
+        if (p.roles() != null && p.roles().contains("PLATFORM_SUPPORT"))
+            audit(p, null, "PLATFORM_SUPPORT_AUDIT_LOG_VIEWED", "AUDIT_EVENT_QUERY", UUID.randomUUID(), Map.of("from", from.toString(), "to", to.toString()));
         if (from == null || to == null || to.isBefore(from) || java.time.Duration.between(from, to).toDays() > 90)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Audit range must be valid and no longer than 90 days");
         return audits.search(tenant, from, to, actorId, trim(action), trim(entityType), trim(outcome), org.springframework.data.domain.PageRequest.of(0, 500));

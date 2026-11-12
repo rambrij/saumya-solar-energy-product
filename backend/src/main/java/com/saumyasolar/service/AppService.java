@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 @Service
 public class AppService {
@@ -99,6 +100,14 @@ public class AppService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
     }
     
+    private boolean hasPermission(Principal p, String code) {
+        return p.permissions() != null && p.permissions().contains(code);
+    }
+
+    private boolean assignedSalesScope(Principal p) {
+        return "VENDOR".equals(p.accountType()) && hasPermission(p, "LEAD_VIEW") && !hasPermission(p, "LEAD_ASSIGN");
+    }
+
     private void requirePermission(Principal p, String code) {
         if (p.permissions() == null || !p.permissions().contains(code))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing permission: " + code);
@@ -110,8 +119,8 @@ public class AppService {
     }
     
     private void requireEmployee(UUID id, UUID tenantId) {
-        if (id != null && users.findById(id).filter(u -> tenantId.equals(u.getTenantId())
-                && "VENDOR".equals(u.getAccountType()) && u.isEnabled()).isEmpty())
+        if (id != null && users.findByIdAndTenantId(id, tenantId).filter(u ->
+                "VENDOR".equals(u.getAccountType()) && u.isEnabled()).isEmpty())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee must belong to this vendor");
     }
     
@@ -123,6 +132,22 @@ public class AppService {
     private SalesLead requireLead(UUID id, UUID tenantId) {
         return leads.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found"));
+    }
+
+    private void assertSalesLeadScope(SalesLead lead, Principal p) {
+        if (assignedSalesScope(p)
+                && !p.userId().equals(lead.getAssignedUserId()))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found");
+    }
+
+    void assertSalesQuotationScope(Quotation quotation, Principal p) {
+        if (!assignedSalesScope(p)) return;
+        boolean createdBySelf = p.userId().equals(quotation.getCreatedBy());
+        boolean assignedLead = quotation.getLeadId() != null
+                && leads.findByIdAndTenantId(quotation.getLeadId(), p.tenantId())
+                    .filter(lead -> p.userId().equals(lead.getAssignedUserId())).isPresent();
+        if (!createdBySelf && !assignedLead)
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Quotation not found");
     }
     
     public Object list(String type, Principal p) {
@@ -164,12 +189,13 @@ public class AppService {
         }
         vendor(p);
         switch (type) {
-            case "categories", "products", "packages" -> requireAnyPermission(p, "CATALOG_VIEW", "CATALOG_MANAGE");
-            case "customers" -> requirePermission(p, "CUSTOMER_MANAGE");
-            case "enquiries", "leads" -> requirePermission(p, "LEAD_MANAGE");
-            case "surveys" -> requirePermission(p, "SURVEY_MANAGE");
-            case "quotations" -> requirePermission(p, "QUOTATION_MANAGE");
-            case "orders" -> requirePermission(p, "ORDER_CREATE");
+            case "categories", "products" -> requirePermission(p, "PRODUCT_VIEW");
+            case "packages" -> requirePermission(p, "PACKAGE_VIEW");
+            case "customers" -> requirePermission(p, "CUSTOMER_VIEW");
+            case "enquiries", "leads" -> requirePermission(p, "LEAD_VIEW");
+            case "surveys" -> requirePermission(p, "SURVEY_VIEW");
+            case "quotations" -> requirePermission(p, "QUOTATION_VIEW");
+            case "orders" -> requirePermission(p, "ORDER_VIEW");
             default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         Object rows = switch (type) {
@@ -184,6 +210,34 @@ public class AppService {
             case "orders" -> orders.findByTenantIdOrderByIdDesc(p.tenantId());
             default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         };
+        if (assignedSalesScope(p)) {
+            List<SalesLead> assignedLeads = leads.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
+                    .filter(lead -> p.userId().equals(lead.getAssignedUserId())).toList();
+            java.util.Set<UUID> assignedLeadIds = assignedLeads.stream().map(SalesLead::getId).collect(java.util.stream.Collectors.toSet());
+            java.util.Set<UUID> assignedEnquiryIds = assignedLeads.stream().map(SalesLead::getEnquiryId).filter(Objects::nonNull).collect(java.util.stream.Collectors.toSet());
+            java.util.Set<UUID> assignedCustomerIds = assignedLeads.stream().map(SalesLead::getCustomerId).filter(Objects::nonNull).collect(java.util.stream.Collectors.toSet());
+            java.util.Set<UUID> assignedQuotationIds = quotes.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
+                    .filter(q -> p.userId().equals(q.getCreatedBy()) || assignedLeadIds.contains(q.getLeadId()))
+                    .map(Quotation::getId).collect(java.util.stream.Collectors.toSet());
+            rows = switch (type) {
+                case "leads" -> assignedLeads;
+                case "enquiries" -> ((List<Enquiry>) rows).stream().filter(e -> assignedEnquiryIds.contains(e.getId())).toList();
+                case "customers" -> ((List<CustomerProfile>) rows).stream().filter(customer -> assignedCustomerIds.contains(customer.getId())).toList();
+                case "surveys" -> ((List<SiteSurvey>) rows).stream().filter(survey -> p.userId().equals(survey.getAssignedUserId())).toList();
+                case "quotations" -> ((List<Quotation>) rows).stream().filter(q -> assignedQuotationIds.contains(q.getId())).toList();
+                case "orders" -> {
+                    java.util.Set<UUID> assignedOrderIds = orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
+                            .filter(order -> assignedQuotationIds.contains(order.getQuotationId()))
+                            .map(CustomerOrder::getId).collect(java.util.stream.Collectors.toSet());
+                    yield ((List<CustomerOrder>) rows).stream().filter(order -> assignedOrderIds.contains(order.getId())).toList();
+                }
+                default -> rows;
+            };
+        }
+        if (hasPermission(p, "SURVEY_VIEW") && !hasPermission(p, "SURVEY_ASSIGN")
+                && "surveys".equals(type)) {
+            rows = ((List<SiteSurvey>) rows).stream().filter(survey -> p.userId().equals(survey.getAssignedUserId())).toList();
+        }
         if (enterpriseSaas == null) return rows;
         return switch (type) {
             case "enquiries" -> enterpriseSaas.filterBranchRecords((List<Enquiry>) rows, Enquiry::getBranchId, p);
@@ -220,9 +274,10 @@ public class AppService {
         }
         vendor(p);
         switch (type) {
-            case "categories", "products", "packages" -> requirePermission(p, "CATALOG_MANAGE");
-            case "customers" -> requirePermission(p, "CUSTOMER_MANAGE");
-            case "enquiries" -> requirePermission(p, "LEAD_MANAGE");
+            case "categories", "products" -> requirePermission(p, "PRODUCT_CREATE");
+            case "packages" -> requirePermission(p, "PACKAGE_CREATE");
+            case "customers" -> requirePermission(p, "CUSTOMER_CREATE");
+            case "enquiries" -> requirePermission(p, "LEAD_CREATE");
             default -> throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         return switch (type) {
@@ -396,7 +451,7 @@ public class AppService {
     
     private UUID requirePackageManager(Principal p) {
         vendor(p);
-        requirePermission(p, "CATALOG_MANAGE");
+        requirePermission(p, "PACKAGE_UPDATE");
         return p.tenantId();
     }
     
@@ -476,13 +531,13 @@ public class AppService {
     
     public Tenant tenantSettings(Principal p) {
         vendor(p);
-        requirePermission(p, "DISCOUNT_POLICY_MANAGE");
+        requirePermission(p, "QUOTATION_APPROVE_DISCOUNT");
         return tenants.findById(p.tenantId()).orElseThrow();
     }
     
     public Tenant updateDiscountApprovalThreshold(BigDecimal threshold, Principal p) {
         vendor(p);
-        requirePermission(p, "DISCOUNT_POLICY_MANAGE");
+        requirePermission(p, "QUOTATION_APPROVE_DISCOUNT");
         if (threshold == null || threshold.compareTo(BigDecimal.ZERO) < 0
                 || threshold.compareTo(new BigDecimal("100")) > 0)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Discount approval threshold must be between 0 and 100");
@@ -493,9 +548,10 @@ public class AppService {
     
     public List<Role> employeeRoles(Principal p) {
         vendor(p);
-        requirePermission(p, "USER_MANAGE");
+        requirePermission(p, "ROLE_VIEW");
         return roles.findByTenantIdOrderByNameAsc(p.tenantId()).stream()
-                .filter(role -> !java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "CUSTOMER").contains(role.getName()))
+                .filter(role -> !java.util.Set.of("VENDOR_ADMIN", "PLATFORM_SUPER_ADMIN", "PLATFORM_SUPPORT", "CUSTOMER").contains(role.getName()))
+                .peek(role -> role.setCustomRole(!com.saumyasolar.config.DataSeeder.employeeRolePermissions().containsKey(role.getName())))
                 .toList();
     }
     
@@ -543,11 +599,17 @@ public class AppService {
     @Transactional
     public SalesLead convertLead(UUID enquiryId, Input x, Principal p) {
         vendor(p);
-        requirePermission(p, "LEAD_MANAGE");
+        requirePermission(p, "LEAD_CREATE");
+        UUID leadAssignee = x.assignedUserId();
+        if (!hasPermission(p, "LEAD_ASSIGN")) {
+            if (leadAssignee != null && !Objects.equals(leadAssignee, p.userId()))
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Lead assignment requires LEAD_ASSIGN");
+            leadAssignee = p.userId();
+        }
         var q = enquiries.findByIdAndTenantId(enquiryId, p.tenantId()).orElseThrow();
         if (!"NEW".equals(q.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Enquiry already converted");
-        requireEmployee(x.assignedUserId(), p.tenantId());
+        requireEmployee(leadAssignee, p.tenantId());
         if (q.getCustomerId() == null) {
             CustomerProfile customer = customers.findByTenantIdAndEmailIgnoreCase(p.tenantId(), q.getEmail())
                     .orElseGet(() -> {
@@ -571,7 +633,7 @@ public class AppService {
         l.setCustomerId(q.getCustomerId());
         l.setStage("NEW");
         l.setPriority(x.priority() == null ? "MEDIUM" : x.priority());
-        l.setAssignedUserId(x.assignedUserId());
+        l.setAssignedUserId(leadAssignee);
         l.setNextFollowUp(x.nextFollowUp());
         l.setCreatedAt(Instant.now());
         leads.save(l);
@@ -584,8 +646,13 @@ public class AppService {
     @Transactional
     public SalesLead updateLead(UUID id, Input x, Principal p) {
         vendor(p);
-        requirePermission(p, "LEAD_MANAGE");
-        var l = leads.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
+        requirePermission(p, "LEAD_UPDATE");
+        var l = leads.findByIdAndTenantId(id, p.tenantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found"));
+        assertSalesLeadScope(l, p);
+        if (!hasPermission(p, "LEAD_ASSIGN")
+                && x.assignedUserId() != null && !Objects.equals(x.assignedUserId(), p.userId()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Lead reassignment requires LEAD_ASSIGN");
         if (enterpriseSaas != null) enterpriseSaas.assertBranchAccess(l.getBranchId(), p);
         requireEmployee(x.assignedUserId(), p.tenantId());
         var old = l.getStage();
@@ -624,9 +691,9 @@ public class AppService {
     
     public List<LeadHistory> leadHistory(UUID leadId, Principal p) {
         vendor(p);
-        requirePermission(p, "LEAD_MANAGE");
-        if (leads.findByIdAndTenantId(leadId, p.tenantId()).isEmpty())
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found");
+        requirePermission(p, "LEAD_VIEW");
+        SalesLead lead = requireLead(leadId, p.tenantId());
+        assertSalesLeadScope(lead, p);
         return histories.findByLeadIdAndTenantIdOrderByCreatedAtDesc(leadId, p.tenantId());
     }
     
@@ -647,16 +714,19 @@ public class AppService {
     @Transactional
     public SiteSurvey survey(Input x, Principal p) {
         vendor(p);
-        requirePermission(p, "SURVEY_MANAGE");
+        requirePermission(p, "SURVEY_CREATE");
         if (x.leadId() == null || leads.findByIdAndTenantId(x.leadId(), p.tenantId()).isEmpty())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lead must belong to this vendor");
-        requireEmployee(x.assignedUserId(), p.tenantId());
+        if (!hasPermission(p, "SURVEY_ASSIGN") && x.assignedUserId() != null && !p.userId().equals(x.assignedUserId()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Survey assignment requires SURVEY_ASSIGN");
+        UUID surveyAssignee = x.assignedUserId() == null && !hasPermission(p, "SURVEY_ASSIGN") ? p.userId() : x.assignedUserId();
+        requireEmployee(surveyAssignee, p.tenantId());
         var e = new SiteSurvey();
         e.setId(UUID.randomUUID());
         e.setTenantId(p.tenantId());
         e.setLeadId(x.leadId());
         e.setScheduledAt(x.scheduledAt());
-        e.setAssignedUserId(x.assignedUserId());
+        e.setAssignedUserId(surveyAssignee);
         e.setPropertyType(x.propertyType());
         e.setRoofType(x.roofType());
         e.setUsableAreaSqft(x.usableAreaSqft());
@@ -677,10 +747,16 @@ public class AppService {
     @Transactional
     public QuoteView quote(Input x, Principal p) {
         vendor(p);
-        requirePermission(p, "QUOTATION_MANAGE");
+        requirePermission(p, "QUOTATION_CREATE");
         requireCustomer(x.customerId(), p.tenantId());
-        if (x.leadId() != null && !Objects.equals(requireLead(x.leadId(), p.tenantId()).getCustomerId(), x.customerId()))
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lead does not belong to the selected customer");
+        if (assignedSalesScope(p) && x.leadId() == null)
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sales executives may quote only against an assigned lead");
+        if (x.leadId() != null) {
+            SalesLead lead = requireLead(x.leadId(), p.tenantId());
+            assertSalesLeadScope(lead, p);
+            if (!Objects.equals(lead.getCustomerId(), x.customerId()))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lead does not belong to the selected customer");
+        }
         if (x.leadId() != null && x.surveyId() == null
                 && !surveys.findByLeadIdAndTenantIdOrderByIdDesc(x.leadId(), p.tenantId()).isEmpty()) {
             throw new ResponseStatusException(
@@ -788,10 +864,17 @@ public class AppService {
     @Transactional
     public Quotation action(UUID id, String action, Principal p) {
         if (p.tenantId() == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-        var q = quotes.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
+        var q = quotes.findByIdAndTenantId(id, p.tenantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Quotation not found"));
         if ("CUSTOMER".equals(p.accountType())) {
-            var c = customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream().filter(x -> p.userId().equals(x.getUserId())).findFirst().orElseThrow();
-            if (!q.getCustomerId().equals(c.getId()) || !"SENT".equals(q.getStatus()) || q.getValidUntil().isBefore(LocalDate.now()))
+            var c = customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
+                    .filter(x -> p.userId().equals(x.getUserId())).findFirst().orElseThrow();
+            // Hide the existence of another customer's quotation before evaluating state or expiry.
+            // A guessed foreign ID must be indistinguishable from a missing quotation.
+            if (!q.getCustomerId().equals(c.getId()))
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+            if (!"SENT".equals(q.getStatus()) || q.getValidUntil() == null
+                    || q.getValidUntil().isBefore(LocalDate.now()))
                 throw new ResponseStatusException(HttpStatus.CONFLICT);
             if (!"accept".equals(action) && !"reject".equals(action))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN);
@@ -801,6 +884,7 @@ public class AppService {
             return quotes.save(q);
         }
         vendor(p);
+        assertSalesQuotationScope(q, p);
         if (enterpriseSaas != null) enterpriseSaas.assertBranchAccess(q.getBranchId(), p);
         if ("approve".equals(action) || "reject-approval".equals(action)) {
             if (!"PENDING_APPROVAL".equals(q.getStatus()) || !q.isApprovalRequired())
@@ -814,9 +898,9 @@ public class AppService {
                 else if ("REJECTED".equals(workflowStatus.get())) q.setStatus("APPROVAL_REJECTED");
                 return quotes.save(q);
             }
-            requirePermission(p, "DISCOUNT_APPROVE");
+            requirePermission(p, "QUOTATION_APPROVE_DISCOUNT");
         } else {
-            requirePermission(p, "QUOTATION_MANAGE");
+            requirePermission(p, "QUOTATION_SEND");
         }
         if ("send".equals(action) && !"DRAFT".equals(q.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only a draft quotation can be sent");
@@ -842,7 +926,8 @@ public class AppService {
     
     public java.util.List<Quotation> quotationRevisions(UUID id, Principal p) {
         if (p.tenantId() == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-        var quotation = quotes.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
+        var quotation = quotes.findByIdAndTenantId(id, p.tenantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Quotation not found"));
         if ("CUSTOMER".equals(p.accountType())) {
             var customer = customers.findByTenantIdOrderByIdDesc(p.tenantId()).stream()
                     .filter(x -> p.userId().equals(x.getUserId())).findFirst()
@@ -851,7 +936,8 @@ public class AppService {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         } else {
             vendor(p);
-            requirePermission(p, "QUOTATION_MANAGE");
+            requirePermission(p, "QUOTATION_VIEW");
+            assertSalesQuotationScope(quotation, p);
         }
         return quotes.findByQuoteGroupIdAndTenantIdOrderByRevisionAsc(quotation.getQuoteGroupId(), p.tenantId());
     }
@@ -870,6 +956,7 @@ public class AppService {
             return existing;
         }
         var q = quotes.findByIdAndTenantIdForUpdate(qid, p.tenantId()).orElseThrow();
+        assertSalesQuotationScope(q, p);
         if (enterpriseSaas != null) enterpriseSaas.assertBranchAccess(q.getBranchId(), p);
         if (!"ACCEPTED".equals(q.getStatus())) throw new ResponseStatusException(HttpStatus.CONFLICT);
         var existingOrder = orders.findByTenantIdOrderByIdDesc(p.tenantId()).stream()

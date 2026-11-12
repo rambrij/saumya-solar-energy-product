@@ -18,15 +18,19 @@ import java.util.UUID;
 @Service
 public class JwtService {
     private final SecretKey key;
+    private final long accessTokenTtlSeconds;
     
-    JwtService(@Value("${app.jwt-secret}") String s) {
+    JwtService(@Value("${app.jwt-secret}") String s,
+               @Value("${app.auth.access-token-ttl-seconds:900}") long accessTokenTtlSeconds) {
+        if (accessTokenTtlSeconds < 60) throw new IllegalArgumentException("Access token TTL must be at least 60 seconds");
         key = Keys.hmacShaKeyFor(s.getBytes(StandardCharsets.UTF_8));
+        this.accessTokenTtlSeconds = accessTokenTtlSeconds;
     }
     
     public String issue(AppUser u) {
         var rs = u.getRoles().stream().map(Role::getName).toList();
         var ps = u.getRoles().stream().flatMap(r -> r.getPermissions().stream()).map(Permission::getCode).distinct().toList();
-        return Jwts.builder().subject(u.getId().toString()).claim("tenant", u.getTenantId() == null ? null : u.getTenantId().toString()).claim("email", u.getEmail()).claim("type", u.getAccountType()).claim("roles", rs).claim("permissions", ps).claim("ver", u.getTokenVersion()).expiration(Date.from(Instant.now().plusSeconds(7200))).signWith(key).compact();
+        return Jwts.builder().subject(u.getId().toString()).claim("tenant", u.getTenantId() == null ? null : u.getTenantId().toString()).claim("email", u.getEmail()).claim("type", u.getAccountType()).claim("roles", rs).claim("permissions", ps).claim("ver", u.getTokenVersion()).expiration(Date.from(Instant.now().plusSeconds(accessTokenTtlSeconds))).signWith(key).compact();
     }
     
     public Principal parse(String t) {

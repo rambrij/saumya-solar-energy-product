@@ -14,14 +14,14 @@ import java.util.UUID;
 @NoArgsConstructor
 public class Branch {
     @Id
-    UUID id;
-    UUID tenantId;
-    String code;
-    String name;
-    String address;
-    String phone;
-    String email;
-    boolean active;
-    Instant createdAt;
-    Instant updatedAt;
+    private UUID id;
+    private UUID tenantId;
+    private String code;
+    private String name;
+    private String address;
+    private String phone;
+    private String email;
+    private boolean active;
+    private Instant createdAt;
+    private Instant updatedAt;
 }

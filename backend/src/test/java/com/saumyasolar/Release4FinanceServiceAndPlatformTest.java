@@ -69,6 +69,17 @@ class Release4FinanceServiceAndPlatformTest {
         mvc.perform(post("/api/v1/tenants").header("Authorization", "Bearer " + platform).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Export Tenant\",\"slug\":\"" + exportSlug + "\",\"adminName\":\"Export Admin\",\"adminEmail\":\"" + exportEmail + "\",\"adminPassword\":\"ExportAdmin@2026\"}"))
                 .andExpect(status().isOk());
+        String createdTenantId=json.readTree(mvc.perform(get("/api/v1/platform/tenants")
+                        .header("Authorization","Bearer "+platform).param("search",exportSlug))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("items").get(0).path("id").asText();
+        mvc.perform(patch("/api/v1/tenants/"+createdTenantId+"/status").header("Authorization","Bearer "+platform)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"VERIFIED\",\"reason\":\"Integration test verification\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(patch("/api/v1/tenants/"+createdTenantId+"/status").header("Authorization","Bearer "+platform)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"ACTIVE\",\"reason\":\"Integration test activation\"}"))
+                .andExpect(status().isOk());
         String csv = mvc.perform(get("/api/v1/platform/tenants/export").header("Authorization", "Bearer " + platform).param("status", "ACTIVE"))
                 .andExpect(status().isOk()).andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("tenants-active-" + LocalDate.now()))).andExpect(content().contentTypeCompatibleWith("text/csv"))
                 .andReturn().getResponse().getContentAsString();
@@ -139,15 +150,15 @@ class Release4FinanceServiceAndPlatformTest {
     }
     
     @Test
-    void signedPaymentWebhookIsAuthenticatedAndDuplicateEventsAreIdempotent() throws Exception {
+    void signedUnmatchedPaymentWebhookIsRetryableAndInvalidSignatureIsRejected() throws Exception {
         String raw = "{\"eventId\":\"evt-release4-test-1\",\"paymentReference\":\"unmatched-provider-ref\",\"amount\":100.00,\"status\":\"SUCCEEDED\"}";
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec("test-webhook-secret".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
         String signature = HexFormat.of().formatHex(mac.doFinal(raw.getBytes(StandardCharsets.UTF_8)));
         mvc.perform(post("/api/v1/payment-webhooks/test-provider").header("X-Payment-Signature", signature).contentType(MediaType.APPLICATION_JSON).content(raw))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.accepted").value(true)).andExpect(jsonPath("$.matched").value(false));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.accepted").value(false)).andExpect(jsonPath("$.matched").value(false)).andExpect(jsonPath("$.retryable").value(true));
         mvc.perform(post("/api/v1/payment-webhooks/test-provider").header("X-Payment-Signature", signature).contentType(MediaType.APPLICATION_JSON).content(raw))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.duplicate").value(true));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.accepted").value(false)).andExpect(jsonPath("$.retryable").value(true));
         mvc.perform(post("/api/v1/payment-webhooks/test-provider").header("X-Payment-Signature", "invalid").contentType(MediaType.APPLICATION_JSON).content(raw))
                 .andExpect(status().isUnauthorized());
     }
@@ -224,24 +235,43 @@ class Release4FinanceServiceAndPlatformTest {
         mvc.perform(get("/api/v1/reports/operations").header("Authorization", "Bearer " + admin))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.orders").isNumber())
                 .andExpect(jsonPath("$.paymentsReceived").isNumber());
-        byte[] csv = mvc.perform(get("/api/v1/reports/operations/export.csv").header("Authorization", "Bearer " + admin))
-                .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith("text/csv"))
-                .andReturn().getResponse().getContentAsByteArray();
+        byte[] csv = exportFile(admin, "CSV");
         assertTrue(new String(csv, StandardCharsets.UTF_8).startsWith("Metric,Value"));
-        byte[] excel = mvc.perform(get("/api/v1/reports/operations/export.xlsx").header("Authorization", "Bearer " + admin))
-                .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                .andReturn().getResponse().getContentAsByteArray();
+        byte[] excel = exportFile(admin, "XLSX");
         assertTrue(excel.length > 100);
         assertEquals('P', excel[0]);
         assertEquals('K', excel[1], "XLSX must be a valid ZIP-based workbook");
-        byte[] pdf = mvc.perform(get("/api/v1/reports/operations/export.pdf").header("Authorization", "Bearer " + admin))
-                .andExpect(status().isOk()).andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PDF))
-                .andReturn().getResponse().getContentAsByteArray();
+        byte[] pdf = exportFile(admin, "PDF");
         assertTrue(new String(pdf, 0, Math.min(5, pdf.length), StandardCharsets.US_ASCII).startsWith("%PDF-"));
         mvc.perform(get("/api/v1/reports/operations").header("Authorization", "Bearer " + admin)
                 .param("from", "2026-12-31").param("to", "2026-01-01")).andExpect(status().isBadRequest());
         String customer = token("customer@saumya.local", "Customer@123");
         mvc.perform(get("/api/v1/reports/operations").header("Authorization", "Bearer " + customer))
                 .andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/exports")
+                        .header("Authorization", "Bearer " + customer).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("reportType", "OPERATIONS", "format", "CSV"))))
+                .andExpect(status().isForbidden());
+    }
+
+    private byte[] exportFile(String token, String format) throws Exception {
+        String created = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/exports")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("reportType", "OPERATIONS", "format", format))))
+                .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
+        String exportId = json.readTree(created).get("id").asText();
+        for (int attempt = 0; attempt < 30; attempt++) {
+            String statusBody = mvc.perform(get("/api/v1/exports/" + exportId).header("Authorization", "Bearer " + token))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            var job = json.readTree(statusBody);
+            String state = job.path("status").asText();
+            if ("FAILED".equals(state)) throw new AssertionError("Export failed: " + job.path("error").asText());
+            if ("COMPLETED".equals(state)) {
+                return mvc.perform(get("/api/v1/exports/" + exportId + "/download").header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+            }
+            Thread.sleep(1000);
+        }
+        throw new AssertionError("Timed out waiting for asynchronous " + format + " export");
     }
 }

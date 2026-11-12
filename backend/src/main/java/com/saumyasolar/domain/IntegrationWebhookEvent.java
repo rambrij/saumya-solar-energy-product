@@ -15,6 +15,7 @@ import java.util.UUID;
 public class IntegrationWebhookEvent {
     @Id
     UUID id;
+    @Column(nullable = false)
     UUID tenantId;
     String providerCode;
     String providerEventId;

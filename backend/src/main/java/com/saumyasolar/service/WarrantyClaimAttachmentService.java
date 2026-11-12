@@ -46,7 +46,8 @@ public class WarrantyClaimAttachmentService {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Warranty claim not found");
             return c;
         }
-        if (!"VENDOR".equals(p.accountType()) || p.permissions() == null || !p.permissions().contains("SURVEY_MANAGE") || p.roles() == null || p.roles().stream().noneMatch(r -> Set.of("VENDOR_ADMIN", "OPERATIONS_MANAGER", "SERVICE_MANAGER").contains(r)))
+        if (!"VENDOR".equals(p.accountType()) || p.permissions() == null
+                || !p.permissions().contains("SERVICE_UPDATE") || !p.permissions().contains("SERVICE_ASSIGN"))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Warranty claim access denied");
         return c;
     }

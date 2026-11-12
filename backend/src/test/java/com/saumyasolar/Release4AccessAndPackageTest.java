@@ -63,9 +63,9 @@ class Release4AccessAndPackageTest {
     }
     
     @Test
-    void settingsAliasRequiresVendorDiscountPolicyPermission() throws Exception {
+    void tenantSettingsRequiresVendorDiscountPolicyPermission() throws Exception {
         String vendor = token("admin@saumya.local", "Admin@123");
-        mvc.perform(get("/api/v1/settings").header("Authorization", "Bearer " + vendor))
+        mvc.perform(get("/api/v1/tenant/settings").header("Authorization", "Bearer " + vendor))
                 .andExpect(status().isOk());
         String customerEmail = "settings-" + UUID.randomUUID() + "@example.test";
         mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
@@ -74,7 +74,7 @@ class Release4AccessAndPackageTest {
                                 """.formatted(customerEmail)))
                 .andExpect(status().isOk());
         String customer = token(customerEmail, "CustomerPassword@2026");
-        mvc.perform(get("/api/v1/settings").header("Authorization", "Bearer " + customer))
+        mvc.perform(get("/api/v1/tenant/settings").header("Authorization", "Bearer " + customer))
                 .andExpect(status().isForbidden());
     }
     

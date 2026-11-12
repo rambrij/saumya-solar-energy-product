@@ -3,30 +3,86 @@ package com.saumyasolar;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.saumyasolar.domain.AppUser;
+import com.saumyasolar.domain.Branch;
+import com.saumyasolar.domain.CustomerAddress;
+import com.saumyasolar.domain.SiteSurvey;
+import com.saumyasolar.domain.Warehouse;
+import com.saumyasolar.domain.InventoryBalance;
+import com.saumyasolar.domain.InventoryTransaction;
+import com.saumyasolar.domain.ProductCategory;
+import com.saumyasolar.domain.Product;
+import com.saumyasolar.domain.SalesLead;
+import com.saumyasolar.domain.SolarPackage;
 import com.saumyasolar.domain.Enquiry;
 import com.saumyasolar.domain.Product;
 import com.saumyasolar.domain.ProductCategory;
+import com.saumyasolar.domain.CustomerProfile;
+import com.saumyasolar.domain.CustomerOrder;
+import com.saumyasolar.domain.Quotation;
+import com.saumyasolar.domain.Invoice;
+import com.saumyasolar.domain.ServiceRequest;
+import com.saumyasolar.domain.InstallationJob;
+import com.saumyasolar.domain.Warranty;
+import com.saumyasolar.domain.WarrantyClaim;
+import com.saumyasolar.domain.WarrantyClaimAttachment;
+import com.saumyasolar.domain.BranchMembership;
+import com.saumyasolar.domain.Role;
+import com.saumyasolar.domain.Permission;
+import com.saumyasolar.domain.Enquiry;
+import com.saumyasolar.domain.SalesLead;
+import com.saumyasolar.domain.SiteSurvey;
+import com.saumyasolar.repo.WarrantyClaimAttachmentRepository;
+import com.saumyasolar.repo.BranchMembershipRepository;
+import com.saumyasolar.repo.PermissionRepository;
+import com.saumyasolar.repo.EnquiryRepository;
+import com.saumyasolar.repo.SalesLeadRepository;
+import com.saumyasolar.repo.WarehouseRepository;
+import com.saumyasolar.repo.InventoryBalanceRepository;
+import com.saumyasolar.repo.InventoryTransactionRepository;
+import com.saumyasolar.repo.ProductCategoryRepository;
+import com.saumyasolar.repo.ProductRepository;
 import com.saumyasolar.repo.CustomerProfileRepository;
+import com.saumyasolar.repo.CustomerAddressRepository;
+import com.saumyasolar.repo.BranchRepository;
+import com.saumyasolar.repo.SiteSurveyRepository;
+import com.saumyasolar.repo.SalesLeadRepository;
+import com.saumyasolar.repo.SolarPackageRepository;
 import com.saumyasolar.domain.Tenant;
 import com.saumyasolar.repo.AppUserRepository;
+import com.saumyasolar.repo.RoleRepository;
+import com.saumyasolar.repo.AuditEventRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import com.saumyasolar.repo.EnquiryRepository;
 import com.saumyasolar.repo.ProductCategoryRepository;
 import com.saumyasolar.repo.ProductRepository;
 import com.saumyasolar.repo.CustomerOrderRepository;
 import com.saumyasolar.repo.OrderItemRepository;
+import com.saumyasolar.repo.QuotationRepository;
+import com.saumyasolar.repo.InvoiceRepository;
+import com.saumyasolar.repo.ServiceRequestRepository;
+import com.saumyasolar.service.SurveyAttachmentService;
+import com.saumyasolar.repo.InstallationJobRepository;
+import com.saumyasolar.repo.WarrantyRepository;
+import com.saumyasolar.repo.WarrantyClaimRepository;
 import com.saumyasolar.repo.TenantRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -35,16 +91,27 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "app.warranty.attachment-location=${java.io.tmpdir}/saumya-warranty-attachment-it",
+        "app.service.attachment-location=${java.io.tmpdir}/saumya-service-attachment-it"
+})
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class Release12TenantIntegrationTest {
     @Autowired
     MockMvc mvc;
     @Autowired
+    jakarta.persistence.EntityManager entityManager;
+    @Autowired
     ObjectMapper json;
     @Autowired
     AppUserRepository users;
+    @Autowired
+    RoleRepository roles;
+    @Autowired
+    AuditEventRepository auditEvents;
+    @Autowired
+    PasswordEncoder passwordEncoder;
     @Autowired
     TenantRepository tenants;
     @Autowired
@@ -56,9 +123,66 @@ class Release12TenantIntegrationTest {
     @Autowired
     CustomerProfileRepository customerProfiles;
     @Autowired
+    CustomerAddressRepository customerAddresses;
+    @Autowired
+    BranchRepository branches;
+    @Autowired
+    SiteSurveyRepository surveys;
+    @Autowired
+    SalesLeadRepository leads;
+    @Autowired
+    SolarPackageRepository packages;
+    @Autowired
     CustomerOrderRepository customerOrders;
     @Autowired
     OrderItemRepository orderItems;
+    @Autowired
+    QuotationRepository quotations;
+    @Autowired
+    InvoiceRepository invoices;
+    @Autowired
+    com.saumyasolar.repo.PaymentRepository payments;
+    @Autowired
+    com.saumyasolar.repo.CreditNoteRepository creditNoteRecords;
+    @Autowired
+    com.saumyasolar.repo.RefundRepository refundRecords;
+    @Autowired
+    com.saumyasolar.repo.InstallationChecklistItemRepository checklistItems;
+    @Autowired
+    com.saumyasolar.repo.TenantSubscriptionRepository tenantSubscriptions;
+    @Autowired
+    com.saumyasolar.repo.SubscriptionPlanRepository subscriptionPlans;
+    @Autowired
+    ServiceRequestRepository serviceRequests;
+    @Autowired
+    com.saumyasolar.service.ServiceAttachmentService serviceAttachments;
+    @Autowired
+    com.saumyasolar.repo.ServiceAttachmentRepository serviceAttachmentRecords;
+    @Autowired
+    com.saumyasolar.repo.ServiceVisitRepository serviceVisitRecords;
+    @Autowired
+    com.saumyasolar.service.ExportService exportService;
+    @Autowired
+    com.saumyasolar.repo.ExportJobRepository exportJobs;
+    @Autowired
+    SurveyAttachmentService surveyAttachments;
+    @Autowired
+    InstallationJobRepository installationJobs;
+    @Autowired
+    WarrantyRepository warranties;
+    @Autowired
+    WarrantyClaimRepository warrantyClaims;
+    @Autowired
+    WarrantyClaimAttachmentRepository warrantyClaimAttachments;
+    @Autowired BranchMembershipRepository branchMemberships;
+    @Autowired PermissionRepository permissions;
+    @Autowired EnquiryRepository enquiryRecords;
+    @Autowired SalesLeadRepository salesLeadRecords;
+    @Autowired WarehouseRepository warehouseRecords;
+    @Autowired InventoryBalanceRepository inventoryBalances;
+    @Autowired InventoryTransactionRepository inventoryTransactions;
+    @Autowired ProductCategoryRepository productCategories;
+    @Autowired ProductRepository productRecords;
     
     UUID vendorTenantId;
     
@@ -83,7 +207,35 @@ class Release12TenantIntegrationTest {
                         .content(tenantBody))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var tenantId = json.readTree(tenantResponse).get("id").asText();
-        
+
+        var tenantCsv = mvc.perform(get("/api/v1/platform/tenants/export")
+                        .header("Authorization", "Bearer " + platformToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(tenantCsv.contains("vendor-" + suffix));
+        byte[] tenantXlsx = mvc.perform(get("/api/v1/platform/tenants/export.xlsx")
+                        .header("Authorization", "Bearer " + platformToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertTrue(tenantXlsx.length > 4);
+        assertEquals('P', tenantXlsx[0]);
+        assertEquals('K', tenantXlsx[1]);
+        byte[] tenantPdf = mvc.perform(get("/api/v1/platform/tenants/export.pdf")
+                        .header("Authorization", "Bearer " + platformToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertTrue(new String(tenantPdf, 0, 5, java.nio.charset.StandardCharsets.US_ASCII).startsWith("%PDF-"));
+
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(adminEmail,adminPassword)))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/tenants/" + tenantId + "/status")
+                        .header("Authorization", "Bearer " + platformToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"VERIFIED\",\"reason\":\"Onboarding documents verified\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("VERIFIED"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/tenants/" + tenantId + "/status")
+                        .header("Authorization", "Bearer " + platformToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"ACTIVE\",\"reason\":\"Subscription and limits assigned\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ACTIVE"));
         var vendorToken = accessToken(adminEmail, adminPassword);
         var rolesResponse = mvc.perform(get("/api/v1/roles").header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
@@ -112,7 +264,7 @@ class Release12TenantIntegrationTest {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/tenants/" + tenantId + "/status")
                         .header("Authorization", "Bearer " + platformToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"SUSPENDED\"}"))
+                        .content("{\"status\":\"SUSPENDED\",\"reason\":\"Compliance review\"}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -121,36 +273,195 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isUnauthorized());
         mvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isUnauthorized());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/tenants/" + tenantId + "/status")
+                        .header("Authorization", "Bearer " + platformToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"ACTIVE\",\"reason\":\"Compliance review completed\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ACTIVE"));
+        var reactivatedToken=accessToken(adminEmail,adminPassword);
+        mvc.perform(post("/api/v1/platform/tenants/" + tenantId + "/lifecycle")
+                        .header("Authorization", "Bearer " + platformToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"CLOSED\",\"reason\":\"Vendor account permanently closed\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CLOSED"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/tenants/" + tenantId + "/status")
+                        .header("Authorization", "Bearer " + platformToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"ACTIVE\",\"reason\":\"must not reopen\"}"))
+                .andExpect(status().isConflict());
+        mvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + reactivatedToken))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(adminEmail,adminPassword)))
+                .andExpect(status().isUnauthorized());
+        var tenantView=json.readTree(mvc.perform(get("/api/v1/platform/tenants/"+tenantId)
+                        .header("Authorization","Bearer "+platformToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        for(String field:java.util.List.of("verifiedAt","verifiedBy","activatedAt","activatedBy",
+                "suspendedAt","suspendedBy","closedAt","closedBy"))
+            assertFalse(tenantView.path(field).isNull(),field+" should be persisted and exposed");
+        var lifecycleActions=auditEvents.findTop200ByTenantIdAndCreatedAtBetweenOrderByCreatedAtDesc(
+                        java.util.UUID.fromString(tenantId),Instant.now().minusSeconds(3600),Instant.now().plusSeconds(60))
+                .stream().map(event->event.getAction()).collect(java.util.stream.Collectors.toSet());
+        assertTrue(lifecycleActions.containsAll(java.util.Set.of("TENANT_CREATED","TENANT_VERIFIED",
+                "TENANT_ACTIVATED","TENANT_SUSPENDED","TENANT_REACTIVATED","TENANT_CLOSED")),lifecycleActions.toString());
     }
     
+
+    @Test
+    void vendorOrderTransitionPolicyCanDisableOnlyApprovedEdges() throws Exception {
+        var customer=customerProfiles.findByTenantIdOrderByIdDesc(vendorTenantId).get(0);
+        CustomerOrder order=new CustomerOrder(); order.setId(UUID.randomUUID()); order.setTenantId(vendorTenantId);
+        order.setCustomerId(customer.getId()); order.setOrderNumber("POL-"+UUID.randomUUID());
+        order.setStatus("CONFIRMED"); order.setTotal(new java.math.BigDecimal("100")); order.setCreatedAt(Instant.now());
+        customerOrders.saveAndFlush(order);
+        String token=accessToken("admin@saumya.local","Admin@123");
+        String initialOptions=mvc.perform(get("/api/v1/orders/transition-options").header("Authorization","Bearer "+token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(json.readTree(initialOptions).findValuesAsText("toStatus").contains("PAYMENT_PENDING"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/orders/transition-policy")
+                        .header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"transitions\":[{\"fromStatus\":\"CONFIRMED\",\"toStatus\":\"PAYMENT_PENDING\",\"enabled\":false}]}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/orders/"+order.getId()+"/transition").header("Authorization","Bearer "+token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"PAYMENT_PENDING\",\"reason\":\"disabled edge test\"}"))
+                .andExpect(status().isConflict());
+        assertEquals("CONFIRMED",customerOrders.findByIdAndTenantId(order.getId(),vendorTenantId).orElseThrow().getStatus());
+        String disabledOptions=mvc.perform(get("/api/v1/orders/transition-options").header("Authorization","Bearer "+token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(java.util.stream.StreamSupport.stream(json.readTree(disabledOptions).spliterator(),false)
+                .anyMatch(node->"CONFIRMED".equals(node.path("fromStatus").asText())&&"PAYMENT_PENDING".equals(node.path("toStatus").asText())));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/orders/transition-policy")
+                        .header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"transitions\":[{\"fromStatus\":\"CONFIRMED\",\"toStatus\":\"PAYMENT_PENDING\",\"enabled\":true}]}"))
+                .andExpect(status().isOk());
+        String restoredOptions=mvc.perform(get("/api/v1/orders/transition-options").header("Authorization","Bearer "+token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(json.readTree(restoredOptions).findValuesAsText("toStatus").contains("PAYMENT_PENDING"));
+    }
+
+    @Test
+    void platformSupportCanReadTenantDirectoryButCannotMutatePlatformState() throws Exception {
+        var supportRole = roles.findByNameAndTenantIdIsNull("PLATFORM_SUPPORT").orElseThrow();
+        var support = new AppUser();
+        support.setId(UUID.randomUUID());
+        support.setName("Read Only Support");
+        support.setEmail("support-" + UUID.randomUUID() + "@example.test");
+        support.setPasswordHash(passwordEncoder.encode("Support-Password-2026"));
+        support.setAccountType("PLATFORM");
+        support.setEnabled(true);
+        support.getRoles().add(supportRole);
+        users.save(support);
+        var token = accessToken(support.getEmail(), "Support-Password-2026");
+        mvc.perform(get("/api/v1/platform/tenants").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        var from = Instant.now().minusSeconds(60);
+        var to = Instant.now().plusSeconds(60);
+        mvc.perform(get("/api/v1/audit-events").param("from", from.toString()).param("to", to.toString())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        assertTrue(auditEvents.findTop200ByCreatedAtBetweenOrderByCreatedAtDesc(from, to).stream()
+                .anyMatch(event -> "PLATFORM_SUPPORT_TENANT_DIRECTORY_VIEWED".equals(event.getAction())
+                        || "PLATFORM_SUPPORT_AUDIT_LOG_VIEWED".equals(event.getAction())));
+        mvc.perform(post("/api/v1/tenants").header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Support Must Not Create","slug":"support-must-not-create","adminName":"Support","adminEmail":"support-new@example.test","adminPassword":"Support-Password-2026"}
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void csrfBootstrapReturnsTheReadableDoubleSubmitCookieValue() throws Exception {
+        var login = mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"admin@saumya.local\",\"password\":\"Admin@123\"}"))
+                .andExpect(status().isOk()).andReturn();
+        var csrfCookie = login.getResponse().getCookie("XSRF-TOKEN");
+        assertNotNull(csrfCookie);
+        mvc.perform(get("/api/v1/auth/csrf").cookie(csrfCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.csrfToken").value(csrfCookie.getValue()));
+    }
+
     @Test
     void logoutRevokesAccessAndRefreshTokens() throws Exception {
         var loginBody = """
                 {"email":"admin@saumya.local","password":"Admin@123"}
                 """;
-        var loginResponse = mvc.perform(post("/api/v1/auth/login")
+        var loginResult = mvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON).content(loginBody))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+                .andExpect(status().isOk()).andReturn();
+        var loginResponse = loginResult.getResponse().getContentAsString();
         var session = json.readTree(loginResponse);
         var accessToken = session.get("accessToken").asText();
-        var refreshToken = session.get("refreshToken").asText();
-        
+        var csrfToken = session.get("csrfToken").asText();
+        var refreshCookie = responseCookie(loginResult, "saumya_refresh");
+        var csrfCookie = responseCookie(loginResult, "XSRF-TOKEN");
+        assertNotNull(refreshCookie);
+        assertNotNull(csrfCookie);
+        assertFalse(session.has("refreshToken"));
+        assertTrue(loginResult.getResponse().getHeaders("Set-Cookie").stream().anyMatch(v -> v.contains("HttpOnly")));
+        assertTrue(loginResult.getResponse().getHeaders("Set-Cookie").stream().anyMatch(v -> v.contains("SameSite")));
+        mvc.perform(post("/api/v1/auth/refresh").cookie(refreshCookie))
+                .andExpect(status().isForbidden());
+
         mvc.perform(post("/api/v1/auth/logout")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"refreshToken":"%s"}
-                                """.formatted(refreshToken)))
+                        .cookie(refreshCookie, csrfCookie)
+                        .header("X-CSRF-Token", csrfToken))
                 .andExpect(status().isNoContent());
         mvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isUnauthorized());
         mvc.perform(post("/api/v1/auth/refresh")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"refreshToken":"%s"}
-                                """.formatted(refreshToken)))
+                        .cookie(refreshCookie, csrfCookie)
+                        .header("X-CSRF-Token", csrfToken))
                 .andExpect(status().isUnauthorized());
     }
     
+    @Test
+    void concurrentRefreshReuseRevokesTheWholeDatabaseTokenFamily() throws Exception {
+        var login = mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"admin@saumya.local\",\"password\":\"Admin@123\"}"))
+                .andExpect(status().isOk()).andReturn();
+        var csrfToken = json.readTree(login.getResponse().getContentAsString()).get("csrfToken").asText();
+        var refreshCookie = login.getResponse().getCookie("saumya_refresh");
+        var csrfCookie = login.getResponse().getCookie("XSRF-TOKEN");
+        assertNotNull(refreshCookie);
+        assertNotNull(csrfCookie);
+
+        var gate = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.Callable<org.springframework.test.web.servlet.MvcResult> request = () -> {
+                gate.await();
+                return mvc.perform(post("/api/v1/auth/refresh")
+                                .cookie(refreshCookie, csrfCookie)
+                                .header("X-CSRF-Token", csrfToken))
+                        .andReturn();
+            };
+            var first = pool.submit(request);
+            var second = pool.submit(request);
+            gate.countDown();
+            var firstResult = first.get();
+            var secondResult = second.get();
+            int firstStatus = firstResult.getResponse().getStatus();
+            int secondStatus = secondResult.getResponse().getStatus();
+            assertTrue((firstStatus == 200 && secondStatus == 401) || (firstStatus == 401 && secondStatus == 200),
+                    "Exactly one concurrent refresh can rotate the same token");
+            var rotated = firstStatus == 200 ? firstResult : secondResult;
+            var rotatedCookie = responseCookie(rotated, "saumya_refresh");
+            var rotatedCsrfCookie = responseCookie(rotated, "XSRF-TOKEN");
+            var rotatedCsrf = json.readTree(rotated.getResponse().getContentAsString()).get("csrfToken").asText();
+            assertNotNull(rotatedCookie);
+            assertNotNull(rotatedCsrfCookie);
+            mvc.perform(post("/api/v1/auth/refresh")
+                            .cookie(rotatedCookie, rotatedCsrfCookie)
+                            .header("X-CSRF-Token", rotatedCsrf))
+                    .andExpect(status().isUnauthorized());
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
     @Test
     void customerRegistrationCreatesProfileAndCanOpenCustomerQuotationList() throws Exception {
         var email = "registered-" + UUID.randomUUID() + "@example.test";
@@ -278,6 +589,337 @@ class Release12TenantIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
     
+
+    @Test
+    void customServiceViewerCanOnlyReadTicketsAssignedToItsUser() throws Exception {
+        var adminToken = accessToken("admin@saumya.local", "Admin@123");
+        mvc.perform(post("/api/v1/roles").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"CUSTOM_SERVICE_READ","permissions":["SERVICE_VIEW"]}
+                                """))
+                .andExpect(status().isOk());
+        var email = "custom-service-" + UUID.randomUUID() + "@example.test";
+        var password = "Custom-Service-Password-2026";
+        var userResponse = mvc.perform(post("/api/v1/users").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Custom Service Reader","email":"%s","password":"%s","roleName":"CUSTOM_SERVICE_READ"}
+                                """.formatted(email, password)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var customUserId = UUID.fromString(json.readTree(userResponse).get("id").asText());
+        var otherUserId = users.findByEmailIgnoreCase("sales@saumya.local").orElseThrow().getId();
+
+        ServiceRequest assigned = new ServiceRequest();
+        assigned.setId(UUID.randomUUID());
+        assigned.setTenantId(vendorTenantId);
+        assigned.setTicketNumber("CUSTOM-ASSIGNED-" + UUID.randomUUID().toString().substring(0, 8));
+        assigned.setCategory("GENERAL");
+        assigned.setPriority("LOW");
+        assigned.setWarrantyStatus("UNKNOWN");
+        assigned.setStatus("ASSIGNED");
+        assigned.setDescription("Assigned custom-role test ticket");
+        assigned.setAssignedEngineerId(customUserId);
+        assigned.setCreatedAt(Instant.now());
+        assigned.setUpdatedAt(Instant.now());
+        serviceRequests.save(assigned);
+
+        ServiceRequest other = new ServiceRequest();
+        other.setId(UUID.randomUUID());
+        other.setTenantId(vendorTenantId);
+        other.setTicketNumber("CUSTOM-OTHER-" + UUID.randomUUID().toString().substring(0, 8));
+        other.setCategory("GENERAL");
+        other.setPriority("LOW");
+        other.setWarrantyStatus("UNKNOWN");
+        other.setStatus("ASSIGNED");
+        other.setDescription("Other employee ticket");
+        other.setAssignedEngineerId(otherUserId);
+        other.setCreatedAt(Instant.now());
+        other.setUpdatedAt(Instant.now());
+        serviceRequests.save(other);
+
+        var customToken = accessToken(email, password);
+        var list = mvc.perform(get("/api/v1/service-requests").header("Authorization", "Bearer " + customToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(list.contains(assigned.getTicketNumber()));
+        assertFalse(list.contains(other.getTicketNumber()));
+        mvc.perform(get("/api/v1/service-requests/" + other.getId())
+                        .header("Authorization", "Bearer " + customToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void vendorCannotReadAnotherTenantsOrdersQuotesInvoicesServiceOrInstallationRecords() throws Exception {
+        var foreignTenant = new Tenant();
+        foreignTenant.setId(UUID.randomUUID());
+        foreignTenant.setName("Foreign Vendor");
+        foreignTenant.setSlug("foreign-" + UUID.randomUUID().toString().replace("-", ""));
+        foreignTenant.setStatus("ACTIVE");
+        foreignTenant.setCreatedAt(Instant.now());
+        foreignTenant.setUpdatedAt(Instant.now());
+        tenants.save(foreignTenant);
+
+        var customer = new CustomerProfile();
+        customer.setId(UUID.randomUUID());
+        customer.setTenantId(foreignTenant.getId());
+        customer.setName("Foreign Customer");
+        customer.setEmail("foreign-" + UUID.randomUUID() + "@example.test");
+        customerProfiles.save(customer);
+
+        var quote = new Quotation();
+        quote.setId(UUID.randomUUID());
+        quote.setTenantId(foreignTenant.getId());
+        quote.setQuoteGroupId(UUID.randomUUID());
+        quote.setQuotationNumber("FOREIGN-" + UUID.randomUUID().toString().substring(0, 8));
+        quote.setCustomerId(customer.getId());
+        quote.setStatus("DRAFT");
+        quote.setSubtotal(BigDecimal.ZERO);
+        quote.setDiscountPercent(BigDecimal.ZERO);
+        quote.setDiscountAmount(BigDecimal.ZERO);
+        quote.setTaxAmount(BigDecimal.ZERO);
+        quote.setGrandTotal(BigDecimal.ZERO);
+        quote.setCreatedAt(Instant.now());
+        quotations.save(quote);
+
+        var order = new CustomerOrder();
+        order.setId(UUID.randomUUID());
+        order.setTenantId(foreignTenant.getId());
+        order.setQuotationId(quote.getId());
+        order.setCustomerId(customer.getId());
+        order.setOrderNumber("FOREIGN-ORDER-" + UUID.randomUUID().toString().substring(0, 8));
+        order.setStatus("PENDING");
+        order.setSubtotal(BigDecimal.ZERO);
+        order.setDiscountPercent(BigDecimal.ZERO);
+        order.setDiscountAmount(BigDecimal.ZERO);
+        order.setTaxTotal(BigDecimal.ZERO);
+        order.setTotal(BigDecimal.ZERO);
+        order.setCreatedAt(Instant.now());
+        customerOrders.save(order);
+
+        var invoice = new Invoice();
+        invoice.setId(UUID.randomUUID());
+        invoice.setTenantId(foreignTenant.getId());
+        invoice.setOrderId(order.getId());
+        invoice.setInvoiceNumber("FOREIGN-INV-" + UUID.randomUUID().toString().substring(0, 8));
+        invoice.setStatus("DRAFT");
+        invoice.setFiscalYear("2026-27");
+        invoice.setCustomerName(customer.getName());
+        invoice.setCustomerEmail(customer.getEmail());
+        invoice.setVendorName(foreignTenant.getName());
+        invoice.setSubtotal(BigDecimal.ZERO);
+        invoice.setTaxTotal(BigDecimal.ZERO);
+        invoice.setGrandTotal(BigDecimal.ZERO);
+        invoice.setTaxTreatment("INTRA_STATE");
+        invoice.setDueDate(java.time.LocalDate.now().plusDays(30));
+        invoice.setCreatedAt(Instant.now());
+        invoices.save(invoice);
+
+        var ticket = new ServiceRequest();
+        ticket.setId(UUID.randomUUID());
+        ticket.setTenantId(foreignTenant.getId());
+        ticket.setCustomerId(customer.getId());
+        ticket.setTicketNumber("FOREIGN-SVC-" + UUID.randomUUID().toString().substring(0, 8));
+        ticket.setCategory("GENERAL");
+        ticket.setPriority("LOW");
+        ticket.setWarrantyStatus("UNKNOWN");
+        ticket.setStatus("OPEN");
+        ticket.setDescription("Foreign tenant test record");
+        ticket.setCreatedAt(Instant.now());
+        ticket.setUpdatedAt(Instant.now());
+        serviceRequests.save(ticket);
+
+        var installation = new InstallationJob();
+        installation.setId(UUID.randomUUID());
+        installation.setTenantId(foreignTenant.getId());
+        installation.setCustomerId(customer.getId());
+        installation.setOrderId(order.getId());
+        installation.setStatus("SCHEDULED");
+        installation.setCapacityKw(BigDecimal.ZERO);
+        installation.setScheduledAt(Instant.now());
+        installation.setCreatedAt(Instant.now());
+        installationJobs.save(installation);
+
+        var token = accessToken("admin@saumya.local", "Admin@123");
+        mvc.perform(get("/api/v1/orders/" + order.getId() + "/history").header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/quotations/" + quote.getId() + "/revisions").header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/invoices/" + invoice.getId() + "/items").header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/service-requests/" + ticket.getId()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/installations/" + installation.getId() + "/checklist").header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void salesExecutiveCanOnlyReadAndUpdateAssignedLeads() throws Exception {
+        var adminToken = accessToken("admin@saumya.local", "Admin@123");
+        var salesUser = users.findByEmailIgnoreCase("sales@saumya.local").orElseThrow();
+        var managerEmail = "sales-manager-" + UUID.randomUUID() + "@example.test";
+        var managerBody = """
+                {"name":"Sales Manager Test","email":"%s","password":"SalesManager-Pass-2026","roleName":"SALES_MANAGER"}
+                """.formatted(managerEmail);
+        var managerResponse = mvc.perform(post("/api/v1/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(managerBody))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var managerId = json.readTree(managerResponse).get("id").asText();
+
+        var firstEnquiry = mvc.perform(post("/api/v1/enquiries")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Assigned Lead","email":"assigned-%s@example.test","phone":"9000000001","propertyType":"Residential"}
+                                """.formatted(UUID.randomUUID())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var firstEnquiryId = json.readTree(firstEnquiry).get("id").asText();
+        var assignedLead = mvc.perform(post("/api/v1/enquiries/" + firstEnquiryId + "/convert")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"assignedUserId":"%s","priority":"MEDIUM"}
+                                """.formatted(salesUser.getId())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var assignedLeadId = json.readTree(assignedLead).get("id").asText();
+
+        var secondEnquiry = mvc.perform(post("/api/v1/enquiries")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Other Lead","email":"other-%s@example.test","phone":"9000000002","propertyType":"Residential"}
+                                """.formatted(UUID.randomUUID())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var secondEnquiryId = json.readTree(secondEnquiry).get("id").asText();
+        var otherLead = mvc.perform(post("/api/v1/enquiries/" + secondEnquiryId + "/convert")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"assignedUserId":"%s","priority":"MEDIUM"}
+                                """.formatted(managerId)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var otherLeadId = json.readTree(otherLead).get("id").asText();
+
+        var salesToken = accessToken("sales@saumya.local", "Sales@123");
+        var visibleLeads = mvc.perform(get("/api/v1/leads").header("Authorization", "Bearer " + salesToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(visibleLeads.contains(assignedLeadId));
+        assertFalse(visibleLeads.contains(otherLeadId));
+        mvc.perform(get("/api/v1/leads/" + otherLeadId + "/history").header("Authorization", "Bearer " + salesToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(patch("/api/v1/leads/" + assignedLeadId)
+                        .header("Authorization", "Bearer " + salesToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"assignedUserId":"%s","stage":"CONTACTED","priority":"HIGH"}
+                                """.formatted(managerId)))
+                .andExpect(status().isForbidden());
+    }
+
+
+    @Test
+    void customSalesRoleCannotReadUnassignedLeadsOrAssignOutsideItsScope() throws Exception {
+        var adminToken = accessToken("admin@saumya.local", "Admin@123");
+        mvc.perform(post("/api/v1/roles").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"CUSTOM_SALES_READ","permissions":["LEAD_VIEW","LEAD_UPDATE"]}
+                                """))
+                .andExpect(status().isOk());
+        var suffix = UUID.randomUUID().toString().replace("-", "");
+        var customEmail = "custom-sales-" + suffix + "@example.test";
+        var customPassword = "Custom-Sales-Password-2026";
+        var customUser = mvc.perform(post("/api/v1/users").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Custom Sales Reader","email":"%s","password":"%s","roleName":"CUSTOM_SALES_READ"}
+                                """.formatted(customEmail, customPassword)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var customUserId = json.readTree(customUser).get("id").asText();
+        var assignedEnquiry = mvc.perform(post("/api/v1/enquiries").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Custom Assigned","email":"assigned-%s@example.test","propertyType":"Residential"}
+                                """.formatted(suffix)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var assignedEnquiryId = json.readTree(assignedEnquiry).get("id").asText();
+        var assignedLead = mvc.perform(post("/api/v1/enquiries/" + assignedEnquiryId + "/convert")
+                        .header("Authorization", "Bearer " + adminToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"assignedUserId":"%s","priority":"MEDIUM"}
+                                """.formatted(customUserId)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var assignedLeadId = json.readTree(assignedLead).get("id").asText();
+        var otherEnquiry = mvc.perform(post("/api/v1/enquiries").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Custom Other","email":"other-%s@example.test","propertyType":"Residential"}
+                                """.formatted(suffix)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var otherEnquiryId = json.readTree(otherEnquiry).get("id").asText();
+        var otherLead = mvc.perform(post("/api/v1/enquiries/" + otherEnquiryId + "/convert")
+                        .header("Authorization", "Bearer " + adminToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"assignedUserId":"%s","priority":"MEDIUM"}
+                                """.formatted(users.findByEmailIgnoreCase("sales@saumya.local").orElseThrow().getId())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var otherLeadId = json.readTree(otherLead).get("id").asText();
+
+        var customToken = accessToken(customEmail, customPassword);
+        var visible = mvc.perform(get("/api/v1/leads").header("Authorization", "Bearer " + customToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(visible.contains(assignedLeadId));
+        assertFalse(visible.contains(otherLeadId));
+        mvc.perform(patch("/api/v1/leads/" + assignedLeadId).header("Authorization", "Bearer " + customToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"assignedUserId":"%s","stage":"CONTACTED"}
+                                """.formatted(users.findByEmailIgnoreCase("sales@saumya.local").orElseThrow().getId())))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/roles").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"CUSTOM_PLATFORM_ESCAPE","permissions":["PLATFORM_MANAGE"]}
+                                """))
+                .andExpect(status().isForbidden());
+        var auditFrom = Instant.now().minusSeconds(60);
+        var auditTo = Instant.now().plusSeconds(60);
+        assertTrue(auditEvents.findTop200ByTenantIdAndCreatedAtBetweenOrderByCreatedAtDesc(vendorTenantId, auditFrom, auditTo)
+                .stream().anyMatch(event -> "ROLE_PRIVILEGE_ESCALATION_BLOCKED".equals(event.getAction())
+                        && "DENIED".equals(event.getOutcome())),
+                "Blocked custom-role platform permission escalation must be durably audited");
+    }
+
+
+    @Test
+    void everySeededEmployeeRoleHasItsDeclaredFineGrainedSrsPermissionSet() {
+        var forbidden = java.util.Set.of("PLATFORM_MANAGE", "SUBSCRIPTION_MANAGE", "TENANT_VIEW", "TENANT_UPDATE",
+                "CATALOG_MANAGE", "CATALOG_VIEW", "CUSTOMER_MANAGE", "LEAD_MANAGE", "SURVEY_MANAGE",
+                "QUOTATION_MANAGE", "DISCOUNT_APPROVE", "USER_MANAGE", "INVENTORY_MANAGE", "SERVICE_MANAGE", "FINANCE_MANAGE");
+        com.saumyasolar.config.DataSeeder.employeeRolePermissions().forEach((roleName, expected) -> {
+            var role = roles.findByNameAndTenantId(roleName, vendorTenantId).orElseThrow();
+            var actual = role.getPermissions().stream().map(com.saumyasolar.domain.Permission::getCode)
+                    .collect(java.util.stream.Collectors.toSet());
+            assertTrue(actual.containsAll(expected), "Missing declared permission for " + roleName);
+            assertTrue(java.util.Collections.disjoint(actual, forbidden), "Legacy/platform permission on " + roleName);
+        });
+    }
+
+    @Test
+    void vendorAdminAndCustomRolesNeverReceivePlatformOrLegacyBroadPermissions() {
+        var admin = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        var codes = admin.getRoles().stream().flatMap(role -> role.getPermissions().stream())
+                .map(com.saumyasolar.domain.Permission::getCode).collect(java.util.stream.Collectors.toSet());
+        assertFalse(codes.contains("PLATFORM_MANAGE"));
+        assertFalse(codes.contains("SUBSCRIPTION_MANAGE"));
+        assertFalse(codes.contains("TENANT_VIEW"));
+        assertFalse(codes.contains("TENANT_UPDATE"));
+        for (String legacy : java.util.List.of("CATALOG_MANAGE", "CATALOG_VIEW", "CUSTOMER_MANAGE",
+                "LEAD_MANAGE", "SURVEY_MANAGE", "QUOTATION_MANAGE", "INVENTORY_MANAGE",
+                "SERVICE_MANAGE", "FINANCE_MANAGE", "USER_MANAGE", "DISCOUNT_APPROVE"))
+            assertFalse(codes.contains(legacy), "Legacy broad permission must not be granted: " + legacy);
+    }
+
     @Test
     void vendorAdminCanCreateCategorizedProductAndConfigurablePackage() throws Exception {
         var token = accessToken("admin@saumya.local", "Admin@123");
@@ -325,6 +967,7 @@ class Release12TenantIntegrationTest {
     }
     
     @Test
+    @Transactional
     void customerCanRequestSurveyReceiveQuotationAcceptAndConvertExactlyOneOrder() throws Exception {
         var vendorToken = accessToken("admin@saumya.local", "Admin@123");
         var customerEmail = "journey-" + UUID.randomUUID() + "@example.test";
@@ -404,7 +1047,14 @@ class Release12TenantIntegrationTest {
                         )))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var quotationId = json.readTree(quoteResponse).get("quotation").get("id").asText();
-        
+        AppUser noQuotationPermission = createPermissionMatrixUser("quotation-no-send", List.of());
+        String noQuotationPermissionToken = accessToken(noQuotationPermission.getEmail(), "Matrix-Password-2026");
+        mvc.perform(post("/api/v1/quotations/" + quotationId + "/send")
+                        .header("Authorization", "Bearer " + noQuotationPermissionToken))
+                .andExpect(status().isForbidden());
+        assertEquals("DRAFT", quotations.findByIdAndTenantId(UUID.fromString(quotationId), vendorTenantId)
+                .orElseThrow().getStatus(), "A denied quotation send must not change its status");
+
         mvc.perform(post("/api/v1/quotations/" + quotationId + "/send")
                         .header("Authorization", "Bearer " + vendorToken))
                 .andExpect(status().isOk());
@@ -502,6 +1152,1063 @@ class Release12TenantIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content(payload)).andExpect(status().isConflict());
     }
     
+
+    @Test
+    void vendorAdminCannotEscalateEmployeeToPlatformSuperAdmin() throws Exception {
+        String token = accessToken("admin@saumya.local", "Admin@123");
+        String email = "escalation-" + UUID.randomUUID() + "@example.test";
+        mvc.perform(post("/api/v1/users")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Escalation Attempt","email":"%s","password":"StrongEscalationPassword-2026","roleName":"PLATFORM_SUPER_ADMIN"}
+                                """.formatted(email)))
+                .andExpect(status().isForbidden());
+        assertTrue(users.findByEmailIgnoreCase(email).isEmpty());
+    }
+
+    @Test
+    void missingAndMalformedBearerTokensAreUnauthorized() throws Exception {
+        mvc.perform(get("/api/v1/me")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/me").header("Authorization", "Bearer not-a-valid-jwt"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private jakarta.servlet.http.Cookie responseCookie(org.springframework.test.web.servlet.MvcResult result, String name) {
+        String header = result.getResponse().getHeaders("Set-Cookie").stream()
+                .filter(value -> value.startsWith(name + "=")).findFirst()
+                .orElseThrow(() -> new AssertionError("Missing " + name + " response cookie"));
+        String value = header.substring(name.length() + 1).split(";", 2)[0];
+        return new jakarta.servlet.http.Cookie(name, value);
+    }
+
+
+    @Test
+    void customerAddressEndpointsEnforceAuthenticatedCustomerOwnershipAndIgnoreTamperedOwnerIds() throws Exception {
+        var customerA = createCustomer(vendorTenantId, "address-owner-a");
+        var customerB = createCustomer(vendorTenantId, "address-owner-b");
+        var foreignTenant = newTenant();
+        var customerC = createCustomer(foreignTenant.getId(), "address-owner-c");
+        var addressA = createAddress(customerA.profile().getId(), vendorTenantId);
+        var addressB = createAddress(customerB.profile().getId(), vendorTenantId);
+        var addressC = createAddress(customerC.profile().getId(), foreignTenant.getId());
+
+        var token = accessToken(customerA.user().getEmail(), "Customer-Password-2026");
+        var listed = mvc.perform(get("/api/v1/customer/addresses").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(listed.contains(addressA.getId().toString()));
+        assertFalse(listed.contains(addressB.getId().toString()));
+        assertFalse(listed.contains(addressC.getId().toString()));
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                                "/api/v1/customer/addresses/" + addressB.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(addressBody()))
+                .andExpect(status().isNotFound());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                                "/api/v1/customer/addresses/" + addressB.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        assertEquals("Home", customerAddresses.findById(addressB.getId())
+                .orElseThrow().getLabel(), "A failed cross-customer delete must not mutate the target address");
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                                "/api/v1/customer/addresses/" + addressC.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+
+        var created = mvc.perform(post("/api/v1/customer/addresses")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"label":"Tampered","line1":"1 Test Road","city":"Raipur","state":"Chhattisgarh","pincode":"492001","tenantId":"%s","customerId":"%s"}
+                                """.formatted(foreignTenant.getId(), customerC.profile().getId())))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        var createdJson = json.readTree(created);
+        assertEquals(vendorTenantId.toString(), createdJson.get("tenantId").asText());
+        assertEquals(customerA.profile().getId().toString(), createdJson.get("customerId").asText());
+    }
+
+
+
+
+    @org.springframework.transaction.annotation.Transactional
+    @Test
+    void customerProfileMessagingConsentInstallationsAndWarrantiesAreSelfOwned() throws Exception {
+        var customerA = createCustomer(vendorTenantId, "customer-owned-resource-a");
+        var customerB = createCustomer(vendorTenantId, "customer-owned-resource-b");
+        var vendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        var product = productRecords.findByTenantIdOrderByIdDesc(vendorTenantId).stream()
+                .findFirst().orElseThrow();
+
+        CustomerOrder order = new CustomerOrder();
+        order.setId(UUID.randomUUID());
+        order.setTenantId(vendorTenantId);
+        order.setCustomerId(customerB.profile().getId());
+        order.setOrderNumber("CUSTOMER-RESOURCE-" + UUID.randomUUID().toString().substring(0, 8));
+        order.setStatus("CONFIRMED");
+        order.setSubtotal(BigDecimal.valueOf(100));
+        order.setDiscountPercent(BigDecimal.ZERO);
+        order.setDiscountAmount(BigDecimal.ZERO);
+        order.setTaxTotal(BigDecimal.ZERO);
+        order.setTotal(BigDecimal.valueOf(100));
+        order.setCreatedAt(Instant.now());
+        customerOrders.saveAndFlush(order);
+
+        InstallationJob installation = new InstallationJob();
+        installation.setId(UUID.randomUUID());
+        installation.setTenantId(vendorTenantId);
+        installation.setOrderId(order.getId());
+        installation.setCustomerId(customerB.profile().getId());
+        installation.setSiteAddress("Customer B installation address");
+        installation.setScheduledAt(Instant.now().plusSeconds(3600));
+        installation.setAssignedEngineerId(vendor.getId());
+        installation.setStatus("SCHEDULED");
+        installation.setCreatedAt(Instant.now());
+        installationJobs.saveAndFlush(installation);
+
+        Warranty warranty = new Warranty();
+        warranty.setId(UUID.randomUUID());
+        warranty.setTenantId(vendorTenantId);
+        warranty.setOrderId(order.getId());
+        warranty.setInstallationId(installation.getId());
+        warranty.setCustomerId(customerB.profile().getId());
+        warranty.setProductId(product.getId());
+        warranty.setQuantity(1);
+        warranty.setStartDate(java.time.LocalDate.now().minusDays(1));
+        warranty.setEndDate(java.time.LocalDate.now().plusDays(365));
+        warranty.setStatus("ACTIVE");
+        warranty.setActivatedAt(Instant.now());
+        warranties.saveAndFlush(warranty);
+
+        String customerAToken = accessToken(customerA.user().getEmail(), "Customer-Password-2026");
+        String customerBToken = accessToken(customerB.user().getEmail(), "Customer-Password-2026");
+
+        String customerAInstallations = mvc.perform(get("/api/v1/customer/installations")
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(customerAInstallations.contains(installation.getId().toString()),
+                "A customer must not see another customer's installation");
+
+        String customerBInstallations = mvc.perform(get("/api/v1/customer/installations")
+                        .header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(customerBInstallations.contains(installation.getId().toString()),
+                "The installation owner must be able to see its own installation");
+
+        String customerAWarranties = mvc.perform(get("/api/v1/customer/warranties")
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(customerAWarranties.contains(warranty.getId().toString()),
+                "A customer must not see another customer's warranty");
+
+        String customerBWarranties = mvc.perform(get("/api/v1/customer/warranties")
+                        .header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(customerBWarranties.contains(warranty.getId().toString()),
+                "The warranty owner must be able to see its own warranty");
+
+        mvc.perform(get("/api/v1/customer/profile").header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(customerA.user().getEmail()));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/customer/profile")
+                        .header("Authorization", "Bearer " + customerAToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Customer A Updated\",\"phone\":\"9000000001\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Customer A Updated"));
+        assertEquals("customer-owned-resource-b", customerProfiles.findById(customerB.profile().getId()).orElseThrow().getName());
+
+        mvc.perform(get("/api/v1/customer/messaging-consent").header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.smsConsent").value(false))
+                .andExpect(jsonPath("$.whatsappConsent").value(false));
+        mvc.perform(patch("/api/v1/customer/messaging-consent")
+                        .header("Authorization", "Bearer " + customerAToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"smsConsent\":true,\"whatsappConsent\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.smsConsent").value(true))
+                .andExpect(jsonPath("$.whatsappConsent").value(true));
+        mvc.perform(get("/api/v1/customer/messaging-consent").header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.smsConsent").value(false))
+                .andExpect(jsonPath("$.whatsappConsent").value(false));
+        assertTrue(customerProfiles.findById(customerA.profile().getId()).orElseThrow().isSmsConsent());
+        assertFalse(customerProfiles.findById(customerB.profile().getId()).orElseThrow().isSmsConsent());
+    }
+
+    @Test
+    void genericVendorListEndpointsNeverReturnForeignTenantResources() throws Exception {
+        var foreignTenant = newTenant();
+
+        AppUser foreignVendor = new AppUser();
+        foreignVendor.setId(UUID.randomUUID());
+        foreignVendor.setTenantId(foreignTenant.getId());
+        foreignVendor.setName("Foreign Vendor User");
+        foreignVendor.setEmail("foreign-vendor-" + UUID.randomUUID() + "@example.test");
+        foreignVendor.setPasswordHash("not-used");
+        foreignVendor.setAccountType("VENDOR");
+        foreignVendor.setEnabled(true);
+        users.save(foreignVendor);
+
+        ProductCategory category = new ProductCategory();
+        category.setId(UUID.randomUUID());
+        category.setTenantId(foreignTenant.getId());
+        category.setName("Foreign category " + UUID.randomUUID());
+        category.setActive(true);
+        categories.save(category);
+
+        Product product = new Product();
+        product.setId(UUID.randomUUID());
+        product.setTenantId(foreignTenant.getId());
+        product.setCategoryId(category.getId());
+        product.setSku("FOREIGN-" + UUID.randomUUID());
+        product.setName("Foreign product");
+        product.setPrice(BigDecimal.TEN);
+        product.setTaxPercent(BigDecimal.ZERO);
+        product.setActive(true);
+        products.save(product);
+
+        SolarPackage solarPackage = new SolarPackage();
+        solarPackage.setId(UUID.randomUUID());
+        solarPackage.setTenantId(foreignTenant.getId());
+        solarPackage.setCode("FOREIGN-" + UUID.randomUUID().toString().substring(0, 8));
+        solarPackage.setName("Foreign package");
+        solarPackage.setActive(true);
+        packages.save(solarPackage);
+
+        CustomerProfile customer = createCustomer(foreignTenant.getId(), "generic-list-customer").profile();
+
+        Enquiry enquiry = new Enquiry();
+        enquiry.setId(UUID.randomUUID());
+        enquiry.setTenantId(foreignTenant.getId());
+        enquiry.setCustomerId(customer.getId());
+        enquiry.setName("Foreign enquiry");
+        enquiry.setStatus("NEW");
+        enquiry.setCreatedAt(Instant.now());
+        enquiries.save(enquiry);
+
+        SalesLead lead = new SalesLead();
+        lead.setId(UUID.randomUUID());
+        lead.setTenantId(foreignTenant.getId());
+        lead.setEnquiryId(enquiry.getId());
+        lead.setCustomerId(customer.getId());
+        lead.setStage("NEW");
+        lead.setPriority("LOW");
+        lead.setCreatedAt(Instant.now());
+        leads.save(lead);
+
+        SiteSurvey survey = new SiteSurvey();
+        survey.setId(UUID.randomUUID());
+        survey.setTenantId(foreignTenant.getId());
+        survey.setLeadId(lead.getId());
+        survey.setPropertyType("RESIDENTIAL");
+        survey.setRoofType("RCC");
+        survey.setStatus("SCHEDULED");
+        survey.setScheduledAt(Instant.now().plusSeconds(3600));
+        surveys.save(survey);
+
+        Quotation quotation = new Quotation();
+        quotation.setId(UUID.randomUUID());
+        quotation.setTenantId(foreignTenant.getId());
+        quotation.setQuoteGroupId(UUID.randomUUID());
+        quotation.setQuotationNumber("FOREIGN-" + UUID.randomUUID().toString().substring(0, 8));
+        quotation.setRevision(1);
+        quotation.setCustomerId(customer.getId());
+        quotation.setLeadId(lead.getId());
+        quotation.setSurveyId(survey.getId());
+        quotation.setStatus("DRAFT");
+        quotation.setSubtotal(BigDecimal.ZERO);
+        quotation.setDiscountPercent(BigDecimal.ZERO);
+        quotation.setDiscountAmount(BigDecimal.ZERO);
+        quotation.setTaxAmount(BigDecimal.ZERO);
+        quotation.setGrandTotal(BigDecimal.ZERO);
+        quotation.setCreatedBy(foreignVendor.getId());
+        quotation.setCreatedAt(Instant.now());
+        quotations.save(quotation);
+
+        CustomerOrder order = new CustomerOrder();
+        order.setId(UUID.randomUUID());
+        order.setTenantId(foreignTenant.getId());
+        order.setQuotationId(quotation.getId());
+        order.setCustomerId(customer.getId());
+        order.setOrderNumber("FOREIGN-" + UUID.randomUUID().toString().substring(0, 8));
+        order.setStatus("PENDING");
+        order.setSubtotal(BigDecimal.ZERO);
+        order.setDiscountPercent(BigDecimal.ZERO);
+        order.setDiscountAmount(BigDecimal.ZERO);
+        order.setTaxTotal(BigDecimal.ZERO);
+        order.setTotal(BigDecimal.ZERO);
+        order.setCreatedAt(Instant.now());
+        customerOrders.save(order);
+
+        var token = accessToken("admin@saumya.local", "Admin@123");
+        mvc.perform(patch("/api/v1/products/" + product.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"categoryId":"%s","sku":"TAMPERED","name":"Tampered foreign product","price":1,"purchasePrice":0,"discountPercent":0,"taxPercent":0,"reorderLevel":0}
+                                """.formatted(category.getId())))
+                .andExpect(status().isNotFound());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/products/" + product.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(patch("/api/v1/categories/" + category.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Tampered foreign category\"}"))
+                .andExpect(status().isNotFound());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/categories/" + category.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(patch("/api/v1/packages/" + solarPackage.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"TAMPERED","name":"Tampered foreign package","capacityKw":1,"packageType":"RESIDENTIAL","basePrice":1,"items":[{"productId":"%s","quantity":1}]}
+                                """.formatted(product.getId())))
+                .andExpect(status().isNotFound());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/packages/" + solarPackage.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        Map<String, UUID> foreignIds = Map.of(
+                "users", foreignVendor.getId(),
+                "categories", category.getId(),
+                "products", product.getId(),
+                "packages", solarPackage.getId(),
+                "customers", customer.getId(),
+                "enquiries", enquiry.getId(),
+                "leads", lead.getId(),
+                "surveys", survey.getId(),
+                "quotations", quotation.getId(),
+                "orders", order.getId()
+        );
+        for (var entry : foreignIds.entrySet()) {
+            String body = mvc.perform(get("/api/v1/" + entry.getKey())
+                            .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            assertFalse(body.contains(entry.getValue().toString()),
+                    "Foreign tenant resource leaked from /" + entry.getKey());
+        }
+
+        var customerActor = createCustomer(vendorTenantId, "catalog-customer");
+        var customerToken = accessToken(customerActor.user().getEmail(), "Customer-Password-2026");
+        for (String type : List.of("catalog-categories", "catalog-products", "catalog-packages")) {
+            String body = mvc.perform(get("/api/v1/" + type)
+                            .header("Authorization", "Bearer " + customerToken))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            assertFalse(body.contains(category.getId().toString()));
+            assertFalse(body.contains(product.getId().toString()));
+            assertFalse(body.contains(solarPackage.getId().toString()));
+        }
+        mvc.perform(post("/api/v1/customer/product-orders")
+                        .header("Authorization", "Bearer " + customerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"productId":"%s","quantity":1,"tenantId":"%s","customerId":"%s"}
+                                """.formatted(product.getId(), foreignTenant.getId(), customer.getId())))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void operationsCsvXlsxAndPdfExportsContainOnlyAuthenticatedTenantAggregates() throws Exception {
+        var foreignTenant = newTenant();
+        CustomerProfile foreignCustomer = createCustomer(foreignTenant.getId(), "report-export-foreign").profile();
+
+        CustomerOrder foreignOrder = new CustomerOrder();
+        foreignOrder.setId(UUID.randomUUID());
+        foreignOrder.setTenantId(foreignTenant.getId());
+        foreignOrder.setCustomerId(foreignCustomer.getId());
+        foreignOrder.setOrderNumber("FOREIGN-EXPORT-" + UUID.randomUUID().toString().substring(0, 8));
+        foreignOrder.setStatus("CONFIRMED");
+        foreignOrder.setSubtotal(BigDecimal.valueOf(987654));
+        foreignOrder.setDiscountPercent(BigDecimal.ZERO);
+        foreignOrder.setDiscountAmount(BigDecimal.ZERO);
+        foreignOrder.setTaxTotal(BigDecimal.ZERO);
+        foreignOrder.setTotal(BigDecimal.valueOf(987654));
+        foreignOrder.setCreatedAt(Instant.now());
+        customerOrders.save(foreignOrder);
+
+        var token = accessToken("admin@saumya.local", "Admin@123");
+        var reportResponse = mvc.perform(get("/api/v1/reports/operations")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        JsonNode report = json.readTree(reportResponse);
+        long expectedOrders = customerOrders.findByTenantIdOrderByIdDesc(vendorTenantId).stream()
+                .filter(x -> x.getCreatedAt() != null).count();
+        assertEquals(expectedOrders, report.get("orders").asLong());
+
+        String csv = new String(exportFile(token, "CSV"), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(csv.contains("orders," + expectedOrders));
+        assertFalse(csv.contains("987654"));
+        assertFalse(csv.contains(foreignOrder.getId().toString()));
+
+        byte[] xlsx = exportFile(token, "XLSX");
+        try (var workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
+                new java.io.ByteArrayInputStream(xlsx))) {
+            var sheet = workbook.getSheet("Operations");
+            assertNotNull(sheet);
+            boolean foundOrders = false;
+            for (int row = 1; row <= sheet.getLastRowNum(); row++) {
+                var cells = sheet.getRow(row);
+                if (cells != null && "orders".equals(cells.getCell(0).getStringCellValue())) {
+                    assertEquals(String.valueOf(expectedOrders), cells.getCell(1).getStringCellValue());
+                    foundOrders = true;
+                }
+            }
+            assertTrue(foundOrders, "XLSX must contain the authenticated tenant's order aggregate");
+            assertFalse(xlsx.length == 0);
+            assertFalse(new String(xlsx, java.nio.charset.StandardCharsets.ISO_8859_1).contains("987654"));
+        }
+
+        byte[] pdf = exportFile(token, "PDF");
+        String pdfText = new com.lowagie.text.pdf.parser.PdfTextExtractor(
+                new com.lowagie.text.pdf.PdfReader(pdf)).getTextFromPage(1, true);
+        assertTrue(pdfText.contains("orders"));
+        assertTrue(pdfText.contains(String.valueOf(expectedOrders)));
+        assertFalse(pdfText.contains("987654"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"CSV", "XLSX", "PDF"})
+    @Transactional
+    void asynchronousExportStatusAndDownloadAreRestrictedToTheRequestingPrincipalForEveryFormat(String format) throws Exception {
+        String ownerToken = accessToken("admin@saumya.local", "Admin@123");
+        String created = mvc.perform(post("/api/v1/exports")
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reportType\":\"OPERATIONS\",\"format\":\"" + format + "\"}"))
+                .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
+        String exportId = json.readTree(created).get("id").asText();
+
+        AppUser secondExporter = createPermissionMatrixUser("export-second-requester", List.of("REPORT_EXPORT"));
+        String secondExporterToken = accessToken(secondExporter.getEmail(), "Matrix-Password-2026");
+        mvc.perform(get("/api/v1/exports/" + exportId).header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/exports/" + exportId + "/download")
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isConflict());
+
+        // The integration test is transactional, so the after-commit worker event is intentionally
+        // not published until the test ends. Detach the just-created PENDING entity before invoking
+        // the worker directly: the worker's atomic claim is a bulk update and production workers
+        // run with a separate persistence context.
+        entityManager.flush();
+        entityManager.clear();
+        exportService.process(UUID.fromString(exportId), vendorTenantId);
+
+        String completedStatus = mvc.perform(get("/api/v1/exports/" + exportId)
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertEquals("COMPLETED", json.readTree(completedStatus).get("status").asText());
+
+        var ownerDownload = mvc.perform(get("/api/v1/exports/" + exportId + "/download")
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk())
+                .andReturn();
+        byte[] ownerBytes = ownerDownload.getResponse().getContentAsByteArray();
+        assertTrue(ownerBytes.length > 0, "The owner must receive the completed private export bytes");
+        String expectedContentType = switch (format) {
+            case "CSV" -> "text/csv;charset=UTF-8";
+            case "XLSX" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            case "PDF" -> "application/pdf";
+            default -> throw new AssertionError("Unexpected export format: " + format);
+        };
+        assertEquals(expectedContentType, ownerDownload.getResponse().getContentType());
+        assertTrue(ownerDownload.getResponse().getHeader("Content-Disposition").contains(format.toLowerCase(java.util.Locale.ROOT)));
+
+        mvc.perform(get("/api/v1/exports/" + exportId).header("Authorization", "Bearer " + secondExporterToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/exports/" + exportId + "/download")
+                        .header("Authorization", "Bearer " + secondExporterToken))
+                .andExpect(status().isNotFound());
+
+        var foreignTenant = newTenant();
+        AppUser foreignExporter = createPermissionMatrixUser(
+                foreignTenant.getId(), "foreign-export-requester", List.of("REPORT_EXPORT"));
+        String foreignExporterToken = accessToken(foreignExporter.getEmail(), "Matrix-Password-2026");
+        mvc.perform(get("/api/v1/exports/" + exportId).header("Authorization", "Bearer " + foreignExporterToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/exports/" + exportId + "/download")
+                        .header("Authorization", "Bearer " + foreignExporterToken))
+                .andExpect(status().isNotFound());
+
+        String customerToken = accessToken("customer@saumya.local", "Customer@123");
+        mvc.perform(get("/api/v1/exports/" + exportId).header("Authorization", "Bearer " + customerToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/exports/" + exportId + "/download")
+                        .header("Authorization", "Bearer " + customerToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void warrantyClaimListCreateAndDecisionAreTenantAndCustomerScoped() throws Exception {
+        var customerA = createCustomer(vendorTenantId, "claim-customer-a");
+        var customerB = createCustomer(vendorTenantId, "claim-customer-b");
+        var foreignTenant = newTenant();
+        var foreignCustomer = createCustomer(foreignTenant.getId(), "claim-customer-foreign");
+
+        Warranty foreignWarranty = new Warranty();
+        foreignWarranty.setId(UUID.randomUUID());
+        foreignWarranty.setTenantId(foreignTenant.getId());
+        foreignWarranty.setCustomerId(foreignCustomer.profile().getId());
+        foreignWarranty.setStatus("ACTIVE");
+        foreignWarranty.setStartDate(java.time.LocalDate.now().minusDays(5));
+        foreignWarranty.setEndDate(java.time.LocalDate.now().plusDays(30));
+        warranties.save(foreignWarranty);
+
+        WarrantyClaim foreignClaim = new WarrantyClaim();
+        foreignClaim.setId(UUID.randomUUID());
+        foreignClaim.setTenantId(foreignTenant.getId());
+        foreignClaim.setWarrantyId(foreignWarranty.getId());
+        foreignClaim.setCustomerId(foreignCustomer.profile().getId());
+        foreignClaim.setClaimNumber("FOREIGN-CLAIM-" + UUID.randomUUID().toString().substring(0, 8));
+        foreignClaim.setSubject("Foreign warranty claim");
+        foreignClaim.setDescription("Tenant isolation fixture");
+        foreignClaim.setStatus("SUBMITTED");
+        foreignClaim.setCreatedAt(Instant.now());
+        foreignClaim.setUpdatedAt(Instant.now());
+        warrantyClaims.save(foreignClaim);
+
+        Warranty customerBWarranty = new Warranty();
+        customerBWarranty.setId(UUID.randomUUID());
+        customerBWarranty.setTenantId(vendorTenantId);
+        customerBWarranty.setCustomerId(customerB.profile().getId());
+        customerBWarranty.setStatus("ACTIVE");
+        customerBWarranty.setStartDate(java.time.LocalDate.now().minusDays(5));
+        customerBWarranty.setEndDate(java.time.LocalDate.now().plusDays(30));
+        warranties.save(customerBWarranty);
+        WarrantyClaim customerBClaim = new WarrantyClaim();
+        customerBClaim.setId(UUID.randomUUID());
+        customerBClaim.setTenantId(vendorTenantId);
+        customerBClaim.setWarrantyId(customerBWarranty.getId());
+        customerBClaim.setCustomerId(customerB.profile().getId());
+        customerBClaim.setClaimNumber("CUSTOMER-B-CLAIM-" + UUID.randomUUID().toString().substring(0, 8));
+        customerBClaim.setSubject("Customer B claim");
+        customerBClaim.setDescription("Same-tenant customer isolation fixture");
+        customerBClaim.setStatus("SUBMITTED");
+        customerBClaim.setCreatedAt(Instant.now());
+        customerBClaim.setUpdatedAt(Instant.now());
+        warrantyClaims.save(customerBClaim);
+
+        var customerAToken = accessToken(customerA.user().getEmail(), "Customer-Password-2026");
+        var customerBToken = accessToken(customerB.user().getEmail(), "Customer-Password-2026");
+        String customerAClaims = mvc.perform(get("/api/v1/customer/warranty-claims")
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(customerAClaims.contains(foreignClaim.getId().toString()));
+        assertFalse(customerAClaims.contains(customerBClaim.getId().toString()));
+
+        String customerBClaims = mvc.perform(get("/api/v1/customer/warranty-claims")
+                        .header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(customerBClaims.contains(foreignClaim.getId().toString()));
+        assertTrue(customerBClaims.contains(customerBClaim.getId().toString()));
+
+        mvc.perform(post("/api/v1/customer/warranty-claims")
+                        .header("Authorization", "Bearer " + customerAToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"warrantyId":"%s","subject":"Tampered claim","description":"Cross-customer warranty"}
+                                """.formatted(foreignWarranty.getId())))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(post("/api/v1/customer/warranty-claims")
+                        .header("Authorization", "Bearer " + customerAToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"warrantyId":"%s","subject":"Same-tenant customer tampering","description":"Attempt to claim another customer's warranty"}
+                                """.formatted(customerBWarranty.getId())))
+                .andExpect(status().isNotFound());
+
+        var vendorToken = accessToken("admin@saumya.local", "Admin@123");
+        String vendorClaims = mvc.perform(get("/api/v1/warranty-claims")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(vendorClaims.contains(foreignClaim.getId().toString()));
+
+        mvc.perform(post("/api/v1/warranty-claims/" + foreignClaim.getId() + "/approve")
+                        .header("Authorization", "Bearer " + vendorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Tampered cross-tenant decision\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("SUBMITTED", warrantyClaims.findById(foreignClaim.getId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    void customerCannotReadAnotherCustomersOrdersInvoicesOrServiceTickets() throws Exception {
+        var customerA = createCustomer(vendorTenantId, "customer-scope-a");
+        var customerB = createCustomer(vendorTenantId, "customer-scope-b");
+        var vendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+
+        CustomerOrder order = new CustomerOrder();
+        order.setId(UUID.randomUUID());
+        order.setTenantId(vendorTenantId);
+        order.setCustomerId(customerB.profile().getId());
+        order.setOrderNumber("CUSTOMER-B-" + UUID.randomUUID().toString().substring(0, 8));
+        order.setStatus("CONFIRMED");
+        order.setSubtotal(BigDecimal.TEN);
+        order.setDiscountPercent(BigDecimal.ZERO);
+        order.setDiscountAmount(BigDecimal.ZERO);
+        order.setTaxTotal(BigDecimal.ZERO);
+        order.setTotal(BigDecimal.TEN);
+        order.setCreatedAt(Instant.now());
+        customerOrders.save(order);
+
+        Quotation quotation = new Quotation();
+        quotation.setId(UUID.randomUUID());
+        quotation.setTenantId(vendorTenantId);
+        quotation.setCustomerId(customerB.profile().getId());
+        quotation.setQuotationNumber("CUSTOMER-B-QUOTE-" + UUID.randomUUID().toString().substring(0, 8));
+        quotation.setRevision(1);
+        quotation.setStatus("SENT");
+        quotation.setValidUntil(java.time.LocalDate.now().plusDays(30));
+        quotation.setSubtotal(BigDecimal.TEN);
+        quotation.setDiscountPercent(BigDecimal.ZERO);
+        quotation.setDiscountAmount(BigDecimal.ZERO);
+        quotation.setTaxAmount(BigDecimal.ZERO);
+        quotation.setGrandTotal(BigDecimal.TEN);
+        quotation.setCreatedBy(vendor.getId());
+        quotation.setCreatedAt(Instant.now());
+        quotations.save(quotation);
+
+        Invoice invoice = new Invoice();
+        invoice.setId(UUID.randomUUID());
+        invoice.setTenantId(vendorTenantId);
+        invoice.setOrderId(order.getId());
+        invoice.setInvoiceNumber("CUSTOMER-B-INV-" + UUID.randomUUID().toString().substring(0, 8));
+        invoice.setFiscalYear("2026-27");
+        invoice.setStatus("ISSUED");
+        invoice.setCustomerName(customerB.profile().getName());
+        invoice.setCustomerEmail(customerB.profile().getEmail());
+        invoice.setVendorName("Saumya Solar");
+        invoice.setCurrency("INR");
+        invoice.setSubtotal(BigDecimal.TEN);
+        invoice.setTaxTotal(BigDecimal.ZERO);
+        invoice.setGrandTotal(BigDecimal.TEN);
+        invoice.setTaxTreatment("INTRA_STATE");
+        invoice.setDueDate(java.time.LocalDate.now().plusDays(30));
+        invoice.setIssuedAt(Instant.now());
+        invoice.setCreatedBy(vendor.getId());
+        invoice.setCreatedAt(Instant.now());
+        invoices.save(invoice);
+
+        com.saumyasolar.domain.Payment payment = new com.saumyasolar.domain.Payment();
+        payment.setId(UUID.randomUUID());
+        payment.setTenantId(vendorTenantId);
+        payment.setInvoiceId(invoice.getId());
+        payment.setOrderId(order.getId());
+        payment.setAmount(BigDecimal.TEN);
+        payment.setCurrency("INR");
+        payment.setMethod("CASH");
+        payment.setSource("MANUAL");
+        payment.setStatus("CONFIRMED");
+        payment.setReference("CUSTOMER-B-PAY-" + UUID.randomUUID().toString().substring(0, 8));
+        payment.setPaidAt(Instant.now());
+        payment.setRecordedBy(vendor.getId());
+        payment.setCreatedAt(Instant.now());
+        payments.save(payment);
+
+        ServiceRequest ticket = new ServiceRequest();
+        ticket.setId(UUID.randomUUID());
+        ticket.setTenantId(vendorTenantId);
+        ticket.setCustomerId(customerB.profile().getId());
+        ticket.setTicketNumber("CUSTOMER-B-SVC-" + UUID.randomUUID().toString().substring(0, 8));
+        ticket.setCategory("GENERAL");
+        ticket.setPriority("LOW");
+        ticket.setDescription("Private customer B service ticket");
+        ticket.setWarrantyStatus("UNKNOWN");
+        ticket.setStatus("OPEN");
+        ticket.setCreatedAt(Instant.now());
+        ticket.setUpdatedAt(Instant.now());
+        serviceRequests.save(ticket);
+
+        var customerAPrincipal = new com.saumyasolar.security.Principal(customerA.user().getId(), vendorTenantId,
+                customerA.user().getEmail(), "CUSTOMER", java.util.Set.of("CUSTOMER"), java.util.Set.of(), 0);
+        var customerBPrincipal = new com.saumyasolar.security.Principal(customerB.user().getId(), vendorTenantId,
+                customerB.user().getEmail(), "CUSTOMER", java.util.Set.of("CUSTOMER"), java.util.Set.of(), 0);
+        byte[] privateEvidenceBytes = "%PDF-1.4 customer B service evidence"
+                .getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        MockMultipartFile privateEvidence = new MockMultipartFile("file", "customer-b-evidence.pdf",
+                "application/pdf", privateEvidenceBytes);
+        var privateAttachment = serviceAttachments.upload(ticket.getId(), privateEvidence, customerBPrincipal);
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> serviceAttachments.download(ticket.getId(), privateAttachment.getId(), customerAPrincipal));
+        var customerAToken = accessToken(customerA.user().getEmail(), "Customer-Password-2026");
+        var customerBTokenForEvidence = accessToken(customerB.user().getEmail(), "Customer-Password-2026");
+        mvc.perform(get("/api/v1/service-requests/" + ticket.getId() + "/attachments/" + privateAttachment.getId())
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/service-requests/" + ticket.getId() + "/attachments/" + privateAttachment.getId())
+                        .header("Authorization", "Bearer " + customerBTokenForEvidence))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(privateEvidenceBytes));
+        MockMultipartFile tamperedCustomerUpload = new MockMultipartFile("file", "tampered.pdf", "application/pdf", privateEvidenceBytes);
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/service-requests/" + ticket.getId() + "/attachments")
+                        .file(tamperedCustomerUpload)
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isNotFound());
+        assertArrayEquals(privateEvidenceBytes,
+                serviceAttachments.download(ticket.getId(), privateAttachment.getId(), customerBPrincipal).content());
+
+        var token = accessToken(customerA.user().getEmail(), "Customer-Password-2026");
+        var ordersJson = mvc.perform(get("/api/v1/customer/product-orders")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(ordersJson.contains(order.getId().toString()));
+
+        var quotationsJson = mvc.perform(get("/api/v1/quotations")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(quotationsJson.contains(quotation.getId().toString()));
+        mvc.perform(get("/api/v1/quotations/" + quotation.getId() + "/pdf")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        var customerBToken = accessToken(customerB.user().getEmail(), "Customer-Password-2026");
+        mvc.perform(get("/api/v1/quotations/" + quotation.getId() + "/pdf")
+                        .header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .contentType(MediaType.APPLICATION_PDF));
+
+        // A customer must not approve/reject another customer's quotation by guessed ID.
+        // Rejection must be side-effect free; the actual owner can perform the decision.
+        mvc.perform(post("/api/v1/quotations/" + quotation.getId() + "/accept")
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isNotFound());
+        assertEquals("SENT", quotations.findByIdAndTenantId(quotation.getId(), vendorTenantId)
+                .orElseThrow().getStatus(),
+                "A foreign customer's guessed quotation ID must not change the quotation state");
+        mvc.perform(post("/api/v1/quotations/" + quotation.getId() + "/accept")
+                        .header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isOk());
+        assertEquals("ACCEPTED", quotations.findByIdAndTenantId(quotation.getId(), vendorTenantId)
+                .orElseThrow().getStatus());
+
+        // Checkout authorization must bind invoice -> order -> customer before any gateway
+        // lookup, entitlement check or payment creation.
+        int paymentsBeforeForeignCheckout = payments.findByTenantIdAndInvoiceId(vendorTenantId, invoice.getId()).size();
+        mvc.perform(post("/api/v1/payment-gateways/invoices/" + invoice.getId() + "/checkout")
+                        .header("Authorization", "Bearer " + customerAToken)
+                        .header("Idempotency-Key", "foreign-invoice-checkout-01"))
+                .andExpect(status().isNotFound());
+        assertEquals(paymentsBeforeForeignCheckout,
+                payments.findByTenantIdAndInvoiceId(vendorTenantId, invoice.getId()).size(),
+                "A foreign-customer checkout attempt must not create a payment");
+
+        var invoicesJson = mvc.perform(get("/api/v1/invoices")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(invoicesJson.contains(invoice.getId().toString()));
+        mvc.perform(get("/api/v1/invoices/" + invoice.getId() + "/items")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/invoices/" + invoice.getId() + "/pdf")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/invoices/" + invoice.getId() + "/pdf")
+                        .header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .contentType(MediaType.APPLICATION_PDF));
+        mvc.perform(get("/api/v1/payments/" + payment.getId() + "/receipt.pdf")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/payments/" + payment.getId() + "/receipt.pdf")
+                        .header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .contentType(MediaType.APPLICATION_PDF));
+
+        var ticketsJson = mvc.perform(get("/api/v1/service-requests")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertFalse(ticketsJson.contains(ticket.getId().toString()));
+        mvc.perform(get("/api/v1/service-requests/" + ticket.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void vendorBranchEndpointsCannotReadOrMutateAnotherTenantsBranch() throws Exception {
+        var foreignTenant = newTenant();
+        Branch foreignBranch = new Branch();
+        foreignBranch.setId(UUID.randomUUID());
+        foreignBranch.setTenantId(foreignTenant.getId());
+        foreignBranch.setCode("FOREIGN-" + UUID.randomUUID().toString().substring(0, 8));
+        foreignBranch.setName("Foreign branch");
+        foreignBranch.setActive(true);
+        foreignBranch.setCreatedAt(Instant.now());
+        foreignBranch.setUpdatedAt(Instant.now());
+        branches.save(foreignBranch);
+
+        var token = accessToken("admin@saumya.local", "Admin@123");
+        mvc.perform(get("/api/v1/branches/" + foreignBranch.getId() + "/users")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/branches/" + foreignBranch.getId() + "/analytics")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                                "/api/v1/branches/" + foreignBranch.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"code":"TAMPERED","name":"Attempted foreign update"}
+                                """))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/branches/" + foreignBranch.getId() + "/deactivate")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/branches/" + foreignBranch.getId() + "/users")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"userId":"%s"}
+                                """.formatted(users.findByEmailIgnoreCase("sales@saumya.local").orElseThrow().getId())))
+                .andExpect(status().isNotFound());
+    }
+
+
+    @org.springframework.transaction.annotation.Transactional
+    @Test
+    void vendorBranchCrudAndMembershipAssignmentArePermissionAndTenantScoped() throws Exception {
+        var activeSubscription = tenantSubscriptions.findByTenantIdOrderByCreatedAtDesc(vendorTenantId).stream()
+                .filter(subscription -> "ACTIVE".equals(subscription.getStatus())).findFirst().orElseThrow();
+        var professionalPlan = subscriptionPlans.findByPlanCodeIgnoreCase("PROFESSIONAL").orElseThrow();
+        activeSubscription.setPlanId(professionalPlan.getId());
+        tenantSubscriptions.saveAndFlush(activeSubscription);
+
+        var adminToken = accessToken("admin@saumya.local", "Admin@123");
+        var salesToken = accessToken("sales@saumya.local", "Sales@123");
+        var suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        var body = """
+                {"code":"BR-%s","name":"Branch %s","address":"Indore","phone":"9999999999","email":"branch-%s@example.test"}
+                """.formatted(suffix, suffix, suffix);
+        mvc.perform(post("/api/v1/branches").header("Authorization", "Bearer " + salesToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+
+        var created = mvc.perform(post("/api/v1/branches").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        UUID branchId = UUID.fromString(json.readTree(created).get("id").asText());
+        var list = mvc.perform(get("/api/v1/branches").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(list.contains(branchId.toString()));
+
+        var updateBody = """
+                {"code":"BR-UPD-%s","name":"Updated branch %s","address":"Updated address","phone":"8888888888","email":"updated-%s@example.test"}
+                """.formatted(suffix, suffix, suffix);
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/branches/" + branchId)
+                        .header("Authorization", "Bearer " + salesToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(updateBody))
+                .andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/branches/" + branchId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(updateBody))
+                .andExpect(status().isOk());
+        assertEquals("Updated branch " + suffix,
+                branches.findByIdAndTenantId(branchId, vendorTenantId).orElseThrow().getName());
+
+        UUID employeeId = users.findByEmailIgnoreCase("sales@saumya.local").orElseThrow().getId();
+        mvc.perform(post("/api/v1/branches/" + branchId + "/users")
+                        .header("Authorization", "Bearer " + salesToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + employeeId + "\"}"))
+                .andExpect(status().isForbidden());
+        var foreignTenantForMember = newTenant();
+        AppUser foreignEmployee = new AppUser();
+        foreignEmployee.setId(UUID.randomUUID());
+        foreignEmployee.setTenantId(foreignTenantForMember.getId());
+        foreignEmployee.setName("Foreign branch employee");
+        foreignEmployee.setEmail("foreign-branch-employee-" + UUID.randomUUID() + "@example.test");
+        foreignEmployee.setPasswordHash(passwordEncoder.encode("Foreign-Employee-Password-2026"));
+        foreignEmployee.setAccountType("VENDOR");
+        foreignEmployee.setEnabled(true);
+        users.saveAndFlush(foreignEmployee);
+        mvc.perform(post("/api/v1/branches/" + branchId + "/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + foreignEmployee.getId() + "\"}"))
+                .andExpect(status().is4xxClientError());
+        assertFalse(branchMemberships.existsByTenantIdAndBranchIdAndUserId(
+                vendorTenantId, branchId, foreignEmployee.getId()));
+        mvc.perform(post("/api/v1/branches/" + branchId + "/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + employeeId + "\"}"))
+                .andExpect(status().isOk());
+        var members = mvc.perform(get("/api/v1/branches/" + branchId + "/users")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(members.contains(employeeId.toString()));
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                                "/api/v1/branches/" + branchId + "/users/" + employeeId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+        assertFalse(branchMemberships.existsByTenantIdAndBranchIdAndUserId(vendorTenantId, branchId, employeeId));
+
+        mvc.perform(post("/api/v1/branches/" + branchId + "/deactivate")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+        assertFalse(branches.findByIdAndTenantId(branchId, vendorTenantId).orElseThrow().isActive());
+        mvc.perform(post("/api/v1/branches/" + branchId + "/activate")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+        assertTrue(branches.findByIdAndTenantId(branchId, vendorTenantId).orElseThrow().isActive());
+    }
+
+    @Test
+    void vendorCannotReadForeignSurveyOrDownloadForeignServiceEvidence() throws Exception {
+        var foreignTenant = newTenant();
+        var foreignCustomer = createCustomer(foreignTenant.getId(), "foreign-evidence-customer");
+        ServiceRequest foreignTicket = new ServiceRequest();
+        foreignTicket.setId(UUID.randomUUID());
+        foreignTicket.setTenantId(foreignTenant.getId());
+        foreignTicket.setTicketNumber("FOREIGN-EVIDENCE-" + UUID.randomUUID().toString().substring(0, 8));
+        foreignTicket.setCustomerId(foreignCustomer.profile().getId());
+        foreignTicket.setCategory("GENERAL");
+        foreignTicket.setPriority("LOW");
+        foreignTicket.setDescription("Foreign tenant private evidence");
+        foreignTicket.setWarrantyStatus("UNKNOWN");
+        foreignTicket.setStatus("OPEN");
+        foreignTicket.setCreatedAt(Instant.now());
+        foreignTicket.setUpdatedAt(Instant.now());
+        serviceRequests.save(foreignTicket);
+
+        SiteSurvey ownSurvey = new SiteSurvey();
+        ownSurvey.setId(UUID.randomUUID());
+        ownSurvey.setTenantId(vendorTenantId);
+        ownSurvey.setScheduledAt(Instant.now().plusSeconds(3600));
+        ownSurvey.setPropertyType("RESIDENTIAL");
+        ownSurvey.setRoofType("RCC");
+        ownSurvey.setStatus("SCHEDULED");
+        surveys.save(ownSurvey);
+
+        SiteSurvey foreignSurvey = new SiteSurvey();
+        foreignSurvey.setId(UUID.randomUUID());
+        foreignSurvey.setTenantId(foreignTenant.getId());
+        foreignSurvey.setScheduledAt(Instant.now().plusSeconds(3600));
+        foreignSurvey.setPropertyType("RESIDENTIAL");
+        foreignSurvey.setRoofType("RCC");
+        foreignSurvey.setStatus("SCHEDULED");
+        surveys.save(foreignSurvey);
+
+        var vendorToken = accessToken("admin@saumya.local", "Admin@123");
+        var vendorUser = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        var vendorRoles = vendorUser.getRoles().stream().map(Role::getName).collect(java.util.stream.Collectors.toSet());
+        var vendorPermissions = vendorUser.getRoles().stream().flatMap(role -> role.getPermissions().stream())
+                .map(Permission::getCode).collect(java.util.stream.Collectors.toSet());
+        var vendorPrincipal = new com.saumyasolar.security.Principal(
+                vendorUser.getId(), vendorTenantId, vendorUser.getEmail(), "VENDOR",
+                vendorRoles, vendorPermissions, vendorUser.getTokenVersion());
+        byte[] surveyEvidenceBytes = "%PDF-1.4 survey evidence".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        MockMultipartFile ownSurveyEvidence = new MockMultipartFile(
+                "file", "own-survey.pdf", "application/pdf", surveyEvidenceBytes);
+        var ownSurveyAttachment = surveyAttachments.upload(ownSurvey.getId(), ownSurveyEvidence, vendorPrincipal);
+        mvc.perform(get("/api/v1/surveys/" + ownSurvey.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].id")
+                        .value(ownSurveyAttachment.getId().toString()));
+        mvc.perform(get("/api/v1/surveys/" + ownSurvey.getId() + "/attachments/" + ownSurveyAttachment.getId())
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(surveyEvidenceBytes));
+        var reportBefore = mvc.perform(get("/api/v1/reports/operations")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        long serviceTicketsBefore = json.readTree(reportBefore).get("serviceTickets").asLong();
+        String csv = new String(exportFile(vendorToken, "CSV"), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(csv.contains("serviceTickets," + serviceTicketsBefore));
+        mvc.perform(get("/api/v1/platform/tenants/export")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/platform/tenants/export.xlsx")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/platform/tenants/export.pdf")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/service-requests/" + foreignTicket.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/service-requests/" + foreignTicket.getId() + "/attachments/" + UUID.randomUUID())
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/surveys/" + foreignSurvey.getId())
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/surveys/" + foreignSurvey.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+        MockMultipartFile foreignSurveyUpload = new MockMultipartFile(
+                "file", "foreign-survey.txt", "text/plain", "foreign tenant evidence".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/surveys/" + foreignSurvey.getId() + "/attachments")
+                        .file(foreignSurveyUpload)
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/surveys/" + foreignSurvey.getId() + "/attachments/"
+                        + UUID.randomUUID())
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+    }
+
+    private CustomerFixture createCustomer(UUID tenantId, String prefix) {
+        String password = "Customer-Password-2026";
+        AppUser user = new AppUser();
+        user.setId(UUID.randomUUID());
+        user.setTenantId(tenantId);
+        user.setName(prefix);
+        user.setEmail(prefix + "-" + UUID.randomUUID() + "@example.test");
+        user.setPasswordHash(passwordEncoder.encode(password));
+        user.setAccountType("CUSTOMER");
+        user.setEnabled(true);
+        user.getRoles().add(roles.findByNameAndTenantIdIsNull("CUSTOMER").orElseThrow());
+        users.save(user);
+
+        CustomerProfile profile = new CustomerProfile();
+        profile.setId(UUID.randomUUID());
+        profile.setTenantId(tenantId);
+        profile.setUserId(user.getId());
+        profile.setName(prefix);
+        profile.setEmail(user.getEmail());
+        profile.setActive(true);
+        customerProfiles.save(profile);
+        return new CustomerFixture(user, profile);
+    }
+
+    private CustomerAddress createAddress(UUID customerId, UUID tenantId) {
+        CustomerAddress address = new CustomerAddress();
+        address.setId(UUID.randomUUID());
+        address.setTenantId(tenantId);
+        address.setCustomerId(customerId);
+        address.setLabel("Home");
+        address.setLine1("1 Test Road");
+        address.setCity("Raipur");
+        address.setState("Chhattisgarh");
+        address.setPincode("492001");
+        address.setCountry("India");
+        address.setDefault(true);
+        address.setCreatedAt(Instant.now());
+        address.setUpdatedAt(Instant.now());
+        return customerAddresses.save(address);
+    }
+
+    private String addressBody() {
+        return """
+                {"label":"Updated","line1":"2 Test Road","city":"Raipur","state":"Chhattisgarh","pincode":"492001"}
+                """;
+    }
+
+    private record CustomerFixture(AppUser user, CustomerProfile profile) {
+    }
+
     private String accessToken(String email, String password) throws Exception {
         var body = """
                 {"email":"%s","password":"%s"}
@@ -522,6 +2229,832 @@ class Release12TenantIntegrationTest {
         return tenants.save(tenant);
     }
     
+    @Test
+    void warrantyClaimAttachmentHttpUploadAndDownloadAreBoundToTenantAndParentClaim() throws Exception {
+        var customerA = createCustomer(vendorTenantId, "attachment-customer-a");
+        var customerB = createCustomer(vendorTenantId, "attachment-customer-b");
+        var foreignTenant = newTenant();
+        var foreignCustomer = createCustomer(foreignTenant.getId(), "attachment-foreign-customer");
+
+        Warranty warrantyA = new Warranty();
+        warrantyA.setId(UUID.randomUUID());
+        warrantyA.setTenantId(vendorTenantId);
+        warrantyA.setCustomerId(customerA.profile().getId());
+        warrantyA.setStatus("ACTIVE");
+        warrantyA.setStartDate(java.time.LocalDate.now().minusDays(1));
+        warrantyA.setEndDate(java.time.LocalDate.now().plusDays(30));
+        warranties.save(warrantyA);
+
+        Warranty warrantyB = new Warranty();
+        warrantyB.setId(UUID.randomUUID());
+        warrantyB.setTenantId(vendorTenantId);
+        warrantyB.setCustomerId(customerB.profile().getId());
+        warrantyB.setStatus("ACTIVE");
+        warrantyB.setStartDate(java.time.LocalDate.now().minusDays(1));
+        warrantyB.setEndDate(java.time.LocalDate.now().plusDays(30));
+        warranties.save(warrantyB);
+
+        Warranty foreignWarranty = new Warranty();
+        foreignWarranty.setId(UUID.randomUUID());
+        foreignWarranty.setTenantId(foreignTenant.getId());
+        foreignWarranty.setCustomerId(foreignCustomer.profile().getId());
+        foreignWarranty.setStatus("ACTIVE");
+        foreignWarranty.setStartDate(java.time.LocalDate.now().minusDays(1));
+        foreignWarranty.setEndDate(java.time.LocalDate.now().plusDays(30));
+        warranties.save(foreignWarranty);
+
+        WarrantyClaim claimA = warrantyClaim(vendorTenantId, customerA.profile().getId(), warrantyA.getId());
+        WarrantyClaim claimB = warrantyClaim(vendorTenantId, customerB.profile().getId(), warrantyB.getId());
+        WarrantyClaim foreignClaim = warrantyClaim(foreignTenant.getId(), foreignCustomer.profile().getId(), foreignWarranty.getId());
+        warrantyClaims.saveAllAndFlush(List.of(claimA, claimB, foreignClaim));
+
+        String vendorToken = accessToken("admin@saumya.local", "Admin@123");
+        byte[] pdf = "%PDF-1.7\nclaim evidence\n%%EOF".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        MockMultipartFile evidence = new MockMultipartFile("file", "claim-evidence.pdf", "application/pdf", pdf);
+        String uploaded = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/warranty-claims/" + claimA.getId() + "/attachments")
+                        .file(evidence)
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tenantId").value(vendorTenantId.toString()))
+                .andExpect(jsonPath("$.claimId").value(claimA.getId().toString()))
+                .andReturn().getResponse().getContentAsString();
+        UUID attachmentId = UUID.fromString(json.readTree(uploaded).get("id").asText());
+
+        mvc.perform(get("/api/v1/warranty-claims/" + claimA.getId() + "/attachments/" + attachmentId)
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .header().string("Content-Disposition", org.hamcrest.Matchers.containsString("claim-evidence.pdf")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(pdf));
+
+        mvc.perform(get("/api/v1/warranty-claims/" + claimB.getId() + "/attachments/" + attachmentId)
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/warranty-claims/" + foreignClaim.getId() + "/attachments/" + attachmentId)
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/warranty-claims/" + foreignClaim.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+
+        WarrantyClaimAttachment stored = warrantyClaimAttachments.findByIdAndTenantIdAndClaimId(
+                attachmentId, vendorTenantId, claimA.getId()).orElseThrow();
+        assertTrue(stored.getStorageKey().startsWith(vendorTenantId + "/warranty-claims/"));
+
+        // Customer HTTP access is restricted to the customer's own claim, even
+        // when the caller knows another customer's claim and attachment UUIDs.
+        String customerAToken = accessToken(customerA.user().getEmail(), "Customer-Password-2026");
+        String customerBToken = accessToken(customerB.user().getEmail(), "Customer-Password-2026");
+        mvc.perform(get("/api/v1/warranty-claims/" + claimA.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(attachmentId.toString()));
+        mvc.perform(get("/api/v1/warranty-claims/" + claimA.getId() + "/attachments/" + attachmentId)
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(pdf));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/warranty-claims/" + claimB.getId() + "/attachments")
+                        .file(evidence)
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/warranty-claims/" + claimB.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + customerAToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/warranty-claims/" + claimA.getId() + "/attachments/" + attachmentId)
+                        .header("Authorization", "Bearer " + customerBToken))
+                .andExpect(status().isNotFound());
+
+        // Vendor access must not permit an upload to a foreign tenant's claim.
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/warranty-claims/" + foreignClaim.getId() + "/attachments")
+                        .file(evidence)
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isNotFound());
+
+        // Reject unsupported media types at the HTTP boundary before storage.
+        MockMultipartFile unsupported = new MockMultipartFile(
+                "file", "claim-evidence.txt", "text/plain", "not evidence".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/warranty-claims/" + claimA.getId() + "/attachments")
+                        .file(unsupported)
+                        .header("Authorization", "Bearer " + vendorToken))
+                .andExpect(status().isBadRequest());
+    }
+
+    private WarrantyClaim warrantyClaim(UUID tenantId, UUID customerId, UUID warrantyId) {
+        WarrantyClaim claim = new WarrantyClaim();
+        claim.setId(UUID.randomUUID());
+        claim.setTenantId(tenantId);
+        claim.setWarrantyId(warrantyId);
+        claim.setCustomerId(customerId);
+        claim.setClaimNumber("HTTP-CLAIM-" + UUID.randomUUID().toString().substring(0, 8));
+        claim.setSubject("Controller upload test");
+        claim.setDescription("Private evidence controller integration test");
+        claim.setStatus("SUBMITTED");
+        claim.setCreatedAt(Instant.now());
+        claim.setUpdatedAt(Instant.now());
+        return claim;
+    }
+
+
+    @org.springframework.transaction.annotation.Transactional
+    @Test
+    void warehouseBranchAssignmentRequiresBranchManageAndRejectsForeignBranch() throws Exception {
+        Branch ownBranch = branch(vendorTenantId, "WH-BR-" + UUID.randomUUID().toString().substring(0, 6));
+        branches.saveAndFlush(ownBranch);
+        var foreignTenant = newTenant();
+        Branch foreignBranch = branch(foreignTenant.getId(), "WH-FOREIGN-" + UUID.randomUUID().toString().substring(0, 6));
+        branches.saveAndFlush(foreignBranch);
+
+        Warehouse warehouse = branchWarehouse(vendorTenantId, null, "BRANCH-GUARD");
+        warehouseRecords.saveAndFlush(warehouse);
+
+        AppUser transferOnly = createPermissionMatrixUser(
+                "warehouse-transfer-only", List.of("INVENTORY_TRANSFER"));
+        String transferOnlyToken = accessToken(transferOnly.getEmail(), "Matrix-Password-2026");
+        AppUser branchManager = createPermissionMatrixUser(
+                "warehouse-branch-manager", List.of("INVENTORY_TRANSFER", "BRANCH_MANAGE"));
+        String branchManagerToken = accessToken(branchManager.getEmail(), "Matrix-Password-2026");
+
+        mvc.perform(patch("/api/v1/warehouses/" + warehouse.getId() + "/branch")
+                        .header("Authorization", "Bearer " + transferOnlyToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"branchId\":\"" + ownBranch.getId() + "\"}"))
+                .andExpect(status().isForbidden());
+        assertNull(warehouseRecords.findById(warehouse.getId()).orElseThrow().getBranchId(),
+                "A user lacking BRANCH_MANAGE must not change warehouse branch assignment");
+
+        mvc.perform(patch("/api/v1/warehouses/" + warehouse.getId() + "/branch")
+                        .header("Authorization", "Bearer " + branchManagerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"branchId\":\"" + ownBranch.getId() + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.branchId").value(ownBranch.getId().toString()));
+        assertEquals(ownBranch.getId(), warehouseRecords.findById(warehouse.getId()).orElseThrow().getBranchId());
+
+        mvc.perform(patch("/api/v1/warehouses/" + warehouse.getId() + "/branch")
+                        .header("Authorization", "Bearer " + branchManagerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"branchId\":\"" + foreignBranch.getId() + "\"}"))
+                .andExpect(status().isBadRequest());
+        assertEquals(ownBranch.getId(), warehouseRecords.findById(warehouse.getId()).orElseThrow().getBranchId(),
+                "A failed cross-tenant branch assignment must leave the existing warehouse assignment unchanged");
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    @Test
+    void branchAssignedMemberListsOnlyAssignedBranchEnquiriesLeadsSurveysQuotationsAndOrders() throws Exception {
+        Branch branchA = branch(vendorTenantId, "BR-A-" + UUID.randomUUID().toString().substring(0, 6));
+        Branch branchB = branch(vendorTenantId, "BR-B-" + UUID.randomUUID().toString().substring(0, 6));
+        branches.saveAllAndFlush(List.of(branchA, branchB));
+
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setTenantId(vendorTenantId);
+        role.setName("BRANCH_SCOPE_TEST_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10));
+        for (String code : List.of("LEAD_VIEW", "LEAD_UPDATE", "SURVEY_VIEW", "SURVEY_COMPLETE", "QUOTATION_VIEW", "ORDER_VIEW", "BRANCH_MANAGE", "INVOICE_VIEW", "INVOICE_CREATE", "INVOICE_VOID", "PAYMENT_VIEW", "PAYMENT_REFUND", "SERVICE_VIEW", "SERVICE_ASSIGN", "SERVICE_UPDATE", "SERVICE_CLOSE", "INSTALLATION_VIEW", "INSTALLATION_ASSIGN", "INSTALLATION_UPDATE", "INVENTORY_VIEW")) {
+            Permission permission = permissions.findByCode(code).orElseThrow();
+            role.getPermissions().add(permission);
+        }
+        roles.saveAndFlush(role);
+
+        AppUser member = new AppUser();
+        member.setId(UUID.randomUUID());
+        member.setTenantId(vendorTenantId);
+        member.setName("Branch Assigned Member");
+        member.setEmail("branch-member-" + UUID.randomUUID() + "@example.test");
+        member.setPasswordHash(passwordEncoder.encode("Branch-Member-Password-2026"));
+        member.setAccountType("VENDOR");
+        member.setEnabled(true);
+        member.getRoles().add(role);
+        users.saveAndFlush(member);
+
+        BranchMembership membership = new BranchMembership();
+        membership.setId(UUID.randomUUID());
+        membership.setTenantId(vendorTenantId);
+        membership.setBranchId(branchA.getId());
+        membership.setUserId(member.getId());
+        membership.setCreatedAt(Instant.now());
+        branchMemberships.saveAndFlush(membership);
+
+        Enquiry enquiryA = enquiry(vendorTenantId, branchA.getId(), "A");
+        Enquiry enquiryB = enquiry(vendorTenantId, branchB.getId(), "B");
+        enquiryRecords.saveAllAndFlush(List.of(enquiryA, enquiryB));
+
+        SalesLead leadA = lead(vendorTenantId, branchA.getId(), member.getId(), enquiryA.getId());
+        SalesLead leadB = lead(vendorTenantId, branchB.getId(), member.getId(), enquiryB.getId());
+        salesLeadRecords.saveAllAndFlush(List.of(leadA, leadB));
+
+        SiteSurvey surveyA = survey(vendorTenantId, branchA.getId(), member.getId(), leadA.getId());
+        SiteSurvey surveyB = survey(vendorTenantId, branchB.getId(), member.getId(), leadB.getId());
+        surveys.saveAllAndFlush(List.of(surveyA, surveyB));
+
+        var branchCustomer = createCustomer(vendorTenantId, "branch-scope-customer");
+        Quotation quoteA = quotation(vendorTenantId, branchA.getId(), member.getId(), leadA.getId(), branchCustomer.profile().getId());
+        Quotation quoteB = quotation(vendorTenantId, branchB.getId(), member.getId(), leadB.getId(), branchCustomer.profile().getId());
+        quotations.saveAllAndFlush(List.of(quoteA, quoteB));
+
+        CustomerOrder orderA = order(vendorTenantId, branchA.getId(), quoteA.getId(), branchCustomer.profile().getId());
+        CustomerOrder orderB = order(vendorTenantId, branchB.getId(), quoteB.getId(), branchCustomer.profile().getId());
+        orderA.setStatus("CONFIRMED");
+        orderB.setStatus("CONFIRMED");
+        customerOrders.saveAllAndFlush(List.of(orderA, orderB));
+
+        String token = accessToken(member.getEmail(), "Branch-Member-Password-2026");
+        String billableOrders = mvc.perform(get("/api/v1/finance/orders-awaiting-invoice")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(billableOrders.contains(orderA.getId().toString()));
+        assertFalse(billableOrders.contains(orderB.getId().toString()));
+        mvc.perform(post("/api/v1/invoices").header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"orderId\":\"" + orderB.getId() + "\"}"))
+                .andExpect(status().isNotFound());
+        assertTrue(invoices.findByOrderIdAndTenantId(orderB.getId(), vendorTenantId).isEmpty(),
+                "A branch-A member must not create an invoice for a branch-B order");
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/enquiries?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), enquiryA.getId(), enquiryB.getId());
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/leads?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), leadA.getId(), leadB.getId());
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/surveys?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), surveyA.getId(), surveyB.getId());
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/quotations?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), quoteA.getId(), quoteB.getId());
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/orders?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), orderA.getId(), orderB.getId());
+
+        Invoice invoiceA = branchInvoice(vendorTenantId, branchA.getId(), orderA.getId(), member.getId());
+        Invoice invoiceB = branchInvoice(vendorTenantId, branchB.getId(), orderB.getId(), member.getId());
+        invoices.saveAllAndFlush(List.of(invoiceA, invoiceB));
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/invoices?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), invoiceA.getId(), invoiceB.getId());
+
+        ServiceRequest ticketA = branchTicket(vendorTenantId, branchA.getId(), branchCustomer.profile().getId());
+        ServiceRequest ticketB = branchTicket(vendorTenantId, branchB.getId(), branchCustomer.profile().getId());
+        ticketA.setAssignedEngineerId(member.getId());
+        ticketB.setAssignedEngineerId(member.getId());
+        ticketA.setStatus("ASSIGNED");
+        ticketB.setStatus("ASSIGNED");
+        serviceRequests.saveAllAndFlush(List.of(ticketA, ticketB));
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/service-requests?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), ticketA.getId(), ticketB.getId());
+        mvc.perform(get("/api/v1/service-requests/" + ticketA.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/service-requests/" + ticketB.getId() + "/attachments")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        MockMultipartFile branchEvidence = new MockMultipartFile("file", "branch-evidence.pdf", "application/pdf",
+                "%PDF-1.7\\nbranch evidence\\n%%EOF".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/service-requests/" + ticketB.getId() + "/attachments")
+                        .file(branchEvidence).header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        assertTrue(serviceAttachmentRecords.findByTenantIdAndServiceRequestIdOrderByCreatedAtAsc(
+                vendorTenantId, ticketB.getId()).isEmpty());
+        mvc.perform(post("/api/v1/service-requests/" + ticketA.getId() + "/visits")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"engineerId\":\"" + member.getId() + "\",\"scheduledAt\":\"" + Instant.now().plusSeconds(7200) + "\",\"reason\":\"branch A visit\"}"))
+                .andExpect(status().isOk());
+        assertEquals(1, serviceVisitRecords.findByTenantIdAndServiceRequestIdOrderByScheduledAtAsc(
+                vendorTenantId, ticketA.getId()).size());
+        mvc.perform(post("/api/v1/service-requests/" + ticketB.getId() + "/visits")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"engineerId\":\"" + member.getId() + "\",\"scheduledAt\":\"" + Instant.now().plusSeconds(10800) + "\",\"reason\":\"branch B unauthorized visit\"}"))
+                .andExpect(status().isNotFound());
+        assertTrue(serviceVisitRecords.findByTenantIdAndServiceRequestIdOrderByScheduledAtAsc(
+                vendorTenantId, ticketB.getId()).isEmpty());
+        assertEquals("ASSIGNED", serviceRequests.findById(ticketB.getId()).orElseThrow().getStatus());
+
+        InstallationJob installationA = branchInstallation(vendorTenantId, branchA.getId(), orderA.getId(), branchCustomer.profile().getId(), member.getId());
+        InstallationJob installationB = branchInstallation(vendorTenantId, branchB.getId(), orderB.getId(), branchCustomer.profile().getId(), member.getId());
+        installationJobs.saveAllAndFlush(List.of(installationA, installationB));
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/installations?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), installationA.getId(), installationB.getId());
+
+        com.saumyasolar.domain.InstallationChecklistItem checklistA = new com.saumyasolar.domain.InstallationChecklistItem();
+        checklistA.setId(UUID.randomUUID());
+        checklistA.setTenantId(vendorTenantId);
+        checklistA.setInstallationId(installationA.getId());
+        checklistA.setCode("BRANCH_A_CHECK");
+        checklistA.setTitle("Branch A safety check");
+        checklistA.setMandatory(true);
+        com.saumyasolar.domain.InstallationChecklistItem checklistB = new com.saumyasolar.domain.InstallationChecklistItem();
+        checklistB.setId(UUID.randomUUID());
+        checklistB.setTenantId(vendorTenantId);
+        checklistB.setInstallationId(installationB.getId());
+        checklistB.setCode("BRANCH_B_CHECK");
+        checklistB.setTitle("Branch B safety check");
+        checklistB.setMandatory(true);
+        checklistItems.saveAllAndFlush(List.of(checklistA, checklistB));
+        mvc.perform(get("/api/v1/installations/" + installationA.getId() + "/checklist")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/installations/" + installationB.getId() + "/checklist")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(patch("/api/v1/installations/" + installationA.getId() + "/checklist/" + checklistA.getId())
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"completed\":true,\"evidenceUrl\":\"branch-a.pdf\",\"notes\":\"checked\"}"))
+                .andExpect(status().isOk());
+        assertTrue(checklistItems.findById(checklistA.getId()).orElseThrow().isCompleted());
+        mvc.perform(patch("/api/v1/installations/" + installationB.getId() + "/checklist/" + checklistB.getId())
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"completed\":true,\"evidenceUrl\":\"branch-b.pdf\",\"notes\":\"unauthorized\"}"))
+                .andExpect(status().isNotFound());
+        assertFalse(checklistItems.findById(checklistB.getId()).orElseThrow().isCompleted());
+
+        mvc.perform(get("/api/v1/branches/" + branchA.getId() + "/analytics")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/branches/" + branchB.getId() + "/analytics")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+
+        ProductCategory stockCategory = new ProductCategory();
+        stockCategory.setId(UUID.randomUUID());
+        stockCategory.setTenantId(vendorTenantId);
+        stockCategory.setName("Branch inventory category " + UUID.randomUUID());
+        stockCategory.setActive(true);
+        productCategories.saveAndFlush(stockCategory);
+        Product stockProduct = new Product();
+        stockProduct.setId(UUID.randomUUID());
+        stockProduct.setTenantId(vendorTenantId);
+        stockProduct.setCategoryId(stockCategory.getId());
+        stockProduct.setSku("BR-STOCK-" + UUID.randomUUID().toString().substring(0, 8));
+        stockProduct.setName("Branch stock product");
+        stockProduct.setPrice(BigDecimal.ZERO);
+        stockProduct.setPurchasePrice(BigDecimal.ZERO);
+        stockProduct.setDiscountPercent(BigDecimal.ZERO);
+        stockProduct.setTaxPercent(BigDecimal.ZERO);
+        stockProduct.setReorderLevel(BigDecimal.ZERO);
+        stockProduct.setWarrantyYears(1);
+        stockProduct.setUnitOfMeasure("PCS");
+        stockProduct.setActive(true);
+        productRecords.saveAndFlush(stockProduct);
+
+        Warehouse warehouseA = branchWarehouse(vendorTenantId, branchA.getId(), "A");
+        Warehouse warehouseB = branchWarehouse(vendorTenantId, branchB.getId(), "B");
+        warehouseRecords.saveAllAndFlush(List.of(warehouseA, warehouseB));
+        InventoryBalance balanceA = branchBalance(vendorTenantId, warehouseA.getId(), stockProduct.getId());
+        InventoryBalance balanceB = branchBalance(vendorTenantId, warehouseB.getId(), stockProduct.getId());
+        inventoryBalances.saveAllAndFlush(List.of(balanceA, balanceB));
+        InventoryTransaction movementA = branchMovement(vendorTenantId, warehouseA.getId(), stockProduct.getId(), member.getId());
+        InventoryTransaction movementB = branchMovement(vendorTenantId, warehouseB.getId(), stockProduct.getId(), member.getId());
+        inventoryTransactions.saveAllAndFlush(List.of(movementA, movementB));
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/warehouses?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), warehouseA.getId(), warehouseB.getId());
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/inventory/balances?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), balanceA.getId(), balanceB.getId());
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/inventory/transactions?branchId=" + branchB.getId()).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), movementA.getId(), movementB.getId());
+
+        // Branch membership must constrain writes as well as filtered list reads. These two
+        // fixtures deliberately retain the same assigned member while living in branch B.
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                                "/api/v1/leads/" + leadA.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"stage\":\"CONTACTED\"}"))
+                .andExpect(status().isOk());
+        assertEquals("CONTACTED", salesLeadRecords.findById(leadA.getId()).orElseThrow().getStage());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                                "/api/v1/leads/" + leadB.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"stage\":\"CONTACTED\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("NEW", salesLeadRecords.findById(leadB.getId()).orElseThrow().getStage(),
+                "A branch-A member cannot mutate a branch-B lead even when assignedUserId matches");
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                                "/api/v1/surveys/" + surveyA.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"findings\":\"Branch A assessment\"}"))
+                .andExpect(status().isOk());
+        assertEquals("Branch A assessment", surveys.findById(surveyA.getId()).orElseThrow().getFindings());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(
+                                "/api/v1/surveys/" + surveyB.getId())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"findings\":\"Unauthorized branch B assessment\"}"))
+                .andExpect(status().isNotFound());
+        assertNotEquals("Unauthorized branch B assessment",
+                surveys.findById(surveyB.getId()).orElseThrow().getFindings(),
+                "A branch-A member cannot mutate a branch-B survey even when assignedUserId matches");
+
+        // Direct resource routes must apply the same branch scope as list filtering.
+        mvc.perform(get("/api/v1/invoices/" + invoiceA.getId() + "/items")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/invoices/" + invoiceB.getId() + "/items")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/invoices/" + invoiceA.getId() + "/void")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"branch A finance test\"}"))
+                .andExpect(status().isOk());
+        assertEquals("VOID", invoices.findByIdAndTenantId(invoiceA.getId(), vendorTenantId).orElseThrow().getStatus());
+        mvc.perform(post("/api/v1/invoices/" + invoiceB.getId() + "/void")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"unauthorized branch B finance test\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("ISSUED", invoices.findByIdAndTenantId(invoiceB.getId(), vendorTenantId).orElseThrow().getStatus());
+
+        com.saumyasolar.domain.Payment paymentA = new com.saumyasolar.domain.Payment();
+        paymentA.setId(UUID.randomUUID());
+        paymentA.setTenantId(vendorTenantId);
+        paymentA.setInvoiceId(invoiceA.getId());
+        paymentA.setOrderId(orderA.getId());
+        paymentA.setAmount(new BigDecimal("5.00"));
+        paymentA.setCurrency("INR");
+        paymentA.setMethod("CASH");
+        paymentA.setSource("MANUAL");
+        paymentA.setStatus("CONFIRMED");
+        paymentA.setReference("BRANCH-A-PAY-" + UUID.randomUUID());
+        paymentA.setPaidAt(Instant.now());
+        paymentA.setCreatedAt(Instant.now());
+        com.saumyasolar.domain.Payment paymentB = new com.saumyasolar.domain.Payment();
+        paymentB.setId(UUID.randomUUID());
+        paymentB.setTenantId(vendorTenantId);
+        paymentB.setInvoiceId(invoiceB.getId());
+        paymentB.setOrderId(orderB.getId());
+        paymentB.setAmount(new BigDecimal("5.00"));
+        paymentB.setCurrency("INR");
+        paymentB.setMethod("CASH");
+        paymentB.setSource("MANUAL");
+        paymentB.setStatus("CONFIRMED");
+        paymentB.setReference("BRANCH-B-PAY-" + UUID.randomUUID());
+        paymentB.setPaidAt(Instant.now());
+        paymentB.setCreatedAt(Instant.now());
+        payments.saveAllAndFlush(List.of(paymentA, paymentB));
+        com.saumyasolar.domain.Refund refundA = new com.saumyasolar.domain.Refund();
+        refundA.setId(UUID.randomUUID());
+        refundA.setTenantId(vendorTenantId);
+        refundA.setPaymentId(paymentA.getId());
+        refundA.setAmount(BigDecimal.ONE);
+        refundA.setReason("branch A refund fixture");
+        refundA.setStatus("RECORDED");
+        refundA.setRecordedBy(member.getId());
+        refundA.setCreatedAt(Instant.now());
+        com.saumyasolar.domain.Refund refundB = new com.saumyasolar.domain.Refund();
+        refundB.setId(UUID.randomUUID());
+        refundB.setTenantId(vendorTenantId);
+        refundB.setPaymentId(paymentB.getId());
+        refundB.setAmount(BigDecimal.ONE);
+        refundB.setReason("branch B refund fixture");
+        refundB.setStatus("RECORDED");
+        refundB.setRecordedBy(member.getId());
+        refundB.setCreatedAt(Instant.now());
+        refundRecords.saveAllAndFlush(List.of(refundA, refundB));
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/payments").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), paymentA.getId(), paymentB.getId());
+        assertBranchListContainsOnly(mvc.perform(get("/api/v1/refunds").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), refundA.getId(), refundB.getId());
+        mvc.perform(get("/api/v1/payments/" + paymentA.getId() + "/receipt.pdf")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .contentType(MediaType.APPLICATION_PDF));
+        mvc.perform(get("/api/v1/payments/" + paymentB.getId() + "/receipt.pdf")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
+        int branchBRefundsBefore = refundRecords.findByTenantIdAndPaymentId(vendorTenantId, paymentB.getId()).size();
+        mvc.perform(post("/api/v1/payments/" + paymentB.getId() + "/refund")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":\"1.00\",\"reason\":\"branch B refund must be denied\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("CONFIRMED", payments.findByIdAndTenantId(paymentB.getId(), vendorTenantId).orElseThrow().getStatus());
+        assertEquals(branchBRefundsBefore, refundRecords.findByTenantIdAndPaymentId(vendorTenantId, paymentB.getId()).size());
+
+        ticketA.setStatus("CUSTOMER_CONFIRMED");
+        ticketB.setStatus("CUSTOMER_CONFIRMED");
+        serviceRequests.saveAllAndFlush(List.of(ticketA, ticketB));
+        mvc.perform(post("/api/v1/service-requests/" + ticketA.getId() + "/close")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"branch A service close\"}"))
+                .andExpect(status().isOk());
+        assertEquals("CLOSED", serviceRequests.findById(ticketA.getId()).orElseThrow().getStatus());
+        mvc.perform(post("/api/v1/service-requests/" + ticketB.getId() + "/close")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"branch B unauthorized close\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("CUSTOMER_CONFIRMED", serviceRequests.findById(ticketB.getId()).orElseThrow().getStatus());
+
+        orderA.setStatus("INSTALLATION_SCHEDULED");
+        orderB.setStatus("INSTALLATION_SCHEDULED");
+        customerOrders.saveAllAndFlush(List.of(orderA, orderB));
+        mvc.perform(post("/api/v1/installations/" + installationA.getId() + "/cancel")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"branch A installation cancel\"}"))
+                .andExpect(status().isOk());
+        assertEquals("CANCELLED", installationJobs.findById(installationA.getId()).orElseThrow().getStatus());
+        mvc.perform(post("/api/v1/installations/" + installationB.getId() + "/cancel")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"branch B unauthorized cancel\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("SCHEDULED", installationJobs.findById(installationB.getId()).orElseThrow().getStatus());
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    @Test
+    void fineGrainedRoleMatrixDeniesCrossModulePrivilegeEscalation() throws Exception {
+        AppUser inventoryUser = createPermissionMatrixUser("inventory", List.of("INVENTORY_VIEW"));
+        String inventoryToken = accessToken(inventoryUser.getEmail(), "Matrix-Password-2026");
+        mvc.perform(get("/api/v1/inventory/balances").header("Authorization", "Bearer " + inventoryToken))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/invoices").header("Authorization", "Bearer " + inventoryToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/payments").header("Authorization", "Bearer " + inventoryToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/service-requests").header("Authorization", "Bearer " + inventoryToken))
+                .andExpect(status().isForbidden());
+
+        AppUser accountant = createPermissionMatrixUser(
+                "accountant", List.of("INVOICE_VIEW", "PAYMENT_VIEW", "PAYMENT_REFUND")
+        );
+        String accountantToken = accessToken(accountant.getEmail(), "Matrix-Password-2026");
+        mvc.perform(get("/api/v1/invoices").header("Authorization", "Bearer " + accountantToken))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/payments").header("Authorization", "Bearer " + accountantToken))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/inventory/balances").header("Authorization", "Bearer " + accountantToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/service-requests").header("Authorization", "Bearer " + accountantToken))
+                .andExpect(status().isForbidden());
+
+        AppUser engineer = createPermissionMatrixUser(
+                "service-engineer", List.of("SERVICE_VIEW", "SERVICE_UPDATE", "SERVICE_RESOLVE")
+        );
+        String engineerToken = accessToken(engineer.getEmail(), "Matrix-Password-2026");
+        mvc.perform(get("/api/v1/service-requests").header("Authorization", "Bearer " + engineerToken))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/invoices").header("Authorization", "Bearer " + engineerToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/payments").header("Authorization", "Bearer " + engineerToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/inventory/balances").header("Authorization", "Bearer " + engineerToken))
+                .andExpect(status().isForbidden());
+
+        // Read grants do not imply mutation grants for the same resource family.
+        mvc.perform(post("/api/v1/inventory/receipts").header("Authorization", "Bearer " + inventoryToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"warehouseId":"%s","productId":"%s","quantity":1,"reason":"least privilege matrix"}
+                                """.formatted(UUID.randomUUID(), UUID.randomUUID())))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/invoices").header("Authorization", "Bearer " + accountantToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"orderId\":\"" + UUID.randomUUID() + "\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/payments").header("Authorization", "Bearer " + accountantToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"invoiceId":"%s","amount":1,"method":"CASH","paidAt":"2026-11-11T00:00:00Z"}
+                                """.formatted(UUID.randomUUID())))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/service-requests").header("Authorization", "Bearer " + engineerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"category":"GENERAL","priority":"LOW","description":"least privilege matrix"}
+                                """))
+                .andExpect(status().isForbidden());
+
+        long exportJobsBeforeDeniedRequests = exportJobs.count();
+        for (String token : List.of(inventoryToken, accountantToken, engineerToken)) {
+            mvc.perform(post("/api/v1/exports").header("Authorization", "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"reportType\":\"OPERATIONS\",\"format\":\"CSV\"}"))
+                    .andExpect(status().isForbidden());
+            mvc.perform(get("/api/v1/exports/" + UUID.randomUUID())
+                            .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isForbidden());
+        }
+        assertEquals(exportJobsBeforeDeniedRequests, exportJobs.count(),
+                "Denied export creation must not persist an export job");
+    }
+
+    private AppUser createPermissionMatrixUser(String suffix, List<String> permissionCodes) {
+        return createPermissionMatrixUser(vendorTenantId, suffix, permissionCodes);
+    }
+
+    private AppUser createPermissionMatrixUser(UUID tenantId, String suffix, List<String> permissionCodes) {
+        String unique = suffix + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setTenantId(tenantId);
+        role.setName("MATRIX_" + unique.toUpperCase(java.util.Locale.ROOT));
+        permissionCodes.forEach(code -> role.getPermissions().add(permissions.findByCode(code).orElseThrow()));
+        roles.saveAndFlush(role);
+
+        AppUser user = new AppUser();
+        user.setId(UUID.randomUUID());
+        user.setTenantId(tenantId);
+        user.setName("Permission matrix " + suffix);
+        user.setEmail("matrix-" + unique + "@example.test");
+        user.setPasswordHash(passwordEncoder.encode("Matrix-Password-2026"));
+        user.setAccountType("VENDOR");
+        user.setEnabled(true);
+        user.setTokenVersion(0);
+        user.getRoles().add(role);
+        return users.saveAndFlush(user);
+    }
+
+    private Branch branch(UUID tenantId, String code) {
+        Branch branch = new Branch();
+        branch.setId(UUID.randomUUID());
+        branch.setTenantId(tenantId);
+        branch.setCode(code);
+        branch.setName(code);
+        branch.setActive(true);
+        branch.setCreatedAt(Instant.now());
+        branch.setUpdatedAt(Instant.now());
+        return branch;
+    }
+
+    private Enquiry enquiry(UUID tenantId, UUID branchId, String suffix) {
+        Enquiry row = new Enquiry();
+        row.setId(UUID.randomUUID());
+        row.setTenantId(tenantId);
+        row.setBranchId(branchId);
+        row.setName("Branch enquiry " + suffix);
+        row.setEmail("branch-" + suffix + "-" + UUID.randomUUID() + "@example.test");
+        row.setPhone("900000000" + suffix);
+        row.setPropertyType("RESIDENTIAL");
+        row.setStatus("NEW");
+        row.setCreatedAt(Instant.now());
+        return row;
+    }
+
+    private SalesLead lead(UUID tenantId, UUID branchId, UUID assignedUserId, UUID enquiryId) {
+        SalesLead row = new SalesLead();
+        row.setId(UUID.randomUUID());
+        row.setTenantId(tenantId);
+        row.setBranchId(branchId);
+        row.setEnquiryId(enquiryId);
+        row.setAssignedUserId(assignedUserId);
+        row.setStage("NEW");
+        row.setPriority("MEDIUM");
+        row.setCreatedAt(Instant.now());
+        return row;
+    }
+
+    private SiteSurvey survey(UUID tenantId, UUID branchId, UUID assignedUserId, UUID leadId) {
+        SiteSurvey row = new SiteSurvey();
+        row.setId(UUID.randomUUID());
+        row.setTenantId(tenantId);
+        row.setBranchId(branchId);
+        row.setLeadId(leadId);
+        row.setAssignedUserId(assignedUserId);
+        row.setScheduledAt(Instant.now().plusSeconds(3600));
+        row.setStatus("SCHEDULED");
+        return row;
+    }
+
+    private Quotation quotation(UUID tenantId, UUID branchId, UUID createdBy, UUID leadId, UUID customerId) {
+        Quotation row = new Quotation();
+        row.setId(UUID.randomUUID());
+        row.setTenantId(tenantId);
+        row.setBranchId(branchId);
+        row.setQuotationNumber("BR-Q-" + UUID.randomUUID().toString().substring(0, 8));
+        row.setRevision(1);
+        row.setLeadId(leadId);
+        row.setCustomerId(customerId);
+        row.setCreatedBy(createdBy);
+        row.setStatus("DRAFT");
+        row.setSubtotal(BigDecimal.ZERO);
+        row.setDiscountPercent(BigDecimal.ZERO);
+        row.setDiscountAmount(BigDecimal.ZERO);
+        row.setTaxAmount(BigDecimal.ZERO);
+        row.setGrandTotal(BigDecimal.ZERO);
+        row.setCreatedAt(Instant.now());
+        return row;
+    }
+
+    private CustomerOrder order(UUID tenantId, UUID branchId, UUID quotationId, UUID customerId) {
+        CustomerOrder row = new CustomerOrder();
+        row.setId(UUID.randomUUID());
+        row.setTenantId(tenantId);
+        row.setBranchId(branchId);
+        row.setQuotationId(quotationId);
+        row.setCustomerId(customerId);
+        row.setOrderNumber("BR-O-" + UUID.randomUUID().toString().substring(0, 8));
+        row.setStatus("DRAFT");
+        row.setSubtotal(BigDecimal.ZERO);
+        row.setDiscountPercent(BigDecimal.ZERO);
+        row.setDiscountAmount(BigDecimal.ZERO);
+        row.setTaxTotal(BigDecimal.ZERO);
+        row.setTotal(BigDecimal.ZERO);
+        row.setCreatedAt(Instant.now());
+        return row;
+    }
+
+    private Warehouse branchWarehouse(UUID tenantId, UUID branchId, String suffix) {
+        Warehouse warehouse = new Warehouse();
+        warehouse.setId(UUID.randomUUID());
+        warehouse.setTenantId(tenantId);
+        warehouse.setBranchId(branchId);
+        warehouse.setCode("BR-WH-" + suffix + "-" + UUID.randomUUID().toString().substring(0, 6));
+        warehouse.setName("Branch warehouse " + suffix);
+        warehouse.setActive(true);
+        warehouse.setCreatedAt(Instant.now());
+        return warehouse;
+    }
+
+    private InventoryBalance branchBalance(UUID tenantId, UUID warehouseId, UUID productId) {
+        InventoryBalance balance = new InventoryBalance();
+        balance.setId(UUID.randomUUID());
+        balance.setTenantId(tenantId);
+        balance.setWarehouseId(warehouseId);
+        balance.setProductId(productId);
+        balance.setOnHand(BigDecimal.TEN);
+        balance.setReserved(BigDecimal.ZERO);
+        balance.setDamaged(BigDecimal.ZERO);
+        return balance;
+    }
+
+    private InventoryTransaction branchMovement(UUID tenantId, UUID warehouseId, UUID productId, UUID actorId) {
+        InventoryTransaction movement = new InventoryTransaction();
+        movement.setId(UUID.randomUUID());
+        movement.setTenantId(tenantId);
+        movement.setWarehouseId(warehouseId);
+        movement.setProductId(productId);
+        movement.setType("RECEIPT");
+        movement.setQuantityDelta(BigDecimal.TEN);
+        movement.setReservedDelta(BigDecimal.ZERO);
+        movement.setDamagedDelta(BigDecimal.ZERO);
+        movement.setReason("Branch isolation integration fixture");
+        movement.setActorId(actorId);
+        movement.setCreatedAt(Instant.now());
+        return movement;
+    }
+
+    private Invoice branchInvoice(UUID tenantId, UUID branchId, UUID orderId, UUID actorId) {
+        Invoice invoice = new Invoice();
+        invoice.setId(UUID.randomUUID());
+        invoice.setTenantId(tenantId);
+        invoice.setBranchId(branchId);
+        invoice.setOrderId(orderId);
+        invoice.setInvoiceNumber("BR-I-" + UUID.randomUUID().toString().substring(0, 8));
+        invoice.setFiscalYear("2026-27");
+        invoice.setStatus("ISSUED");
+        invoice.setCustomerName("Branch scope customer");
+        invoice.setVendorName("Branch scope vendor");
+        invoice.setCurrency("INR");
+        invoice.setSubtotal(BigDecimal.ZERO);
+        invoice.setTaxTotal(BigDecimal.ZERO);
+        invoice.setGrandTotal(BigDecimal.ZERO);
+        invoice.setTaxTreatment("INTRA_STATE");
+        invoice.setCreatedBy(actorId);
+        invoice.setIssuedAt(Instant.now());
+        invoice.setCreatedAt(Instant.now());
+        return invoice;
+    }
+
+    private ServiceRequest branchTicket(UUID tenantId, UUID branchId, UUID customerId) {
+        ServiceRequest ticket = new ServiceRequest();
+        ticket.setId(UUID.randomUUID());
+        ticket.setTenantId(tenantId);
+        ticket.setBranchId(branchId);
+        ticket.setCustomerId(customerId);
+        ticket.setTicketNumber("BR-S-" + UUID.randomUUID().toString().substring(0, 8));
+        ticket.setCategory("INSTALLATION");
+        ticket.setPriority("MEDIUM");
+        ticket.setDescription("Branch scoped service request");
+        ticket.setWarrantyStatus("UNKNOWN");
+        ticket.setStatus("OPEN");
+        ticket.setPausedSeconds(0);
+        ticket.setCreatedAt(Instant.now());
+        ticket.setUpdatedAt(Instant.now());
+        return ticket;
+    }
+
+    private InstallationJob branchInstallation(UUID tenantId, UUID branchId, UUID orderId, UUID customerId, UUID engineerId) {
+        InstallationJob installation = new InstallationJob();
+        installation.setId(UUID.randomUUID());
+        installation.setTenantId(tenantId);
+        installation.setBranchId(branchId);
+        installation.setOrderId(orderId);
+        installation.setCustomerId(customerId);
+        installation.setSiteAddress("Branch installation test");
+        installation.setScheduledAt(Instant.now().plusSeconds(7200));
+        installation.setAssignedEngineerId(engineerId);
+        installation.setStatus("SCHEDULED");
+        installation.setCreatedAt(Instant.now());
+        return installation;
+    }
+
+    private void assertBranchListContainsOnly(String response, UUID expectedId, UUID excludedId) throws Exception {
+        JsonNode rows = json.readTree(response);
+        assertTrue(rows.isArray());
+        assertTrue(java.util.stream.StreamSupport.stream(rows.spliterator(), false)
+                .anyMatch(row -> expectedId.toString().equals(row.path("id").asText())));
+        assertFalse(response.contains(excludedId.toString()));
+    }
+
     @Test
     void customerCanPlaceProductOrderAndVendorMustAcceptIt() throws Exception {
         var email = "direct-order-" + UUID.randomUUID() + "@example.test";
@@ -556,7 +3089,7 @@ class Release12TenantIntegrationTest {
         assertNotNull(line.getTaxPercent());
         assertTrue(persistedOrder.getTotal().compareTo(BigDecimal.ZERO) > 0);
         
-        var vendorToken = accessToken("sales@saumya.local", "Sales@123");
+        var vendorToken = accessToken("admin@saumya.local", "Admin@123");
         mvc.perform(post("/api/v1/orders/" + orderId + "/vendor-decision")
                         .header("Authorization", "Bearer " + vendorToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -569,5 +3102,667 @@ class Release12TenantIntegrationTest {
                         .header("Authorization", "Bearer " + customerToken))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertTrue(json.readTree(customerOrdersJson).toString().contains(orderId.toString()));
+    }
+
+    private byte[] exportFile(String token, String format) throws Exception {
+        String created = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/exports")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("reportType", "OPERATIONS", "format", format))))
+                .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
+        String exportId = json.readTree(created).get("id").asText();
+        for (int attempt = 0; attempt < 30; attempt++) {
+            String statusBody = mvc.perform(get("/api/v1/exports/" + exportId).header("Authorization", "Bearer " + token))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            JsonNode job = json.readTree(statusBody);
+            String state = job.path("status").asText();
+            if ("FAILED".equals(state)) throw new AssertionError("Export failed: " + job.path("error").asText());
+            if ("COMPLETED".equals(state)) {
+                return mvc.perform(get("/api/v1/exports/" + exportId + "/download").header("Authorization", "Bearer " + token))
+                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+            }
+            Thread.sleep(1000);
+        }
+        throw new AssertionError("Timed out waiting for asynchronous " + format + " export");
+    }
+
+
+
+    @org.springframework.transaction.annotation.Transactional
+    @Test
+    void salesManagerCanManageUnassignedLeadsWhileSalesEmployeeIsRestrictedToAssignedLeads() throws Exception {
+        AppUser employee = createPermissionMatrixUser("sales-employee-scope",
+                List.of("LEAD_VIEW", "LEAD_UPDATE"));
+        AppUser manager = createPermissionMatrixUser("sales-manager-scope",
+                List.of("LEAD_VIEW", "LEAD_UPDATE", "LEAD_ASSIGN"));
+        Tenant foreignTenant = newTenant();
+
+        Enquiry ownEnquiry = enquiry(vendorTenantId, null, "sales-own-" + UUID.randomUUID());
+        Enquiry unassignedEnquiry = enquiry(vendorTenantId, null, "sales-unassigned-" + UUID.randomUUID());
+        Enquiry foreignEnquiry = enquiry(foreignTenant.getId(), null, "sales-foreign-" + UUID.randomUUID());
+        enquiries.saveAllAndFlush(List.of(ownEnquiry, unassignedEnquiry, foreignEnquiry));
+        SalesLead own = lead(vendorTenantId, null, employee.getId(), ownEnquiry.getId());
+        SalesLead unassigned = lead(vendorTenantId, null, null, unassignedEnquiry.getId());
+        SalesLead foreign = lead(foreignTenant.getId(), null, manager.getId(), foreignEnquiry.getId());
+        leads.saveAllAndFlush(List.of(own, unassigned, foreign));
+
+        String employeeToken = accessToken(employee.getEmail(), "Matrix-Password-2026");
+        String managerToken = accessToken(manager.getEmail(), "Matrix-Password-2026");
+
+        String employeeRows = mvc.perform(get("/api/v1/leads").header("Authorization", "Bearer " + employeeToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(employeeRows.contains(own.getId().toString()));
+        assertFalse(employeeRows.contains(unassigned.getId().toString()));
+        mvc.perform(patch("/api/v1/leads/" + own.getId()).header("Authorization", "Bearer " + employeeToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"stage\":\"CONTACTED\"}"))
+                .andExpect(status().isOk());
+        assertEquals("CONTACTED", leads.findByIdAndTenantId(own.getId(), vendorTenantId).orElseThrow().getStage());
+        mvc.perform(patch("/api/v1/leads/" + unassigned.getId()).header("Authorization", "Bearer " + employeeToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"stage\":\"CONTACTED\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("NEW", leads.findByIdAndTenantId(unassigned.getId(), vendorTenantId).orElseThrow().getStage());
+
+        String managerRows = mvc.perform(get("/api/v1/leads").header("Authorization", "Bearer " + managerToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(managerRows.contains(own.getId().toString()));
+        assertTrue(managerRows.contains(unassigned.getId().toString()));
+        mvc.perform(patch("/api/v1/leads/" + unassigned.getId()).header("Authorization", "Bearer " + managerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"stage\":\"CONTACTED\",\"assignedUserId\":\"" + employee.getId() + "\"}"))
+                .andExpect(status().isOk());
+        SalesLead changed = leads.findByIdAndTenantId(unassigned.getId(), vendorTenantId).orElseThrow();
+        assertEquals("CONTACTED", changed.getStage());
+        assertEquals(employee.getId(), changed.getAssignedUserId());
+
+        mvc.perform(patch("/api/v1/leads/" + foreign.getId()).header("Authorization", "Bearer " + managerToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"stage\":\"CONTACTED\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("NEW", leads.findByIdAndTenantId(foreign.getId(), foreignTenant.getId()).orElseThrow().getStage());
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    @Test
+    void assignedAndUnassignedServiceEngineersHaveFixtureBackedReadAndMutationBoundaries() throws Exception {
+        AppUser assignedEngineer = createPermissionMatrixUser("assigned-engineer",
+                List.of("SERVICE_VIEW", "SERVICE_UPDATE", "SERVICE_RESOLVE", "SERVICE_CLOSE"));
+        AppUser otherEngineer = createPermissionMatrixUser("unassigned-engineer",
+                List.of("SERVICE_VIEW", "SERVICE_UPDATE", "SERVICE_RESOLVE", "SERVICE_CLOSE"));
+        Tenant foreignTenant = newTenant();
+        CustomerFixture ownCustomer = createCustomer(vendorTenantId, "engineer-own-customer");
+        CustomerFixture foreignCustomer = createCustomer(foreignTenant.getId(), "engineer-foreign-customer");
+
+        ServiceRequest assigned = branchTicket(vendorTenantId, null, ownCustomer.profile().getId());
+        assigned.setAssignedEngineerId(assignedEngineer.getId());
+        assigned.setStatus("CUSTOMER_CONFIRMED");
+        ServiceRequest unassigned = branchTicket(vendorTenantId, null, ownCustomer.profile().getId());
+        unassigned.setAssignedEngineerId(otherEngineer.getId());
+        unassigned.setStatus("CUSTOMER_CONFIRMED");
+        ServiceRequest foreign = branchTicket(foreignTenant.getId(), null, foreignCustomer.profile().getId());
+        foreign.setAssignedEngineerId(assignedEngineer.getId());
+        foreign.setStatus("CUSTOMER_CONFIRMED");
+        serviceRequests.saveAllAndFlush(List.of(assigned, unassigned, foreign));
+
+        String assignedToken = accessToken(assignedEngineer.getEmail(), "Matrix-Password-2026");
+        String otherToken = accessToken(otherEngineer.getEmail(), "Matrix-Password-2026");
+        String visible = mvc.perform(get("/api/v1/service-requests").header("Authorization", "Bearer " + assignedToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(visible.contains(assigned.getId().toString()));
+        assertFalse(visible.contains(unassigned.getId().toString()));
+        assertFalse(visible.contains(foreign.getId().toString()));
+        mvc.perform(get("/api/v1/service-requests/" + assigned.getId()).header("Authorization", "Bearer " + assignedToken))
+                .andExpect(status().isOk());
+        byte[] evidenceBytes = "%PDF-1.7\\nservice visit evidence\\n%%EOF"
+                .getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        MockMultipartFile evidence = new MockMultipartFile("file", "service-evidence.pdf", "application/pdf", evidenceBytes);
+        String uploadedEvidence = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/service-requests/" + assigned.getId() + "/attachments")
+                        .file(evidence).header("Authorization", "Bearer " + assignedToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        UUID attachmentId = UUID.fromString(json.readTree(uploadedEvidence).get("id").asText());
+        assertEquals(1, serviceAttachmentRecords.findByTenantIdAndServiceRequestIdOrderByCreatedAtAsc(
+                vendorTenantId, assigned.getId()).size());
+        mvc.perform(get("/api/v1/service-requests/" + assigned.getId() + "/attachments/" + attachmentId)
+                        .header("Authorization", "Bearer " + assignedToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(evidenceBytes));
+        mvc.perform(get("/api/v1/service-requests/" + assigned.getId() + "/attachments/" + attachmentId)
+                        .header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/v1/service-requests/" + assigned.getId() + "/attachments")
+                        .file(evidence).header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isForbidden());
+        assertEquals(1, serviceAttachmentRecords.findByTenantIdAndServiceRequestIdOrderByCreatedAtAsc(
+                vendorTenantId, assigned.getId()).size());
+
+        ServiceRequest visitTicket = branchTicket(vendorTenantId, null, ownCustomer.profile().getId());
+        visitTicket.setAssignedEngineerId(assignedEngineer.getId());
+        visitTicket.setStatus("VISIT_SCHEDULED");
+        ServiceRequest otherVisitTicket = branchTicket(vendorTenantId, null, ownCustomer.profile().getId());
+        otherVisitTicket.setAssignedEngineerId(otherEngineer.getId());
+        otherVisitTicket.setStatus("VISIT_SCHEDULED");
+        serviceRequests.saveAllAndFlush(List.of(visitTicket, otherVisitTicket));
+        com.saumyasolar.domain.ServiceVisit assignedVisit = new com.saumyasolar.domain.ServiceVisit();
+        assignedVisit.setId(UUID.randomUUID());
+        assignedVisit.setTenantId(vendorTenantId);
+        assignedVisit.setServiceRequestId(visitTicket.getId());
+        assignedVisit.setEngineerId(assignedEngineer.getId());
+        assignedVisit.setScheduledAt(Instant.now().plusSeconds(1800));
+        com.saumyasolar.domain.ServiceVisit otherVisit = new com.saumyasolar.domain.ServiceVisit();
+        otherVisit.setId(UUID.randomUUID());
+        otherVisit.setTenantId(vendorTenantId);
+        otherVisit.setServiceRequestId(otherVisitTicket.getId());
+        otherVisit.setEngineerId(otherEngineer.getId());
+        otherVisit.setScheduledAt(Instant.now().plusSeconds(3600));
+        serviceVisitRecords.saveAllAndFlush(List.of(assignedVisit, otherVisit));
+
+        mvc.perform(get("/api/v1/service-requests/" + visitTicket.getId() + "/visits")
+                        .header("Authorization", "Bearer " + assignedToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(assignedVisit.getId().toString()));
+        mvc.perform(get("/api/v1/service-requests/" + visitTicket.getId() + "/visits")
+                        .header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/service-requests/" + visitTicket.getId() + "/visits/" + assignedVisit.getId() + "/start")
+                        .header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isForbidden());
+        assertNull(serviceVisitRecords.findByIdAndTenantIdAndServiceRequestId(
+                assignedVisit.getId(), vendorTenantId, visitTicket.getId()).orElseThrow().getStartedAt());
+        mvc.perform(post("/api/v1/service-requests/" + visitTicket.getId() + "/visits/" + assignedVisit.getId() + "/start")
+                        .header("Authorization", "Bearer " + assignedToken))
+                .andExpect(status().isOk());
+        assertNotNull(serviceVisitRecords.findByIdAndTenantIdAndServiceRequestId(
+                assignedVisit.getId(), vendorTenantId, visitTicket.getId()).orElseThrow().getStartedAt());
+        String deniedCompletion = "{\"engineerNotes\":\"not assigned\",\"resolution\":\"unauthorized\",\"evidenceUrl\":\"private.pdf\",\"parts\":[]}";
+        mvc.perform(post("/api/v1/service-requests/" + visitTicket.getId() + "/visits/" + assignedVisit.getId() + "/complete")
+                        .header("Authorization", "Bearer " + otherToken).contentType(MediaType.APPLICATION_JSON)
+                        .content(deniedCompletion))
+                .andExpect(status().isForbidden());
+        assertNull(serviceVisitRecords.findByIdAndTenantIdAndServiceRequestId(
+                assignedVisit.getId(), vendorTenantId, visitTicket.getId()).orElseThrow().getCompletedAt());
+        mvc.perform(post("/api/v1/service-requests/" + visitTicket.getId() + "/visits/" + assignedVisit.getId() + "/complete")
+                        .header("Authorization", "Bearer " + assignedToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"engineerNotes\":\"inspected inverter\",\"resolution\":\"replaced loose connector\",\"evidenceUrl\":\"s3://private/visit-proof.pdf\",\"parts\":[]}"))
+                .andExpect(status().isOk());
+        com.saumyasolar.domain.ServiceVisit completedVisit = serviceVisitRecords.findByIdAndTenantIdAndServiceRequestId(
+                assignedVisit.getId(), vendorTenantId, visitTicket.getId()).orElseThrow();
+        assertNotNull(completedVisit.getCompletedAt());
+        assertEquals("inspected inverter", completedVisit.getEngineerNotes());
+        assertEquals("replaced loose connector", completedVisit.getResolution());
+        assertEquals("s3://private/visit-proof.pdf", completedVisit.getEvidenceUrl());
+        assertEquals("RESOLVED", serviceRequests.findById(visitTicket.getId()).orElseThrow().getStatus());
+
+        mvc.perform(get("/api/v1/service-requests/" + unassigned.getId()).header("Authorization", "Bearer " + assignedToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/service-requests/" + unassigned.getId() + "/close")
+                        .header("Authorization", "Bearer " + assignedToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"unassigned engineer must not close\"}"))
+                .andExpect(status().isForbidden());
+        assertEquals("CUSTOMER_CONFIRMED", serviceRequests.findById(unassigned.getId()).orElseThrow().getStatus());
+        mvc.perform(post("/api/v1/service-requests/" + assigned.getId() + "/close")
+                        .header("Authorization", "Bearer " + assignedToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"assigned engineer close\"}"))
+                .andExpect(status().isOk());
+        assertEquals("CLOSED", serviceRequests.findById(assigned.getId()).orElseThrow().getStatus());
+        mvc.perform(post("/api/v1/service-requests/" + foreign.getId() + "/close")
+                        .header("Authorization", "Bearer " + assignedToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"foreign tenant close attempt\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("CUSTOMER_CONFIRMED", serviceRequests.findById(foreign.getId()).orElseThrow().getStatus());
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    @Test
+    void financePaymentRefundAndCreditNoteMutationsAreTenantAndPermissionScoped() throws Exception {
+        Tenant foreignTenant = newTenant();
+        CustomerFixture ownCustomer = createCustomer(vendorTenantId, "finance-own-customer");
+        CustomerFixture foreignCustomer = createCustomer(foreignTenant.getId(), "finance-foreign-customer");
+        Enquiry ownEnquiry = enquiry(vendorTenantId, null, "finance-own-" + UUID.randomUUID());
+        Enquiry foreignEnquiry = enquiry(foreignTenant.getId(), null, "finance-foreign-" + UUID.randomUUID());
+        enquiries.saveAllAndFlush(List.of(ownEnquiry, foreignEnquiry));
+        SalesLead ownLead = lead(vendorTenantId, null, null, ownEnquiry.getId());
+        SalesLead foreignLead = lead(foreignTenant.getId(), null, null, foreignEnquiry.getId());
+        leads.saveAllAndFlush(List.of(ownLead, foreignLead));
+        Quotation ownQuote = quotation(vendorTenantId, null, users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow().getId(),
+                ownLead.getId(), ownCustomer.profile().getId());
+        Quotation foreignQuote = quotation(foreignTenant.getId(), null, users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow().getId(),
+                foreignLead.getId(), foreignCustomer.profile().getId());
+        quotations.saveAllAndFlush(List.of(ownQuote, foreignQuote));
+        CustomerOrder ownOrder = order(vendorTenantId, null, ownQuote.getId(), ownCustomer.profile().getId());
+        CustomerOrder foreignOrder = order(foreignTenant.getId(), null, foreignQuote.getId(), foreignCustomer.profile().getId());
+        customerOrders.saveAllAndFlush(List.of(ownOrder, foreignOrder));
+        Invoice ownInvoice = branchInvoice(vendorTenantId, null, ownOrder.getId(), users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow().getId());
+        ownInvoice.setGrandTotal(new BigDecimal("100.00"));
+        Invoice foreignInvoice = branchInvoice(foreignTenant.getId(), null, foreignOrder.getId(), users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow().getId());
+        foreignInvoice.setGrandTotal(new BigDecimal("100.00"));
+        invoices.saveAllAndFlush(List.of(ownInvoice, foreignInvoice));
+
+        com.saumyasolar.domain.Payment ownPayment = new com.saumyasolar.domain.Payment();
+        ownPayment.setId(UUID.randomUUID());
+        ownPayment.setTenantId(vendorTenantId);
+        ownPayment.setInvoiceId(ownInvoice.getId());
+        ownPayment.setOrderId(ownOrder.getId());
+        ownPayment.setAmount(new BigDecimal("60.00"));
+        ownPayment.setCurrency("INR");
+        ownPayment.setMethod("CASH");
+        ownPayment.setSource("MANUAL");
+        ownPayment.setStatus("CONFIRMED");
+        ownPayment.setReference("TEST-MANUAL-" + UUID.randomUUID());
+        ownPayment.setPaidAt(Instant.now().minusSeconds(60));
+        ownPayment.setCreatedAt(Instant.now());
+        payments.saveAndFlush(ownPayment);
+        com.saumyasolar.domain.Payment foreignPayment = new com.saumyasolar.domain.Payment();
+        foreignPayment.setId(UUID.randomUUID());
+        foreignPayment.setTenantId(foreignTenant.getId());
+        foreignPayment.setInvoiceId(foreignInvoice.getId());
+        foreignPayment.setOrderId(foreignOrder.getId());
+        foreignPayment.setAmount(new BigDecimal("30.00"));
+        foreignPayment.setCurrency("INR");
+        foreignPayment.setMethod("CASH");
+        foreignPayment.setSource("MANUAL");
+        foreignPayment.setStatus("CONFIRMED");
+        foreignPayment.setReference("TEST-FOREIGN-" + UUID.randomUUID());
+        foreignPayment.setPaidAt(Instant.now().minusSeconds(60));
+        foreignPayment.setCreatedAt(Instant.now());
+        payments.saveAllAndFlush(List.of(foreignPayment));
+
+        AppUser accountant = createPermissionMatrixUser("finance-accountant",
+                List.of("INVOICE_VIEW", "INVOICE_VOID", "PAYMENT_VIEW", "PAYMENT_RECORD", "PAYMENT_REFUND"));
+        String accountantToken = accessToken(accountant.getEmail(), "Matrix-Password-2026");
+        mvc.perform(post("/api/v1/payments").header("Authorization", "Bearer " + accountantToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"invoiceId\":\"" + ownInvoice.getId() + "\",\"amount\":\"20.00\",\"method\":\"UPI\",\"reference\":\"MANUAL-TEST\",\"paidAt\":\"" + Instant.now().minusSeconds(30) + "\"}"))
+                .andExpect(status().isOk());
+        assertEquals("PARTIALLY_PAID", invoices.findByIdAndTenantId(ownInvoice.getId(), vendorTenantId).orElseThrow().getStatus());
+        assertEquals(2, payments.findByTenantIdAndInvoiceId(vendorTenantId, ownInvoice.getId()).size());
+
+        mvc.perform(post("/api/v1/payments/" + ownPayment.getId() + "/refund")
+                        .header("Authorization", "Bearer " + accountantToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":\"10.00\",\"reason\":\"adapter-only manual refund test\"}"))
+                .andExpect(status().isOk());
+        assertEquals("PARTIALLY_REFUNDED", payments.findByIdAndTenantId(ownPayment.getId(), vendorTenantId).orElseThrow().getStatus());
+        assertEquals(1, refundRecords.findByTenantIdAndPaymentId(vendorTenantId, ownPayment.getId()).size());
+
+        mvc.perform(post("/api/v1/invoices/" + ownInvoice.getId() + "/credit-notes")
+                        .header("Authorization", "Bearer " + accountantToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":\"15.00\",\"reason\":\"manual adjustment test\"}"))
+                .andExpect(status().isOk());
+        assertEquals("PARTIALLY_CREDITED", invoices.findByIdAndTenantId(ownInvoice.getId(), vendorTenantId).orElseThrow().getStatus());
+        assertEquals(1, creditNoteRecords.findByTenantIdAndInvoiceIdOrderByCreatedAtDesc(vendorTenantId, ownInvoice.getId()).size());
+
+        mvc.perform(post("/api/v1/payments").header("Authorization", "Bearer " + accountantToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"invoiceId\":\"" + foreignInvoice.getId() + "\",\"amount\":\"10.00\",\"method\":\"CASH\",\"paidAt\":\"" + Instant.now().minusSeconds(20) + "\"}"))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/payments/" + foreignPayment.getId() + "/refund")
+                        .header("Authorization", "Bearer " + accountantToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":\"5.00\",\"reason\":\"foreign refund attempt\"}"))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/invoices/" + foreignInvoice.getId() + "/credit-notes")
+                        .header("Authorization", "Bearer " + accountantToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":\"5.00\",\"reason\":\"foreign credit note attempt\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("CONFIRMED", payments.findByIdAndTenantId(foreignPayment.getId(), foreignTenant.getId()).orElseThrow().getStatus());
+        assertEquals(0, refundRecords.findByTenantIdAndPaymentId(foreignTenant.getId(), foreignPayment.getId()).size());
+        assertEquals("ISSUED", invoices.findByIdAndTenantId(foreignInvoice.getId(), foreignTenant.getId()).orElseThrow().getStatus());
+        assertEquals(0, creditNoteRecords.findByTenantIdAndInvoiceIdOrderByCreatedAtDesc(foreignTenant.getId(), foreignInvoice.getId()).size());
+
+        AppUser readOnly = createPermissionMatrixUser("finance-readonly", List.of("INVOICE_VIEW", "PAYMENT_VIEW"));
+        String readOnlyToken = accessToken(readOnly.getEmail(), "Matrix-Password-2026");
+        int paymentCountBeforeDeniedWrites = payments.findByTenantIdAndInvoiceId(vendorTenantId, ownInvoice.getId()).size();
+        int creditNoteCountBeforeDeniedWrites = creditNoteRecords.findByTenantIdAndInvoiceIdOrderByCreatedAtDesc(
+                vendorTenantId, ownInvoice.getId()).size();
+        mvc.perform(post("/api/v1/payments/" + ownPayment.getId() + "/refund")
+                        .header("Authorization", "Bearer " + readOnlyToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":\"1.00\",\"reason\":\"missing refund permission\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/payments").header("Authorization", "Bearer " + readOnlyToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"invoiceId\":\"" + ownInvoice.getId() + "\",\"amount\":\"1.00\",\"method\":\"CASH\",\"paidAt\":\"" + Instant.now().minusSeconds(10) + "\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/invoices/" + ownInvoice.getId() + "/credit-notes")
+                        .header("Authorization", "Bearer " + readOnlyToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":\"1.00\",\"reason\":\"missing credit note permission\"}"))
+                .andExpect(status().isForbidden());
+        assertEquals(paymentCountBeforeDeniedWrites,
+                payments.findByTenantIdAndInvoiceId(vendorTenantId, ownInvoice.getId()).size());
+        assertEquals(creditNoteCountBeforeDeniedWrites,
+                creditNoteRecords.findByTenantIdAndInvoiceIdOrderByCreatedAtDesc(vendorTenantId, ownInvoice.getId()).size());
+        assertEquals(1, refundRecords.findByTenantIdAndPaymentId(vendorTenantId, ownPayment.getId()).size());
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    @Test
+    void installationChecklistAndCommissioningAreRestrictedToAssignedEngineerAndPersistEvidence() throws Exception {
+        Branch ownBranch = branch(vendorTenantId, "INSTALL-SCOPE-" + UUID.randomUUID().toString().substring(0, 6));
+        branches.saveAndFlush(ownBranch);
+        CustomerFixture customer = createCustomer(vendorTenantId, "installation-scope-customer");
+        CustomerOrder order = order(vendorTenantId, ownBranch.getId(), UUID.randomUUID(), customer.profile().getId());
+        order.setStatus("INSTALLED");
+        customerOrders.saveAndFlush(order);
+
+        AppUser assigned = createPermissionMatrixUser("installation-assigned",
+                List.of("INSTALLATION_VIEW", "INSTALLATION_UPDATE", "INSTALLATION_COMMISSION"));
+        AppUser unassigned = createPermissionMatrixUser("installation-unassigned",
+                List.of("INSTALLATION_VIEW", "INSTALLATION_UPDATE", "INSTALLATION_COMMISSION"));
+        for (AppUser actor : List.of(assigned, unassigned)) {
+            BranchMembership membership = new BranchMembership();
+            membership.setId(UUID.randomUUID());
+            membership.setTenantId(vendorTenantId);
+            membership.setBranchId(ownBranch.getId());
+            membership.setUserId(actor.getId());
+            membership.setCreatedAt(Instant.now());
+            branchMemberships.save(membership);
+        }
+
+        InstallationJob installation = branchInstallation(vendorTenantId, ownBranch.getId(), order.getId(),
+                customer.profile().getId(), assigned.getId());
+        installation.setStatus("COMPLETED");
+        installationJobs.saveAndFlush(installation);
+        com.saumyasolar.domain.InstallationChecklistItem mandatory = new com.saumyasolar.domain.InstallationChecklistItem();
+        mandatory.setId(UUID.randomUUID());
+        mandatory.setTenantId(vendorTenantId);
+        mandatory.setInstallationId(installation.getId());
+        mandatory.setCode("FINAL_TEST");
+        mandatory.setTitle("Final electrical safety test");
+        mandatory.setMandatory(true);
+        mandatory.setCompleted(false);
+        checklistItems.saveAndFlush(mandatory);
+
+        String assignedToken = accessToken(assigned.getEmail(), "Matrix-Password-2026");
+        String unassignedToken = accessToken(unassigned.getEmail(), "Matrix-Password-2026");
+        mvc.perform(get("/api/v1/installations/" + installation.getId() + "/checklist")
+                        .header("Authorization", "Bearer " + assignedToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(mandatory.getId().toString()));
+        mvc.perform(get("/api/v1/installations/" + installation.getId() + "/checklist")
+                        .header("Authorization", "Bearer " + unassignedToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(patch("/api/v1/installations/" + installation.getId() + "/checklist/" + mandatory.getId())
+                        .header("Authorization", "Bearer " + unassignedToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"completed\":true,\"evidenceUrl\":\"s3://private/unassigned.pdf\",\"notes\":\"not assigned\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/installations/" + installation.getId() + "/commission")
+                        .header("Authorization", "Bearer " + unassignedToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"customerSignedOff\":true,\"commissioningNotes\":\"unauthorized commissioning\",\"equipment\":[]}"))
+                .andExpect(status().isForbidden());
+        assertFalse(checklistItems.findById(mandatory.getId()).orElseThrow().isCompleted());
+        assertEquals("COMPLETED", installationJobs.findById(installation.getId()).orElseThrow().getStatus());
+        assertNull(installationJobs.findById(installation.getId()).orElseThrow().getCommissionedAt());
+
+        mvc.perform(patch("/api/v1/installations/" + installation.getId() + "/checklist/" + mandatory.getId())
+                        .header("Authorization", "Bearer " + assignedToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"completed\":true,\"evidenceUrl\":\"s3://private/final-test.pdf\",\"notes\":\"insulation and earthing verified\"}"))
+                .andExpect(status().isOk());
+        com.saumyasolar.domain.InstallationChecklistItem savedChecklist = checklistItems.findById(mandatory.getId()).orElseThrow();
+        assertTrue(savedChecklist.isCompleted());
+        assertEquals(assigned.getId(), savedChecklist.getCompletedBy());
+        assertEquals("s3://private/final-test.pdf", savedChecklist.getEvidenceUrl());
+
+        mvc.perform(post("/api/v1/installations/" + installation.getId() + "/commission")
+                        .header("Authorization", "Bearer " + assignedToken).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"customerSignedOff\":true,\"commissioningNotes\":\"Customer handover completed\",\"equipment\":[]}"))
+                .andExpect(status().isOk());
+        InstallationJob commissioned = installationJobs.findById(installation.getId()).orElseThrow();
+        assertEquals("COMMISSIONED", commissioned.getStatus());
+        assertTrue(commissioned.isCustomerSignedOff());
+        assertNotNull(commissioned.getCommissionedAt());
+        assertEquals("COMMISSIONED", customerOrders.findByIdAndTenantId(order.getId(), vendorTenantId).orElseThrow().getStatus());
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    @Test
+    void fixtureBackedCrudAuthorizationAcrossCrmQuotesOrdersInventoryInstallationsServiceWarrantyFinanceAndExports()
+            throws Exception {
+        // Build real same-tenant and foreign-tenant resource graphs. Every denied mutation below
+        // is followed by a repository assertion proving that the foreign row was not changed.
+        Tenant foreignTenant = newTenant();
+        AppUser vendor = users.findByEmailIgnoreCase("admin@saumya.local").orElseThrow();
+        CustomerFixture ownCustomer = createCustomer(vendorTenantId, "crud-own");
+        CustomerFixture foreignCustomer = createCustomer(foreignTenant.getId(), "crud-foreign");
+        Branch ownBranch = branch(vendorTenantId, "CRUD-OWN-" + UUID.randomUUID().toString().substring(0, 6));
+        Branch foreignBranch = branch(foreignTenant.getId(), "CRUD-FOR-" + UUID.randomUUID().toString().substring(0, 6));
+        branches.saveAllAndFlush(List.of(ownBranch, foreignBranch));
+
+        Enquiry ownEnquiry = enquiry(vendorTenantId, ownBranch.getId(), "own-" + UUID.randomUUID());
+        Enquiry foreignEnquiry = enquiry(foreignTenant.getId(), foreignBranch.getId(), "foreign-" + UUID.randomUUID());
+        enquiries.saveAllAndFlush(List.of(ownEnquiry, foreignEnquiry));
+        SalesLead ownLead = lead(vendorTenantId, ownBranch.getId(), vendor.getId(), ownEnquiry.getId());
+        SalesLead foreignLead = lead(foreignTenant.getId(), foreignBranch.getId(), vendor.getId(), foreignEnquiry.getId());
+        leads.saveAllAndFlush(List.of(ownLead, foreignLead));
+
+        SiteSurvey ownSurvey = survey(vendorTenantId, ownBranch.getId(), vendor.getId(), ownLead.getId());
+        ownSurvey.setPropertyType("RESIDENTIAL");
+        ownSurvey.setRoofType("RCC");
+        SiteSurvey foreignSurvey = survey(foreignTenant.getId(), foreignBranch.getId(), vendor.getId(), foreignLead.getId());
+        foreignSurvey.setPropertyType("RESIDENTIAL");
+        foreignSurvey.setRoofType("RCC");
+        surveys.saveAllAndFlush(List.of(ownSurvey, foreignSurvey));
+
+        Quotation ownQuote = quotation(vendorTenantId, ownBranch.getId(), vendor.getId(), ownLead.getId(), ownCustomer.profile().getId());
+        Quotation foreignQuote = quotation(foreignTenant.getId(), foreignBranch.getId(), vendor.getId(),
+                foreignLead.getId(), foreignCustomer.profile().getId());
+        quotations.saveAllAndFlush(List.of(ownQuote, foreignQuote));
+        CustomerOrder ownOrder = order(vendorTenantId, ownBranch.getId(), ownQuote.getId(), ownCustomer.profile().getId());
+        ownOrder.setStatus("CONFIRMED");
+        CustomerOrder foreignOrder = order(foreignTenant.getId(), foreignBranch.getId(), foreignQuote.getId(),
+                foreignCustomer.profile().getId());
+        foreignOrder.setStatus("CONFIRMED");
+        customerOrders.saveAllAndFlush(List.of(ownOrder, foreignOrder));
+
+        Product ownProduct = productRecords.findByTenantIdOrderByIdDesc(vendorTenantId).stream()
+                .findFirst().orElseThrow();
+        ProductCategory foreignCategory = new ProductCategory();
+        foreignCategory.setId(UUID.randomUUID());
+        foreignCategory.setTenantId(foreignTenant.getId());
+        foreignCategory.setName("CRUD foreign category " + UUID.randomUUID());
+        foreignCategory.setActive(true);
+        categories.saveAndFlush(foreignCategory);
+        Product foreignProduct = new Product();
+        foreignProduct.setId(UUID.randomUUID());
+        foreignProduct.setTenantId(foreignTenant.getId());
+        foreignProduct.setCategoryId(foreignCategory.getId());
+        foreignProduct.setSku("CRUD-FOREIGN-" + UUID.randomUUID());
+        foreignProduct.setName("CRUD foreign product");
+        foreignProduct.setPrice(BigDecimal.TEN);
+        foreignProduct.setTaxPercent(BigDecimal.ZERO);
+        foreignProduct.setActive(true);
+        products.saveAndFlush(foreignProduct);
+        Warehouse ownWarehouse = branchWarehouse(vendorTenantId, ownBranch.getId(), "OWN");
+        Warehouse foreignWarehouse = branchWarehouse(foreignTenant.getId(), foreignBranch.getId(), "FOREIGN");
+        warehouseRecords.saveAllAndFlush(List.of(ownWarehouse, foreignWarehouse));
+        InventoryBalance ownBalance = branchBalance(vendorTenantId, ownWarehouse.getId(), ownProduct.getId());
+        InventoryBalance foreignBalance = branchBalance(foreignTenant.getId(), foreignWarehouse.getId(), foreignProduct.getId());
+        inventoryBalances.saveAllAndFlush(List.of(ownBalance, foreignBalance));
+        InventoryTransaction ownMovement = branchMovement(vendorTenantId, ownWarehouse.getId(), ownProduct.getId(), vendor.getId());
+        InventoryTransaction foreignMovement = branchMovement(foreignTenant.getId(), foreignWarehouse.getId(),
+                foreignProduct.getId(), vendor.getId());
+        inventoryTransactions.saveAllAndFlush(List.of(ownMovement, foreignMovement));
+
+        Invoice ownInvoice = branchInvoice(vendorTenantId, ownBranch.getId(), ownOrder.getId(), vendor.getId());
+        Invoice foreignInvoice = branchInvoice(foreignTenant.getId(), foreignBranch.getId(), foreignOrder.getId(), vendor.getId());
+        invoices.saveAllAndFlush(List.of(ownInvoice, foreignInvoice));
+
+        ServiceRequest ownTicket = branchTicket(vendorTenantId, ownBranch.getId(), ownCustomer.profile().getId());
+        ServiceRequest foreignTicket = branchTicket(foreignTenant.getId(), foreignBranch.getId(),
+                foreignCustomer.profile().getId());
+        serviceRequests.saveAllAndFlush(List.of(ownTicket, foreignTicket));
+
+        InstallationJob ownInstallation = branchInstallation(vendorTenantId, ownBranch.getId(), ownOrder.getId(),
+                ownCustomer.profile().getId(), vendor.getId());
+        InstallationJob foreignInstallation = branchInstallation(foreignTenant.getId(), foreignBranch.getId(),
+                foreignOrder.getId(), foreignCustomer.profile().getId(), vendor.getId());
+        installationJobs.saveAllAndFlush(List.of(ownInstallation, foreignInstallation));
+
+        Warranty ownWarranty = new Warranty();
+        ownWarranty.setId(UUID.randomUUID());
+        ownWarranty.setTenantId(vendorTenantId);
+        ownWarranty.setOrderId(ownOrder.getId());
+        ownWarranty.setInstallationId(ownInstallation.getId());
+        ownWarranty.setCustomerId(ownCustomer.profile().getId());
+        ownWarranty.setProductId(ownProduct.getId());
+        ownWarranty.setQuantity(1);
+        ownWarranty.setStartDate(java.time.LocalDate.now().minusDays(1));
+        ownWarranty.setEndDate(java.time.LocalDate.now().plusDays(365));
+        ownWarranty.setStatus("ACTIVE");
+        ownWarranty.setActivatedAt(Instant.now());
+        Warranty foreignWarranty = new Warranty();
+        foreignWarranty.setId(UUID.randomUUID());
+        foreignWarranty.setTenantId(foreignTenant.getId());
+        foreignWarranty.setOrderId(foreignOrder.getId());
+        foreignWarranty.setInstallationId(foreignInstallation.getId());
+        foreignWarranty.setCustomerId(foreignCustomer.profile().getId());
+        foreignWarranty.setProductId(foreignProduct.getId());
+        foreignWarranty.setQuantity(1);
+        foreignWarranty.setStartDate(java.time.LocalDate.now().minusDays(1));
+        foreignWarranty.setEndDate(java.time.LocalDate.now().plusDays(365));
+        foreignWarranty.setStatus("ACTIVE");
+        foreignWarranty.setActivatedAt(Instant.now());
+        warranties.saveAllAndFlush(List.of(ownWarranty, foreignWarranty));
+        WarrantyClaim ownClaim = warrantyClaim(vendorTenantId, ownCustomer.profile().getId(), ownWarranty.getId());
+        WarrantyClaim foreignClaim = warrantyClaim(foreignTenant.getId(), foreignCustomer.profile().getId(),
+                foreignWarranty.getId());
+        warrantyClaims.saveAllAndFlush(List.of(ownClaim, foreignClaim));
+
+        String vendorToken = accessToken("admin@saumya.local", "Admin@123");
+        String auth = "Bearer " + vendorToken;
+
+        // CRM: same-tenant lead read/update succeeds; foreign update is non-disclosing and immutable.
+        mvc.perform(get("/api/v1/leads/" + ownLead.getId() + "/history").header("Authorization", auth))
+                .andExpect(status().isOk());
+        mvc.perform(patch("/api/v1/leads/" + ownLead.getId()).header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"stage\":\"CONTACTED\",\"priority\":\"HIGH\"}"))
+                .andExpect(status().isOk());
+        assertEquals("CONTACTED", leads.findByIdAndTenantId(ownLead.getId(), vendorTenantId).orElseThrow().getStage());
+        mvc.perform(patch("/api/v1/leads/" + foreignLead.getId()).header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"stage\":\"CONTACTED\",\"priority\":\"HIGH\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("NEW", leads.findByIdAndTenantId(foreignLead.getId(), foreignTenant.getId()).orElseThrow().getStage());
+
+        // Quotations: fixture-backed same-tenant revisions are readable; a foreign action cannot send or mutate it.
+        mvc.perform(get("/api/v1/quotations/" + ownQuote.getId() + "/revisions").header("Authorization", auth))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/quotations/" + foreignQuote.getId() + "/revisions").header("Authorization", auth))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/quotations/" + foreignQuote.getId() + "/send").header("Authorization", auth))
+                .andExpect(status().isNotFound());
+        assertEquals("DRAFT", quotations.findByIdAndTenantId(foreignQuote.getId(), foreignTenant.getId())
+                .orElseThrow().getStatus());
+
+        // Orders: same-tenant state transition persists; foreign transition is rejected without a status/history change.
+        mvc.perform(get("/api/v1/orders/" + ownOrder.getId() + "/history").header("Authorization", auth))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/orders/" + ownOrder.getId() + "/transition").header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"PAYMENT_PENDING\",\"reason\":\"CRUD authorization fixture\"}"))
+                .andExpect(status().isOk());
+        assertEquals("PAYMENT_PENDING", customerOrders.findByIdAndTenantId(ownOrder.getId(), vendorTenantId)
+                .orElseThrow().getStatus());
+        mvc.perform(post("/api/v1/orders/" + foreignOrder.getId() + "/transition").header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"PAYMENT_PENDING\",\"reason\":\"must not cross tenant\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("CONFIRMED", customerOrders.findByIdAndTenantId(foreignOrder.getId(), foreignTenant.getId())
+                .orElseThrow().getStatus());
+
+        // Inventory: own transaction can be compensated; foreign transaction cannot alter its balance or ledger.
+        String balanceRows = mvc.perform(get("/api/v1/inventory/balances").header("Authorization", auth))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertTrue(balanceRows.contains(ownBalance.getId().toString()));
+        assertFalse(balanceRows.contains(foreignBalance.getId().toString()));
+        mvc.perform(post("/api/v1/inventory/transactions/" + ownMovement.getId() + "/reverse")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"same-tenant reversal fixture\"}"))
+                .andExpect(status().isOk());
+        assertEquals(0, inventoryBalances.findById(ownBalance.getId()).orElseThrow().getOnHand()
+                .compareTo(BigDecimal.ZERO));
+        mvc.perform(post("/api/v1/inventory/transactions/" + foreignMovement.getId() + "/reverse")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"cross-tenant reversal attempt\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals(0, inventoryBalances.findById(foreignBalance.getId()).orElseThrow().getOnHand()
+                .compareTo(BigDecimal.TEN));
+        assertFalse(inventoryTransactions.existsByTenantIdAndReversalOfTransactionId(
+                foreignTenant.getId(), foreignMovement.getId()));
+
+        // Installations: same-tenant cancellation is persisted; foreign cancellation is a non-disclosing 404.
+        mvc.perform(get("/api/v1/installations/" + ownInstallation.getId() + "/checklist")
+                        .header("Authorization", auth)).andExpect(status().isOk());
+        mvc.perform(post("/api/v1/installations/" + ownInstallation.getId() + "/cancel")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"same-tenant cancellation fixture\"}"))
+                .andExpect(status().isOk());
+        assertEquals("CANCELLED", installationJobs.findById(ownInstallation.getId()).orElseThrow().getStatus());
+        mvc.perform(post("/api/v1/installations/" + foreignInstallation.getId() + "/cancel")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"cross-tenant cancellation attempt\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("SCHEDULED", installationJobs.findById(foreignInstallation.getId()).orElseThrow().getStatus());
+
+        // Service: same-tenant detail is available; foreign detail and mutation are both denied without changing state.
+        mvc.perform(get("/api/v1/service-requests/" + ownTicket.getId()).header("Authorization", auth))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/service-requests/" + foreignTicket.getId()).header("Authorization", auth))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/service-requests/" + foreignTicket.getId() + "/close")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"cross-tenant closure attempt\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("OPEN", serviceRequests.findById(foreignTicket.getId()).orElseThrow().getStatus());
+
+        // Warranty: same-tenant claim decision persists; foreign claim decision leaves status and timestamps intact.
+        mvc.perform(get("/api/v1/warranty-claims").header("Authorization", auth))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[*].id")
+                        .value(org.hamcrest.Matchers.hasItem(ownClaim.getId().toString())));
+        mvc.perform(post("/api/v1/warranty-claims/" + ownClaim.getId() + "/approve")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"same-tenant claim approval fixture\"}"))
+                .andExpect(status().isOk());
+        assertEquals("APPROVED", warrantyClaims.findById(ownClaim.getId()).orElseThrow().getStatus());
+        mvc.perform(post("/api/v1/warranty-claims/" + foreignClaim.getId() + "/approve")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"cross-tenant claim approval attempt\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("SUBMITTED", warrantyClaims.findById(foreignClaim.getId()).orElseThrow().getStatus());
+
+        // Finance: same-tenant invoice items and void work; foreign invoice item/void operations cannot leak or mutate.
+        mvc.perform(get("/api/v1/invoices/" + ownInvoice.getId() + "/items").header("Authorization", auth))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/invoices/" + foreignInvoice.getId() + "/items").header("Authorization", auth))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/invoices/" + ownInvoice.getId() + "/void")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"same-tenant void fixture\"}"))
+                .andExpect(status().isOk());
+        assertEquals("VOID", invoices.findByIdAndTenantId(ownInvoice.getId(), vendorTenantId).orElseThrow().getStatus());
+        mvc.perform(post("/api/v1/invoices/" + foreignInvoice.getId() + "/void")
+                        .header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"cross-tenant void attempt\"}"))
+                .andExpect(status().isNotFound());
+        assertEquals("ISSUED", invoices.findByIdAndTenantId(foreignInvoice.getId(), foreignTenant.getId())
+                .orElseThrow().getStatus());
+
+        // Exports: creator can read their own job; another tenant cannot read it by guessing its UUID.
+        String ownExportBody = mvc.perform(post("/api/v1/exports").header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reportType\":\"OPERATIONS\",\"format\":\"CSV\"}"))
+                .andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
+        UUID ownExportId = UUID.fromString(json.readTree(ownExportBody).get("id").asText());
+        mvc.perform(get("/api/v1/exports/" + ownExportId).header("Authorization", auth))
+                .andExpect(status().isOk());
+        AppUser foreignExporter = createPermissionMatrixUser(foreignTenant.getId(), "foreign-exporter",
+                List.of("REPORT_EXPORT"));
+        String foreignExporterToken = accessToken(foreignExporter.getEmail(), "Matrix-Password-2026");
+        mvc.perform(get("/api/v1/exports/" + ownExportId)
+                        .header("Authorization", "Bearer " + foreignExporterToken))
+                .andExpect(status().isNotFound());
+        assertEquals(vendorTenantId, exportService.status(ownExportId,
+                new com.saumyasolar.security.Principal(vendor.getId(), vendorTenantId, vendor.getEmail(), "VENDOR",
+                        vendor.getRoles().stream().map(Role::getName).collect(java.util.stream.Collectors.toSet()),
+                        vendor.getRoles().stream().flatMap(role -> role.getPermissions().stream())
+                                .map(Permission::getCode).collect(java.util.stream.Collectors.toSet()),
+                        vendor.getTokenVersion())).getTenantId());
     }
 }

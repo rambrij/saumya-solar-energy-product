@@ -4,22 +4,23 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
 import java.time.Instant;
 import java.util.UUID;
+
 @Entity
-@Table(name = "payment_webhook_event", uniqueConstraints = @UniqueConstraint(columnNames = { "provider", "event_id" }))
-@Getter
-@Setter
-@NoArgsConstructor
+@Table(name = "payment_webhook_event", uniqueConstraints =
+        @UniqueConstraint(name = "uq_payment_webhook_tenant_provider_event", columnNames = {"tenant_id", "provider", "event_id"}))
+@Getter @Setter @NoArgsConstructor
 public class PaymentWebhookEvent {
-    @Id
-    UUID id;
-    String provider;
-    @Column(name = "event_id")
-    String eventId;
-    String payloadHash;
-    String processingStatus;
+    @Id UUID id;
+    UUID tenantId;
+    @Column(length = 60) String provider;
+    @Column(length = 150) String providerReference;
+    @Column(name = "event_id", length = 180) String eventId;
+    @Column(length = 64) String payloadHash;
+    @Column(length = 24) String processingStatus;
+    @Column(length = 32) String eventType;
+    @Column(length = 150) String providerRefundReference;
     Instant receivedAt;
     Instant processedAt;
 }

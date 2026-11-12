@@ -1,0 +1,122 @@
+import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
+import {authenticatedFetch,bootstrapSession,setCurrentAuthSession,type AuthSession} from '../src/authenticatedFetch';
+
+const session:AuthSession={accessToken:'expired-access',csrfToken:'csrf-old',user:{id:'u1',name:'Test',email:'test@example.test',accountType:'VENDOR',roles:['VENDOR_ADMIN'],permissions:[],tenantId:'t1'}};
+
+beforeEach(()=>{sessionStorage.clear();setCurrentAuthSession(null)});
+afterEach(()=>{sessionStorage.clear();setCurrentAuthSession(null);vi.unstubAllGlobals();vi.restoreAllMocks()});
+
+describe('HttpOnly-cookie authenticatedFetch',()=>{
+ it('rotates the HttpOnly cookie session after 401 and retries the protected request',async()=>{
+  setCurrentAuthSession(session);
+  const fetchMock=vi.fn()
+   .mockResolvedValueOnce(new Response('',{status:401}))
+   .mockResolvedValueOnce(new Response(JSON.stringify({csrfToken:'csrf-rotated'}),{status:200,headers:{'Content-Type':'application/json'}}))
+   .mockResolvedValueOnce(new Response(JSON.stringify({...session,accessToken:'access-new',csrfToken:'csrf-rotated'}),{status:200,headers:{'Content-Type':'application/json'}}))
+   .mockResolvedValueOnce(new Response('ok',{status:200}));
+  vi.stubGlobal('fetch',fetchMock);
+  const response=await authenticatedFetch('/api/v1/products',{},session);
+  expect(response.status).toBe(200);
+  expect(fetchMock).toHaveBeenCalledTimes(4);
+  expect(String(fetchMock.mock.calls[1][0])).toContain('/auth/csrf');
+  expect(fetchMock.mock.calls[1][1]?.credentials).toBe('include');
+  expect(String(fetchMock.mock.calls[2][0])).toContain('/auth/refresh');
+  expect(new Headers(fetchMock.mock.calls[2][1]?.headers).get('X-CSRF-Token')).toBe('csrf-rotated');
+  expect(new Headers(fetchMock.mock.calls[3][1]?.headers).get('Authorization')).toBe('Bearer access-new');
+  expect(sessionStorage.getItem('saumya-csrf-token')).toBe('csrf-rotated');
+ });
+
+ it('shares one cookie refresh operation for concurrent expired requests',async()=>{
+  setCurrentAuthSession(session);
+  let refreshCalls=0;
+  const fetchMock=vi.fn(async(url:string,init?:RequestInit)=>{
+   if(url.includes('/auth/csrf'))return new Response(JSON.stringify({csrfToken:'csrf-new'}),{status:200,headers:{'Content-Type':'application/json'}});
+   if(url.includes('/auth/refresh')){
+    refreshCalls++;
+    await Promise.resolve();
+    return new Response(JSON.stringify({...session,accessToken:'access-new',csrfToken:'csrf-new'}),{status:200,headers:{'Content-Type':'application/json'}});
+   }
+   const auth=new Headers(init?.headers).get('Authorization');
+   return auth==='Bearer access-new'?new Response('ok',{status:200}):new Response('',{status:401});
+  });
+  vi.stubGlobal('fetch',fetchMock);
+  const [first,second]=await Promise.all([
+   authenticatedFetch('/api/v1/products',{},session),
+   authenticatedFetch('/api/v1/orders',{},session)
+  ]);
+  expect(first.status).toBe(200);
+  expect(second.status).toBe(200);
+  expect(refreshCalls).toBe(1);
+ });
+
+ it('bootstraps a new in-memory session after page reload using the current cookie CSRF value',async()=>{
+  const fetchMock=vi.fn()
+   .mockResolvedValueOnce(new Response(JSON.stringify({csrfToken:'csrf-current'}),{status:200,headers:{'Content-Type':'application/json'}}))
+   .mockResolvedValueOnce(new Response(JSON.stringify({...session,accessToken:'bootstrapped',csrfToken:'csrf-current'}),{status:200,headers:{'Content-Type':'application/json'}}));
+  vi.stubGlobal('fetch',fetchMock);
+  const result=await bootstrapSession();
+  expect(result?.accessToken).toBe('bootstrapped');
+  expect(String(fetchMock.mock.calls[0][0])).toContain('/auth/csrf');
+  expect(String(fetchMock.mock.calls[1][0])).toContain('/auth/refresh');
+  expect(new Headers(fetchMock.mock.calls[1][1]?.headers).get('X-CSRF-Token')).toBe('csrf-current');
+ });
+
+
+ it('obtains the CSRF double-submit value from the API for a fresh tab before refresh',async()=>{
+  const fetchMock=vi.fn()
+   .mockResolvedValueOnce(new Response(JSON.stringify({csrfToken:'csrf-from-api'}),{status:200,headers:{'Content-Type':'application/json'}}))
+   .mockResolvedValueOnce(new Response(JSON.stringify({...session,accessToken:'fresh-tab-access'}),{status:200,headers:{'Content-Type':'application/json'}}));
+  vi.stubGlobal('fetch',fetchMock);
+  const result=await bootstrapSession();
+  expect(result?.accessToken).toBe('fresh-tab-access');
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(String(fetchMock.mock.calls[0][0])).toContain('/auth/csrf');
+  expect(fetchMock.mock.calls[0][1]?.credentials).toBe('include');
+  expect(String(fetchMock.mock.calls[1][0])).toContain('/auth/refresh');
+  expect(new Headers(fetchMock.mock.calls[1][1]?.headers).get('X-CSRF-Token')).toBe('csrf-from-api');
+ });
+
+
+ it('uses the browser-wide Web Lock while rotating refresh cookies',async()=>{
+  const descriptor=Object.getOwnPropertyDescriptor(navigator,'locks');
+  const secureDescriptor=Object.getOwnPropertyDescriptor(window,'isSecureContext');
+  Object.defineProperty(window,'isSecureContext',{configurable:true,value:true});
+  const request=vi.fn(async(_name:string,task:()=>Promise<unknown>)=>task());
+  Object.defineProperty(navigator,'locks',{configurable:true,value:{request}});
+  const fetchMock=vi.fn()
+   .mockResolvedValueOnce(new Response(JSON.stringify({csrfToken:'csrf-lock'}),{status:200,headers:{'Content-Type':'application/json'}}))
+   .mockResolvedValueOnce(new Response(JSON.stringify({...session,accessToken:'locked-refresh',csrfToken:'csrf-lock'}),{status:200,headers:{'Content-Type':'application/json'}}));
+  vi.stubGlobal('fetch',fetchMock);
+  try{
+   const result=await bootstrapSession();
+   expect(result?.accessToken).toBe('locked-refresh');
+   expect(request).toHaveBeenCalledWith('saumya-auth-refresh',expect.any(Function));
+  }finally{
+   if(descriptor)Object.defineProperty(navigator,'locks',descriptor);
+   else delete (navigator as Navigator & {locks?:unknown}).locks;
+   if(secureDescriptor)Object.defineProperty(window,'isSecureContext',secureDescriptor);
+   else delete (window as Window & {isSecureContext?:boolean}).isSecureContext;
+  }
+ });
+
+ it('keeps access credentials in memory and never persists them in localStorage',()=>{
+  localStorage.clear();
+  setCurrentAuthSession(session);
+  expect(localStorage.length).toBe(0);
+  expect(sessionStorage.getItem('saumya-csrf-token')).toBe('csrf-old');
+ });
+
+ it('clears the in-memory session when refresh is rejected',async()=>{
+  setCurrentAuthSession(session);
+  const expired=vi.fn();
+  window.addEventListener('saumya:session-expired',expired);
+  const fetchMock=vi.fn()
+   .mockResolvedValueOnce(new Response('',{status:401}))
+   .mockResolvedValueOnce(new Response('',{status:401}));
+  vi.stubGlobal('fetch',fetchMock);
+  await expect(authenticatedFetch('/api/v1/products',{},session)).rejects.toThrow('session has expired');
+  expect(sessionStorage.getItem('saumya-csrf-token')).toBeNull();
+  expect(expired).toHaveBeenCalledTimes(1);
+  window.removeEventListener('saumya:session-expired',expired);
+ });
+});

@@ -55,7 +55,7 @@ class SurveyLifecycleIntegrationTest {
         actorId = admin.getId();
         actor = new Principal(
                 actorId, tenantId, admin.getEmail(), "VENDOR",
-                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_MANAGE")
+                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_CREATE", "SURVEY_VIEW", "SURVEY_COMPLETE", "SURVEY_ASSIGN")
         );
         SalesLead lead = new SalesLead();
         lead.setId(UUID.randomUUID());
@@ -134,7 +134,7 @@ class SurveyLifecycleIntegrationTest {
         tenants.save(other);
         Principal foreign = new Principal(
                 actorId, other.getId(), "foreign@example.test", "VENDOR",
-                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_MANAGE")
+                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_CREATE", "SURVEY_VIEW", "SURVEY_COMPLETE", "SURVEY_ASSIGN")
         );
         ResponseStatusException notFound = assertThrows(
                 ResponseStatusException.class,
@@ -173,6 +173,38 @@ class SurveyLifecycleIntegrationTest {
     }
     
     @Test
+    void customRoleWithSurveyAssignPermissionCanReviewWithoutStandardRoleName() {
+        lifecycle.start(surveyId, actor);
+        lifecycle.update(surveyId, new UpdateRequest(
+                null, null, "RESIDENTIAL", "RCC", new BigDecimal("1000"), "LOW",
+                new BigDecimal("4"), null, null, null, null, null, null, null,
+                "Assessment complete", "Suitable for rooftop solar"), actor);
+        lifecycle.submit(surveyId, actor);
+        Principal customReviewer = new Principal(UUID.randomUUID(), tenantId, "reviewer@example.test",
+                "VENDOR", Set.of("CUSTOM_SURVEY_REVIEWER"), Set.of("SURVEY_VIEW", "SURVEY_COMPLETE", "SURVEY_ASSIGN"), 0);
+
+        assertEquals("APPROVED", lifecycle.approve(surveyId, customReviewer).getStatus());
+    }
+
+    @Test
+    void nonDispatcherSurveyViewerCannotReadAnotherUsersSurveyButCanReadTheirAssignedSurvey() {
+        SiteSurvey survey = surveys.findById(surveyId).orElseThrow();
+        survey.setAssignedUserId(actorId);
+        surveys.saveAndFlush(survey);
+        Principal assignedEngineer = new Principal(actorId, tenantId, "assigned-engineer@example.test",
+                "VENDOR", Set.of("CUSTOM_SERVICE_ROLE"), Set.of("SURVEY_VIEW", "SURVEY_COMPLETE"), 0);
+        Principal otherSalesUser = new Principal(UUID.randomUUID(), tenantId, "other-sales@example.test",
+                "VENDOR", Set.of("CUSTOM_SALES_ROLE"), Set.of("SURVEY_VIEW", "SURVEY_COMPLETE"), 0);
+
+        assertEquals(surveyId, lifecycle.get(surveyId, assignedEngineer).getId());
+        ResponseStatusException hidden = assertThrows(ResponseStatusException.class,
+                () -> lifecycle.get(surveyId, otherSalesUser));
+
+        assertEquals(HttpStatus.NOT_FOUND, hidden.getStatusCode());
+    }
+
+
+    @Test
     void surveyEvidenceUploadDownloadAndTenantIsolation() {
         byte[] pdf = "%PDF-1.4\\nSurvey evidence\\n%%EOF".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
         MockMultipartFile file = new MockMultipartFile("file", "../../roof-evidence.pdf", "application/pdf", pdf);
@@ -184,7 +216,7 @@ class SurveyLifecycleIntegrationTest {
         
         Principal foreign = new Principal(
                 actorId, UUID.randomUUID(), "foreign@example.test", "VENDOR",
-                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_MANAGE")
+                Set.of("VENDOR_ADMIN"), Set.of("SURVEY_CREATE", "SURVEY_VIEW", "SURVEY_COMPLETE", "SURVEY_ASSIGN")
         );
         ResponseStatusException hidden = assertThrows(
                 ResponseStatusException.class,

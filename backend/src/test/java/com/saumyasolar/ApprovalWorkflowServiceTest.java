@@ -60,7 +60,7 @@ class ApprovalWorkflowServiceTest {
         when(decisions.save(any(ApprovalDecision.class))).thenAnswer(inv -> inv.getArgument(0));
         when(audits.save(any(AuditEvent.class))).thenAnswer(inv -> inv.getArgument(0));
         
-        Principal requester = principal(userId, tenantId, Set.of("SALES_MANAGER"), Set.of());
+        Principal requester = principal(userId, tenantId, Set.of("SALES_MANAGER"), Set.of("APPROVAL_INSTANCE_DECIDE"));
         ApprovalInstance instance = service.startIfConfigured("QUOTATION", UUID.randomUUID(), requester).orElseThrow();
         
         when(instances.findForUpdate(instance.getId(), tenantId)).thenReturn(Optional.of(instance));
@@ -68,7 +68,7 @@ class ApprovalWorkflowServiceTest {
         assertEquals("PENDING", first.getStatus());
         assertEquals(2, first.getCurrentStep());
         
-        Principal finalApprover = principal(UUID.randomUUID(), tenantId, Set.of("VENDOR_ADMIN"), Set.of());
+        Principal finalApprover = principal(UUID.randomUUID(), tenantId, Set.of("VENDOR_ADMIN"), Set.of("APPROVAL_INSTANCE_DECIDE"));
         ApprovalInstance completed = service.decide(instance.getId(), "APPROVE", "Final approval", finalApprover);
         assertEquals("APPROVED", completed.getStatus());
         assertNotNull(completed.getCompletedAt());
@@ -82,12 +82,51 @@ class ApprovalWorkflowServiceTest {
         when(instances.findForUpdate(instanceId, tenantId)).thenReturn(Optional.empty());
         ResponseStatusException error = assertThrows(
                 ResponseStatusException.class,
-                () -> service.decide(instanceId, "APPROVE", null, principal(UUID.randomUUID(), tenantId, Set.of("VENDOR_ADMIN"), Set.of()))
+                () -> service.decide(instanceId, "APPROVE", null, principal(UUID.randomUUID(), tenantId, Set.of("VENDOR_ADMIN"), Set.of("APPROVAL_INSTANCE_DECIDE")))
         );
         assertEquals(HttpStatus.NOT_FOUND, error.getStatusCode());
         verify(decisions, never()).save(any());
     }
     
+
+    @Test
+    void approverCanOnlyListAndReadInstancesForConfiguredSteps() {
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        ApprovalInstance assigned = instance(tenantId, "[{\"approverRole\":\"SALES_MANAGER\"}]");
+        ApprovalInstance unrelated = instance(tenantId, "[{\"approverRole\":\"SERVICE_MANAGER\"}]");
+        when(instances.findByTenantIdOrderByRequestedAtDesc(tenantId)).thenReturn(List.of(assigned, unrelated));
+        when(instances.findByIdAndTenantId(assigned.getId(), tenantId)).thenReturn(Optional.of(assigned));
+        when(instances.findByIdAndTenantId(unrelated.getId(), tenantId)).thenReturn(Optional.of(unrelated));
+        Principal approver = principal(userId, tenantId, Set.of("SALES_MANAGER"), Set.of("APPROVAL_INSTANCE_VIEW"));
+
+        List<ApprovalInstance> visible = service.instances(approver);
+
+        assertEquals(List.of(assigned.getId()), visible.stream().map(ApprovalInstance::getId).toList());
+        assertEquals(assigned.getId(), service.get(assigned.getId(), approver).getId());
+        ResponseStatusException hidden = assertThrows(ResponseStatusException.class,
+                () -> service.get(unrelated.getId(), approver));
+        assertEquals(HttpStatus.NOT_FOUND, hidden.getStatusCode());
+    }
+
+    @Test
+    void approvalInstanceListRequiresDedicatedViewPermission() {
+        Principal vendor = principal(UUID.randomUUID(), UUID.randomUUID(), Set.of("SALES_MANAGER"), Set.of());
+        assertEquals(HttpStatus.FORBIDDEN, assertThrows(ResponseStatusException.class,
+                () -> service.instances(vendor)).getStatusCode());
+    }
+
+    private ApprovalInstance instance(UUID tenantId, String steps) {
+        ApprovalInstance instance = new ApprovalInstance();
+        instance.setId(UUID.randomUUID());
+        instance.setTenantId(tenantId);
+        instance.setStepsSnapshotJson(steps);
+        instance.setStatus("PENDING");
+        instance.setCurrentStep(1);
+        instance.setRequestedAt(Instant.now());
+        return instance;
+    }
+
     @Test
     void malformedWorkflowStepsAreRejected() {
         Principal p = principal(UUID.randomUUID(), UUID.randomUUID(), Set.of("VENDOR_ADMIN"), Set.of("APPROVAL_WORKFLOW_MANAGE"));

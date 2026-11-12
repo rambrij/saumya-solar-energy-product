@@ -29,6 +29,8 @@ import com.saumyasolar.service.PackageImageStorageService;
 import com.saumyasolar.service.TenantAdminService;
 import com.saumyasolar.api.TenantAdminModels.TenantUpdate;
 import com.saumyasolar.api.TenantAdminModels.TenantPage;
+import com.saumyasolar.api.TenantAdminModels.TenantLifecycleInput;
+import com.saumyasolar.api.OrderPolicyModels.TransitionPolicyUpdate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpHeaders;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -63,6 +65,7 @@ public class Controller {
     final com.saumyasolar.service.SurveyLifecycleService surveyLifecycle;
     final com.saumyasolar.service.EnterpriseSaasService enterpriseSaas;
     final boolean platformMfaEnabled;
+    final com.saumyasolar.security.AuthCookieService authCookies;
     
     Controller(
             AppService s,
@@ -80,7 +83,8 @@ public class Controller {
             com.saumyasolar.service.SurveyLifecycleService surveyLifecycle,
             com.saumyasolar.service.EnterpriseSaasService enterpriseSaas,
             @org.springframework.beans.factory.annotation.Value("${app.auth.platform-mfa-enabled:true}")
-            boolean platformMfaEnabled
+            boolean platformMfaEnabled,
+            com.saumyasolar.security.AuthCookieService authCookies
     ) {
         this.s = s;
         users = u;
@@ -97,6 +101,7 @@ public class Controller {
         this.surveyLifecycle = surveyLifecycle;
         this.enterpriseSaas = enterpriseSaas;
         this.platformMfaEnabled = platformMfaEnabled;
+        this.authCookies = authCookies;
     }
     
     Principal p(Authentication a) {
@@ -104,8 +109,8 @@ public class Controller {
     }
     
     @PostMapping("/auth/login")
-    Object login(@Valid @RequestBody Login x) {
-        var u = users.findByEmailIgnoreCase(x.email()).filter(v -> v.isEnabled() && lifecycle.tenantIsActive(v) && enc.matches(x.password(), v.getPasswordHash())).orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED));
+    Object login(@Valid @RequestBody Login x, jakarta.servlet.http.HttpServletResponse response) {
+        var u = lifecycle.authenticate(x.email(), x.password());
         if (platformMfaEnabled && "PLATFORM".equals(u.getAccountType())) {
             return new MfaChallengeRequired(true, lifecycle.createMfaChallenge(u));
         }
@@ -115,11 +120,12 @@ public class Controller {
             rs.add(r.getName());
             r.getPermissions().forEach(z -> ps.add(z.getCode()));
         });
-        return new Session(jwt.issue(u), lifecycle.newRefresh(u), new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
+        String csrfToken = authCookies.issue(response, lifecycle.newRefresh(u));
+        return new Session(jwt.issue(u), csrfToken, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
     }
     
     @PostMapping("/auth/mfa/verify")
-    Session verifyMfa(@Valid @RequestBody MfaVerify input) {
+    Session verifyMfa(@Valid @RequestBody MfaVerify input, jakarta.servlet.http.HttpServletResponse response) {
         var u = lifecycle.verifyMfaChallenge(input.challengeId(), input.code());
         var roleNames = new HashSet<String>();
         var permissionCodes = new HashSet<String>();
@@ -127,38 +133,73 @@ public class Controller {
             roleNames.add(role.getName());
             role.getPermissions().forEach(permission -> permissionCodes.add(permission.getCode()));
         });
+        String csrfToken = authCookies.issue(response, lifecycle.newRefresh(u));
         return new Session(
-                jwt.issue(u), lifecycle.newRefresh(u),
+                jwt.issue(u), csrfToken,
                 new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), roleNames, permissionCodes)
         );
     }
     
+    @GetMapping("/auth/csrf")
+    Map<String, String> csrf(jakarta.servlet.http.HttpServletRequest request) {
+        String token = authCookies.csrfToken(request);
+        if (token == null || token.isBlank())
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED, "Session is unavailable");
+        return Map.of("csrfToken", token);
+    }
+
     @PostMapping("/auth/refresh")
-    Session refresh(@Valid @RequestBody Refresh x) {
-        var u = lifecycle.consumeRefresh(x.refreshToken());
+    Session refresh(jakarta.servlet.http.HttpServletRequest request, jakarta.servlet.http.HttpServletResponse response) {
+        authCookies.requireCsrf(request);
+        String refreshToken = authCookies.refreshToken(request);
+        if (refreshToken == null || refreshToken.isBlank())
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh session is unavailable");
+        var rotation = lifecycle.rotateRefresh(refreshToken);
+        String csrfToken = authCookies.issue(response, rotation.refreshToken());
+        var u = rotation.user();
         var rs = new HashSet<String>();
         var ps = new HashSet<String>();
         u.getRoles().forEach(r -> {
             rs.add(r.getName());
             r.getPermissions().forEach(z -> ps.add(z.getCode()));
         });
-        return new Session(jwt.issue(u), lifecycle.newRefresh(u), new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
+        return new Session(jwt.issue(u), csrfToken, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), rs, ps));
     }
     
     @PostMapping("/auth/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    void logout(@Valid @RequestBody Refresh x) {
-        lifecycle.logout(x.refreshToken());
+    void logout(jakarta.servlet.http.HttpServletRequest request, jakarta.servlet.http.HttpServletResponse response) {
+        authCookies.requireCsrf(request);
+        lifecycle.logout(authCookies.refreshToken(request));
+        authCookies.clear(response);
     }
     
+    @PatchMapping("/users/{userId}/role")
+    UserView assignEmployeeRole(@PathVariable UUID userId, @Valid @RequestBody EmployeeRoleAssignment x, Authentication a) {
+        var actor = p(a);
+        if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
+                || actor.permissions() == null || !actor.permissions().contains("ROLE_ASSIGN"))
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
+        var u = lifecycle.assignEmployeeRole(actor.tenantId(), actor.userId(), userId, x.roleName());
+        var roleNames = new HashSet<String>();
+        var permissionCodes = new HashSet<String>();
+        u.getRoles().forEach(role -> {
+            roleNames.add(role.getName());
+            role.getPermissions().forEach(permission -> permissionCodes.add(permission.getCode()));
+        });
+        return new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), roleNames, permissionCodes);
+    }
+
     @PostMapping("/users")
     UserView createVendorEmployee(@Valid @RequestBody EmployeeCreate x, Authentication a) {
         var actor = p(a);
         if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
-                || actor.permissions() == null || !actor.permissions().contains("USER_MANAGE"))
+                || actor.permissions() == null
+                || !actor.permissions().contains("USER_CREATE")
+                || !actor.permissions().contains("ROLE_ASSIGN"))
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
         enterpriseSaas.enforceUserLimit(actor.tenantId());
-        var u = lifecycle.createEmployee(actor.tenantId(), x.name(), x.email(), x.password(), x.roleName());
+        var u = lifecycle.createEmployee(actor.tenantId(), actor.userId(), x.name(), x.email(), x.password(), x.roleName());
         var roleNames = new HashSet<String>();
         var permissionCodes = new HashSet<String>();
         u.getRoles().forEach(r -> {
@@ -169,9 +210,10 @@ public class Controller {
     }
     
     @PostMapping("/auth/register")
-    Session register(@Valid @RequestBody Register x) {
+    Session register(@Valid @RequestBody Register x, jakarta.servlet.http.HttpServletResponse response) {
         var u = lifecycle.register(x.storeSlug(), x.name(), x.email(), x.password());
-        return new Session(jwt.issue(u), lifecycle.newRefresh(u), new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), Set.of("CUSTOMER"), Set.of()));
+        String csrfToken = authCookies.issue(response, lifecycle.newRefresh(u));
+        return new Session(jwt.issue(u), csrfToken, new UserView(u.getId(), u.getTenantId(), u.getName(), u.getEmail(), u.getAccountType(), Set.of("CUSTOMER"), Set.of()));
     }
     
     @PostMapping("/auth/forgot-password")
@@ -197,12 +239,12 @@ public class Controller {
         return s.list(type, p(a));
     }
     
-    @GetMapping({ "/tenant/settings", "/settings" })
+    @GetMapping("/tenant/settings")
     Tenant tenantSettings(Authentication a) {
         return s.tenantSettings(p(a));
     }
     
-    @PatchMapping({ "/tenant/settings/discount-threshold", "/settings/discount-threshold" })
+    @PatchMapping("/tenant/settings/discount-threshold")
     Tenant discountThreshold(@RequestBody Input x, Authentication a) {
         return s.updateDiscountApprovalThreshold(x.discountPercent(), p(a));
     }
@@ -210,6 +252,42 @@ public class Controller {
     @GetMapping("/roles")
     List<com.saumyasolar.domain.Role> employeeRoles(Authentication a) {
         return s.employeeRoles(p(a));
+    }
+
+    @GetMapping("/permissions")
+    List<com.saumyasolar.domain.Permission> vendorRolePermissions(Authentication a) {
+        var actor = p(a);
+        if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
+                || actor.permissions() == null || !actor.permissions().contains("ROLE_VIEW"))
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
+        return lifecycle.vendorRolePermissions();
+    }
+
+    @PostMapping("/roles")
+    com.saumyasolar.domain.Role createCustomRole(@Valid @RequestBody RolePermissionRequest x, Authentication a) {
+        var actor = p(a);
+        if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
+                || actor.permissions() == null || !actor.permissions().contains("ROLE_CREATE"))
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
+        return lifecycle.createCustomRole(actor.tenantId(), actor.userId(), x.name(), x.permissions());
+    }
+
+    @PatchMapping("/roles/{roleId}")
+    com.saumyasolar.domain.Role updateCustomRole(@PathVariable UUID roleId, @Valid @RequestBody RolePermissionRequest x, Authentication a) {
+        var actor = p(a);
+        if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
+                || actor.permissions() == null || !actor.permissions().contains("ROLE_UPDATE"))
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
+        return lifecycle.updateCustomRole(actor.tenantId(), actor.userId(), roleId, x.permissions());
+    }
+
+    @DeleteMapping("/roles/{roleId}")
+    void deleteCustomRole(@PathVariable UUID roleId, Authentication a) {
+        var actor = p(a);
+        if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
+                || actor.permissions() == null || !actor.permissions().contains("ROLE_UPDATE"))
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
+        lifecycle.deleteCustomRole(actor.tenantId(), actor.userId(), roleId);
     }
     
     @Operation(
@@ -357,7 +435,7 @@ public class Controller {
                     HttpStatus.FORBIDDEN,
                     "Platform Super Admin permission is required"
             );
-        return lifecycle.createTenant(x.name(), x.slug(), x.adminName(), x.adminEmail(), x.adminPassword());
+        return tenantAdmin.createTenant(x,principal);
     }
     
     @PostMapping("/{type:categories|products|packages|customers|enquiries}")
@@ -366,15 +444,16 @@ public class Controller {
     }
     
     @PatchMapping("/tenants/{id}/status")
-    Tenant tenantStatus(@PathVariable UUID id, @RequestBody Input x, Authentication a) {
-        return s.updateTenantStatus(id, x.status(), p(a));
-    }
+    com.saumyasolar.api.TenantAdminModels.TenantRow tenantStatus(@PathVariable UUID id, @Valid @RequestBody TenantLifecycleInput x, Authentication a) { return tenantAdmin.transition(id,x,p(a)); }
+
+    @PostMapping("/platform/tenants/{id}/lifecycle")
+    com.saumyasolar.api.TenantAdminModels.TenantRow tenantLifecycle(@PathVariable UUID id,@Valid @RequestBody TenantLifecycleInput x,Authentication a) { return tenantAdmin.transition(id,x,p(a)); }
     
     @PatchMapping("/users/{id}/enabled")
     UserView employeeEnabled(@PathVariable UUID id, @RequestBody Input x, Authentication a) {
         var actor = p(a);
         if (!"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
-                || actor.permissions() == null || !actor.permissions().contains("USER_MANAGE"))
+                || actor.permissions() == null || !actor.permissions().contains("USER_DISABLE"))
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
         if (x.active() == null)
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "active is required");
@@ -439,7 +518,9 @@ public class Controller {
     
     @GetMapping(value = "/quotations/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
     byte[] pdf(@PathVariable UUID id, Authentication a) throws Exception {
-        var q = ( (List<Quotation>) s.list("quotations", p(a)) ).stream().filter(x -> x.getId().equals(id)).findFirst().orElseThrow();
+        var q = ( (List<Quotation>) s.list("quotations", p(a)) ).stream().filter(x -> x.getId().equals(id)).findFirst()
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "Quotation not found"));
         try (var out = new ByteArrayOutputStream()) {
             var d = new Document();
             PdfWriter.getInstance(d, out);
@@ -583,7 +664,7 @@ public class Controller {
     @DeleteMapping("/users/{id}")
     UserView archiveEmployee(@PathVariable UUID id, Authentication a) {
         var actor = p(a);
-        if (!"VENDOR".equals(actor.accountType()) || actor.permissions() == null || !actor.permissions().contains("USER_MANAGE"))
+        if (!"VENDOR".equals(actor.accountType()) || actor.permissions() == null || !actor.permissions().contains("USER_DISABLE"))
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
         if (actor.userId().equals(id))
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.CONFLICT, "You cannot disable your own account");
@@ -630,6 +711,10 @@ public class Controller {
     @GetMapping("/inventory/balances")
     List<com.saumyasolar.domain.InventoryBalance> inventoryBalances(Authentication a) {
         return operations.balances(p(a));
+    }
+    @GetMapping("/inventory/reservations")
+    List<com.saumyasolar.domain.InventoryReservation> inventoryReservations(Authentication a) {
+        return operations.reservations(p(a));
     }
     
     @GetMapping("/inventory/transactions")
@@ -684,6 +769,15 @@ public class Controller {
         return operations.transfer(x, p(a));
     }
     
+    @GetMapping("/orders/transition-options")
+    List<com.saumyasolar.api.OrderPolicyModels.TransitionOption> orderTransitionOptions(Authentication a) { return operations.transitionOptions(p(a)); }
+
+    @GetMapping("/orders/transition-policy")
+    List<com.saumyasolar.api.OrderPolicyModels.PolicyRule> orderTransitionPolicy(Authentication a) { return operations.transitionPolicy(p(a)); }
+
+    @PutMapping("/orders/transition-policy")
+    List<com.saumyasolar.api.OrderPolicyModels.PolicyRule> updateOrderTransitionPolicy(@RequestBody TransitionPolicyUpdate x,Authentication a) { return operations.updateTransitionPolicy(x,p(a)); }
+
     @PostMapping("/orders/{id}/reserve")
     List<com.saumyasolar.domain.InventoryReservation> reserveOrder(
             @PathVariable UUID id,

@@ -10,13 +10,28 @@ spring:
     open-in-view: false
   flyway:
     enabled: false
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-test.sql
 app:
   auth:
     platform-mfa-enabled: false
+    rate-limit:
+      login-per-window: 10000
+      recovery-per-window: 10000
+      mfa-per-window: 10000
+      window-seconds: 60
   jwt-secret: test-only-jwt-secret-that-is-long-enough-for-hmac-sha-256-and-more
   cors-origins: http://localhost:3000
   seed:
     enabled: true
+  payment:
+    mock:
+      enabled: true
+      signing-secret: test-only-mock-payment-signing-secret-32-chars
+      checkout-outcome: ${MOCK_PAYMENT_CHECKOUT_OUTCOME:PENDING}
+      frontend-base-url: ${MOCK_PAYMENT_FRONTEND_BASE_URL:http://localhost:3000}
 management:
   endpoints:
     web:

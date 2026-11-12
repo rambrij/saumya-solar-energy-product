@@ -28,12 +28,14 @@ public class SurveyLifecycleService {
     private final AppUserRepository users;
     private final CustomerProfileRepository customers;
     private final NotificationService notifications;
+    private final EnterpriseSaasService enterpriseSaas;
     
     public SurveyLifecycleService(
             SiteSurveyRepository surveys,
             SiteSurveyHistoryRepository history,
             SalesLeadRepository leads,
-            AppUserRepository users, CustomerProfileRepository customers, NotificationService notifications
+            AppUserRepository users, CustomerProfileRepository customers,
+            NotificationService notifications, EnterpriseSaasService enterpriseSaas
     ) {
         this.surveys = surveys;
         this.history = history;
@@ -41,18 +43,33 @@ public class SurveyLifecycleService {
         this.users = users;
         this.customers = customers;
         this.notifications = notifications;
+        this.enterpriseSaas = enterpriseSaas;
     }
     
-    private void authorize(Principal actor) {
+    private void authorize(Principal actor, String permission) {
         if (actor == null || !"VENDOR".equals(actor.accountType()) || actor.tenantId() == null
-                || actor.permissions() == null || !actor.permissions().contains("SURVEY_MANAGE")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Survey management permission is required");
+                || actor.permissions() == null || !actor.permissions().contains(permission)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Survey permission is required");
         }
+    }
+
+    private void requireReviewer(Principal actor) {
+        authorize(actor, "SURVEY_ASSIGN");
     }
     
     private SiteSurvey requireSurvey(UUID id, Principal actor) {
-        return surveys.findByIdAndTenantId(id, actor.tenantId())
+        SiteSurvey survey = surveys.findByIdAndTenantId(id, actor.tenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Survey not found"));
+        if (!"CUSTOMER".equals(actor.accountType())) {
+            if ((actor.permissions() == null || !actor.permissions().contains("SURVEY_ASSIGN"))
+                    && !actor.userId().equals(survey.getAssignedUserId()))
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Survey not found");
+            // Engineer assignment does not override the vendor employee's branch membership.
+            // A survey in another branch must remain hidden even when its assignedUserId is
+            // forged or stale and happens to match the caller.
+            enterpriseSaas.assertBranchAccess(survey.getBranchId(), actor);
+        }
+        return survey;
     }
     
     private void record(
@@ -78,7 +95,7 @@ public class SurveyLifecycleService {
     
     @Transactional
     public void recordCreated(SiteSurvey survey, Principal actor) {
-        authorize(actor);
+        authorize(actor, "SURVEY_CREATE");
         if (survey == null || !actor.tenantId().equals(survey.getTenantId())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Survey not found");
         }
@@ -88,27 +105,30 @@ public class SurveyLifecycleService {
     
     @Transactional
     public SiteSurvey get(UUID id, Principal actor) {
-        authorize(actor);
+        authorize(actor, "SURVEY_VIEW");
         return requireSurvey(id, actor);
     }
     
     @Transactional
     public List<SiteSurveyHistory> history(UUID id, Principal actor) {
-        authorize(actor);
+        authorize(actor, "SURVEY_VIEW");
         requireSurvey(id, actor);
         return history.findBySurveyIdAndTenantIdOrderByCreatedAtDesc(id, actor.tenantId());
     }
     
     @Transactional
     public SiteSurvey update(UUID id, UpdateRequest input, Principal actor) {
-        authorize(actor);
+        authorize(actor, "SURVEY_COMPLETE");
         SiteSurvey survey = requireSurvey(id, actor);
         if (!EDITABLE.contains(survey.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Survey cannot be edited in status " + survey.getStatus());
         }
-        if (input.assignedUserId() != null && users.findById(input.assignedUserId())
-                .filter(user -> actor.tenantId().equals(user.getTenantId())
-                        && "VENDOR".equals(user.getAccountType()) && user.isEnabled()).isEmpty()) {
+        if (input.assignedUserId() != null && !input.assignedUserId().equals(survey.getAssignedUserId())) {
+            if (actor.permissions() == null || !actor.permissions().contains("SURVEY_ASSIGN"))
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Survey reassignment requires SURVEY_ASSIGN");
+        }
+        if (input.assignedUserId() != null && users.findByIdAndTenantId(input.assignedUserId(), actor.tenantId())
+                .filter(user -> "VENDOR".equals(user.getAccountType()) && user.isEnabled()).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Assigned engineer must be an enabled employee of this vendor");
         }
         if (input.scheduledAt() != null) survey.setScheduledAt(input.scheduledAt());
@@ -136,7 +156,7 @@ public class SurveyLifecycleService {
     
     @Transactional
     public SiteSurvey start(UUID id, Principal actor) {
-        authorize(actor);
+        authorize(actor, "SURVEY_COMPLETE");
         SiteSurvey survey = requireSurvey(id, actor);
         transition(survey, actor, "SCHEDULED", "IN_PROGRESS", "STARTED", "Survey started");
         return surveys.save(survey);
@@ -144,7 +164,7 @@ public class SurveyLifecycleService {
     
     @Transactional
     public SiteSurvey submit(UUID id, Principal actor) {
-        authorize(actor);
+        authorize(actor, "SURVEY_COMPLETE");
         SiteSurvey survey = requireSurvey(id, actor);
         if (!Set.of("IN_PROGRESS", "REJECTED").contains(survey.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only an in-progress or rejected survey can be submitted");
@@ -169,7 +189,8 @@ public class SurveyLifecycleService {
     
     @Transactional
     public SiteSurvey approve(UUID id, Principal actor) {
-        authorize(actor);
+        authorize(actor, "SURVEY_COMPLETE");
+        requireReviewer(actor);
         SiteSurvey survey = requireSurvey(id, actor);
         transition(survey, actor, "SUBMITTED", "APPROVED", "APPROVED", "Survey approved");
         survey.setReviewedBy(actor.userId());
@@ -181,7 +202,8 @@ public class SurveyLifecycleService {
     
     @Transactional
     public SiteSurvey reject(UUID id, String reason, Principal actor) {
-        authorize(actor);
+        authorize(actor, "SURVEY_COMPLETE");
+        requireReviewer(actor);
         if (reason == null || reason.isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rejection reason is required");
         SiteSurvey survey = requireSurvey(id, actor);
@@ -196,7 +218,7 @@ public class SurveyLifecycleService {
     
     @Transactional
     public SiteSurvey cancel(UUID id, String reason, Principal actor) {
-        authorize(actor);
+        authorize(actor, "SURVEY_COMPLETE");
         if (reason == null || reason.isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cancellation reason is required");
         SiteSurvey survey = requireSurvey(id, actor);

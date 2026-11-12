@@ -1,8 +1,9 @@
 import React,{useEffect,useState} from 'react';
+import {authenticatedFetch,type AuthSession} from './authenticatedFetch';
 const API_BASE=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/+$/,'');
 type Session={accessToken:string;user:{tenantId?:string;permissions:string[]}};
 async function request(path:string,s:Session,method='GET',body?:any){
- const r=await fetch(API_BASE+'/api/v1'+path,{method,headers:{Authorization:'Bearer '+s.accessToken,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
+ const r=await authenticatedFetch(API_BASE+'/api/v1'+path,{method,headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)},s as AuthSession);
  const data=await r.json().catch(()=>({}));
  if(!r.ok)throw new Error(data.detail||data.message||'Request failed ('+r.status+')');
  return data;

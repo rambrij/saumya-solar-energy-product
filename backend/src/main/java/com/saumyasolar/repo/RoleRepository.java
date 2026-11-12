@@ -8,6 +8,8 @@ import java.util.Optional;
 import java.util.UUID;
 public interface RoleRepository extends JpaRepository<Role, UUID> {
     Optional<Role> findByNameAndTenantId(String name, UUID tenantId);
+
+    Optional<Role> findByIdAndTenantId(UUID id, UUID tenantId);
     
     Optional<Role> findByNameAndTenantIdIsNull(String name);
     

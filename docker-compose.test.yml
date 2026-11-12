@@ -1,0 +1,17 @@
+# Disposable local test overlay. Use only with:
+# docker compose -f docker-compose.yml -f docker-compose.test.yml up --build
+services:
+  mysql:
+    volumes:
+      - mysql_test_data:/var/lib/mysql
+  backend:
+    environment:
+      SPRING_PROFILES_ACTIVE: test
+      SEED_DATA_ENABLED: "false"
+      PLATFORM_BOOTSTRAP_ENABLED: "false"
+      PLATFORM_MFA_ENABLED: "false"
+      NOTIFICATION_MESSAGING_PROVIDER: mock
+      JWT_SECRET: test-only-compose-secret-with-more-than-sixty-four-characters-for-hmac-sha256
+      CORS_ORIGINS: http://localhost:3000
+volumes:
+  mysql_test_data: {}

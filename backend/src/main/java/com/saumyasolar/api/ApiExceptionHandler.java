@@ -17,8 +17,12 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, Object>> handleStatus(ResponseStatusException exception) {
         HttpStatus status = HttpStatus.valueOf(exception.getStatusCode().value());
-        String detail = exception.getReason() == null || exception.getReason().isBlank()
-                ? status.getReasonPhrase() : exception.getReason();
+        String detail = status == HttpStatus.UNAUTHORIZED
+                ? "Authentication failed. Please check your credentials or sign in again."
+                : status == HttpStatus.FORBIDDEN
+                    ? "You do not have permission to access this resource."
+                    : exception.getReason() == null || exception.getReason().isBlank()
+                        ? status.getReasonPhrase() : exception.getReason();
         return ResponseEntity.status(status).body(body(status, detail));
     }
     

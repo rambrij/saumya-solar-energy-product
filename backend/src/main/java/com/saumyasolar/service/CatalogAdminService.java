@@ -17,6 +17,8 @@ import java.util.*;
 public class CatalogAdminService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private EnterpriseSaasService enterpriseSaas;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private SalesLeadRepository leads;
     private final ProductRepository products;
     private final ProductCategoryRepository categories;
     private final CustomerProfileRepository customers;
@@ -55,8 +57,15 @@ public class CatalogAdminService {
         return categories.findByIdAndTenantId(id, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Category not found"));
     }
     
-    private CustomerProfile customer(UUID id, UUID t) {
-        return customers.findByIdAndTenantId(id, t).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
+    private CustomerProfile customer(UUID id, UUID t, Principal p) {
+        CustomerProfile customer = customers.findByIdAndTenantId(id, t)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
+        if (p.permissions() != null && p.permissions().contains("LEAD_VIEW")
+                && !p.permissions().contains("LEAD_ASSIGN")
+                && (leads == null || leads.findByTenantIdOrderByIdDesc(t).stream()
+                    .noneMatch(lead -> id.equals(lead.getCustomerId()) && p.userId().equals(lead.getAssignedUserId()))))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found");
+        return customer;
     }
     
     private void secureUrl(String value, String field) {
@@ -88,7 +97,7 @@ public class CatalogAdminService {
     @Transactional
     public Product createProduct(ProductInput x, Principal p) {
         UUID t = tenant(p);
-        require(p, "CATALOG_MANAGE");
+        require(p, "PRODUCT_CREATE");
         if (enterpriseSaas != null) enterpriseSaas.enforceProductLimit(t);
         if (categories.findByIdAndTenantId(x.categoryId(), t).filter(ProductCategory::isActive).isEmpty())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select an active category belonging to this vendor");
@@ -108,7 +117,7 @@ public class CatalogAdminService {
     @Transactional
     public Product updateProduct(UUID id, ProductInput x, Principal p) {
         UUID t = tenant(p);
-        require(p, "CATALOG_MANAGE");
+        require(p, "PRODUCT_UPDATE");
         Product e = product(id, t);
         if (categories.findByIdAndTenantId(x.categoryId(), t).filter(ProductCategory::isActive).isEmpty())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose an active category from this vendor");
@@ -126,7 +135,7 @@ public class CatalogAdminService {
     @Transactional
     public Product archiveProduct(UUID id, Principal p) {
         UUID t = tenant(p);
-        require(p, "CATALOG_MANAGE");
+        require(p, "PRODUCT_ARCHIVE");
         Product e = product(id, t);
         e.setActive(false);
         return products.save(e);
@@ -135,7 +144,7 @@ public class CatalogAdminService {
     @Transactional
     public ProductCategory updateCategory(UUID id, CategoryInput x, Principal p) {
         UUID t = tenant(p);
-        require(p, "CATALOG_MANAGE");
+        require(p, "PRODUCT_UPDATE");
         ProductCategory e = category(id, t);
         categories.findByNameAndTenantId(x.name(), t).filter(v -> !v.getId().equals(id)).ifPresent(v -> {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Category name already exists");
@@ -149,7 +158,7 @@ public class CatalogAdminService {
     @Transactional
     public ProductCategory archiveCategory(UUID id, Principal p) {
         UUID t = tenant(p);
-        require(p, "CATALOG_MANAGE");
+        require(p, "PRODUCT_ARCHIVE");
         ProductCategory e = category(id, t);
         boolean referenced = products.findByTenantIdOrderByIdDesc(t).stream().anyMatch(x -> id.equals(x.getCategoryId()) && x.isActive());
         if (referenced)
@@ -161,8 +170,8 @@ public class CatalogAdminService {
     @Transactional
     public CustomerProfile updateCustomer(UUID id, CustomerInput x, Principal p) {
         UUID t = tenant(p);
-        require(p, "CUSTOMER_MANAGE");
-        CustomerProfile e = customer(id, t);
+        require(p, "CUSTOMER_UPDATE");
+        CustomerProfile e = customer(id, t, p);
         customers.findByTenantIdAndEmailIgnoreCase(t, x.email()).filter(v -> !v.getId().equals(id)).ifPresent(v -> {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Customer email already exists");
         });
@@ -177,8 +186,8 @@ public class CatalogAdminService {
     @Transactional
     public CustomerProfile archiveCustomer(UUID id, Principal p) {
         UUID t = tenant(p);
-        require(p, "CUSTOMER_MANAGE");
-        CustomerProfile e = customer(id, t);
+        require(p, "CUSTOMER_UPDATE");
+        CustomerProfile e = customer(id, t, p);
         e.setActive(false);
         return customers.save(e);
     }
@@ -186,7 +195,7 @@ public class CatalogAdminService {
     @Transactional
     public AppUser updateEmployee(UUID id, EmployeeUpdateInput x, Principal p) {
         UUID t = tenant(p);
-        require(p, "USER_MANAGE");
+        require(p, "USER_UPDATE");
         AppUser u = users.findById(id).filter(v -> t.equals(v.getTenantId()) && "VENDOR".equals(v.getAccountType())).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
         users.findByEmailIgnoreCase(x.email()).filter(v -> !v.getId().equals(id)).ifPresent(v -> {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email is already in use");

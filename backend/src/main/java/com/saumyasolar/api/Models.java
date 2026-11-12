@@ -30,6 +30,12 @@ public final class Models {
     public record Refresh(@NotBlank String refreshToken) {
     }
     
+    public record EmployeeRoleAssignment(@NotBlank String roleName) {
+    }
+
+    public record RolePermissionRequest(@NotBlank @Size(max = 50) String name, Set<@NotBlank String> permissions) {
+    }
+    
     public record EmployeeCreate(
             @NotBlank String name, @Email String email, @Size(min = 12) String password,
             @NotBlank String roleName
@@ -39,7 +45,7 @@ public final class Models {
     public record PasswordReset(@Email String email, String token, String newPassword) {
     }
     
-    public record Session(String accessToken, String refreshToken, UserView user) {
+    public record Session(String accessToken, String csrfToken, UserView user) {
     }
     
     public record UserView(

@@ -51,9 +51,9 @@ public class ServiceCommentController {
             if (!c.getId().equals(t.getCustomerId()))
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Service ticket not found");
         } else {
-            if (!"VENDOR".equals(p.accountType()) || p.permissions() == null || !p.permissions().contains("SERVICE_MANAGE"))
+            if (!"VENDOR".equals(p.accountType()) || p.permissions() == null || !p.permissions().contains("SERVICE_VIEW"))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-            boolean manager = p.roles() != null && p.roles().stream().anyMatch(r -> Set.of("VENDOR_ADMIN", "SERVICE_MANAGER").contains(r));
+            boolean manager = p.permissions() != null && p.permissions().contains("SERVICE_ASSIGN");
             if (!manager && !p.userId().equals(t.getAssignedEngineerId()))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
@@ -73,6 +73,8 @@ public class ServiceCommentController {
     public ServiceComment add(@PathVariable UUID ticketId, @Valid @RequestBody CommentInput x, Authentication a) {
         Principal p = p(a);
         ServiceRequest t = access(ticketId, p);
+        if ("VENDOR".equals(p.accountType()) && (p.permissions() == null || !p.permissions().contains("SERVICE_UPDATE")))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         String visibility = "CUSTOMER".equals(p.accountType()) ? "CUSTOMER" : ( x.visibility() == null ? "CUSTOMER" : x.visibility() );
         if ("INTERNAL".equals(visibility) && "CUSTOMER".equals(p.accountType()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);

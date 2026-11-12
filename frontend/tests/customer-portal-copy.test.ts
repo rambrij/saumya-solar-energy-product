@@ -5,6 +5,7 @@ import {dirname,resolve} from 'node:path';
 const here=dirname(fileURLToPath(import.meta.url));
 const customerPortal=readFileSync(resolve(here,'../src/main.tsx'),'utf8');
 const publicHome=readFileSync(resolve(here,'../src/PublicHome.tsx'),'utf8');
+const financePanel=readFileSync(resolve(here,'../src/FinanceServicePanel.tsx'),'utf8');
 describe('Customer catalogue and quotation copy regressions',()=>{
  it('keeps product categories in the available-products selector without a duplicate section',()=>{
   expect(customerPortal).toContain('Available products');
@@ -20,5 +21,19 @@ describe('Customer catalogue and quotation copy regressions',()=>{
  it('uses the single Solar Quotation workflow label',()=>{
   expect(customerPortal).toContain('Request a Solar Quotation');
   expect(customerPortal).not.toContain('Request a Solar Quote');
+ });
+ it('shows checkout status from the authenticated payment list rather than URL parameters',()=>{
+  expect(customerPortal).toContain("get('mockCheckoutPaymentId')");
+  expect(customerPortal).toContain("payment.status==='PENDING'");
+  expect(customerPortal).toContain('Authoritative status:');
+  expect(customerPortal).toContain('Returning from checkout does not itself confirm a payment.');
+  expect(customerPortal).toContain("api('/refunds',{},s)");
+ });
+ it('supports idempotent provider refunds and displays refund state in finance workspace',()=>{
+  expect(financePanel).toContain("'Idempotency-Key':idempotencyKey");
+  expect(financePanel).toContain('refundKeys[fingerprint]||crypto.randomUUID()');
+  expect(financePanel).toContain('Initiate provider refund');
+  expect(financePanel).toContain('Refund ₹');
+  expect(financePanel).toContain('Final status will update after a verified provider event.');
  });
 });

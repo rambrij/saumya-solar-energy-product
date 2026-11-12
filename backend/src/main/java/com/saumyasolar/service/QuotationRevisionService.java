@@ -19,19 +19,22 @@ import java.util.UUID;
 public class QuotationRevisionService {
     private final QuotationRepository quotes;
     private final QuotationItemRepository items;
+    private final AppService appService;
     
-    public QuotationRevisionService(QuotationRepository q, QuotationItemRepository i) {
+    public QuotationRevisionService(QuotationRepository q, QuotationItemRepository i, AppService appService) {
         quotes = q;
         items = i;
+        this.appService = appService;
     }
     
     @Transactional
     public QuoteView revise(UUID id, Principal p) {
         if (!"VENDOR".equals(p.accountType()) || p.tenantId() == null)
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
-        if (p.permissions() == null || !p.permissions().contains("QUOTATION_MANAGE"))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing permission: QUOTATION_MANAGE");
+        if (p.permissions() == null || !p.permissions().contains("QUOTATION_UPDATE"))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Missing permission: QUOTATION_UPDATE");
         var old = quotes.findByIdAndTenantId(id, p.tenantId()).orElseThrow();
+        appService.assertSalesQuotationScope(old, p);
         if (!Set.of("SENT", "REJECTED", "APPROVAL_REJECTED").contains(old.getStatus()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only sent/rejected quotations can be revised");
         old.setStatus("SUPERSEDED");

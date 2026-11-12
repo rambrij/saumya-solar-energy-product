@@ -36,6 +36,10 @@ public class ServiceAttachmentService {
     @Transactional
     public ServiceAttachment upload(UUID ticketId, MultipartFile file, Principal p) {
         finance.getTicket(ticketId, p);
+        if (!"CUSTOMER".equals(p.accountType())
+                && (p.permissions() == null || !p.permissions().contains("SERVICE_UPDATE"))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "SERVICE_UPDATE is required to upload service evidence");
+        }
         if (file == null || file.isEmpty())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose an attachment file");
         if (file.getSize() > MAX_SIZE)

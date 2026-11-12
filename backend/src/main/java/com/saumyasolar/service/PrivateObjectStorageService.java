@@ -54,6 +54,20 @@ public class PrivateObjectStorageService {
         return tenantId + "/" + category + "/" + generatedKey;
     }
     
+    /** Idempotent export retry: safely replace the deterministic key for a reclaimed job. */
+    @Transactional
+    public String putReplacing(Path localRoot, String category, UUID tenantId, String generatedKey,
+                               byte[] content, String contentType) throws IOException {
+        Path root = localRoot.toAbsolutePath().normalize();
+        Path directory = root.resolve(tenantId.toString()).resolve(category).normalize();
+        Path target = directory.resolve(generatedKey).normalize();
+        if (!directory.startsWith(root) || !target.startsWith(directory))
+            throw new IOException("Invalid private evidence path");
+        Files.createDirectories(directory);
+        Files.deleteIfExists(target);
+        return put(localRoot, category, tenantId, generatedKey, content, contentType);
+    }
+
     public byte[] get(Path localRoot, String storageKey) throws IOException {
         return Files.readAllBytes(resolve(localRoot, storageKey));
     }

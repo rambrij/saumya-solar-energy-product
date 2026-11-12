@@ -35,7 +35,7 @@ public class SecurityConfig {
     }
     
     @Bean
-    SecurityFilterChain chain(HttpSecurity http, JwtFilter jwtFilter, SubscriptionEnforcementFilter subscriptionFilter)
+    SecurityFilterChain chain(HttpSecurity http, JwtFilter jwtFilter, AuthenticationRateLimitFilter rateLimitFilter, SubscriptionEnforcementFilter subscriptionFilter)
             throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
@@ -48,15 +48,26 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(
-                                "/api/v1/auth/**", "/api/v1/public/**", "/api/v1/payment-webhooks/**", "/api/v1/payment-gateway-webhooks/**", "/uploads/**",
+                                "/api/v1/auth/**", "/api/v1/public/**", "/api/v1/payment-webhooks/**", "/api/v1/payment-gateway-webhooks/**", "/api/v1/notification-webhooks/mock", "/uploads/**",
                                 "/actuator/health", "/swagger-ui/**", "/v3/api-docs/**"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/cms/media").hasAuthority("CMS_UPDATE")
                         .anyRequest().authenticated())
+                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(subscriptionFilter, JwtFilter.class)
                 .build();
     }
     
+    @Bean
+    FilterRegistrationBean<AuthenticationRateLimitFilter> disableContainerAuthenticationRateLimitFilter(
+            AuthenticationRateLimitFilter filter
+    ) {
+        FilterRegistrationBean<AuthenticationRateLimitFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
     @Bean
     SubscriptionEnforcementFilter subscriptionEnforcementFilter(TenantSubscriptionRepository subscriptions) {
         return new SubscriptionEnforcementFilter(subscriptions);
@@ -76,9 +87,9 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(Arrays.stream(origins.split(","))
                 .map(String::trim).filter(value -> !value.isEmpty()).distinct().toList());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Idempotency-Key", "X-Payment-Signature"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Idempotency-Key", "X-Payment-Signature", "X-Mock-Signature", "X-CSRF-Token"));
         configuration.setExposedHeaders(List.of("Location", "Content-Disposition"));
-        configuration.setAllowCredentials(false);
+        configuration.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

@@ -55,10 +55,19 @@ public class VendorAnalyticsController {
         return analytics.trends(actor(a), from, to, branchId, categoryId, productId, granularity);
     }
     
-    @Operation(
-            summary = "Top vendor products and categories",
-            description = "Returns tenant-scoped product and category rankings by orders, revenue or leads."
-    )
+    @Operation(summary = "Vendor operational analytics", description = "Returns tenant-scoped installation, service, low-stock, outstanding invoice and employee aggregates. Supports branch and employee filters.")
+    @GetMapping("/operations")
+    public Map<String,Object> operations(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+            @RequestParam(required = false) UUID branchId,
+            @RequestParam(required = false) UUID employeeId,
+            Authentication a
+    ) {
+        return analytics.operations(actor(a), from, to, branchId, employeeId);
+    }
+
+    @Operation(summary = "Top vendor products and categories", description = "Returns tenant-scoped product and category rankings by orders, revenue or leads.")
     @GetMapping("/rankings")
     public Map<String, Object> rankings(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,

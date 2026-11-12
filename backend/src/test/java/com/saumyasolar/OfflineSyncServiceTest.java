@@ -60,6 +60,30 @@ class OfflineSyncServiceTest {
     }
     
     @Test
+    void propagatesTargetResourceAuthorizationDenialWithoutPersistingAnOfflineOperation() {
+        OfflineSyncOperationRepository operations = mock(OfflineSyncOperationRepository.class);
+        SurveyLifecycleService surveys = mock(SurveyLifecycleService.class);
+        UUID tenant = UUID.randomUUID(), actorId = UUID.randomUUID(), surveyId = UUID.randomUUID();
+        Principal vendorWithoutSurveyPermission = new Principal(
+                actorId, tenant, "vendor@example.test", "VENDOR", Set.of("CUSTOM_ROLE"), Set.of(), 0);
+        when(surveys.start(eq(surveyId), eq(vendorWithoutSurveyPermission)))
+                .thenThrow(new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.FORBIDDEN));
+        OfflineSyncService service = new OfflineSyncService(
+                operations, mock(AuditEventRepository.class), mock(ServiceRequestRepository.class),
+                mock(ServiceCommentRepository.class), mock(CustomerProfileRepository.class),
+                mock(NotificationService.class), surveys, new ObjectMapper());
+
+        var command = new OfflineSyncService.SyncCommand(
+                UUID.randomUUID(), "SURVEY_START", surveyId, "{}", Instant.now());
+        var denied = assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> service.synchronize(List.of(command), vendorWithoutSurveyPermission));
+        assertEquals(org.springframework.http.HttpStatus.FORBIDDEN, denied.getStatusCode());
+        verify(surveys).start(surveyId, vendorWithoutSurveyPermission);
+        verify(operations, never()).save(any());
+    }
+
+    @Test
     void rejectsOfflineCommandsFromPlatformAccounts() {
         OfflineSyncService service = new OfflineSyncService(
                 mock(OfflineSyncOperationRepository.class), mock(AuditEventRepository.class),

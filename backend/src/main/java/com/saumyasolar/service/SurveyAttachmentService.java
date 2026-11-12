@@ -37,6 +37,10 @@ public class SurveyAttachmentService {
     @Transactional
     public SiteSurveyAttachment upload(UUID surveyId, MultipartFile file, Principal p) {
         surveys.get(surveyId, p);
+        if (!"CUSTOMER".equals(p.accountType())
+                && (p.permissions() == null || !p.permissions().contains("SURVEY_COMPLETE"))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "SURVEY_COMPLETE is required to upload survey evidence");
+        }
         if (file == null || file.isEmpty())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose a survey evidence file");
         if (file.getSize() > MAX_SIZE)

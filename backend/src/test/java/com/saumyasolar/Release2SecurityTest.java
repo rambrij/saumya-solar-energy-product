@@ -52,7 +52,7 @@ class Release2SecurityTest {
         var tenantId = UUID.randomUUID();
         var categoryId = UUID.randomUUID();
         when(categories.findByIdAndTenantId(categoryId, tenantId)).thenReturn(Optional.empty());
-        var principal = new Principal(UUID.randomUUID(), tenantId, "admin@test", "VENDOR", Set.of("VENDOR_ADMIN"), Set.of("CATALOG_MANAGE"));
+        var principal = new Principal(UUID.randomUUID(), tenantId, "admin@test", "VENDOR", Set.of("VENDOR_ADMIN"), Set.of("PRODUCT_CREATE"));
         
         var error = assertThrows(
                 ResponseStatusException.class,
@@ -63,6 +63,41 @@ class Release2SecurityTest {
         verify(products, never()).save(any());
     }
     
+
+    @Test
+    void customSalesRoleWithoutLeadAssignSeesOnlyItsAssignedLeads() {
+        var tenantId = UUID.randomUUID();
+        var userId = UUID.randomUUID();
+        var otherUserId = UUID.randomUUID();
+        var assigned = new com.saumyasolar.domain.SalesLead();
+        assigned.setId(UUID.randomUUID());
+        assigned.setTenantId(tenantId);
+        assigned.setAssignedUserId(userId);
+        var unassigned = new com.saumyasolar.domain.SalesLead();
+        unassigned.setId(UUID.randomUUID());
+        unassigned.setTenantId(tenantId);
+        unassigned.setAssignedUserId(otherUserId);
+        var leads = mock(SalesLeadRepository.class);
+        var quotations = mock(QuotationRepository.class);
+        when(leads.findByTenantIdOrderByIdDesc(tenantId)).thenReturn(java.util.List.of(assigned, unassigned));
+        when(quotations.findByTenantIdOrderByIdDesc(tenantId)).thenReturn(java.util.List.of());
+        var service = new AppService(
+                mock(TenantRepository.class), mock(AppUserRepository.class), mock(ProductCategoryRepository.class),
+                mock(ProductRepository.class), mock(SolarPackageRepository.class), mock(PackageItemRepository.class),
+                mock(CustomerProfileRepository.class), mock(EnquiryRepository.class), leads,
+                mock(LeadHistoryRepository.class), mock(SiteSurveyRepository.class), quotations,
+                mock(QuotationItemRepository.class), mock(CustomerOrderRepository.class),
+                mock(OrderItemRepository.class), mock(IdempotencyRecordRepository.class),
+                mock(RoleRepository.class), mock(OrderStatusHistoryRepository.class),
+                mock(com.saumyasolar.service.NotificationService.class), mock(com.saumyasolar.service.ApprovalWorkflowService.class)
+        );
+        var customSales = new Principal(userId, tenantId, "sales@test", "VENDOR",
+                Set.of("CUSTOM_SALES_READ"), Set.of("LEAD_VIEW"));
+        var visible = (java.util.List<com.saumyasolar.domain.SalesLead>) service.list("leads", customSales);
+        assertEquals(1, visible.size());
+        assertEquals(assigned.getId(), visible.get(0).getId());
+    }
+
     private AppService service(ProductCategoryRepository categories, ProductRepository products) {
         return new AppService(
                 mock(TenantRepository.class), mock(AppUserRepository.class), categories, products,
@@ -89,4 +124,50 @@ class Release2SecurityTest {
         var constructor = Input.class.getDeclaredConstructor(types);
         return (Input) constructor.newInstance(args);
     }
+    @Test
+    void assignedSalesExecutiveCannotReadAnotherEmployeesQuotationRevisions() {
+        UUID tenantId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID otherAssignee = UUID.randomUUID();
+        UUID quotationId = UUID.randomUUID();
+        UUID leadId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+
+        var quotation = new com.saumyasolar.domain.Quotation();
+        quotation.setId(quotationId);
+        quotation.setTenantId(tenantId);
+        quotation.setLeadId(leadId);
+        quotation.setCreatedBy(otherAssignee);
+        quotation.setQuoteGroupId(groupId);
+
+        var lead = new com.saumyasolar.domain.SalesLead();
+        lead.setId(leadId);
+        lead.setTenantId(tenantId);
+        lead.setAssignedUserId(otherAssignee);
+
+        var quotations = mock(QuotationRepository.class);
+        var leads = mock(SalesLeadRepository.class);
+        when(quotations.findByIdAndTenantId(quotationId, tenantId)).thenReturn(Optional.of(quotation));
+        when(leads.findByIdAndTenantId(leadId, tenantId)).thenReturn(Optional.of(lead));
+
+        AppService service = new AppService(
+                mock(TenantRepository.class), mock(AppUserRepository.class), mock(ProductCategoryRepository.class),
+                mock(ProductRepository.class), mock(SolarPackageRepository.class), mock(PackageItemRepository.class),
+                mock(CustomerProfileRepository.class), mock(EnquiryRepository.class), leads,
+                mock(LeadHistoryRepository.class), mock(SiteSurveyRepository.class), quotations,
+                mock(QuotationItemRepository.class), mock(CustomerOrderRepository.class),
+                mock(OrderItemRepository.class), mock(IdempotencyRecordRepository.class),
+                mock(RoleRepository.class), mock(OrderStatusHistoryRepository.class),
+                mock(com.saumyasolar.service.NotificationService.class), mock(com.saumyasolar.service.ApprovalWorkflowService.class)
+        );
+        var principal = new Principal(userId, tenantId, "sales@test", "VENDOR",
+                Set.of("SALES_EXECUTIVE"), Set.of("QUOTATION_VIEW", "LEAD_VIEW"));
+
+        ResponseStatusException failure = assertThrows(ResponseStatusException.class,
+                () -> service.quotationRevisions(quotationId, principal));
+
+        assertEquals(HttpStatus.NOT_FOUND, failure.getStatusCode());
+        verify(quotations, never()).findByQuoteGroupIdAndTenantIdOrderByRevisionAsc(groupId, tenantId);
+    }
+
 }

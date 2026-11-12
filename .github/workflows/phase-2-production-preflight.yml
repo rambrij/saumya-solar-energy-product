@@ -1,0 +1,109 @@
+name: Phase 2 production tenant-integrity preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-preflight:
+    name: Production tenant-integrity and schema preflight
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MySQL client
+        run: sudo apt-get update && sudo apt-get install -y default-mysql-client
+      - name: Validate required production connection secrets
+        env:
+          DB_HOST: ${{ secrets.PROD_DB_HOST }}
+          DB_PORT: ${{ secrets.PROD_DB_PORT }}
+          DB_NAME: ${{ secrets.PROD_DB_NAME }}
+          DB_USER: ${{ secrets.PROD_DB_USER }}
+          DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          DB_AUDIT_USER: ${{ secrets.PROD_DB_AUDIT_USER }}
+          DB_AUDIT_PASSWORD: ${{ secrets.PROD_DB_AUDIT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for key in DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD DB_AUDIT_USER DB_AUDIT_PASSWORD; do
+            if [ -z "${!key:-}" ]; then
+              echo "::error::Missing required GitHub environment secret for ${key}"
+              exit 1
+            fi
+          done
+          echo "Production database connection configuration is present."
+      - name: Run tenant data-integrity checks only (no migration DDL)
+        env:
+          MYSQL_HOST: ${{ secrets.PROD_DB_HOST }}
+          MYSQL_TCP_PORT: ${{ secrets.PROD_DB_PORT }}
+          MYSQL_DATABASE: ${{ secrets.PROD_DB_NAME }}
+          MYSQL_USER: ${{ secrets.PROD_DB_USER }}
+          MYSQL_PWD: ${{ secrets.PROD_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          cleanup_preflight_routines() {
+            mysql --connect-timeout=15 --host="$MYSQL_HOST" --port="$MYSQL_TCP_PORT" --user="$MYSQL_USER" "$MYSQL_DATABASE" \
+              -e "DROP PROCEDURE IF EXISTS assert_phase2_catalogue_tenant_integrity; DROP PROCEDURE IF EXISTS assert_phase2_operational_tenant_integrity;" || true
+          }
+          trap cleanup_preflight_routines EXIT
+          set +e
+          mysql --connect-timeout=15 --host="$MYSQL_HOST" --port="$MYSQL_TCP_PORT" --user="$MYSQL_USER" "$MYSQL_DATABASE" \
+            < backend/src/test/resources/tenant-isolation-production-preflight.sql 2>&1 | tee phase2-production-preflight-output.txt
+          mysql_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$mysql_status" -ne 0 ]; then
+            echo "tenant data-integrity preflight FAILED (exit $mysql_status). Preserve the artifact and remediate only after reviewing the reported relationship."
+            exit "$mysql_status"
+          fi
+          echo "Tenant data-integrity preflight completed successfully." | tee -a phase2-production-preflight-output.txt
+      - name: Require every tenant-integrity preflight PASS marker
+        run: |
+          set -euo pipefail
+          for marker in             "Catalogue tenant-integrity preflight: PASS"             "Operational tenant-integrity preflight: PASS"             "Tenant-owned tenant_id NOT NULL preflight: PASS"; do
+            if ! grep -Fq "$marker" phase2-production-preflight-output.txt; then
+              echo "::error::Missing mandatory production preflight marker: $marker"
+              exit 1
+            fi
+          done
+      - name: Run full tenant schema and NOT NULL audit with read-only account
+        env:
+          MYSQL_HOST: ${{ secrets.PROD_DB_HOST }}
+          MYSQL_TCP_PORT: ${{ secrets.PROD_DB_PORT }}
+          MYSQL_DATABASE: ${{ secrets.PROD_DB_NAME }}
+          MYSQL_USER: ${{ secrets.PROD_DB_AUDIT_USER }}
+          MYSQL_PWD: ${{ secrets.PROD_DB_AUDIT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mysql --connect-timeout=15 --host="$MYSQL_HOST" --port="$MYSQL_TCP_PORT" --user="$MYSQL_USER" "$MYSQL_DATABASE" \
+            < docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql | tee tenant-schema-audit-output.txt
+      - name: Create tamper-evident evidence manifest
+        if: always()
+        run: |
+          set -euo pipefail
+          {
+            echo "workflow_run_id=$GITHUB_RUN_ID"
+            echo "workflow_run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "commit_sha=$GITHUB_SHA"
+            echo "checked_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "phase2_preflight_sql_sha256=$(sha256sum backend/src/test/resources/tenant-isolation-production-preflight.sql | awk '{print $1}')"
+            echo "tenant_schema_audit_sql_sha256=$(sha256sum docs/PHASE_1_2_TENANT_SCHEMA_AUDIT.sql | awk '{print $1}')"
+            if [ -f phase2-production-preflight-output.txt ]; then
+              echo "preflight_output_sha256=$(sha256sum phase2-production-preflight-output.txt | awk '{print $1}')"
+            fi
+            if [ -f tenant-schema-audit-output.txt ]; then
+              echo "schema_audit_output_sha256=$(sha256sum tenant-schema-audit-output.txt | awk '{print $1}')"
+            fi
+          } > phase2-production-evidence-manifest.txt
+      - name: Preserve preflight evidence for remediation review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-production-preflight-${{ github.run_id }}
+          path: |
+            phase2-production-preflight-output.txt
+            tenant-schema-audit-output.txt
+            phase2-production-evidence-manifest.txt
+          if-no-files-found: warn
+          retention-days: 90
