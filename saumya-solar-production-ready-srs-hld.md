@@ -7,7 +7,7 @@
 | Product | Multi-tenant solar vendor marketplace and SaaS ERP |
 | Document type | SRS and HLD |
 | Version | 2.0 |
-| Status | Architecture baseline for Commercial MVP |
+| Status | Approved implementation baseline — companion documents synchronized; release gates remain |
 | Backend | Java 21, Spring Boot 3.5, Maven |
 | Frontend | React 19, TypeScript, Vite |
 | Database | MySQL 8.4, one shared database and shared schema |
@@ -20,7 +20,7 @@
 
 This document defines the functional architecture, non-functional requirements, data ownership, security model, APIs, workflows, integrations, acceptance criteria and technology decisions for a multi-vendor solar marketplace SaaS.
 
-This Version 2.0 supersedes conflicting statements in Version 1.0. The companion file saumya-solar-energy-solution-requirements.md is the business requirements document. These two documents must be changed together if a foundational product decision changes.
+This Version 2.0 supersedes conflicting statements in Version 1.0. The companion file saumya-solar-energy-solution-requirements.md is the business requirements document. The Product Requirements document is the business authority for actors, business rules and MVP scope; this SRS/HLD is the technical authority for data constraints, API contracts, security controls and system workflows. These two documents must be changed together if a foundational product decision changes.
 
 ## 2. Product vision and binding decisions
 
@@ -746,10 +746,12 @@ sequenceDiagram
     POSM->>DB: In one transaction record confirmed cash tender, mark order PAID, issue stock and create receipt/audit
     DB-->>POS: Committed order and receipt
   else UPI/card terminal tender
-    Cashier->>Buyer: Present vendor UPI QR / terminal
-    Buyer->>Provider: Pay vendor directly
     POS->>API: Start external tender using durable payment-attempt ID
-    API->>Provider: Create/verify request with provider idempotency key
+    API->>Provider: Create vendor-context request with provider idempotency key
+    Provider-->>API: QR/payment request or terminal-ready response
+    API-->>POS: Return provider/terminal reference and payment instructions
+    POS-->>Buyer: Present vendor QR / approved card terminal
+    Buyer->>Provider: Complete payment directly to vendor
     Provider-->>API: Authenticated callback/status or ambiguous outcome
     API->>DB: Persist provider event/result and correlation IDs
     POSM->>DB: Verify amount, currency, vendor account and attempt; confirm tender idempotently
@@ -981,7 +983,7 @@ erDiagram
   ORDERS {
     bigint id PK
     bigint tenant_id FK
-    bigint customer_id
+    bigint customer_id nullable_for_IN_STORE_guest
     string sales_channel
     bigint branch_id
     bigint cashier_user_id
@@ -1067,9 +1069,12 @@ CREATE TABLE branches (
 );
 
 CREATE TABLE tenant_users (
+  id BIGINT NOT NULL,
   tenant_id BIGINT NOT NULL,
   user_id BIGINT NOT NULL,
-  PRIMARY KEY (tenant_id, user_id),
+  membership_status VARCHAR(20) NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_tenant_users_tenant_user (tenant_id, user_id),
   CONSTRAINT fk_tenant_users_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id),
   CONSTRAINT fk_tenant_users_user FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -1102,6 +1107,7 @@ CREATE TABLE pos_sessions (
   UNIQUE KEY uk_pos_sessions_tenant_id (tenant_id, id),
   UNIQUE KEY uk_pos_sessions_tenant_branch_cashier (tenant_id, id, branch_id, cashier_user_id),
   UNIQUE KEY uk_pos_sessions_one_active_per_register (tenant_id, active_register_id),
+  CONSTRAINT fk_pos_sessions_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id),
   CONSTRAINT fk_pos_sessions_branch FOREIGN KEY (tenant_id, branch_id) REFERENCES branches(tenant_id, id),
   CONSTRAINT fk_pos_sessions_cashier FOREIGN KEY (tenant_id, cashier_user_id) REFERENCES tenant_users(tenant_id, user_id),
   CONSTRAINT fk_pos_sessions_register FOREIGN KEY (tenant_id, branch_id, register_id) REFERENCES pos_registers(tenant_id, branch_id, id)
@@ -1471,14 +1477,14 @@ Adapters:
 - Global dashboard, profile, order history across vendors, vendor-labelled order details, cart, cart-switch confirmation, checkout, invoices/receipts, payment status, shipments, returns/refunds, installation, warranty, service and notifications.
 
 ### Vendor workspace
-- Vendor dashboard, vendor profile, catalogue/categories/products/packages/prices, inventory, leads/enquiries, customer relationships, private CRM notes, quotations, single-tenant orders, fulfilment, invoices, vendor payments/reconciliation, returns/refunds, branches/warehouses, employees/roles, reports, audit and settings.
+- Vendor dashboard, vendor profile, catalogue/categories/products/packages/prices, inventory, leads/enquiries, customer relationships, private CRM notes, quotations, single-tenant orders, fulfilment, invoices, vendor payments/reconciliation, POS-originated returns/refunds in MVP, advanced shipped-online returns in later Operations, branches/warehouses, employees/roles, reports, audit and settings.
 
 ### Physical Store POS
 - POS register with barcode/SKU/product search, basket and tax/discount summary.
 - Guest walk-in checkout without account creation; optional verified existing-customer association.
 - Cash, vendor UPI and vendor card-terminal tender capture, split tender where enabled, receipt print/share.
 - Cashier session open/close, opening float, cash-in/out/safe drop, expected-vs-counted reconciliation and supervisor variance approval.
-- POS sale search, receipt reprint, authorized void, returns, exchanges and refunds.
+- POS sale search, receipt reprint, authorized void, and basic returns/exchanges/refunds for POS-originated sales in the MVP.
 - Branch/cashier scoped POS reports and online-vs-in-store sales comparison.
 
 ### Platform administration
@@ -1882,3 +1888,25 @@ No implementation may silently invent an answer to these business/legal decision
 - Subscription invoice: SUBINV-TEN-000001-2026-000001
 
 Human-readable identifiers are not authorization tokens. Internal IDs must be protected by ownership checks regardless of whether they are sequential, UUID or opaque identifiers.
+
+
+## Appendix B. Version 2.0 synchronization review
+
+**Review date:** 2026-11-12  
+**Result:** Passed — companion Product Requirements and SRS/HLD synchronized for the Version 2.0 implementation baseline.
+
+| Finding | Resolution recorded in both documents |
+|---|---|
+| F01 — guest POS customer nullability | ONLINE requires customer_id; IN_STORE registered may reference global customer; IN_STORE guest permits NULL. tenant_id is always required. |
+| F02 — payment/order orphan risk | Persist idempotent draft, snapshots, stock reservation and payment attempt before provider initiation; verify outcome; finalize idempotently; release failed/expired reservations and reconcile ambiguous outcomes. |
+| F03 — branch/warehouse MVP boundary | One POS outlet/branch and one designated stock location are MVP minimums; additional branches, warehouses and transfers are later Operations scope. |
+| F04 — returns/refunds scope | Basic POS-originated return/exchange/refund and required statutory credit-note handling are MVP; advanced shipped-online returns and reverse logistics are later scope. |
+| F05 — cash received/applied/change | Separate cash_received, cash_applied and change_given; cash_applied = received - change. Drawer formula excludes double-counting cash_applied. |
+| F06 — external tender verification | Explicit pending/confirmed/failed/unknown-reconciliation states; references alone do not confirm; manual verification requires separate supervisor evidence and audit. |
+| F07 — tenant/branch/session integrity | Composite same-tenant branch, cashier, register, session and order constraints plus transactional OPEN-session checks are specified. |
+| F08 — first vendor customer association | Customer-initiated global OTP/authentication and consent; create only the active vendor relationship after verification. |
+| F09 — register/device semantics | POS register means till/cash drawer; payment terminal is a separate external device/reference; one active session per register. |
+| F10 — receipt vs tax invoice | Receipt for every completed POS sale; tax invoice/credit note conditional on applicable law and approved tax configuration; reprints preserve original identity. |
+| F11 — duplicated POS API matrix | Duplicate POS operation rows removed and replaced by canonical draft, tender, verification, finalization, customer association, receipt, cash and return rows. |
+
+This is a documentation synchronization approval only. It does not certify that application code, database migrations, automated tests, CI, provider integrations, tax/legal configuration or production operations have been implemented or passed. Those remain implementation and release gates.
