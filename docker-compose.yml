@@ -7,10 +7,10 @@ services:
       MYSQL_USER: solar
       MYSQL_PASSWORD: solarpass
       MYSQL_ROOT_PASSWORD: rootpass
-    ports: [ "3306:3306" ]
-    volumes: [ mysql_data:/var/lib/mysql ]
+    ports: ["3306:3306"]
+    volumes: [mysql_data:/var/lib/mysql]
     healthcheck:
-      test: [ "CMD","mysqladmin","ping","-h","localhost","-prootpass" ]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-prootpass"]
       interval: 5s
       timeout: 5s
       retries: 30
@@ -21,7 +21,9 @@ services:
       - "127.0.0.1:8025:8025"
       - "127.0.0.1:1025:1025"
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment:
       SPRING_PROFILES_ACTIVE: dev
       SPRING_MAIL_HOST: mailpit
@@ -46,7 +48,7 @@ services:
       EXPORT_RETENTION_HOURS: "24"
       EXPORT_RECOVERY_INTERVAL_MS: "60000"
       EXPORT_PROCESSING_LEASE_SECONDS: "1800"
-    ports: [ "8080:8080" ]
+    ports: ["8080:8080"]
     volumes:
       - solar_uploads:/var/lib/saumya/uploads
       - solar_private_service_attachments:/var/lib/saumya/private-service-attachments
@@ -54,10 +56,16 @@ services:
       - solar_private_warranty_attachments:/var/lib/saumya/private-warranty-attachments
       - solar_private_exports:/var/lib/saumya/private-exports
     depends_on:
-      mysql: { condition: service_healthy }
-      mailpit: { condition: service_started }
+      mysql: {condition: service_healthy}
+      mailpit: {condition: service_started}
   frontend:
     build: ./frontend
-    ports: [ "3000:80" ]
-    depends_on: [ backend ]
-volumes: { mysql_data: { }, solar_uploads: { }, solar_private_service_attachments: { }, solar_private_survey_attachments: { }, solar_private_warranty_attachments: { }, solar_private_exports: { } }
+    ports: ["3000:80"]
+    depends_on: [backend]
+volumes:
+  mysql_data: {}
+  solar_uploads: {}
+  solar_private_service_attachments: {}
+  solar_private_survey_attachments: {}
+  solar_private_warranty_attachments: {}
+  solar_private_exports: {}
