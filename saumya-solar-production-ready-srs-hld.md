@@ -38,7 +38,7 @@ Binding decisions:
 - A cart contains exactly one vendor's items. A checkout creates one vendor-owned order.
 - Both online marketplace and physical POS sales are Commercial MVP channels and converge on one tenant-owned order/inventory domain.
 - In-store guest sale may have no global customer identity; online marketplace checkout requires the authenticated global customer identity.
-- POS cash/UPI/card-terminal tender is received directly by the vendor; cash sessions and reconciliation are vendor-scoped.
+- POS cash/UPI/card-terminal tender is received directly by the vendor; cash sessions and reconciliation are vendor-scoped. A POS register means the till/cash drawer; an external card/UPI payment terminal is a separate payment device/provider reference.
 - Customer purchase funds go directly to the selected vendor's merchant account. The platform does not collect or pay out customer purchase money.
 - Vendor SaaS subscription charges are separate from customer purchase payments and are collected for the platform's account.
 - Mock payment and SMS/WhatsApp adapters are feature-flagged for non-production only. Production must fail startup or deployment validation if a mock provider is selected.
@@ -54,8 +54,9 @@ Binding decisions:
 - Vendor catalogue, product, solar-package and pricing management.
 - CRM, enquiry, leads, customer relationships, private notes and quotations.
 - Single-vendor online cart, checkout and order management.
-- Physical Store POS for walk-in guest and registered-customer sales, with barcode/SKU search, cashier sessions, tender recording, receipts, returns/refunds and cash reconciliation.
-- Basic POS branch/outlet and cashier assignment.
+- Physical Store POS for walk-in guest and registered-customer sales, with barcode/SKU search, idempotent draft sales, time-limited stock reservation, verified tender, receipts, POS-originated returns/refunds and cash reconciliation.
+- Minimum POS setup of one POS-enabled outlet/branch and one designated stock location per vendor, with one active cashier session per till/register.
+- POS receipt for every completed sale and tax invoice issuance when required by applicable law, approved vendor tax configuration or buyer request.
 - Shared inventory availability/reservation/issue service for online and POS sales, with concurrency protection.
 - Vendor-direct customer payment through a mock adapter in local/test environments, behind a feature flag.
 - Vendor invoice and payment records.
@@ -69,7 +70,7 @@ Binding decisions:
 
 ### 3.2 Operational modules
 
-The domain model and interfaces anticipate branches, multiple warehouses, shipping, installation, warranty, service tickets, returns, credit notes, refunds and advanced reports. Each is released only when complete acceptance criteria and integrated tests exist.
+The MVP includes one basic POS-enabled outlet/branch and one designated stock location per vendor, plus basic return/exchange/refund handling for POS-originated sales and legally required credit notes. Later Operations scope includes additional branches, multiple warehouses, transfers/replenishment, advanced fulfilment, installation, warranty, service tickets, advanced returns for shipped online orders, reverse logistics, complex credit-note/refund orchestration and advanced reports. Each later capability is released only when complete acceptance criteria and integrated tests exist.
 
 ### 3.3 Out of scope
 
@@ -449,7 +450,7 @@ A vendor role cannot contain PLATFORM_* permissions. Global customer identity do
 
 ### 12.10 Order, invoice, fulfilment and returns
 
-- ORD-001: Order has exactly one tenant_id and one global customer_id.
+- ORD-001: Every order has exactly one non-null tenant_id. ONLINE orders require exactly one global customer_id. IN_STORE orders require same-tenant branch_id, cashier_user_id and pos_session_id; customer_id is nullable only for a walk-in guest sale and may reference the global customer profile for a verified registered POS customer.
 - ORD-002: Every order item, invoice, vendor payment, shipment, return and refund shares the order tenant_id.
 - ORD-003: Order lifecycle supports draft, confirmed, payment pending/paid, fulfilment, shipped/delivered or installation, completed, cancelled and refund states.
 - ORD-004: Vendor order number is unique per tenant.
@@ -505,41 +506,41 @@ POS is a first-class Commercial MVP channel alongside online marketplace checkou
 #### POS-001 — Walk-in guest sales
 - POS-001: A walk-in customer can buy without registration, login, global customer account, email address or mobile number, except where specific invoice/tax law requires transaction details.
 - POS-002: No global user, customer profile or tenant_customer relationship is automatically created for a guest sale.
-- POS-003: A cashier may optionally associate an existing global customer only after explicit customer request and approved verification (for example OTP to a verified contact). Lookup is restricted to the active vendor relationship and must not reveal another vendor's customer history or even confirm another vendor relationship.
+- POS-003: A cashier may associate an existing global customer only after the customer explicitly requests the association and proves control of the global identity through the approved global OTP/authentication flow. The flow may resolve the global profile only after verification; it must not expose unauthenticated account existence or any other vendor relationship/history. On success, create the active vendor's tenant_customers relationship idempotently if it does not already exist, then attach the POS order to that global customer. No other vendor's relationship or private CRM data is returned.
 - POS-004: Guest buyer name/contact/tax/address data is optional and captured only when provided or legally required. Store only transaction-time snapshots and apply retention/access controls.
 
 #### POS-002 — Register and checkout
 - POS-005: POS supports product search by name, SKU and barcode, barcode-scanner input, manual item selection, quantity changes, line removal, subtotal, discounts, taxes, amount due and change due.
 - POS-006: POS uses the same tenant catalogue, published status, price lists, discount rules and tax calculation as online sales.
-- POS-007: Vendor must configure at least one POS-enabled branch/outlet and stock source before POS activation. Additional outlets are subject to plan entitlements. Cashier branch/warehouse is resolved from server-side assignment.
+- POS-007: Vendor must configure at least one POS-enabled branch/outlet and one designated stock location before POS activation. This is the minimum Commercial MVP setup. Additional branches/outlets, additional warehouses, inter-branch transfers and replenishment are later Operations scope. Cashier branch/stock location is resolved from server-side assignment.
 - POS-008: POS sale creates a normal orders record with sales_channel=IN_STORE, mandatory tenant_id, branch_id, cashier_user_id and pos_session_id. customer_id may be NULL only for an in-store guest sale. Online orders always require a global customer identity.
 - POS-009: POS order items reference products from the same tenant as the order and preserve unit price, tax, discount and product-description snapshots.
-- POS-010: Cashier cannot mark a sale paid until tender is received/confirmed. Sale is finalized exactly once using idempotency protection.
+- POS-010: The POS first persists an idempotent draft order with immutable product/price/tax/discount snapshots and a time-limited stock reservation. A durable payment attempt is persisted before any external provider/terminal request. Cash tender is confirmed when cash is physically received; external tender remains pending until provider/terminal verification or approved supervisor manual verification. Sale finalization is idempotent and a sale cannot become PAID while any amount due is unconfirmed.
 - POS-011: POS requires live connectivity for authoritative pricing, stock and order persistence. On connection loss, do not claim payment/order/inventory changes are safely recorded; offline POS is out of scope.
 
 #### POS-003 — Tender and direct-to-vendor payment
 - POS-012: Support cash, vendor UPI/QR, vendor card terminal and other approved vendor-direct tender types.
-- POS-013: Split tender may be enabled; successful tenders must equal the amount due before order payment state becomes PAID, with change and rounding explicitly modeled.
-- POS-014: Cash tender records amount received, change returned, cashier, session, time and order reference. Cash belongs to vendor's till.
-- POS-015: UPI/card terminal tender captures terminal/provider reference and confirmation evidence. If integrated confirmation is unavailable, use a controlled cashier confirmation permission, retain external reference and support supervisor review/reconciliation. Do not use a mock online gateway to simulate a terminal transaction.
+- POS-013: Split tender may be enabled. Sum of successful tender applied amounts must equal the server-calculated amount due before order payment state becomes PAID. Cash change and currency rounding are modeled separately and cannot be counted as additional tender.
+- POS-014: Each cash tender records cash_received, cash_applied, change_given, cashier, register/session, time and order reference. cash_applied = cash_received - change_given. Cash belongs to the vendor's till; cash_applied contributes to the order tender total, while physical drawer reconciliation uses cash_received less change_given.
+- POS-015: UPI/card terminal tender begins as PENDING_VERIFICATION and captures provider/terminal reference, amount, currency and evidence. It becomes CONFIRMED only after authenticated provider/terminal status verification or a documented manual-verification workflow approved by a supervisor who is not the initiating cashier. A cashier-entered reference alone never confirms payment. Manual approval must retain evidence, actor, reason and timestamp and enter reconciliation reporting. Failed outcomes become FAILED; timeouts/ambiguous outcomes become UNKNOWN_RECONCILIATION_REQUIRED and block paid/completed status and a new charge attempt until resolved. Do not use a mock online gateway to simulate a terminal transaction.
 - POS-016: Online gateway and UPI/card terminal payments use vendor merchant context. Funds go directly to vendor; platform does not collect, hold, pool, split or pay out POS purchase funds.
 - POS-017: Never store PAN, CVV, PIN, track data, magnetic-stripe data or raw payment credentials. Card entry/authentication is performed only by the vendor's approved terminal/provider.
 - POS-018: Vendor payment/reconciliation views distinguish cash, UPI, card terminal and online gateway; no platform settlement ledger is introduced.
 
 #### POS-004 — Cashier sessions and controls
 - POS-019: Cashier authenticates with an individually assigned employee identity; shared cashier accounts are prohibited.
-- POS-020: Cashier opens a shift/session for a tenant branch/till with opening float. Enforce configured one-active-session-per-cashier/till policy.
+- POS-020: Cashier opens a shift/session for a tenant branch and POS register (till/cash drawer) with opening float. Enforce at most one OPEN or CLOSING session per register/till at a time; a cashier's entitlement to open multiple registers is separately permission-controlled.
 - POS-021: Record cash-in, cash-out, safe drop and other drawer movements with type, amount, reason, actor and timestamp. Non-sale movements are not disguised as customer payments.
-- POS-022: Expected closing cash is opening float plus cash tenders and cash-in, less cash refunds, cash-out and safe drops. Record counted cash and variance.
+- POS-022: Expected physical drawer cash = opening_float + Σ(cash_received) - Σ(change_given) + Σ(cash_in) - Σ(cash_refunds) - Σ(cash_out) - Σ(safe_drops). Record counted cash and variance. Do not add cash_applied separately because it is already represented by cash_received minus change_given; non-sale movements are not sale tenders.
 - POS-023: Closing requires a count (including zero); discrepancy requires reason and configured supervisor review. Closed sessions are immutable to the cashier; corrections are separate audited manager actions.
 - POS-024: Supervisor override is required for configured discount thresholds, voids after payment, refunds, manual tender adjustments, receipt reprints and shift reopening.
 - POS-025: Session is bound to tenant, branch, cashier and terminal. A user cannot access another cashier's session/drawer without manager permission and audit.
 
 #### POS-005 — Receipt, returns and inventory
-- POS-026: Issue sequential tenant/outlet-scoped receipt linked to order and payment references. Receipt can be printed or shared digitally.
-- POS-027: Reprint is marked as a copy/reprint, retains original receipt identity and is audited; it must not create a new sale.
-- POS-028: Return/exchange/refund begins from original vendor order/receipt and verifies item, quantity, return window, condition and prior return balance.
-- POS-029: Refund references original vendor payment and merchant account; cash refunds are vendor cash outflow, UPI/card refunds use original vendor payment method/provider where supported.
+- POS-026: Issue a sequential tenant/outlet-scoped sale receipt for every completed POS sale, linked to order and tender references. A tax invoice is additionally issued when required by applicable law, approved vendor tax configuration or buyer request/transaction conditions confirmed by the vendor's tax adviser. The applicable trigger is configuration-driven and must not be guessed by the application.
+- POS-027: Receipt/tax-invoice reprint is marked as a copy/reprint, retains the original document number and issue identity and is audited; it must not create a new sale or invoice. A credit note, when legally required, references the original tax invoice.
+- POS-028: Commercial MVP supports basic return/exchange/refund only for POS-originated sales. It begins from the original vendor order/receipt and verifies item, quantity, return window, condition and prior return balance. Advanced returns for shipped online orders and reverse logistics are later Operations scope.
+- POS-029: Refund references original vendor payment and merchant account; cash refunds are vendor cash outflow, UPI/card refunds use original vendor payment method/provider where supported. POS-originated statutory credit-note handling is included only when required by applicable law and approved vendor tax configuration.
 - POS-030: POS and online sales call the same inventory reservation/issue/reversal services and database concurrency controls. A concurrent POS sale and online checkout must not oversell stock.
 - POS-031: Returned stock is unavailable until inspection/disposition authorizes restock; damaged/returned stock is tracked separately.
 - POS-032: Vendor reports separate and combined online/in-store sales, tax, discounts, refunds, tender totals, outlet and cashier totals without double counting.
@@ -555,9 +556,12 @@ POS is a first-class Commercial MVP channel alongside online marketplace checkou
 - POS-040: POS objects, receipts, exports, cash sessions and reports enforce tenant and branch authorization.
 
 #### POS-007 — Commercial MVP boundary
-- POS-041: MVP includes connected-mode POS, product lookup/barcode input, guest sale, optional verified existing-customer association, cash/UPI/card-terminal tender recording, receipt, cashier shift open/close, cash movements, return/refund controls and channel reporting.
-- POS-042: Offline POS, offline card authorization, deferred sync and multi-device conflict resolution are excluded. On connectivity loss, require retry or documented manual business contingency outside the application; do not claim durable sale/payment success.
-- POS-043: Basic branch/outlet and cashier assignment needed for POS are Commercial MVP scope. Advanced inter-branch transfers, replenishment and multi-warehouse optimization may follow in Operations.
+- POS-041: MVP includes connected-mode POS, product lookup/barcode input, guest sale, optional globally verified customer association, idempotent draft sale and stock reservation, cash/UPI/card-terminal tender with explicit verification states, receipt and conditional tax invoice, cashier shift open/close, register/drawer cash movements, basic POS-originated return/exchange/refund controls and channel reporting.
+- POS-042: Offline POS, offline card authorization, deferred sync and multi-device conflict resolution are excluded. On connectivity loss, require idempotent retry/status lookup or documented manual business contingency outside the application; do not claim durable sale/payment success.
+- POS-043: One basic POS-enabled branch/outlet and one designated stock location per vendor, plus register and cashier assignment, are Commercial MVP scope. Additional branches/warehouses, inter-branch transfers, replenishment and multi-warehouse optimization may follow in Operations.
+- POS-044: The POS cash drawer formula is opening float + cash received - change given + cash-in - cash refunds - cash-out - safe drops. Cash applied is the customer-order tender amount and is not added separately to physical drawer cash.
+- POS-045: External UPI/card tenders cannot reach CONFIRMED based only on a cashier-entered reference. Manual verification requires a separate supervisor, retained evidence, audit and reconciliation; ambiguous provider outcomes remain pending reconciliation.
+- POS-046: A completed POS sale always has a receipt. Tax invoice and credit-note issuance are conditional on applicable law and approved vendor tax configuration; statutory rules require qualified tax/accounting approval.
 
 ## 13. Core workflows and diagrams
 
@@ -724,26 +728,46 @@ sequenceDiagram
   participant POSM as POS Module
   participant Inv as Shared Inventory
   participant DB as MySQL
-  participant Vendor as Vendor Till / Merchant Account
+  participant Provider as UPI/Card Provider or Terminal
   Buyer->>Cashier: Select products at vendor outlet
   Cashier->>POS: Scan barcode / search SKU
-  POS->>API: Add line to in-store sale
-  API->>POSM: Resolve cashier, tenant, branch and open session
-  POSM->>DB: Validate active session and tenant-owned product
-  DB-->>POSM: Product, price and stock
-  POSM-->>POS: Updated basket and server total
-  Cashier->>Buyer: Confirm items, price and tax
-  Buyer->>Cashier: Pay cash / vendor UPI / vendor card terminal
-  Cashier->>POS: Record tender and confirmation/reference
-  POS->>API: Finalize POS sale with idempotency key
-  API->>POSM: Recalculate totals and validate tender
-  POSM->>Inv: Issue stock atomically
-  Inv->>DB: Tenant-scoped inventory transaction
-  POSM->>DB: Create IN_STORE order, payment, receipt and audit
-  DB-->>POSM: Committed sale and receipt number
-  POSM-->>POS: Receipt and change due
-  POS-->>Buyer: Print or share receipt
+  POS->>API: Create draft sale with idempotency key
+  API->>POSM: Resolve authenticated cashier, tenant, branch and open register session
+  POSM->>DB: Validate tenant-owned products and persist order + immutable price/tax snapshots
+  POSM->>Inv: Reserve stock with expiry/TTL
+  Inv->>DB: Persist tenant-scoped reservation
+  POSM->>DB: Persist payment attempt before any external request
+  DB-->>POS: Draft order, due amount and reservation expiry
+  alt Cash tender
+    Buyer->>Cashier: Hand over cash
+    Cashier->>POS: Record cash received and change
+    POS->>API: Finalize cash sale with same idempotency key
+    API->>POSM: Recalculate totals and validate received cash
+    POSM->>DB: In one transaction record confirmed cash tender, mark order PAID, issue stock and create receipt/audit
+    DB-->>POS: Committed order and receipt
+  else UPI/card terminal tender
+    Cashier->>Buyer: Present vendor UPI QR / terminal
+    Buyer->>Provider: Pay vendor directly
+    POS->>API: Start external tender using durable payment-attempt ID
+    API->>Provider: Create/verify request with provider idempotency key
+    Provider-->>API: Authenticated callback/status or ambiguous outcome
+    API->>DB: Persist provider event/result and correlation IDs
+    POSM->>DB: Verify amount, currency, vendor account and attempt; confirm tender idempotently
+    POSM->>Inv: Issue previously reserved stock
+    POSM->>DB: Mark order PAID and create receipt/audit transactionally
+    DB-->>POS: Committed order and receipt
+  end
+  opt External tender failed or reservation expires
+    POSM->>DB: Cancel draft, release stock and retain failed/expired attempt evidence
+  end
+  opt External tender outcome is unknown
+    POSM->>DB: Keep order/payment pending reconciliation; do not charge again or mark paid
+    POS-->>Cashier: Show pending status and reconciliation reference
+  end
+  POS-->>Buyer: Print or share receipt after committed sale
 ~~~
+
+External payment success and local database commit cannot share one distributed transaction. Persist the payment attempt before the provider call, use provider idempotency and webhook inbox/reconciliation, and make local finalization retryable. If the provider reports success but local finalization fails, retain a recoverable confirmed payment attempt and retry/reconcile finalization; never silently discard the external charge. Cash sales have no external payment round-trip and are finalized in one database transaction.
 
 ### 13.7 Cashier session lifecycle
 
@@ -788,7 +812,7 @@ erDiagram
   CARTS ||--o{ CART_ITEMS : contains
   PRODUCTS ||--o{ CART_ITEMS : selected
 
-  CUSTOMER_PROFILES ||--o{ ORDERS : places
+  CUSTOMER_PROFILES o|--o{ ORDERS : places
   TENANTS ||--o{ ORDERS : owns
   ORDERS ||--o{ ORDER_ITEMS : contains
   PRODUCTS ||--o{ ORDER_ITEMS : snapshot_source
@@ -867,7 +891,8 @@ erDiagram
   ORDERS {
     bigint id PK
     bigint tenant_id FK
-    bigint customer_id FK
+    bigint customer_id FK nullable_for_IN_STORE_guest
+    string sales_channel
     string order_number
     decimal total
   }
@@ -914,14 +939,15 @@ erDiagram
   ORDERS ||--o{ RECEIPTS : produces
   ORDERS ||--o{ VENDOR_PAYMENTS : tendered_by
   ORDERS ||--o{ RETURNS : returned_by
-  POS_TERMINALS ||--o{ POS_SESSIONS : assigned
+  BRANCHES ||--o{ POS_REGISTERS : contains
+  POS_REGISTERS ||--o{ POS_SESSIONS : hosts
 
   POS_SESSIONS {
     bigint id PK
     bigint tenant_id FK
     bigint branch_id FK
     bigint cashier_user_id FK
-    bigint terminal_id FK
+    bigint register_id FK
     decimal opening_float
     decimal counted_closing_cash
     decimal expected_closing_cash
@@ -937,11 +963,11 @@ erDiagram
     string reason
     bigint actor_user_id FK
   }
-  POS_TERMINALS {
+  POS_REGISTERS {
     bigint id PK
     bigint tenant_id FK
     bigint branch_id FK
-    string terminal_code
+    string register_code
     string status
   }
   RECEIPTS {
@@ -987,7 +1013,7 @@ Tenant-owned tables (tenant_id NOT NULL):
 - enquiries, leads, site_surveys, quotations, quotation revisions and quotation_items
 - carts, cart_items
 - orders, order_items, order_status_history (orders include sales_channel ONLINE/IN_STORE, cashier/branch/session context for POS and optional guest snapshot; customer_id nullable only for IN_STORE guest sales)
-- pos_sessions, pos_cash_movements, pos_terminals, receipts
+- pos_sessions, pos_cash_movements, pos_registers, receipts
 - invoices, vendor_payment_accounts, vendor_payments, payment_attempts, refunds
 - shipments, shipment_events, returns and return_items
 - installations, installation assignments/checklists, warranties, service_requests and service_visits
@@ -1005,8 +1031,10 @@ Tenant-owned tables (tenant_id NOT NULL):
 - Order item references order and product with tenant-aware composite foreign keys.
 - Cart item references cart and product with tenant-aware composite foreign keys.
 - Vendor payment references order and vendor_payment_account with same tenant_id.
-- POS session references a branch, cashier and terminal belonging to the same tenant; cashier must have active membership and branch assignment.
-- POS order must reference a same-tenant branch, cashier and open session; customer_id may be NULL only for sales_channel=IN_STORE. ONLINE orders require customer_id.
+- POS register/till references a same-tenant branch. POS session references a same-tenant branch, cashier membership and register; the register's branch must equal the session branch.
+- A unique active-register key prevents more than one OPEN or CLOSING session on the same tenant register. Cashier multi-register access is separately permission-controlled.
+- POS order must reference a same-tenant branch, cashier membership and session. A composite key across (tenant_id, pos_session_id, branch_id, cashier_user_id) ensures the order's branch and cashier match the session. Session state OPEN and assigned-warehouse entitlement are verified under transactional row lock; a foreign key cannot enforce a time-varying OPEN state.
+- Every order has non-null tenant_id. ONLINE orders require customer_id and have null POS fields. IN_STORE orders require branch_id, cashier_user_id and pos_session_id; customer_id may be NULL for a guest or reference a verified global customer profile.
 - POS order items reference same-tenant products using tenant-aware composite foreign keys.
 - POS receipt is unique by (tenant_id, branch_id, receipt_number) and references exactly one same-tenant order.
 - POS cash movement references a same-tenant open cashier session; closed sessions are immutable except audited manager correction.
@@ -1030,6 +1058,55 @@ CREATE TABLE products (
     FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 );
 
+CREATE TABLE branches (
+  id BIGINT NOT NULL,
+  tenant_id BIGINT NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_branches_tenant_id_id (tenant_id, id),
+  CONSTRAINT fk_branches_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+);
+
+CREATE TABLE tenant_users (
+  tenant_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  PRIMARY KEY (tenant_id, user_id),
+  CONSTRAINT fk_tenant_users_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+  CONSTRAINT fk_tenant_users_user FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE pos_registers (
+  id BIGINT NOT NULL,
+  tenant_id BIGINT NOT NULL,
+  branch_id BIGINT NOT NULL,
+  register_code VARCHAR(40) NOT NULL,
+  status VARCHAR(20) NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_pos_registers_tenant_id (tenant_id, id),
+  UNIQUE KEY uk_pos_registers_tenant_branch_id (tenant_id, branch_id, id),
+  UNIQUE KEY uk_pos_registers_code (tenant_id, branch_id, register_code),
+  CONSTRAINT fk_pos_registers_branch FOREIGN KEY (tenant_id, branch_id) REFERENCES branches(tenant_id, id)
+);
+
+CREATE TABLE pos_sessions (
+  id BIGINT NOT NULL,
+  tenant_id BIGINT NOT NULL,
+  branch_id BIGINT NOT NULL,
+  cashier_user_id BIGINT NOT NULL,
+  register_id BIGINT NOT NULL,
+  state VARCHAR(20) NOT NULL,
+  opening_float DECIMAL(19,4) NOT NULL,
+  active_register_id BIGINT GENERATED ALWAYS AS (
+    CASE WHEN state IN ('OPEN', 'CLOSING') THEN register_id ELSE NULL END
+  ) STORED,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_pos_sessions_tenant_id (tenant_id, id),
+  UNIQUE KEY uk_pos_sessions_tenant_branch_cashier (tenant_id, id, branch_id, cashier_user_id),
+  UNIQUE KEY uk_pos_sessions_one_active_per_register (tenant_id, active_register_id),
+  CONSTRAINT fk_pos_sessions_branch FOREIGN KEY (tenant_id, branch_id) REFERENCES branches(tenant_id, id),
+  CONSTRAINT fk_pos_sessions_cashier FOREIGN KEY (tenant_id, cashier_user_id) REFERENCES tenant_users(tenant_id, user_id),
+  CONSTRAINT fk_pos_sessions_register FOREIGN KEY (tenant_id, branch_id, register_id) REFERENCES pos_registers(tenant_id, branch_id, id)
+);
+
 CREATE TABLE orders (
   id BIGINT NOT NULL,
   tenant_id BIGINT NOT NULL,
@@ -1042,12 +1119,18 @@ CREATE TABLE orders (
   PRIMARY KEY (id),
   UNIQUE KEY uk_orders_tenant_id_id (tenant_id, id),
   UNIQUE KEY uk_orders_tenant_number (tenant_id, order_number),
-  CONSTRAINT fk_orders_tenant
-    FOREIGN KEY (tenant_id) REFERENCES tenants(id),
-  CONSTRAINT fk_orders_customer
-    FOREIGN KEY (customer_id) REFERENCES customer_profiles(id),
-  CONSTRAINT chk_orders_customer_channel
-    CHECK ((sales_channel = 'ONLINE' AND customer_id IS NOT NULL AND branch_id IS NULL AND cashier_user_id IS NULL AND pos_session_id IS NULL) OR (sales_channel = 'IN_STORE' AND branch_id IS NOT NULL AND cashier_user_id IS NOT NULL AND pos_session_id IS NOT NULL))
+  CONSTRAINT fk_orders_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+  CONSTRAINT fk_orders_customer FOREIGN KEY (customer_id) REFERENCES customer_profiles(id),
+  CONSTRAINT fk_orders_branch FOREIGN KEY (tenant_id, branch_id) REFERENCES branches(tenant_id, id),
+  CONSTRAINT fk_orders_cashier FOREIGN KEY (tenant_id, cashier_user_id) REFERENCES tenant_users(tenant_id, user_id),
+  CONSTRAINT fk_orders_pos_session_context
+    FOREIGN KEY (tenant_id, pos_session_id, branch_id, cashier_user_id)
+    REFERENCES pos_sessions(tenant_id, id, branch_id, cashier_user_id),
+  CONSTRAINT chk_orders_channel_context CHECK (
+    (sales_channel = 'ONLINE' AND customer_id IS NOT NULL AND branch_id IS NULL AND cashier_user_id IS NULL AND pos_session_id IS NULL)
+    OR
+    (sales_channel = 'IN_STORE' AND branch_id IS NOT NULL AND cashier_user_id IS NOT NULL AND pos_session_id IS NOT NULL)
+  )
 );
 
 CREATE TABLE order_items (
@@ -1056,12 +1139,8 @@ CREATE TABLE order_items (
   order_id BIGINT NOT NULL,
   product_id BIGINT NOT NULL,
   PRIMARY KEY (id),
-  CONSTRAINT fk_order_items_order
-    FOREIGN KEY (tenant_id, order_id)
-    REFERENCES orders(tenant_id, id),
-  CONSTRAINT fk_order_items_product
-    FOREIGN KEY (tenant_id, product_id)
-    REFERENCES products(tenant_id, id)
+  CONSTRAINT fk_order_items_order FOREIGN KEY (tenant_id, order_id) REFERENCES orders(tenant_id, id),
+  CONSTRAINT fk_order_items_product FOREIGN KEY (tenant_id, product_id) REFERENCES products(tenant_id, id)
 );
 ~~~
 
@@ -1073,11 +1152,15 @@ This illustrates the same-tenant parent/child relationship. Production migration
 - orders.customer_id is mandatory for ONLINE and may be NULL only for IN_STORE guest sales. A registered POS customer sale references the global customer profile.
 - POS guest snapshot columns (buyer name, phone/email when supplied, billing/tax identifiers/address when required) are optional, transaction-specific and not used to create a global account. Minimize fields and apply retention policy.
 - POS order requires tenant_id, branch_id, cashier_user_id and pos_session_id. These values are derived/validated on the server, not trusted from request payload.
-- vendor_payments supports multiple tender rows per order for optional split tender. Each tender has method (CASH, VENDOR_UPI, VENDOR_CARD_TERMINAL, ONLINE_GATEWAY or approved method), source (POS/ONLINE), amount, currency, state and provider/terminal reference where applicable.
-- Cash received/change is recorded without confusing change due with payment amount. Cash-in/out/safe drops are pos_cash_movements, not fabricated sale payments.
-- pos_sessions stores opening float, cashier, outlet, terminal, open/close state, expected and counted cash, variance and supervisor approval.
-- receipts are append-only issued documents. A reprint is an event/audit action, not a new receipt or order.
-- Unique idempotency records prevent double-tap duplicate sales. Database transaction/locking protects stock and sale finalization.
+- vendor_payments/payment_attempts support multiple tender rows per order for optional split tender. Each tender has method (CASH, VENDOR_UPI, VENDOR_CARD_TERMINAL, ONLINE_GATEWAY or approved method), source (POS/ONLINE), currency, cash_received/cash_applied/change_given where applicable, amount_applied, state and provider/terminal reference/evidence where applicable. External tender states include PENDING_VERIFICATION, CONFIRMED, FAILED and UNKNOWN_RECONCILIATION_REQUIRED. Only CONFIRMED external tenders and physically received cash count toward amount due.
+- Cash applied plus all other successful tender applied amounts must equal the server-calculated order due. For cash, cash_applied = cash_received - change_given. Cash-in/out/safe drops and cash refunds are separate POS cash movements, not fabricated sale payments.
+- Expected physical drawer cash = opening float + cash received - change given + cash-in - cash refunds - cash-out - safe drops. cash_applied is not added again.
+- pos_registers represents a till/cash drawer and belongs to a branch. An external UPI/card payment terminal is not a POS register; store its provider/device reference on the tender/payment attempt only, without treating it as the drawer session identity.
+- pos_sessions stores opening float, cashier, outlet, register, open/close state, expected and counted cash, variance and supervisor approval. A generated active_register_id plus unique (tenant_id, active_register_id) allows only one OPEN/CLOSING session per register; closed sessions have NULL active_register_id.
+- receipts are append-only issued documents. A reprint is an event/audit action, not a new receipt or order. A tax invoice is issued only when applicable rules/configuration require it; credit notes reference the original invoice.
+- A POS draft has durable product/price/tax snapshots and a time-limited stock reservation. Payment attempts are persisted before external calls. External success is verified and local finalization is idempotent/recoverable; failures release reservations, while ambiguous outcomes remain pending reconciliation.
+- A customer association to a POS sale is permitted only after customer-initiated global verification. Then the vendor's tenant_customer relationship is created idempotently; other vendor data remains inaccessible.
+- MVP return/refund handling is limited to POS-originated sales, with required statutory credit-note handling. Advanced shipped-online returns and reverse logistics are later Operations scope.
 - No offline sale completion is supported in MVP. A local browser queue must never claim a sale or tender is finalized until the server has committed it.
 
 
@@ -1110,12 +1193,13 @@ This illustrates the same-tenant parent/child relationship. Production migration
 | Cart | GET/POST/PATCH/DELETE /customer/cart | Customer, one tenant per cart |
 | Checkout | POST /customer/checkout | Customer, cart tenant |
 | Vendor orders | GET /vendor/orders, GET /vendor/orders/{id} | Active tenant |
-| POS register | GET /vendor/pos/products?query=..., POST /vendor/pos/sessions, GET /vendor/pos/sessions/{id} | Active tenant, assigned branch and POS permission |
-| POS sales | POST /vendor/pos/sales, GET /vendor/pos/sales/{id}, POST /vendor/pos/sales/{id}/finalize, POST /vendor/pos/sales/{id}/void | Active tenant, open session, cashier permission, idempotency |
-| POS tenders | POST /vendor/pos/sales/{id}/tenders, GET /vendor/pos/sales/{id}/tenders | Same-tenant order/session; cash or vendor terminal reference only |
-| POS receipts | GET /vendor/pos/receipts/{id}, POST /vendor/pos/receipts/{id}/reprint | Active tenant/branch; receipt permission and audit |
-| POS cash management | POST /vendor/pos/sessions/{id}/cash-movements, POST /vendor/pos/sessions/{id}/close, GET /vendor/pos/sessions/{id}/reconciliation, POST /vendor/pos/sessions/{id}/approve-variance | Cashier own session or authorized supervisor |
-| POS returns/refunds | POST /vendor/pos/sales/{id}/returns, POST /vendor/pos/sales/{id}/refunds | Original same-tenant order/payment; return/refund permission |
+| POS register/session | GET /vendor/pos/registers, POST /vendor/pos/registers, POST /vendor/pos/sessions, GET /vendor/pos/sessions/{id} | Active tenant, assigned branch/register and POS permission; one active session per register |
+| POS sales | POST /vendor/pos/sales (idempotent draft/reservation), GET /vendor/pos/sales/{id}, POST /vendor/pos/sales/{id}/finalize, POST /vendor/pos/sales/{id}/void | Active tenant, matching OPEN session/register, same-tenant products, immutable snapshots, reservation TTL and idempotency |
+| POS tenders | POST /vendor/pos/sales/{id}/tenders, GET /vendor/pos/sales/{id}/tenders, POST /vendor/pos/sales/{id}/tenders/{tenderId}/verify | Same-tenant order/session; persist attempt before external call; cash amounts or verified vendor terminal reference/evidence; supervisor-only manual verification |
+| POS customer association | POST /vendor/pos/sales/{id}/customer-association | Customer-initiated global OTP/authentication, explicit consent; create only active tenant relationship |
+| POS receipts | GET /vendor/pos/receipts/{id}, POST /vendor/pos/receipts/{id}/reprint | Active tenant/branch; receipt permission and audit; tax invoice only when configured/legal trigger applies |
+| POS cash management | POST /vendor/pos/sessions/{id}/cash-movements, POST /vendor/pos/sessions/{id}/close, GET /vendor/pos/sessions/{id}/reconciliation, POST /vendor/pos/sessions/{id}/approve-variance | Cashier own session or authorized supervisor; drawer formula uses received less change and movement totals |
+| POS returns/refunds | POST /vendor/pos/sales/{id}/returns, POST /vendor/pos/sales/{id}/refunds | POS-originated sale only in MVP; original same-tenant order/payment; original tender and return balance |
 | Vendor payment | POST /customer/orders/{id}/payment-intent, POST /webhooks/vendor-payments/{provider}, POST /vendor/payments/{id}/refund | Customer/order owner or tenant accountant; webhook verified |
 | Subscription payment | POST /webhooks/platform-subscriptions/{provider} | Platform subscription flow |
 | Vendor finance | /vendor/invoices, /vendor/payments, /vendor/returns | Active tenant |
@@ -1315,8 +1399,9 @@ A provider payment may move through CREATED, REQUIRES_CUSTOMER_ACTION, AUTHORIZE
 - Recalculate prices, tax, discounts, amount due and change on the server. Price overrides and discounts require permissions, limits, reason and supervisor approval where configured.
 - Require idempotency for sale finalization, tender posting, return/refund, cash movement and receipt issuance.
 - Cashier cannot view/change another cashier's drawer; closed sessions are immutable; corrections/reopen require separate supervisor permission and audit.
-- Verify terminal/UPI references and amount where provider integration exists. Manual external-terminal confirmation requires explicit permission, reference/evidence and reconciliation.
-- Cash sale records show cash received and change; no platform cash balance is created. UPI/card terminal payment goes to vendor account.
+- Verify terminal/UPI references, merchant context, amount and currency where provider integration exists. External tender states are PENDING_VERIFICATION, CONFIRMED, FAILED or UNKNOWN_RECONCILIATION_REQUIRED. A typed reference alone cannot mark a tender confirmed. When provider integration is unavailable, manual verification requires documented evidence and approval by a supervisor other than the initiating cashier, with audit and reconciliation.
+- Cash sale records distinguish cash_received, cash_applied and change_given; cash_applied = cash_received - change_given. Expected drawer cash is opening float + cash received - change given + cash-in - cash refunds - cash-out - safe drops; no platform cash balance is created. UPI/card terminal payment goes to vendor account.
+- A POS draft and time-limited stock reservation are persisted before tender initiation. External payment attempts are durable before provider invocation; only verified tender finalization issues stock, marks the order paid and creates the receipt. Cash finalization is one database transaction.
 - Never store or log PAN, CVV, PIN, track data, cardholder authentication secrets or raw gateway credentials. Use vendor-approved terminal/provider hosted/tokenized flows.
 - Guest POS customer details are optional and minimized. No account creation or cross-vendor account lookup is allowed without explicit verified association.
 - Receipt lookup/reprint, refunds and returns require transaction ownership and vendor permission; receipt identifiers alone are not authorization.
@@ -1408,16 +1493,14 @@ Adapters:
 | Checkout | Authenticated customer | Exactly one cart tenant | Idempotency, price, stock, merchant ready |
 | View customer order | Global customer | order.customer_id equals principal customer ID | Display vendor label |
 | View vendor order | Vendor employee | order.tenant_id equals active tenant | Permission + assignment |
-| POS sale finalization | Authenticated cashier | Active tenant, assigned branch and open session | Server prices/taxes/stock; tender verified; idempotency |
-| POS guest sale | Authenticated cashier | Same-tenant product/order/session | customer_id nullable only for IN_STORE; no global account created |
-| POS receipt/reprint | Cashier/supervisor | Receipt tenant and branch match | Reprint permission; immutable original; audit |
-| POS cash movement/close | Cashier/supervisor | Session tenant and cashier scope | Reason, amount, count, variance approval |
-| POS return/refund | Authorized cashier/accountant | Original vendor order/payment | Original tender, refundable balance, supervisor rules |
-| POS session/sale | Cashier or supervisor | Active tenant + assigned branch/session | POS permission; open session; idempotency |
-| POS guest checkout | Authenticated cashier | Vendor tenant owns all sale resources | Customer identity optional; no global account creation |
-| POS receipt/reprint | Cashier/supervisor | Receipt order tenant and branch | Reprint permission; audit; no new receipt/order |
-| POS cash movement/close | Cashier/supervisor | Session tenant and cashier scope | Reason, amount bounds, close count, variance approval |
-| POS return/refund | Cashier with approval or accountant | Original vendor order/payment tenant | Original tender, return balance, supervisor rules |
+| POS register/session open | Vendor Admin/cashier | Active tenant, same-tenant branch and register | One OPEN/CLOSING session per register; composite tenant constraints |
+| POS draft sale and stock reservation | Authenticated cashier | Active tenant, assigned branch/register/session; same-tenant products | Immutable server snapshots, reservation TTL, idempotency; guest customer_id may be NULL |
+| POS tender recording/verification | Authenticated cashier; supervisor for manual verification | Same-tenant order/session and vendor merchant context | Cash received/applied/change arithmetic; external verification evidence; typed reference alone is insufficient |
+| POS sale finalization | Authenticated cashier | Order/session tenant, branch and cashier match; session OPEN | Confirmed tenders equal amount due; inventory issue and order PAID exactly once |
+| POS customer association | Customer through verified flow; cashier assists | Global identity resolved only after customer-initiated verification | Explicit consent; create only active tenant relationship; never disclose other vendors |
+| POS receipt/tax invoice/reprint | Cashier/supervisor | Receipt/order tenant and branch match | Receipt per completed sale; tax invoice only on applicable trigger; reprint identity preserved and audited |
+| POS cash movement/close | Cashier/supervisor | Session tenant, cashier and register scope | Expected drawer formula; count incl. zero; reason and variance approval |
+| POS return/refund | Authorized cashier/accountant | Original IN_STORE order/payment only for MVP | Original tender, refundable balance, supervisor controls; required credit note linked to original invoice |
 | View CRM notes | Vendor employee | tenant_customer.tenant_id equals active tenant | CRM_NOTE_VIEW |
 | Create vendor payment | Customer/order owner | Order tenant determines merchant account | Never accept merchant tenant from client |
 | Payment webhook | Gateway | Match stored provider account/order tenant | Signature, replay, amount/currency |
@@ -1607,6 +1690,82 @@ Scenario: Connectivity loss does not fake completion
   When the cashier attempts to finalize the sale
   Then the UI does not claim that the order or payment is completed
   And an idempotent retry/status lookup determines whether the server committed the sale
+
+Scenario: Guest and registered POS orders follow customer nullability rules
+  Given a cashier creates an IN_STORE sale
+  When the buyer does not request customer association
+  Then the order has customer_id NULL
+  And tenant_id, branch_id, cashier_user_id and pos_session_id are non-null
+  When the buyer completes customer-initiated global verification
+  Then the order may reference that global customer
+  And only the current vendor's tenant_customer relationship is created or used
+  And every ONLINE order continues to require customer_id NOT NULL
+
+Scenario: External payment attempt is durable before provider request
+  Given a POS draft has immutable price/tax snapshots and a stock reservation
+  When the customer selects UPI or card terminal
+  Then the payment attempt is committed before the provider/terminal request
+  And the provider request uses the durable attempt idempotency key
+  And a failed/expired attempt releases the reservation safely
+
+Scenario: Unknown external payment outcome is not charged again
+  Given a POS external tender has timed out without a verified result
+  When the cashier views the sale
+  Then the tender state is UNKNOWN_RECONCILIATION_REQUIRED
+  And the order is not PAID
+  And a new charge attempt is blocked until status reconciliation resolves the original attempt
+
+Scenario: Manual external tender verification requires two-person evidence
+  Given terminal/provider status integration is unavailable
+  And a cashier has entered an external payment reference
+  When the initiating cashier attempts to mark the tender confirmed
+  Then the action is denied
+  When a separate authorized supervisor reviews the supporting evidence and approves
+  Then the tender becomes CONFIRMED with approver, evidence, reason and timestamp
+  And the action is included in reconciliation reporting
+
+Scenario: Cash received, cash applied and change are not double counted
+  Given a sale amount due is 1,000 currency units
+  When the cashier receives 1,200 in cash and gives 200 change
+  Then cash_received is 1,200
+  And cash_applied is 1,000
+  And change_given is 200
+  And the order tender total increases by 1,000
+  And physical drawer cash increases by 1,000
+
+Scenario: Expected cash drawer uses physical cash movement formula
+  Given opening float is 500
+  And cash_received is 1,200 and change_given is 200
+  And cash-in is 100, cash refunds are 50, cash-out is 25 and safe drops are 100
+  When the cashier closes the session
+  Then expected drawer cash is 1,425
+  And cash_applied is not added separately
+
+Scenario: Only one active session can occupy a till
+  Given Vendor A register R1 has an OPEN or CLOSING session
+  When another cashier attempts to open a session on register R1
+  Then the database uniqueness constraint rejects the second active session
+  And a closed session does not prevent a later session on R1
+
+Scenario: POS order cannot mismatch its session context
+  Given a POS session belongs to Vendor A, branch A1 and cashier C1
+  When an order references Vendor A but branch A2 or cashier C2 or a session from Vendor B
+  Then composite foreign keys reject the mismatch
+  And service validation rejects a session that is not OPEN under transactional lock
+
+Scenario: Receipt and tax invoice are distinct documents
+  Given a POS sale is completed
+  Then a sale receipt is issued and can be reprinted as a copy
+  And a tax invoice is issued only when applicable law or approved vendor tax configuration requires it
+  And any statutory credit note references the original tax invoice
+
+Scenario: POS MVP return scope is limited to POS-originated sales
+  Given a return request references an IN_STORE POS order
+  When the authorized cashier processes an eligible return or exchange
+  Then the return and refund reference the original POS order and tender
+  And any required credit note references the original tax invoice
+  When a return request references a shipped ONLINE order
+  Then it is routed to the later Operations return workflow and is not treated as POS MVP scope
 ~~~
 
 POS acceptance is part of the Commercial MVP release gate, not a deferred operations feature.
@@ -1667,8 +1826,8 @@ A release is blocked if a critical tenant-isolation test fails, a mock adapter i
 
 ### Release C — Commercial transactions
 - Enquiries, quotations, online cart, single-vendor online checkout and orders.
-- Physical Store POS for walk-in guest and registered customer sales, barcode/SKU lookup, cashier sessions, vendor-direct cash/UPI/card-terminal tender, receipts, returns/refunds and channel reporting.
-- Basic POS outlet/branch, cashier assignments, cash movements and shift reconciliation.
+- Physical Store POS for walk-in guest and verified registered-customer sales, barcode/SKU lookup, durable draft/reservation, verified vendor-direct cash/UPI/card-terminal tender, receipts and conditional tax invoices.
+- One POS outlet/branch and one designated stock location per vendor, POS register/till, cashier assignments, cash movements, shift reconciliation and basic returns/refunds for POS-originated sales only.
 - Vendor merchant account onboarding abstraction.
 - Flagged mock direct-vendor payment adapter.
 - Vendor invoices/receipts and customer order portal.
@@ -1677,7 +1836,7 @@ A release is blocked if a critical tenant-isolation test fails, a mock adapter i
 ### Release D — SaaS billing and operations
 - Plans, entitlements, subscription invoices/payments, renewals, grace and suspension.
 - Advanced inventory and fulfilment.
-- Additional branch/warehouse management, transfers, shipment, installation, warranty and service workflows.
+- Additional branch/warehouse management, transfers, replenishment, advanced returns for shipped online orders and reverse logistics, shipment, installation, warranty and service workflows.
 - Reporting, notifications and audit hardening.
 
 ### Release E — Production readiness
