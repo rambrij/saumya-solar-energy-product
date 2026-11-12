@@ -55,18 +55,22 @@ A Platform Super Admin does not become Vendor Admin by virtue of platform role. 
 
 ## 4. Vendor role-to-feature matrix
 
-Standard role columns:
+Standard role columns map to these canonical role identifiers from SRS/HLD §11.1:
 
-- **VA:** Vendor Admin
-- **SM:** Sales Manager
-- **SE:** Sales Executive
-- **IM:** Inventory Manager
-- **PC:** POS Cashier
-- **AC:** Accountant
-- **OM:** Operations Manager
-- **SV:** Service Manager
-- **SEn:** Service Engineer
-- **CM:** Content Manager
+| Column | Canonical role identifier | Display name |
+|---|---|---|
+| VA | `VENDOR_ADMIN` | Vendor Admin |
+| SM | `SALES_MANAGER` | Sales Manager |
+| SE | `SALES_EXECUTIVE` | Sales Executive |
+| IM | `INVENTORY_MANAGER` | Inventory Manager |
+| PC | `POS_CASHIER` | POS Cashier |
+| AC | `ACCOUNTANT` | Accountant |
+| OM | `OPERATIONS_MANAGER` | Operations Manager |
+| SV | `SERVICE_MANAGER` | Service Manager |
+| SEn | `SERVICE_ENGINEER` | Service Engineer |
+| CM | `CONTENT_MANAGER` | Content Manager |
+
+Platform role identifiers are `PLATFORM_SUPER_ADMIN` and `PLATFORM_SUPPORT`. The global customer actor is `CUSTOMER`.
 
 | Feature / resource | VA | SM | SE | IM | PC | AC | OM | SV | SEn | CM |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
