@@ -1110,6 +1110,12 @@ This illustrates the same-tenant parent/child relationship. Production migration
 | Cart | GET/POST/PATCH/DELETE /customer/cart | Customer, one tenant per cart |
 | Checkout | POST /customer/checkout | Customer, cart tenant |
 | Vendor orders | GET /vendor/orders, GET /vendor/orders/{id} | Active tenant |
+| POS register | GET /vendor/pos/products?query=..., POST /vendor/pos/sessions, GET /vendor/pos/sessions/{id} | Active tenant, assigned branch and POS permission |
+| POS sales | POST /vendor/pos/sales, GET /vendor/pos/sales/{id}, POST /vendor/pos/sales/{id}/finalize, POST /vendor/pos/sales/{id}/void | Active tenant, open session, cashier permission, idempotency |
+| POS tenders | POST /vendor/pos/sales/{id}/tenders, GET /vendor/pos/sales/{id}/tenders | Same-tenant order/session; cash or vendor terminal reference only |
+| POS receipts | GET /vendor/pos/receipts/{id}, POST /vendor/pos/receipts/{id}/reprint | Active tenant/branch; receipt permission and audit |
+| POS cash management | POST /vendor/pos/sessions/{id}/cash-movements, POST /vendor/pos/sessions/{id}/close, GET /vendor/pos/sessions/{id}/reconciliation, POST /vendor/pos/sessions/{id}/approve-variance | Cashier own session or authorized supervisor |
+| POS returns/refunds | POST /vendor/pos/sales/{id}/returns, POST /vendor/pos/sales/{id}/refunds | Original same-tenant order/payment; return/refund permission |
 | Vendor payment | POST /customer/orders/{id}/payment-intent, POST /webhooks/vendor-payments/{provider}, POST /vendor/payments/{id}/refund | Customer/order owner or tenant accountant; webhook verified |
 | Subscription payment | POST /webhooks/platform-subscriptions/{provider} | Platform subscription flow |
 | Vendor finance | /vendor/invoices, /vendor/payments, /vendor/returns | Active tenant |
@@ -1402,6 +1408,11 @@ Adapters:
 | Checkout | Authenticated customer | Exactly one cart tenant | Idempotency, price, stock, merchant ready |
 | View customer order | Global customer | order.customer_id equals principal customer ID | Display vendor label |
 | View vendor order | Vendor employee | order.tenant_id equals active tenant | Permission + assignment |
+| POS sale finalization | Authenticated cashier | Active tenant, assigned branch and open session | Server prices/taxes/stock; tender verified; idempotency |
+| POS guest sale | Authenticated cashier | Same-tenant product/order/session | customer_id nullable only for IN_STORE; no global account created |
+| POS receipt/reprint | Cashier/supervisor | Receipt tenant and branch match | Reprint permission; immutable original; audit |
+| POS cash movement/close | Cashier/supervisor | Session tenant and cashier scope | Reason, amount, count, variance approval |
+| POS return/refund | Authorized cashier/accountant | Original vendor order/payment | Original tender, refundable balance, supervisor rules |
 | POS session/sale | Cashier or supervisor | Active tenant + assigned branch/session | POS permission; open session; idempotency |
 | POS guest checkout | Authenticated cashier | Vendor tenant owns all sale resources | Customer identity optional; no global account creation |
 | POS receipt/reprint | Cashier/supervisor | Receipt order tenant and branch | Reprint permission; audit; no new receipt/order |
