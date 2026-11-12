@@ -64,7 +64,7 @@ Each vendor tenant owns and manages its commercial business:
 
 ### 2.3 Vendor employees
 
-Vendor Admin can invite employees and assign permission-limited roles, such as Sales Manager, Sales Executive, Inventory Manager, Operations Manager, Accountant, Service Manager, Service Engineer and Content Manager. Custom roles may contain only permissions granted to that tenant. Platform permissions can never be granted by a vendor.
+Vendor Admin can invite employees and assign permission-limited roles, such as Sales Manager, Sales Executive, Cashier/POS Operator, Inventory Manager, Operations Manager, Accountant, Service Manager, Service Engineer and Content Manager. Custom roles may contain only permissions granted to that tenant. Platform permissions can never be granted by a vendor.
 
 ### 2.4 Global customer
 
@@ -178,9 +178,12 @@ The platform's subscription billing uses a separate platform-owned merchant acco
 
 ## 8. Vendor business lifecycle
 
-The Commercial MVP supports the end-to-end vendor workflow:
+The Commercial MVP supports two sales channels that converge on the same vendor-owned order and inventory domain:
 
-Enquiry → Lead → Site Survey → Quotation → Customer Acceptance → Order → Direct Vendor Payment → Inventory Reservation → Shipment/Delivery or Installation → Invoice/Receipt → Warranty/Service → Return/Refund where eligible.
+- Online: Marketplace vendor selection → Global customer login → Single-vendor cart → Checkout → Direct payment to vendor merchant account → Order → Inventory reservation → Shipment/Delivery or Installation → Invoice/Receipt → Warranty/Service → Return/Refund where eligible.
+- In-store: Physical vendor outlet → Authenticated cashier → Product scan/search → Optional guest or verified customer association → POS sale → Cash or direct-to-vendor UPI/card tender → Vendor-owned order and receipt → Inventory deduction → Return/Refund where eligible.
+
+Enquiry → Lead → Site Survey → Quotation → Customer Acceptance → Order remains the supported assisted-sales workflow.
 
 Each workflow step is tenant-owned, permission-controlled, validated, auditable and idempotent where retries are possible.
 
@@ -196,7 +199,9 @@ Each workflow step is tenant-owned, permission-controlled, validated, auditable 
 - Enquiries, leads, site surveys and quotations.
 - Single-vendor cart and checkout.
 - Orders, stock availability/reservation and order history.
-- Vendor-direct payment using a flag-controlled mock adapter initially.
+- Online and physical store sales through one shared order/inventory domain.
+- Vendor POS, walk-in guest checkout, cashier sessions, receipts, cash tender recording and daily reconciliation.
+- Vendor-direct online payment using a flag-controlled mock adapter initially; POS cash/terminal tender recording uses vendor-owned funds and accounts.
 - Vendor invoices/receipts and customer portal.
 - Subscription plans, subscription invoices and subscription payment records.
 - Email notifications using Spring Mail; local delivery via Mailpit.
@@ -204,7 +209,64 @@ Each workflow step is tenant-owned, permission-controlled, validated, auditable 
 - Platform/vendor dashboards and audit trail.
 - Docker Compose local stack, migrations, tests and operational metrics.
 
-### 9.2 Operations capabilities
+### 9.2 Physical Store POS and Walk-in Sales
+
+The Commercial MVP supports both **Online Marketplace Sales** and **Physical Store POS Sales**. POS is a first-class sales channel, not a later Enterprise feature. Both channels use the same tenant-owned catalogue, pricing/tax rules, inventory services, order lifecycle, vendor payment ownership, invoice/receipt records, returns/refunds and reporting controls.
+
+#### Walk-in customer experience
+
+A customer may enter a vendor's physical shop, choose products and pay at the counter without registering, logging in, creating a marketplace account or supplying an email/mobile number, except where applicable law requires transaction details. Customer identity is optional for a walk-in sale. A cashier may optionally associate the sale with an existing global customer only after an approved verification/consent flow. The POS must not silently create a global account or reveal whether the person has an account or relationship with another vendor.
+
+#### POS capabilities
+
+- Vendor Admin configures at least one POS-enabled outlet/branch and its permitted warehouse; additional outlets are subject to plan entitlements.
+- Authorized cashiers sign in with their own named employee accounts and open a cashier shift/session for an assigned vendor branch and till.
+- Search products by name, SKU or barcode; support barcode scanner input and manual product selection.
+- Add multiple products from the same vendor to a POS sale; show quantities, current vendor price, discounts, applicable taxes and total.
+- Revalidate product publication, tenant ownership, price, tax, discount authority and stock when the sale is completed.
+- Support configurable tender types: cash, vendor UPI/QR, vendor card terminal and other explicitly approved vendor-direct methods.
+- Support split tender when enabled; successful tenders must equal the amount due before the sale is marked paid.
+- Record cash received and change returned. UPI/card terminal payments capture a provider/terminal reference or approved evidence; never store card PAN, CVV, PIN, track data or raw payment credentials.
+- Generate a sequential, tenant/outlet-scoped receipt and support print, reprint and digital sharing. Reprints are marked/referenced and audited.
+- Capture optional minimal buyer/recipient information only when provided or required for applicable tax/invoice purposes.
+- Deduct or reserve stock through the same concurrency-safe inventory service used by online orders.
+- Support authorized void/cancellation before fulfilment, customer returns, exchanges, partial/full refunds and credit-note workflows using the original vendor sale/payment.
+- Provide cashier shift opening float, cash-in/cash-out/safe-drop recording, expected cash calculation, counted closing cash, variance reason and supervisor review.
+- Provide daily sales, tender, cashier, outlet and online-vs-in-store reports for authorized vendor users.
+
+#### POS ownership and transaction rules
+
+- A POS transaction is a normal vendor-owned order with sales_channel = IN_STORE; it is not a separate order or inventory ledger.
+- Every POS order has mandatory tenant_id, branch_id, cashier_user_id and pos_session_id. Its customer_id is nullable only for an in-store guest sale. Online orders always require the authenticated global customer.
+- Guest details, if captured, are transaction-time snapshots and do not create a user or customer profile. Do not collect unnecessary personal data.
+- Each POS order and every item, payment, invoice/receipt, shipment, return and refund belongs to exactly one vendor tenant.
+- A POS sale can be completed when the buyer has no marketplace account. Vendor employees still require authenticated accounts and POS permissions.
+- Cash received at the physical counter belongs to the vendor. UPI/card payments go to the vendor's own merchant/terminal account. The platform never receives or holds POS purchase funds.
+- POS requires live connectivity for authoritative stock, price and order finalization in this MVP. Offline POS completion is not supported; on connectivity loss, the application must not claim a transaction is durably completed or paid.
+
+#### Security and controls
+
+- Enforce tenant, branch, warehouse, cashier and active-session scope in backend services; never trust client-supplied tenant, branch, warehouse, cashier or session IDs.
+- Cashiers operate only their assigned tenant branch and open session, and only with granted POS permissions.
+- Discount overrides, voids, refunds, cash adjustments, reprints and shift reopen require explicit permissions; configured thresholds require supervisor approval and a reason.
+- Protect against double submission with idempotency keys and unique receipt/order sequence constraints.
+- Audit actor, tenant, branch, session, terminal reference, action, amount, reason, timestamp and correlation ID where applicable.
+- Mask buyer contact/tax details in logs and reports. POS search must not expose global customer accounts or another vendor's customer relationships.
+- Restrict receipts/documents to the owning vendor and the buyer entitled to the transaction.
+- Never store cardholder authentication data; use vendor-approved terminal/provider flows and meet applicable PCI/security obligations.
+- Guest return lookup verifies a valid receipt/order and required proof without revealing another vendor's data.
+- Cashier session close reconciles tenders and records variance; a cashier cannot alter a closed session without an authorized, audited correction.
+
+#### POS acceptance requirements
+
+- A walk-in guest purchase completes without a customer account or mandatory contact details, except legally required invoice data.
+- A POS sale is visible only to the owning vendor and permitted branch/cashier roles.
+- POS and online sales use one stock ledger; concurrent sales cannot oversell inventory.
+- An anonymous guest sale is not automatically attached to a global account or shown in a customer portal.
+- Optional association to a global customer requires verification and explicit confirmation.
+- POS receipts, refunds, cash sessions and daily reconciliation are tenant-scoped and auditable.
+
+### 9.3 Operations capabilities
 - Branches and warehouses.
 - Transfers, stock movements and serialized inventory.
 - Shipping/delivery lifecycle and fulfilment evidence.
@@ -217,7 +279,7 @@ These operational modules are in the domain design; the implementation rollout m
 
 ## 10. Vendor dashboard and customer portal boundaries
 
-Vendor dashboard metrics are computed only from that tenant's relationships and transactions: its customers, leads, quotations, orders, order revenue, payments, inventory, installations, returns and service records. Platform-wide data is never included in a vendor report.
+Vendor dashboard metrics are computed only from that tenant's relationships and transactions: its customers, leads, quotations, orders, order revenue, payments, inventory, installations, returns and service records. Platform-wide data is never included in a vendor report. Vendor analytics must also separate ONLINE and IN_STORE sales by date, outlet, cashier, product and tender type, and provide combined totals without double-counting payments, refunds or tax.
 
 The customer portal can show all orders belonging to the authenticated global customer across vendors. Each order must display vendor identity, order number, status, payment state, invoice and fulfilment status. A customer cannot access another customer's order by changing an identifier.
 
@@ -231,7 +293,11 @@ The customer portal can show all orders belonging to the authenticated global cu
 - Search, counts, reports, exports, object storage, caches, asynchronous jobs and audit queries are tenant-scoped.
 - Global customer identity is not a tenant ownership shortcut.
 - Platform support access is time-limited, purpose-bound and auditable.
-- Audit critical identity, role, tenant, catalogue price, order, stock, invoice, payment, refund and subscription changes.
+- Audit critical identity, role, tenant, catalogue price, online order, POS sale, stock, invoice, payment, refund, cashier session, cash movement and subscription changes.
+- POS APIs require authenticated cashier identity, active tenant membership, branch-level assignment and an open cashier session; body-supplied cashier/session/branch identifiers are never authorization sources.
+- Guest POS checkout may omit customer identity, but it must not bypass employee authentication, sales permissions, tenant/branch isolation, price/discount controls, stock validation or audit.
+- Do not expose global customer lookup or another tenant's CRM data to POS cashiers; optionally linking a global customer requires an explicit verified customer-association flow.
+- Never store card PAN, CVV, PIN, magnetic-stripe/track data or raw payment credentials.
 - Access/refresh credentials are rotated; refresh tokens use revocation/reuse detection. Browser tokens must not be stored in localStorage; use secure HttpOnly cookie handling and CSRF protection where cookie authentication is used.
 - Validate uploads, file signatures, size, malware scan state, tenant quotas and signed download ownership.
 
@@ -241,7 +307,7 @@ Global/platform entities: users, customer_profiles, tenants, subscription_plans,
 
 Tenant relationship entities: tenant_users, tenant_customers, tenant_customer_notes, vendor_profiles, vendor_payment_accounts.
 
-Tenant commercial entities: categories, products, solar_packages, package_items, branches, warehouses, inventory_balances, inventory_transactions, leads, enquiries, site_surveys, quotations, quotation_items, carts, cart_items, orders, order_items, order_status_history, invoices, payments, payment_attempts, refunds, shipments, shipment_events, returns, return_items, installations, warranties, service_requests, service_visits, vendor_notifications, vendor_audit_events.
+Tenant commercial entities: categories, products, solar_packages, package_items, branches, warehouses, inventory_balances, inventory_transactions, leads, enquiries, site_surveys, quotations, quotation_items, carts, cart_items, orders, order_items, order_status_history, invoices, vendor_payments, payment_attempts, refunds, shipments, shipment_events, returns, return_items, installations, warranties, service_requests, service_visits, pos_sessions, pos_cash_movements, pos_terminals, receipts, vendor_notifications, vendor_audit_events.
 
 Subscription billing entities: tenant_subscriptions, subscription_invoices, subscription_payments, subscription_payment_attempts, subscription_events, subscription_usage.
 
@@ -262,6 +328,16 @@ Every transactional child record must preserve tenant ownership through tenant_i
 11. Subscription renewal failure, grace period, suspension and reactivation are tested.
 12. Returns/refunds are restricted to the original vendor order and payment.
 13. All tenant isolation, checkout and payment tests run against MySQL 8.4 through the normal CI pipeline.
+
+14. Both online marketplace orders and in-store POS sales use the same vendor-owned order and inventory services, with an explicit sales_channel value.
+15. A physical walk-in customer can buy from a vendor without registering, logging in or creating a customer account.
+16. A guest POS sale has customer_id = NULL, but has mandatory tenant, branch, cashier and open POS session ownership.
+17. POS cash, vendor UPI and vendor card-terminal payments belong directly to the vendor; platform customer-fund custody is never introduced.
+18. Cashiers can access only permitted branches and active sessions; sensitive operations require permission, reason, audit and supervisor approval where configured.
+19. Receipts, returns, refunds, cash movements and shift reconciliation are tenant-scoped and auditable.
+20. POS and online checkout share inventory concurrency controls and cannot oversell stock.
+21. POS guest sales do not create or attach global customer identities unless the customer explicitly requests and completes the approved verification flow.
+22. POS security, cashier shift, tender reconciliation, guest-sale and cross-tenant negative tests pass before Commercial MVP acceptance.
 
 ## 14. Release governance
 
