@@ -1,1387 +1,1375 @@
-# Saumya Solar Energy Solution
-
-## Software Requirements Specification and High-Level Design
-
-| Document attribute  | Value                                                                                       |
-|---------------------|---------------------------------------------------------------------------------------------|
-| Product             | Saumya Solar Energy Solution Platform                                                       |
-| Document type       | Software Requirements Specification and High-Level Design                                   |
-| Version             | 1.0                                                                                         |
-| Status              | Baseline for MVP planning                                                                   |
-| Target architecture | Multi-tenant SaaS, modular monolith                                                         |
-| Backend             | Java 21, Spring Boot 3.x, Maven                                                             |
-| Frontend            | React with TypeScript                                                                       |
-| Database            | MySQL 8.x                                                                                   |
-| Primary users       | Platform administrators, vendors/dealers, vendor employees, customers and service engineers |
-
----
-
-## 1. Purpose
-
-This document defines the production-ready functional requirements, non-functional requirements, security controls,
-architecture, modules, roles and permissions, data model, REST APIs, user interfaces, workflows, tenant-isolation
-strategy, and acceptance criteria for the Saumya Solar Energy Solution platform.
-
-The platform will operate as a multi-tenant Solar ERP, CRM, e-commerce, quotation, order, inventory, installation,
-invoicing, and service-management SaaS product. A single deployed platform will support multiple independent solar
-vendors while preventing one vendor from accessing another vendor's data.
-
-## 2. Product Vision
-
-> One SaaS platform → many solar vendors → many vendor employees → many customers.
-
-The platform must allow Saumya Solar Energy Solution to:
-
-1. Operate its own solar business.
-2. Onboard external solar vendors and dealers.
-3. Provide each vendor with an isolated store and operational workspace.
-4. Allow customers to discover solar packages, request quotations, place orders, track installations, access invoices,
-   and request service.
-5. Support future subscription plans, white-label branding, multiple branches, multiple warehouses, payment gateways,
-   accounting integrations, and mobile applications.
-
-## 3. Scope
-
-### 3.1 In scope
-
-- Public solar website and vendor storefronts
-- Customer registration and portal
-- Platform and vendor administration
-- Multi-tenant identity and access management
-- Vendor onboarding and lifecycle management
-- Product and solar-package management
-- Enquiry, lead, site-survey and CRM management
-- Quotation creation, approval and PDF generation
-- Order and status management
-- Inventory and warehouse management
-- Installation scheduling and commissioning
-- Invoice and payment tracking
-- Warranty and service-request management
-- Team and role management
-- Blog and content management
-- Notifications by email, SMS, WhatsApp adapter and in-app channel
-- Operational dashboards, reporting and exports
-- Audit trails, monitoring, backups and security controls
-
-### 3.2 Out of scope for the first MVP
-
-- Native Android and iOS applications
-- Full accounting or general-ledger functions
-- Automated government subsidy submission
-- IoT-based live solar-generation monitoring
-- AI-based roof analysis using satellite imagery
-- Marketplace settlement between the platform and vendors
-- Microservice decomposition
-
-These may be delivered in later phases through integrations or dedicated modules.
-
-## 4. Assumptions and Constraints
-
-- The first production release will use Java 21, Spring Boot 3.x, React with TypeScript, and MySQL 8.x.
-- The initial architecture will be a modular monolith to reduce infrastructure and operational complexity.
-- Vendor-owned business data will use a shared database and shared schema with mandatory `tenant_id` isolation.
-- All business APIs will be exposed over HTTPS and versioned under `/api/v1`.
-- Currency, tax rules, document numbering, time zone, language, and notification templates will be configurable per
-  tenant.
-- India will be the initial market, with INR, GST-ready fields, Indian address formats and PIN codes supported.
-- Actual subsidy rules, taxation, invoicing obligations and privacy notices must be reviewed with qualified legal and
-  tax professionals before production launch.
-
-## 5. Stakeholders
-
-| Stakeholder              | Responsibility                                                  |
-|--------------------------|-----------------------------------------------------------------|
-| Platform Owner           | Product strategy, vendor onboarding and platform governance     |
-| Platform Super Admin     | Vendor lifecycle, global configuration, support and audit       |
-| Vendor Admin             | Vendor organization, employees, catalogue, sales and operations |
-| Sales Manager/Executive  | Lead, quotation and order management                            |
-| Inventory Manager        | Product stock, reservation, adjustment and warehouse operations |
-| Operations Manager       | Site survey, installation scheduling and fulfillment            |
-| Service Manager/Engineer | Service tickets, visits, warranty and resolution                |
-| Accountant               | Invoice, payment and outstanding-payment management             |
-| Content Manager          | Blogs, banners, FAQs, testimonials and public content           |
-| Customer                 | Product discovery, quotations, orders, payments and service     |
-| Support/Auditor          | Authorized troubleshooting and audit investigation              |
-
-## 6. Architecture Principles
-
-1. **Tenant isolation by default:** Tenant scope must be derived from the authenticated identity, never trusted from a
-   browser-supplied query parameter.
-2. **Backend authorization:** React visibility rules improve UX but do not replace API authorization.
-3. **Modular monolith first:** Domain modules must have clear boundaries and communicate through application services or
-   domain events.
-4. **API-first design:** All web clients consume documented versioned APIs.
-5. **Configuration over hard-coding:** Package attributes, statuses, notification templates and vendor branding must be
-   configurable.
-6. **Auditability:** Security-sensitive and financial operations must preserve who changed what and when.
-7. **Idempotency:** Payment callbacks, order conversion, document generation and notification processing must safely
-   handle retries.
-8. **Secure by design:** Apply OWASP ASVS-aligned controls and test against OWASP Top 10 risks.
-9. **Operational readiness:** Health checks, metrics, logs, traces, backups, alerts and recovery procedures are release
-   requirements.
-
-## 7. High-Level Architecture
-
-```text
-Users
-  │
-  ├── Public Customer
-  ├── Registered Customer
-  ├── Vendor Employee
-  └── Platform Administrator
-  │
-  ▼
-CDN / WAF / TLS Termination
-  │
-  ▼
-React Web Application
-  │ HTTPS + JSON
-  ▼
-Spring Boot API
-  ├── Authentication and Authorization
-  ├── Tenant Context and Isolation
-  ├── Vendor and User Management
-  ├── Catalogue and Solar Packages
-  ├── CRM, Surveys and Quotations
-  ├── Orders, Inventory and Installations
-  ├── Invoices, Payments and Service
-  ├── CMS, Notifications and Reporting
-  └── Audit and Administration
-  │
-  ├── MySQL 8.x
-  ├── Redis-compatible cache, optional
-  ├── S3-compatible object storage
-  ├── Email/SMS/WhatsApp providers
-  └── Monitoring and centralized logging
-```
-
-### 7.1 Recommended deployment topology
-
-- React static assets behind a CDN.
-- Spring Boot application deployed as at least two stateless instances in production.
-- Managed MySQL with automated backups, encryption and point-in-time recovery where supported.
-- Object storage for images, invoices, quotations, service evidence and installation documents.
-- Redis-compatible cache for rate limiting, short-lived data and distributed coordination when multiple application
-  instances are used.
-- Reverse proxy, load balancer or API gateway for TLS termination, request limits and routing.
-- Separate development, test, staging and production environments.
-
-### 7.2 Modular monolith package structure
-
-```text
-com.saumyasolar
-├── shared
-├── identity
-├── tenant
-├── vendor
-├── customer
-├── catalog
-├── packageconfig
-├── crm
-├── survey
-├── quotation
-├── order
-├── inventory
-├── installation
-├── invoice
-├── payment
-├── service
-├── warranty
-├── notification
-├── cms
-├── reporting
-├── document
-└── audit
-```
-
-Each module should own its domain model, repositories, services, API controllers and events. Direct access to another
-module's repository is prohibited unless explicitly approved as a shared-kernel dependency.
-
-## 8. Tenant-Isolation Strategy
-
-### 8.1 Tenant model
-
-- A tenant represents one independent vendor/dealer organization.
-- Each vendor receives one immutable `tenant_id`.
-- Tenant-owned entities must include `tenant_id NOT NULL`.
-- Platform-owned global reference data may omit `tenant_id` and must be explicitly classified as global.
-- Each user account must be associated with one tenant, except platform-level administrators.
-- A customer may have separate customer identities for different vendor storefronts during the MVP. Cross-vendor
-  customer unification is not required.
-
-### 8.2 Tenant resolution
-
-For an authenticated request:
-
-1. Validate the access token.
-2. Resolve `user_id`, `tenant_id`, platform role and vendor roles from trusted token claims or server-side session data.
-3. Populate an immutable request-scoped `TenantContext`.
-4. Apply tenant scope to every repository query and command.
-5. Verify the target resource belongs to the active tenant before returning or modifying it.
-6. Record tenant context in audit logs and application logs.
-
-For public storefront requests, the tenant may be resolved from a verified subdomain or store slug, for example:
-
-```text
-vendor-a.saumyasolar.example
-/shops/vendor-a/products
-```
-
-The resolved slug must be mapped server-side to an active tenant. The API must not trust an arbitrary submitted
-`tenant_id`.
-
-### 8.3 Database controls
-
-- Include `tenant_id` in tenant-owned primary access paths and indexes.
-- Use composite unique constraints such as `UNIQUE(tenant_id, sku)`.
-- Repository methods must require tenant context.
-- Bulk update/delete operations must include `tenant_id` predicates.
-- Direct native SQL must pass code review and have automated tenant-isolation tests.
-- Cache keys and object-storage paths must include tenant identity.
-- Export jobs must be tenant-scoped.
-- Background jobs must carry explicit, validated tenant context.
-
-### 8.4 Defense-in-depth tests
-
-Automated tests must verify:
-
-- Vendor A cannot access Vendor B records by changing a URL identifier.
-- Vendor A cannot infer Vendor B data through search, reports, exports, counts or error messages.
-- Customer A cannot access another customer's quotation, order, invoice or ticket.
-- Cached responses never cross tenants.
-- Background jobs process only their designated tenant.
-- Platform support access is logged and restricted.
-
-## 9. Roles and Permission Model
-
-Use role-based access control with fine-grained permissions. Vendor Admin may create custom roles from permitted
-vendor-level permissions but cannot grant platform permissions.
-
-### 9.1 Standard roles
-
-| Role                   | Scope           | Summary                                               |
-|------------------------|-----------------|-------------------------------------------------------|
-| `PLATFORM_SUPER_ADMIN` | Platform        | Full platform administration                          |
-| `PLATFORM_SUPPORT`     | Platform        | Restricted support access with audit                  |
-| `VENDOR_ADMIN`         | Tenant          | Full vendor workspace administration                  |
-| `SALES_MANAGER`        | Tenant          | Leads, quotations, customers, sales reports           |
-| `SALES_EXECUTIVE`      | Tenant/assigned | Assigned leads, quotations and orders                 |
-| `INVENTORY_MANAGER`    | Tenant          | Products, stock, warehouses and transactions          |
-| `OPERATIONS_MANAGER`   | Tenant          | Surveys, installation teams and schedules             |
-| `SERVICE_MANAGER`      | Tenant          | Service requests, assignment and SLA monitoring       |
-| `SERVICE_ENGINEER`     | Assigned        | Assigned visits, notes, evidence and resolution       |
-| `ACCOUNTANT`           | Tenant          | Invoices, payments, credit/refund records and reports |
-| `CONTENT_MANAGER`      | Tenant          | Storefront content, blog, FAQ and banners             |
-| `CUSTOMER`             | Self            | Own profile, quotations, orders, invoices and tickets |
-
-### 9.2 Permission catalogue
-
-```text
-TENANT_VIEW, TENANT_UPDATE
-USER_VIEW, USER_CREATE, USER_UPDATE, USER_DISABLE
-ROLE_VIEW, ROLE_CREATE, ROLE_UPDATE, ROLE_ASSIGN
-CUSTOMER_VIEW, CUSTOMER_CREATE, CUSTOMER_UPDATE, CUSTOMER_EXPORT
-PRODUCT_VIEW, PRODUCT_CREATE, PRODUCT_UPDATE, PRODUCT_ARCHIVE
-PACKAGE_VIEW, PACKAGE_CREATE, PACKAGE_UPDATE, PACKAGE_PUBLISH
-LEAD_VIEW, LEAD_CREATE, LEAD_UPDATE, LEAD_ASSIGN, LEAD_EXPORT
-SURVEY_VIEW, SURVEY_CREATE, SURVEY_ASSIGN, SURVEY_COMPLETE
-QUOTATION_VIEW, QUOTATION_CREATE, QUOTATION_UPDATE, QUOTATION_SEND,
-QUOTATION_APPROVE_DISCOUNT, QUOTATION_CONVERT
-ORDER_VIEW, ORDER_CREATE, ORDER_UPDATE, ORDER_CANCEL, ORDER_ASSIGN
-INVENTORY_VIEW, INVENTORY_RECEIVE, INVENTORY_RESERVE,
-INVENTORY_TRANSFER, INVENTORY_ADJUST, INVENTORY_EXPORT
-INSTALLATION_VIEW, INSTALLATION_SCHEDULE, INSTALLATION_ASSIGN,
-INSTALLATION_UPDATE, INSTALLATION_COMMISSION
-INVOICE_VIEW, INVOICE_CREATE, INVOICE_SEND, INVOICE_VOID
-PAYMENT_VIEW, PAYMENT_RECORD, PAYMENT_REFUND
-SERVICE_VIEW, SERVICE_CREATE, SERVICE_ASSIGN, SERVICE_UPDATE,
-SERVICE_RESOLVE, SERVICE_CLOSE
-REPORT_VIEW, REPORT_EXPORT
-CMS_VIEW, CMS_CREATE, CMS_UPDATE, CMS_PUBLISH
-AUDIT_VIEW
-```
-
-### 9.3 Critical authorization rules
-
-- Only Platform Super Admin can create, suspend or close a tenant.
-- Vendor Admin cannot assign platform roles.
-- Service Engineers can update only assigned service visits unless granted broader permission.
-- Sales Executives see assigned leads by default; Sales Managers can see all leads within their tenant.
-- Inventory adjustment requires a reason code and audit entry.
-- Invoice void, payment refund and order cancellation require explicit permissions and mandatory reasons.
-- Customers may access only their own records under the vendor tenant.
-
-## 10. Functional Modules and Requirements
-
-### 10.1 Identity and Access Management
-
-- `IAM-001`: Users shall register, sign in, sign out and reset passwords.
-- `IAM-002`: The platform shall support email verification and optional mobile verification.
-- `IAM-003`: Privileged users shall support configurable multi-factor authentication.
-- `IAM-004`: Vendor Admin shall invite, activate, disable and role-assign vendor employees.
-- `IAM-005`: Access tokens shall be short-lived; refresh tokens shall support rotation and revocation.
-- `IAM-006`: Repeated failed logins shall trigger progressive throttling or temporary lockout.
-- `IAM-007`: Password changes, role changes, login failures and account disabling shall be audited.
-
-### 10.2 Vendor and Subscription Management
-
-- `VEN-001`: Platform Admin shall create and onboard vendors.
-- `VEN-002`: Vendor profiles shall include legal name, display name, store slug, logo, GST/tax identifier, contact
-  information, address and status.
-- `VEN-003`: Vendor lifecycle shall support `PENDING`, `VERIFIED`, `ACTIVE`, `SUSPENDED` and `CLOSED`.
-- `VEN-004`: Suspended vendors shall not perform write operations; storefront behavior shall be configurable.
-- `VEN-005`: Subscription plans shall define user, storage, branch, warehouse and feature limits.
-- `VEN-006`: The platform shall prevent usage beyond configured plan limits or require administrator override.
-
-### 10.3 Customer and CRM
-
-- `CRM-001`: Public visitors shall submit enquiries without authentication.
-- `CRM-002`: The system shall create leads with source, priority, status, assigned user and follow-up date.
-- `CRM-003`: Vendor users shall maintain customer profiles, addresses, notes and communication history.
-- `CRM-004`: Lead stages shall include `NEW`, `CONTACTED`, `SITE_VISIT_SCHEDULED`, `SURVEY_COMPLETED`, `QUOTATION_SENT`,
-  `NEGOTIATION`, `WON` and `LOST`.
-- `CRM-005`: Lost leads shall require a configurable reason.
-- `CRM-006`: Authorized users shall export tenant-scoped lead/customer data.
-
-### 10.4 Product and Solar Package Management
-
-- `CAT-001`: Vendors shall manage product categories, manufacturers and products.
-- `CAT-002`: Products shall support SKU, model, description, technical attributes, tax category, purchase price, selling
-  price, images, documents and status.
-- `CAT-003`: Solar packages shall include capacity, package type, components, quantities, price calculation, estimated
-  generation, warranty and installation options.
-- `CAT-004`: Package attributes shall be configurable and not hard-coded to fixed capacities.
-- `CAT-005`: Products and packages shall support `DRAFT`, `ACTIVE`, `INACTIVE` and `ARCHIVED` states.
-- `CAT-006`: Public APIs shall expose only active, published and tenant-owned catalogue records.
-
-### 10.5 Site Survey
-
-- `SRVY-001`: Authorized users shall schedule and assign site surveys.
-- `SRVY-002`: Surveys shall capture property type, roof type, usable area, shading, sanctioned load, electricity bill
-  range, location, notes and photographs.
-- `SRVY-003`: Survey completion shall support a checklist and customer acknowledgement.
-- `SRVY-004`: A completed survey may be linked to one or more quotations.
-
-### 10.6 Quotation Management
-
-- `QUO-001`: Authorized users shall create quotations from products, packages or custom line items.
-- `QUO-002`: Quotations shall calculate subtotal, discounts, taxes, installation charges, grand total and payment
-  schedule.
-- `QUO-003`: Discount approval shall be required when a configurable threshold is exceeded.
-- `QUO-004`: Each sent revision shall be immutable and versioned.
-- `QUO-005`: The platform shall generate a branded quotation PDF.
-- `QUO-006`: Customers shall accept or reject a valid quotation.
-- `QUO-007`: Accepted quotations shall be convertible to orders exactly once unless an authorized correction workflow is
-  used.
-- `QUO-008`: Quotation validity and expiry shall be enforced.
-
-### 10.7 Order Management
-
-- `ORD-001`: Orders shall be created manually or from accepted quotations.
-- `ORD-002`: Order status transitions shall follow a configured state machine.
-- `ORD-003`: Invalid status transitions shall return a conflict response and shall not alter data.
-- `ORD-004`: Orders shall support sales assignment, customer address, line items, taxes, discounts, payment status and
-  installation status.
-- `ORD-005`: Status history shall be immutable and include actor, timestamp, old status, new status and reason.
-- `ORD-006`: Cancellation shall require permission and reason; fulfilled orders cannot be silently deleted.
-- `ORD-007`: Order creation shall support an idempotency key.
-
-Recommended lifecycle:
-
-```text
-DRAFT → QUOTATION_ACCEPTED → CONFIRMED → PAYMENT_PENDING
-→ PAYMENT_PARTIAL/PAID → MATERIAL_RESERVED → INSTALLATION_SCHEDULED
-→ INSTALLATION_IN_PROGRESS → INSTALLED → COMMISSIONED → CLOSED
-```
-
-Exceptional states:
-
-```text
-ON_HOLD, CANCELLED, REFUND_PENDING, REFUNDED
-```
-
-### 10.8 Inventory and Warehouse
-
-- `INV-001`: Vendors shall manage one or more warehouses subject to plan limits.
-- `INV-002`: Stock shall distinguish on-hand, reserved, available and damaged quantities.
-- `INV-003`: Transactions shall support receipt, reservation, release, issue, transfer, adjustment, return and damage.
-- `INV-004`: Inventory transactions shall be immutable; corrections shall use reversing transactions.
-- `INV-005`: Stock shall never become negative unless an explicit tenant policy permits controlled backorders.
-- `INV-006`: Low-stock alerts shall use a configurable reorder level.
-- `INV-007`: Serialized products shall track component serial numbers through installation.
-- `INV-008`: Concurrent reservations shall use database locking or optimistic concurrency to prevent overselling.
-
-### 10.9 Installation Management
-
-- `INS-001`: Operations users shall create installation jobs from eligible orders.
-- `INS-002`: Jobs shall include site, schedule, assigned team, checklist, products, serial numbers, photographs and
-  notes.
-- `INS-003`: Engineers shall update only assigned jobs unless granted elevated permission.
-- `INS-004`: Commissioning shall require mandatory checklist completion and customer sign-off.
-- `INS-005`: Installation completion shall create or activate applicable warranties.
-- `INS-006`: Rescheduling and cancellation reasons shall be retained.
-
-### 10.10 Invoice and Payment Management
-
-- `FIN-001`: Authorized users shall generate invoices from order milestones.
-- `FIN-002`: Invoice numbers shall be unique per tenant and fiscal sequence.
-- `FIN-003`: Issued invoices shall not be edited in place; corrections shall use void/reissue or credit-note workflows.
-- `FIN-004`: Payments shall support offline/manual records and future gateway callbacks.
-- `FIN-005`: Duplicate payment callbacks shall not create duplicate payments.
-- `FIN-006`: Customers shall download their own invoice PDFs and payment receipts.
-- `FIN-007`: Financial operations shall be audited.
-
-### 10.11 Warranty and Service Management
-
-- `SVC-001`: Customers and vendor users shall create service requests.
-- `SVC-002`: Tickets shall include category, priority, description, installation, product/serial number, warranty status
-  and attachments.
-- `SVC-003`: Service Managers shall assign engineers and schedule visits.
-- `SVC-004`: Ticket states shall follow `OPEN`, `ASSIGNED`, `VISIT_SCHEDULED`, `IN_PROGRESS`, `RESOLVED`,
-  `CUSTOMER_CONFIRMED`, `CLOSED` or `CANCELLED`.
-- `SVC-005`: Reopening shall be supported according to tenant policy.
-- `SVC-006`: Service SLA targets shall be configurable by priority.
-- `SVC-007`: Closure shall preserve resolution notes, parts used, evidence and customer confirmation.
-
-### 10.12 Notification Management
-
-- `NOT-001`: The system shall generate notifications for configured domain events.
-- `NOT-002`: Channels shall include in-app and email, with pluggable SMS and WhatsApp adapters.
-- `NOT-003`: Templates shall be configurable per tenant while platform defaults remain available.
-- `NOT-004`: Notification processing shall be asynchronous where practical.
-- `NOT-005`: Delivery attempts, provider references, failures and retry counts shall be recorded.
-- `NOT-006`: Provider failures shall not roll back completed business transactions.
-
-### 10.13 CMS and Blog
-
-- `CMS-001`: Authorized users shall manage pages, banners, FAQs, testimonials and blogs.
-- `CMS-002`: Content lifecycle shall support `DRAFT`, `REVIEW`, `PUBLISHED` and `ARCHIVED`.
-- `CMS-003`: Only published content shall be publicly visible.
-- `CMS-004`: Content shall support SEO title, description, slug and social image.
-- `CMS-005`: Storefront content shall be tenant-scoped.
-
-### 10.14 Reporting and Dashboard
-
-- `RPT-001`: Vendor dashboards shall show tenant-scoped leads, quotations, orders, installations, tickets, stock,
-  revenue and outstanding payments.
-- `RPT-002`: Platform dashboards shall show vendor status, subscription usage and aggregate platform metrics.
-- `RPT-003`: Reports shall support date, status, branch, warehouse, employee and product filters as applicable.
-- `RPT-004`: Authorized users shall export CSV/XLSX/PDF according to report type.
-- `RPT-005`: Large exports shall execute asynchronously and expire after a configurable period.
-- `RPT-006`: Report and export authorization shall use the same tenant and permission rules as transactional APIs.
-
-### 10.15 Audit and Administration
-
-- `AUD-001`: Audit records shall capture tenant, actor, action, resource type, resource identifier, timestamp, outcome
-  and correlation identifier.
-- `AUD-002`: Sensitive updates shall include old and new values with secrets and payment credentials redacted.
-- `AUD-003`: Audit records shall be append-only for normal application users.
-- `AUD-004`: Authorized auditors shall filter audit records by tenant, actor, action, resource and date.
-- `AUD-005`: Platform support impersonation, if introduced, shall require justification, time-limited access and
-  prominent audit logging.
-
-## 11. Screen Catalogue
-
-### 11.1 Public screens
-
-| Screen                    | Primary capabilities                                                      |
-|---------------------------|---------------------------------------------------------------------------|
-| Home                      | Company information, packages, benefits, testimonials and calls to action |
-| Products                  | Search, filters, categories, pricing and product details                  |
-| Solar Packages            | Capacity, components, estimated generation, pricing and quotation request |
-| Solar Calculator          | Basic requirement/savings estimate with disclaimer                        |
-| Blog                      | Published articles and categories                                         |
-| About Us                  | Vendor/company information                                                |
-| Contact Us                | Contact details, map and enquiry form                                     |
-| Enquiry/Quotation Request | Customer and site requirement capture                                     |
-| Login/Register            | Customer authentication and verification                                  |
-| Legal Pages               | Privacy, terms, cancellation and refund policies                          |
-
-### 11.2 Customer portal screens
-
-- Dashboard
-- Profile and addresses
-- My enquiries
-- My quotations and quotation details
-- Quotation acceptance/rejection
-- My orders and timeline
-- My invoices and receipts
-- My payments
-- My installations and schedules
-- My solar systems and warranties
-- Service requests and service timeline
-- Documents
-- Notifications
-
-### 11.3 Vendor screens
-
-- Vendor dashboard
-- Leads pipeline and lead details
-- Customers and customer details
-- Site surveys and schedule
-- Quotations, revisions and PDF preview
-- Orders and order timeline
-- Products, categories and solar packages
-- Warehouses, stock and transactions
-- Installation calendar and job details
-- Invoices, payments and outstanding amounts
-- Service dashboard, tickets and visits
-- Team, users, roles and permissions
-- Reports and export center
-- Blog and CMS
-- Notification templates
-- Vendor settings, branding, numbering and taxes
-- Audit log
-
-### 11.4 Platform administration screens
-
-- Platform dashboard
-- Vendor list, onboarding and vendor details
-- Subscription plans and limits
-- Global templates and catalogue references
-- Platform users and support roles
-- Feature flags and configuration
-- Audit and security events
-- Notification provider configuration
-- Job and integration monitoring
-- System health and usage
-
-## 12. Core Workflows
-
-### 12.1 Enquiry to commissioning
-
-```text
-Public enquiry
-→ Lead created
-→ Sales assignment
-→ Customer contacted
-→ Site survey scheduled
-→ Survey completed
-→ Quotation created
-→ Approval if discount threshold exceeded
-→ Quotation sent
-→ Customer accepts
-→ Order created idempotently
-→ Payment recorded
-→ Inventory reserved
-→ Installation scheduled
-→ Installation completed
-→ Commissioning and customer sign-off
-→ Warranty activated
-→ Order closed
-```
-
-### 12.2 Quotation revision
-
-```text
-Draft quotation
-→ Calculate prices and taxes
-→ Internal approval when required
-→ Create immutable revision
-→ Generate PDF
-→ Send to customer
-→ Customer requests change
-→ Clone latest revision into new draft
-→ Approve and send new revision
-→ Previous revision remains available but cannot be accepted if superseded
-```
-
-### 12.3 Inventory reservation
-
-```text
-Order confirmed
-→ Validate available quantity
-→ Lock affected stock rows
-→ Create reservation transactions
-→ Update reserved and available balances
-→ Commit
-→ If installation/order is cancelled, create release transactions
-```
-
-### 12.4 Service request
-
-```text
-Customer creates ticket
-→ Warranty and priority evaluated
-→ Service Manager assigns engineer
-→ Visit scheduled
-→ Customer notified
-→ Engineer records diagnosis, parts and evidence
-→ Ticket resolved
-→ Customer confirms or ticket reopens
-→ Ticket closed
-```
-
-### 12.5 Vendor onboarding
-
-```text
-Platform Admin creates vendor
-→ Vendor is PENDING
-→ Documents and contact are verified
-→ Store slug and tenant settings created
-→ Initial Vendor Admin invited
-→ Subscription/limits assigned
-→ Vendor activated
-→ Vendor configures branding, users, products and packages
-```
-
-## 13. REST API Design
-
-### 13.1 Standards
-
-- Base path: `/api/v1`
-- JSON request and response bodies
-- OAuth2/JWT bearer authentication for protected APIs
-- UUID or ULID external identifiers to reduce enumeration risk
-- Pagination: `page`, `size`, `sort`
-- Filtering through explicit allow-listed query parameters
-- Request correlation header: `X-Correlation-ID`
-- Idempotency header for critical create operations: `Idempotency-Key`
-- Optimistic concurrency through `version` and optionally `If-Match`
-- UTC timestamps in ISO 8601 format
-- Standard error response using RFC 9457 Problem Details format
-
-Example error:
-
-```json
-{
-  "type": "https://api.saumyasolar.example/problems/invalid-status-transition",
-  "title": "Invalid order status transition",
-  "status": 409,
-  "detail": "Order cannot move from INSTALLED to DRAFT.",
-  "instance": "/api/v1/orders/01J.../status",
-  "code": "ORDER_INVALID_STATUS_TRANSITION",
-  "correlationId": "c2e7...",
-  "fieldErrors": []
-}
-```
-
-### 13.2 Authentication APIs
-
-| Method | Endpoint                | Purpose                                |
-|--------|-------------------------|----------------------------------------|
-| POST   | `/auth/register`        | Register customer                      |
-| POST   | `/auth/login`           | Authenticate user                      |
-| POST   | `/auth/refresh`         | Rotate HttpOnly refresh cookie; require CSRF double-submit header |
-| POST   | `/auth/logout`          | Revoke HttpOnly cookie session; require CSRF double-submit header |
-| POST   | `/auth/forgot-password` | Request reset                          |
-| POST   | `/auth/reset-password`  | Complete reset                         |
-| POST   | `/auth/verify-email`    | Verify email                           |
-| GET    | `/me`                   | Current user and effective permissions |
-
-Browser session contract:
-- Login, registration and MFA verification return a short-lived access token and a non-secret CSRF token; the refresh token is issued only as an HttpOnly, Secure, SameSite cookie scoped to /api/v1/auth.
-- The browser keeps the access token in memory and the CSRF token in session storage. Neither access nor refresh tokens are persisted in local storage.
-- Refresh and logout send the CSRF token in the X-CSRF-Token header; the server compares it with the CSRF cookie using constant-time comparison.
-- Cross-origin browser clients must use credentialed requests and an explicit CORS_ORIGINS allowlist. SameSite=None requires Secure=true.
-
-
-### 13.3 Vendor and user APIs
-
-| Method    | Endpoint                                | Purpose                  |
-|-----------|-----------------------------------------|--------------------------|
-| GET/POST  | `/platform/vendors`                     | List/create vendors      |
-| GET/PATCH | `/platform/vendors/{vendorId}`          | View/update vendor       |
-| POST      | `/platform/vendors/{vendorId}/activate` | Activate vendor          |
-| POST      | `/platform/vendors/{vendorId}/suspend`  | Suspend vendor           |
-| GET/PATCH | `/vendor/profile`                       | Current vendor profile   |
-| GET/POST  | `/users`                                | List/invite tenant users |
-| GET/PATCH | `/users/{userId}`                       | View/update tenant user  |
-| PATCH     | `/users/{userId}/enabled`               | Activate/disable tenant user |
-| PATCH     | `/users/{userId}/role`                  | Assign a tenant role     |
-| GET       | `/permissions`                          | List assignable vendor permissions |
-| GET/POST  | `/roles`                                | List/create custom roles |
-| PATCH     | `/roles/{roleId}`                       | Update custom role permissions |
-| DELETE    | `/roles/{roleId}`                       | Delete an unused custom role |
-
-### 13.4 Catalogue and package APIs
-
-| Method    | Endpoint                              | Purpose              |
-|-----------|---------------------------------------|----------------------|
-| GET/POST  | `/products`                           | List/create products |
-| GET/PATCH | `/products/{productId}`               | View/update product  |
-| POST      | `/products/{productId}/archive`       | Archive product      |
-| GET/POST  | `/product-categories`                 | Manage categories    |
-| GET/POST  | `/solar-packages`                     | List/create packages |
-| GET/PATCH | `/solar-packages/{packageId}`         | View/update package  |
-| POST      | `/solar-packages/{packageId}/publish` | Publish package      |
-| GET       | `/public/stores/{storeSlug}/products` | Public products      |
-| GET       | `/public/stores/{storeSlug}/packages` | Public packages      |
-
-### 13.5 CRM, survey and quotation APIs
-
-| Method    | Endpoint                                     | Purpose                    |
-|-----------|----------------------------------------------|----------------------------|
-| POST      | `/public/stores/{storeSlug}/enquiries`       | Submit public enquiry      |
-| GET/POST  | `/leads`                                     | List/create leads          |
-| GET/PATCH | `/leads/{leadId}`                            | View/update lead           |
-| POST      | `/leads/{leadId}/assign`                     | Assign lead                |
-| POST      | `/leads/{leadId}/transition`                 | Change lead stage          |
-| GET/POST  | `/site-surveys`                              | List/create surveys        |
-| POST      | `/site-surveys/{surveyId}/complete`          | Complete survey            |
-| GET/POST  | `/quotations`                                | List/create quotation      |
-| GET/PATCH | `/quotations/{quotationId}`                  | View/update draft          |
-| POST      | `/quotations/{quotationId}/submit-approval`  | Request approval           |
-| POST      | `/quotations/{quotationId}/send`             | Freeze revision and send   |
-| POST      | `/customer/quotations/{quotationId}/accept`  | Customer accepts           |
-| POST      | `/customer/quotations/{quotationId}/reject`  | Customer rejects           |
-| POST      | `/quotations/{quotationId}/convert-to-order` | Convert accepted quotation |
-
-### 13.6 Order, inventory and installation APIs
-
-| Method    | Endpoint                                     | Purpose                      |
-|-----------|----------------------------------------------|------------------------------|
-| GET/POST  | `/orders`                                    | List/create orders           |
-| GET/PATCH | `/orders/{orderId}`                          | View/update permitted fields |
-| POST      | `/orders/{orderId}/transition`               | Change order status          |
-| POST      | `/orders/{orderId}/cancel`                   | Cancel order                 |
-| GET       | `/orders/{orderId}/history`                  | Order timeline               |
-| GET/POST  | `/warehouses`                                | Manage warehouses            |
-| GET       | `/inventory/items`                           | View stock balances          |
-| POST      | `/inventory/receipts`                        | Receive stock                |
-| POST      | `/inventory/reservations`                    | Reserve stock                |
-| POST      | `/inventory/transfers`                       | Transfer stock               |
-| POST      | `/inventory/adjustments`                     | Adjust stock with reason     |
-| GET/POST  | `/installations`                             | List/create jobs             |
-| POST      | `/installations/{installationId}/assign`     | Assign team                  |
-| POST      | `/installations/{installationId}/reschedule` | Reschedule job               |
-| POST      | `/installations/{installationId}/complete`   | Complete checklist           |
-| POST      | `/installations/{installationId}/commission` | Commission system            |
-
-### 13.7 Invoice, payment and service APIs
-
-| Method    | Endpoint                               | Purpose                   |
-|-----------|----------------------------------------|---------------------------|
-| GET/POST  | `/invoices`                            | List/create invoices      |
-| GET       | `/invoices/{invoiceId}/pdf`            | Download invoice          |
-| POST      | `/invoices/{invoiceId}/send`           | Send invoice              |
-| POST      | `/invoices/{invoiceId}/void`           | Void invoice              |
-| GET/POST  | `/payments`                            | List/record payments      |
-| POST      | `/payments/{paymentId}/refund`         | Record/process refund     |
-| POST      | `/payment-webhooks/{provider}`         | Receive provider callback |
-| GET/POST  | `/service-requests`                    | List/create tickets       |
-| GET/PATCH | `/service-requests/{ticketId}`         | View/update ticket        |
-| POST      | `/service-requests/{ticketId}/assign`  | Assign engineer           |
-| POST      | `/service-requests/{ticketId}/visits`  | Schedule visit            |
-| POST      | `/service-requests/{ticketId}/resolve` | Resolve ticket            |
-| POST      | `/service-requests/{ticketId}/close`   | Close ticket              |
-
-### 13.8 Reporting, CMS and audit APIs
-
-| Method   | Endpoint                           | Purpose                         |
-|----------|------------------------------------|---------------------------------|
-| GET      | `/dashboard/vendor`                | Vendor metrics                  |
-| GET      | `/platform/dashboard`              | Platform metrics                |
-| GET      | `/reports/sales`                   | Sales report                    |
-| GET      | `/reports/inventory`               | Inventory report                |
-| POST     | `/exports`                         | Start asynchronous export       |
-| GET      | `/exports/{exportId}`              | Export status/download link     |
-| GET/POST | `/cms/blogs`                       | Manage blogs                    |
-| POST     | `/cms/blogs/{blogId}/publish`      | Publish blog                    |
-| GET      | `/public/stores/{storeSlug}/blogs` | Published blogs                 |
-| GET      | `/audit-logs`                      | Search authorized audit records |
-
-## 14. Database Design
-
-### 14.1 Conventions
-
-- Use `BINARY(16)` UUID or a consistent sortable identifier strategy for primary keys.
-- Every tenant-owned table includes `tenant_id`, `created_at`, `created_by`, `updated_at`, `updated_by` and `version`
-  where appropriate.
-- Store timestamps in UTC.
-- Monetary values use `DECIMAL(19,4)` and an ISO currency code, not floating-point types.
-- Use soft deletion only where business recovery or traceability requires it; financial and transaction records must not
-  be physically deleted through normal APIs.
-- Encrypt or tokenize sensitive values where warranted.
-- Use normalized transactional tables; reporting projections may be added later.
-
-### 14.2 Principal entities
-
-| Entity                   | Key fields and relationships                                            |
-|--------------------------|-------------------------------------------------------------------------|
-| `tenant`                 | `id`, legal/display name, slug, tax ID, status, plan, locale, time zone |
-| `user_account`           | `id`, `tenant_id`, email, phone, password hash, status, last login      |
-| `role`                   | `id`, `tenant_id`, name, system flag                                    |
-| `permission`             | Global permission code catalogue                                        |
-| `user_role`              | User-to-role mapping scoped to tenant                                   |
-| `role_permission`        | Role-to-permission mapping                                              |
-| `customer`               | `id`, `tenant_id`, account link, name, contact, status                  |
-| `address`                | Owner type/id, tenant, address fields and coordinates                   |
-| `lead`                   | Customer/prospect, source, stage, priority, assignee, follow-up         |
-| `lead_activity`          | Calls, notes, emails, tasks and stage events                            |
-| `site_survey`            | Lead/customer, site, survey data, schedule and result                   |
-| `product_category`       | Tenant category hierarchy                                               |
-| `product`                | SKU, category, manufacturer, model, pricing, tax and status             |
-| `product_attribute`      | Flexible product specification key/value                                |
-| `solar_package`          | Capacity, type, pricing, generation, warranty and status                |
-| `package_item`           | Package-to-product relationship, quantity and optionality               |
-| `quotation`              | Customer, survey, revision, status, validity and totals                 |
-| `quotation_item`         | Product/package/custom line and calculated values                       |
-| `order_header`           | Customer, quotation, status, totals and assignments                     |
-| `order_item`             | Snapshot of ordered items and prices                                    |
-| `order_status_history`   | Immutable status changes                                                |
-| `warehouse`              | Tenant, branch, name and address                                        |
-| `inventory_balance`      | Warehouse/product, on-hand, reserved, damaged and version               |
-| `inventory_transaction`  | Immutable movement type, quantity, reference and reason                 |
-| `installation`           | Order, schedule, team, site, status and commissioning                   |
-| `installation_component` | Product/serial numbers installed                                        |
-| `installation_checklist` | Checklist item, expected response and completion                        |
-| `warranty`               | Customer asset/component, start/end, coverage and status                |
-| `invoice`                | Order, number, status, tax totals, issue/due dates                      |
-| `invoice_item`           | Item snapshot and financial values                                      |
-| `payment`                | Invoice/order, amount, method, provider reference and status            |
-| `service_request`        | Customer asset, category, priority, assignee and status                 |
-| `service_visit`          | Ticket, engineer, schedule, outcome and parts used                      |
-| `notification`           | Event, recipient, channel, status and attempts                          |
-| `document`               | Tenant, owner, object key, MIME type, checksum and classification       |
-| `blog_post`              | Tenant, slug, content, SEO data and publication status                  |
-| `audit_log`              | Tenant, actor, action, resource, values, IP, result and correlation ID  |
-
-### 14.3 Essential constraints and indexes
-
-```sql
-UNIQUE tenant(slug)
-UNIQUE user_account(tenant_id, email)
-UNIQUE product(tenant_id, sku)
-UNIQUE solar_package(tenant_id, code)
-UNIQUE quotation(tenant_id, quotation_number, revision)
-UNIQUE order_header(tenant_id, order_number)
-UNIQUE warehouse(tenant_id, code)
-UNIQUE inventory_balance(tenant_id, warehouse_id, product_id)
-UNIQUE invoice(tenant_id, invoice_number)
-UNIQUE payment(tenant_id, provider, provider_reference)
-UNIQUE blog_post(tenant_id, slug)
-```
-
-Recommended indexes include:
-
-- `(tenant_id, status, created_at)` on leads, quotations, orders, installations and service requests.
-- `(tenant_id, assigned_user_id, status)` on leads and service requests.
-- `(tenant_id, customer_id, created_at)` on quotations, orders and invoices.
-- `(tenant_id, product_id, warehouse_id)` on inventory tables.
-- `(tenant_id, actor_user_id, occurred_at)` and `(tenant_id, resource_type, resource_id)` on audit logs.
-
-### 14.4 Relationship overview
-
-```text
-Tenant 1 ── * User ── * Role ── * Permission
-Tenant 1 ── * Customer 1 ── * Lead 1 ── * SiteSurvey
-Customer 1 ── * Quotation 1 ── * QuotationItem
-Quotation 0..1 ── 1 Order 1 ── * OrderItem
-Order 1 ── * Invoice 1 ── * Payment
-Order 1 ── 0..1 Installation ── * InstalledComponent
-Product 1 ── * PackageItem * ── 1 SolarPackage
-Warehouse 1 ── * InventoryBalance ── 1 Product
-ServiceRequest * ── 1 Customer/Installation
-ServiceRequest 1 ── * ServiceVisit
-```
-
-## 15. Security Requirements
-
-### 15.1 Authentication and session security
-
-- Use Spring Security and a standards-based OAuth2/OIDC-compatible design.
-- Hash passwords with Argon2id or BCrypt using a reviewed work factor.
-- Do not store access or refresh tokens in browser local storage when a secure HttpOnly, Secure and SameSite cookie
-  model is feasible.
-- Rotate refresh tokens and revoke the token family after reuse detection.
-- Require MFA for Platform Super Admin and make it configurable for vendor privileged roles.
-- Re-authenticate for high-risk operations such as role changes, refunds and sensitive profile updates where
-  appropriate.
-
-### 15.2 Authorization
-
-- Enforce permission and tenant checks at controller/service boundaries and repository scope.
-- Apply deny-by-default policies.
-- Prevent insecure direct object references by validating ownership of every resource identifier.
-- Do not expose internal numeric sequences where avoidable.
-- Test all privileged endpoints with missing, incorrect and cross-tenant identities.
-
-### 15.3 Application and API security
-
-- Validate requests using allow lists and Bean Validation.
-- Use parameterized ORM queries and prohibit string-built SQL.
-- Apply CSRF protection when cookie-based authentication is used.
-- Configure strict CORS allow lists per environment.
-- Apply rate limits to login, password reset, public enquiry, exports and webhook endpoints.
-- Set security headers including CSP, HSTS, X-Content-Type-Options and frame restrictions.
-- Return generic errors without stack traces or internal identifiers.
-- Use idempotency and signature verification for external callbacks.
-
-### 15.4 File-upload security
-
-- Allow-list file types, extensions and MIME signatures.
-- Enforce size limits and tenant quotas.
-- Rename files using generated object keys.
-- Store outside the application web root.
-- Scan uploaded content for malware before making it available.
-- Use short-lived signed URLs for authorized downloads.
-- Record checksum, uploader, tenant, classification and scan status.
-
-### 15.5 Data protection
-
-- Use TLS 1.2 or later in transit.
-- Enable database and object-storage encryption at rest.
-- Store secrets in a managed secret service, never in Git or application logs.
-- Mask contact, tax and financial information in logs.
-- Define retention and deletion policies for customer data, documents and audit logs.
-- Provide controlled data export/deletion workflows subject to legal and financial retention obligations.
-
-### 15.6 Audit and monitoring
-
-Security events must include:
-
-- Successful and failed authentication
-- Password reset and MFA changes
-- User activation, disabling and role changes
-- Vendor activation and suspension
-- Cross-tenant access denials
-- Stock adjustments
-- Quotation discount approvals
-- Order cancellation
-- Invoice void and payment refund
-- Export generation
-- Administrative configuration changes
-
-## 16. Non-Functional Requirements
-
-### 16.1 Performance
-
-- `NFR-PERF-001`: 95% of normal read APIs shall respond within 500 ms under the agreed baseline load, excluding large
-  reports and external-provider latency.
-- `NFR-PERF-002`: 95% of normal write APIs shall respond within 1 second under baseline load.
-- `NFR-PERF-003`: Public pages shall target a Largest Contentful Paint below 2.5 seconds on representative mobile
-  networks after production optimization.
-- `NFR-PERF-004`: Lists shall use server-side pagination with a default size of 20 and configurable maximum of 100.
-- `NFR-PERF-005`: Reports exceeding 30 seconds shall execute asynchronously.
-
-### 16.2 Availability and recovery
-
-- `NFR-AVL-001`: Initial production availability target shall be 99.9% monthly, excluding approved maintenance.
-- `NFR-AVL-002`: Production shall use at least two stateless API instances where infrastructure permits.
-- `NFR-AVL-003`: Target recovery point objective shall be 15 minutes when supported by the managed database.
-- `NFR-AVL-004`: Target recovery time objective shall be 4 hours for the initial commercial release.
-- `NFR-AVL-005`: Backup restoration shall be tested at least quarterly.
-
-### 16.3 Scalability
-
-- The service must remain stateless at the API tier.
-- Horizontal application scaling must not require code changes.
-- Cache, queue and scheduler behavior must work correctly with multiple instances.
-- Tenant-aware indexes must support growth without full-table scans.
-- Initial capacity tests should cover at least 100 active tenants, 1,000 concurrent user sessions and 100 API requests
-  per second, then be adjusted using commercial forecasts.
-
-### 16.4 Maintainability and quality
-
-- Use Flyway or Liquibase for all schema changes.
-- Enforce module-boundary tests and static analysis.
-- Critical domain services require unit tests.
-- Tenant isolation, authorization and workflows require integration tests.
-- APIs require OpenAPI documentation and contract tests.
-- A release must not contain unresolved critical or high-severity vulnerabilities without documented risk acceptance.
-
-### 16.5 Observability
-
-- Use structured JSON logs with timestamp, level, service, environment, tenant where allowed, correlation ID and trace
-  ID.
-- Expose liveness, readiness and dependency health endpoints through Spring Boot Actuator with restricted detail.
-- Capture metrics for request latency, error rate, JVM, database pool, jobs, notifications and business workflows.
-- Use distributed tracing for external calls and asynchronous processing where supported.
-- Alerts should cover elevated 5xx errors, login abuse, database saturation, provider failure, pending background-job backlog and backup
-  failure.
-
-### 16.6 Accessibility and usability
-
-- Target WCAG 2.2 AA for public and core transactional screens.
-- Support keyboard navigation, labels, focus visibility and sufficient color contrast.
-- Use responsive layouts for desktop, tablet and mobile.
-- Confirm destructive actions and clearly display validation errors.
-
-## 17. Integration Requirements
-
-Use ports/adapters so providers can be changed without altering domain logic.
-
-| Integration     | Interface responsibility                                           |
-|-----------------|--------------------------------------------------------------------|
-| Email           | Send templated emails and return provider message ID/status        |
-| SMS             | Send transactional SMS and capture delivery status                 |
-| WhatsApp        | Send approved templates and capture provider status                |
-| Payment gateway | Create payment request, verify callback signature and query status |
-| Object storage  | Upload, scan-state update, signed download and delete/retain       |
-| Maps/geocoding  | Site coordinates and address assistance                            |
-| Accounting      | Future invoice/customer/payment synchronization                    |
-
-External calls must have timeouts, bounded retries, circuit-breaking where appropriate and dead-letter or manual-retry
-handling.
-
-## 18. Background Jobs and Events
-
-Recommended domain events:
-
-```text
-LeadCreated
-QuotationSent
-QuotationAccepted
-OrderCreated
-OrderStatusChanged
-InventoryReserved
-PaymentRecorded
-InstallationScheduled
-InstallationCommissioned
-WarrantyActivated
-ServiceRequestCreated
-ServiceRequestResolved
-InvoiceIssued
-```
-
-Recommended background jobs:
-
-- Quotation expiry
-- Notification delivery and retry
-- Low-stock evaluation
-- SLA breach evaluation
-- Asynchronous report/export generation
-- Document cleanup based on retention
-- Payment reconciliation
-- Stale session/token cleanup
-
-Every job must be idempotent, tenant-aware and observable.
-
-## 19. Validation and Business Rules
-
-- Email addresses must be normalized and validated.
-- Indian phone numbers and PIN codes should support configurable validation rather than irreversible formatting
-  assumptions.
-- Product SKU must be unique per tenant.
-- Package component quantity must be positive.
-- Discount cannot exceed configured limits without approval.
-- Quotation acceptance is allowed only for the latest sent, non-expired revision.
-- Order line prices are snapshots and must not change when catalogue prices change.
-- Stock reservation cannot exceed available stock unless backorders are enabled.
-- Invoice and payment totals use decimal arithmetic and explicit rounding rules.
-- Installation commissioning requires mandatory checklist items and serial-number validation when applicable.
-- Service closure requires resolution details.
-- All destructive or financial actions require a reason where specified.
-
-## 20. Acceptance Criteria
-
-### 20.1 Tenant isolation
-
-```gherkin
-Scenario: Vendor cannot access another vendor's order
-  Given Vendor A and Vendor B have independent tenants
-  And a user is authenticated under Vendor A
-  When the user requests an order identifier belonging to Vendor B
-  Then the API returns 404 or an approved non-disclosing response
-  And no Vendor B data is returned
-  And the denied attempt is recorded where security policy requires it
-```
-
-```gherkin
-Scenario: Tenant isolation applies to reports
-  Given Vendor A has 10 orders and Vendor B has 20 orders
-  When Vendor A requests the order dashboard and export
-  Then only Vendor A's 10 orders are counted or exported
-```
-
-### 20.2 Roles and permissions
-
-```gherkin
-Scenario: Inventory Manager cannot refund a payment
-  Given a user has only the INVENTORY_MANAGER role
-  When the user calls the payment refund API
-  Then the API returns 403
-  And no payment record is changed
-```
-
-```gherkin
-Scenario: Vendor Admin cannot grant platform permissions
-  Given a Vendor Admin creates a custom role
-  When the request includes PLATFORM_SUPER_ADMIN permission
-  Then the request is rejected
-  And the attempted privilege escalation is audited
-```
-
-### 20.3 Quotation and order
-
-```gherkin
-Scenario: Accepted quotation converts to one order
-  Given the latest quotation revision is SENT, valid and accepted
-  When the conversion endpoint is called twice with the same idempotency key
-  Then exactly one order is created
-  And both successful responses identify the same order
-```
-
-```gherkin
-Scenario: Expired quotation cannot be accepted
-  Given a quotation validity date has passed
-  When the customer attempts acceptance
-  Then the API returns 409
-  And no order is created
-```
-
-### 20.4 Inventory
-
-```gherkin
-Scenario: Concurrent orders cannot oversell stock
-  Given five units are available
-  When two concurrent requests each reserve four units
-  Then only one reservation succeeds
-  And the final available quantity is never negative
-```
-
-```gherkin
-Scenario: Inventory correction is traceable
-  Given an authorized Inventory Manager adjusts stock
-  When the adjustment is submitted
-  Then a reason is mandatory
-  And an immutable inventory transaction and audit entry are created
-```
-
-### 20.5 Installation
-
-```gherkin
-Scenario: Installation requires completion evidence
-  Given an installation has mandatory checklist items
-  When an engineer attempts completion without required responses or evidence
-  Then the API rejects completion with field-level errors
-```
-
-### 20.6 Service
-
-```gherkin
-Scenario: Customer accesses only own ticket
-  Given two customers have separate tickets under the same vendor
-  When Customer A requests Customer B's ticket
-  Then no ticket details are disclosed
-```
-
-### 20.7 Security
-
-```gherkin
-Scenario: Uploaded executable is rejected
-  Given an authenticated user submits a prohibited executable file
-  When the upload is validated
-  Then the file is rejected
-  And it is not published or made downloadable
-```
-
-```gherkin
-Scenario: Refresh token reuse is detected
-  Given a refresh token has already been rotated
-  When the old refresh token is reused
-  Then the token family is revoked
-  And the security event is recorded
-```
-
-### 20.8 Performance and availability
-
-- A representative baseline load test demonstrates the agreed p95 API targets with an error rate below 1%, excluding
-  deliberately rejected requests.
-- Backup restoration is demonstrated in a non-production environment.
-- Readiness fails when the application cannot safely accept traffic.
-- One application instance can be removed without losing authenticated business transactions when another healthy
-  instance is available.
-
-## 21. Testing Strategy
-
-### 21.1 Unit tests
-
-- Pricing and tax calculation
-- Discount approval rules
-- Order state machine
-- Inventory balance calculations
-- Warranty dates
-- SLA calculations
-- Permission evaluation
-
-### 21.2 Integration tests
-
-Use Testcontainers for MySQL and the actual persistence mappings.
-
-- Repository tenant filtering
-- Optimistic/pessimistic concurrency
-- Unique constraints
-- Transaction rollback
-- Idempotency
-- Database migrations
-- REST authentication and authorization
-
-### 21.3 End-to-end tests
-
-Use Playwright or Cypress for:
-
-- Public enquiry to lead
-- Quotation acceptance to order
-- Customer order tracking
-- Vendor inventory reservation
-- Installation completion
-- Customer service request
-- Vendor role restrictions
-
-### 21.4 Security tests
-
-- SAST and dependency scanning in CI
-- Secret scanning
-- Container image scanning
-- DAST against staging
-- OWASP access-control tests
-- Cross-tenant penetration tests
-- File-upload tests
-- Rate-limit and brute-force tests
-
-### 21.5 Release gates
-
-A production release requires:
-
-- Successful automated tests
-- Successful migration test against a production-like database copy
-- No unresolved critical security findings
-- Reviewed backup and rollback procedure
-- Updated OpenAPI specification
-- Smoke tests in staging
-- Product-owner acceptance of committed criteria
-
-## 22. DevOps and Environment Requirements
-
-- Source control with protected main/release branches and mandatory pull-request review.
-- CI stages: compile, unit test, static analysis, integration test, frontend test, dependency scan, image build, image
-  scan and artifact publication.
-- CD stages: development, test, staging, approval and production.
-- Build immutable versioned artifacts once and promote the same artifacts through environments.
-- Use environment-specific configuration and managed secrets.
-- Apply zero-downtime-compatible database migrations using expand-and-contract techniques.
-- Define documented rollback for application and database changes.
-- Create production runbooks for deployment, database recovery, provider outage, security incident and tenant-access
-  investigation.
-
-## 23. Data Migration and Seed Data
-
-- Migrations shall be repeatable, version-controlled and forward compatible.
-- Production seed data shall include only required global permissions, system roles, statuses and configuration.
-- Demo tenants and test users must never be included in production.
-- Product/customer imports shall provide validation preview, row-level errors and tenant-scoped processing.
-- Imports must be idempotent or support safely identifiable duplicate handling.
-
-## 24. MVP Delivery Plan
-
-### Phase 1: Commercial MVP
-
-Target modules:
-
-1. Tenant and vendor management
-2. Authentication, users, roles and permissions
-3. Customer and lead management
-4. Product and solar-package management
-5. Site survey basics
-6. Quotations and branded PDF
-7. Orders and status timeline
-8. Basic inventory and reservations
-9. Invoice generation and manual payment records
-10. Customer portal
-11. Email and in-app notifications
-12. Vendor dashboard and basic reports
-13. Audit logs and operational monitoring
-
-Suggested sequence: six to eight two-week sprints for a focused team, followed by hardening and user acceptance. Actual
-duration depends on team size, design maturity, integrations and compliance review.
-
-### Phase 2: Operations
-
-- Multiple warehouses and transfers
-- Advanced installation planning
-- Warranty and AMC
-- Full service-management SLA
-- SMS and WhatsApp adapters
-- Payment gateway
-- Advanced dashboards and exports
-- Branch management
-
-### Phase 3: Enterprise SaaS
-
-- Subscription billing and metering
-- White-label domains and advanced branding
-- Approval workflow designer
-- Accounting integrations
-- Mobile/PWA enhancements
-- IoT monitoring
-- Advanced analytics
-- Selective service decomposition based on measured scale
-
-## 25. Definition of Done
+# Saumya Solar Energy Marketplace SaaS
+
+## Software Requirements Specification and High-Level Design — Version 2.0
+
+| Attribute | Value |
+|---|---|
+| Product | Multi-tenant solar vendor marketplace and SaaS ERP |
+| Document type | SRS and HLD |
+| Version | 2.0 |
+| Status | Architecture baseline for Commercial MVP |
+| Backend | Java 21, Spring Boot 3.5, Maven |
+| Frontend | React 19, TypeScript, Vite |
+| Database | MySQL 8.4, one shared database and shared schema |
+| Migrations | Flyway |
+| Architecture | Modular monolith |
+| API | REST, OpenAPI 3, RFC 9457 Problem Details |
+| Local deployment | Docker Compose |
+
+## 1. Purpose and authority
+
+This document defines the functional architecture, non-functional requirements, data ownership, security model, APIs, workflows, integrations, acceptance criteria and technology decisions for a multi-vendor solar marketplace SaaS.
+
+This Version 2.0 supersedes conflicting statements in Version 1.0. The companion file saumya-solar-energy-solution-requirements.md is the business requirements document. These two documents must be changed together if a foundational product decision changes.
+
+## 2. Product vision and binding decisions
+
+One SaaS platform → many independent vendor tenants → vendor employees and customer relationships → global customers who transact separately with each vendor.
+
+Binding decisions:
+
+- Platform Super Admin is the SaaS operator and does not own commercial products, catalogue, inventory, customers, orders or services.
+- Saumya Solar must be onboarded as an ordinary tenant to sell; no implicit platform catalogue or platform vendor.
+- One MySQL 8.4 database and one shared schema with tenant_id on every tenant-owned record.
+- Application-level tenant isolation is mandatory; composite database constraints provide a second line of defense. MySQL does not provide PostgreSQL-style native row-level security policies.
+- One global customer identity and one global customer profile per customer. Tenant-specific relationships and private CRM data are separate tenant-owned records.
+- Vendor users see only their own tenant's relationships and transactions. A customer can see only their own transactions from multiple vendors.
+- One shared platform domain with path-based vendor storefronts. No per-vendor subdomains or custom domains in the MVP.
+- A cart contains exactly one vendor's items. A checkout creates one vendor-owned order.
+- Customer purchase funds go directly to the selected vendor's merchant account. The platform does not collect or pay out customer purchase money.
+- Vendor SaaS subscription charges are separate from customer purchase payments and are collected for the platform's account.
+- Mock payment and SMS/WhatsApp adapters are feature-flagged for non-production only. Production must fail startup or deployment validation if a mock provider is selected.
+- Modular monolith; do not split into microservices for the Commercial MVP.
+
+## 3. Scope and exclusions
+
+### 3.1 Commercial MVP scope
+
+- Platform and vendor identity, vendor lifecycle and tenant membership.
+- Global customer identity and global customer portal.
+- Vendor directory and storefronts on one common domain.
+- Vendor catalogue, product, solar-package and pricing management.
+- CRM, enquiry, leads, customer relationships, private notes and quotations.
+- Single-vendor cart, checkout and order management.
+- Inventory availability/reservation sufficient for checkout.
+- Vendor-direct customer payment through a mock adapter in local/test environments, behind a feature flag.
+- Vendor invoice and payment records.
+- Platform subscription plans, tenant subscriptions, subscription invoices and separate subscription payment records.
+- Vendor Admin, vendor employee RBAC, platform administration and audit.
+- Email through Spring Mail (Mailpit locally).
+- Mock SMS/WhatsApp adapters behind explicit flags.
+- MinIO local object storage behind S3-compatible storage interface.
+- Redis for cache and distributed rate limiting.
+- Docker Compose local deployment, migrations, tests and observability.
+
+### 3.2 Operational modules
+
+The domain model and interfaces anticipate branches, multiple warehouses, shipping, installation, warranty, service tickets, returns, credit notes, refunds and advanced reports. Each is released only when complete acceptance criteria and integrated tests exist.
+
+### 3.3 Out of scope
+
+- Platform-owned commercial storefront or catalogue.
+- Platform custody, pooling, splitting or payout of customer purchase funds.
+- Vendor subdomains and custom domains.
+- Multi-vendor cart or one order containing multiple vendors.
+- Native mobile applications and microservice decomposition.
+- A production payment gateway integration until provider and merchant-account approval is complete.
+- Real SMS/WhatsApp provider delivery until approved provider adapter is implemented and enabled.
+
+## 4. Stakeholders and trust boundaries
+
+| Actor | Scope | Permitted responsibility |
+|---|---|---|
+| Platform Super Admin | Platform | Tenant lifecycle, subscriptions, platform configuration, platform analytics/audit |
+| Platform Support | Platform, restricted | Time-limited support access with purpose and audit |
+| Vendor Admin | One authorized tenant | Vendor operations, employees, roles, catalogue, CRM and finance |
+| Vendor Employee | One authorized tenant | Permission- and assignment-scoped work |
+| Global Customer | Own identity | Marketplace browsing and own cross-vendor transactions |
+| Payment provider | Vendor merchant context or platform subscription context | External payment execution and verified status events |
+| Messaging provider | Tenant/template context | Delivery of approved messages |
+
+The platform is a service provider, not a vendor. Platform administrators must not inherit vendor permissions. A platform administrator who is also a vendor user must use a separate vendor tenant membership and commercial context.
+
+## 5. Architecture principles
+
+1. Deny by default and enforce permissions in backend services.
+2. Resolve tenant scope from trusted authenticated identity plus server-side membership, never an untrusted tenant_id.
+3. Separate global identity from tenant membership and tenant customer relationships.
+4. Keep global identity data minimal; do not expose global customer history to vendors.
+5. Make tenant ownership explicit in entities, keys, queries, events, cache keys, files and exports.
+6. Keep customer purchase payments separate from platform subscription billing.
+7. Use provider adapters and fail closed when payment provider configuration is incomplete.
+8. Use transactional boundaries, idempotency and outbox/inbox patterns for external side effects.
+9. Treat platform audit and vendor audit as different access scopes.
+10. Maintain a modular monolith with module-owned domain models and application services.
+
+## 6. High-level logical architecture
+
+~~~mermaid
+flowchart TB
+  C[Global Customer] --> WEB[React 19 Marketplace<br/>Single Shared Domain]
+  VA[Vendor Admin / Employee] --> WEB
+  PA[Platform Super Admin] --> WEB
+  WEB --> API[Spring Boot 3.5 REST API]
+  API --> IAM[Identity and Authorization]
+  API --> TEN[Tenant Context and Membership]
+  API --> MOD[Modular Monolith Modules]
+  MOD --> DB[(MySQL 8.4<br/>Shared Schema + tenant_id)]
+  MOD --> REDIS[(Redis)]
+  MOD --> OBJ[Object Storage Port]
+  OBJ --> MINIO[MinIO Local / S3 Compatible]
+  MOD --> MAIL[Spring Mail]
+  MAIL --> MP[Mailpit Local]
+  MOD --> MSG[Messaging Adapter]
+  MOD --> PAY[Vendor Payment Adapter]
+  MOD --> SUBPAY[Platform Subscription Payment Adapter]
+  MSG --> MOCKMSG[Flagged Mock SMS/WhatsApp]
+  PAY --> MOCKPAY[Flagged Mock Payment]
+  PAY --> VG[Vendor Merchant Account]
+  SUBPAY --> PLATFORM[Platform Merchant Account]
+  MOD --> OBS[Actuator / Micrometer]
+  OBS --> PROM[Prometheus]
+~~~
+
+### 6.1 Deployment topology
+
+- React static assets served through the common platform domain.
+- API path under the same site/origin where feasible; TLS terminated at reverse proxy/load balancer.
+- Two or more stateless API instances in production when infrastructure permits.
+- Managed MySQL 8.4 with automated backup, point-in-time recovery, encryption and tested restore.
+- Redis for distributed rate limits, cache and coordination; never the source of truth for tenant authorization.
+- MinIO for local development; S3-compatible storage adapter for production.
+- Mailpit for local email capture; production email credentials via secret management.
+- Prometheus scrapes Actuator/Micrometer metrics.
+- Docker Compose provisions local API, web, MySQL, Redis, MinIO, Mailpit and Prometheus services.
+- Production secrets are injected through managed secret storage, never committed to Git.
+
+### 6.2 Modular monolith modules
+
+Suggested backend modules:
+
+- identity
+- platform
+- tenant
+- membership
+- subscription
+- customer
+- vendor-customer
+- catalog
+- pricing
+- cart
+- checkout
+- order
+- inventory
+- quotation
+- crm
+- invoice
+- vendor-payment
+- subscription-payment
+- shipment
+- returns
+- installation
+- warranty
+- service
+- notification
+- document
+- reporting
+- audit
+- integration
+
+Each module owns its persistence and application-service boundary. Cross-module interaction uses public application services or domain events; direct repository coupling is prohibited except for an explicitly documented shared-kernel dependency.
+
+## 7. Shared domain, domain routing and tenant resolution
+
+### 7.1 One common domain
+
+Example route design:
+
+- / — marketplace landing page
+- /vendors — vendor directory
+- /vendors/{vendorSlug} — storefront
+- /vendors/{vendorSlug}/products — public vendor catalogue
+- /vendors/{vendorSlug}/products/{productSlug} — product detail
+- /customer/* — global customer portal
+- /vendor/* — authenticated vendor workspace
+- /platform/* — authenticated platform administration
+- /api/v1/* — REST APIs
+
+No vendor subdomains or custom vendor domains are supported in this MVP.
+
+### 7.2 Authenticated tenant resolution
+
+1. Validate the JWT access token and token/session state.
+2. Resolve the global user identity.
+3. For vendor operations, resolve the active tenant membership server-side and verify its status.
+4. Build an immutable request-scoped tenant context containing tenant ID, user ID, membership ID, roles and permissions.
+5. Require tenant context for every tenant-owned read/write.
+6. Verify target resource ownership before returning or mutating it.
+7. Clear request/thread context reliably after request completion.
+8. Never accept tenant_id from a request body, query parameter, header or path as an authorization source.
+
+If an employee belongs to more than one tenant, the server may issue a tenant-scoped access context only after validating a membership selection against persisted memberships. Customers do not select an active vendor tenant for their global portal; customer access is scoped by customer identity plus each order's tenant-owned resource policy.
+
+For public storefront reads, resolve vendorSlug to an ACTIVE tenant. This resolution allows only published public data; it does not grant vendor administration or access to private records.
+
+### 7.3 Tenant lifecycle gate
+
+A vendor operation is allowed only when:
+- Tenant lifecycle state permits the action.
+- Subscription status and entitlement policy permits the action.
+- Membership is active.
+- The user has the required permission.
+- Resource ownership matches the resolved tenant.
+
+Platform security suspension and subscription delinquency are separate reasons and must be separately auditable.
+
+## 8. Tenant isolation strategy
+
+### 8.1 Selected database strategy
+
+Use Option C: one shared database, one shared schema, tenant_id on tenant-owned rows.
+
+This is the selected Commercial MVP architecture because it suits a modular monolith, reduces operational complexity and centralizes migrations. It is not native row-level security. MySQL 8.4 does not provide PostgreSQL-style row-level security policies; isolation is enforced through application authorization, tenant-scoped queries and database integrity constraints.
+
+### 8.2 Tenant data rules
+
+- Every tenant-owned table has tenant_id BIGINT NOT NULL.
+- Global identities and genuinely platform-global configuration do not have tenant_id.
+- Platform subscription plan definitions are global; tenant subscriptions and subscription invoices are associated with a tenant.
+- Customer profile and authentication identity are global; tenant_customers and tenant_customer_notes are tenant-owned.
+- Products, categories, packages, pricing, inventory, carts, orders, invoices, payments, shipment, returns, refunds, CRM, service, vendor audit and vendor employees/memberships are tenant-owned.
+- Tenant_id is immutable on a persisted business record. Moving data between tenants is a controlled migration with explicit authorization, audit and reconciliation, not an ordinary update.
+- Every child table that references a tenant-owned parent includes tenant_id and uses composite foreign keys where feasible.
+- Unique business identifiers are tenant-scoped unless a global uniqueness requirement is explicitly defined.
+
+### 8.3 Defense in depth
+
+- Mandatory tenant argument in tenant repository/application-service methods.
+- Tenant-scoped specifications and query helpers; prohibit unscoped tenant repository access.
+- Composite foreign keys for order→order item→product, cart→cart item→product, invoice/payment/return→order and tenant_customer relationships.
+- Database indexes start with tenant_id for common tenant-scoped access paths.
+- Bulk update/delete, native SQL, JPQL, exports and report queries require tenant predicate.
+- Redis cache keys include tenant_id and resource identity; global customer cache entries must not contain vendor-private CRM data.
+- Object storage key includes tenant_id; signed downloads re-authorize ownership before issuing a URL.
+- Queue messages and scheduled jobs include validated tenant context and re-check tenant state.
+- Vendor search, counts, facets, analytics and error responses must not reveal cross-tenant data.
+- Platform support access uses an explicit audited privileged path, never a hidden tenant filter bypass.
+
+## 9. Tenant ownership and visibility matrix
+
+Legend: G = global/platform-owned; T = tenant-owned; C = customer-owned global identity; T↔C = tenant relationship to a global customer.
+
+| Data/domain | Ownership | Platform Super Admin | Vendor A | Vendor B | Global customer |
+|---|---|---|---|---|---|
+| Authentication user identity | G | Platform controls per policy | Own/membership details | Own/membership details | Own identity |
+| Customer profile | C/G | Restricted support only | Minimum details needed for own relationship/orders | Same, own relationship only | Own profile |
+| Tenant/vendor profile | T | Manage lifecycle | Own profile | Own profile | Public published vendor profile |
+| Tenant membership/employee | T | Platform governance/restricted support | Vendor A users only | Vendor B users only | None |
+| Vendor customer relationship | T↔C | Restricted support/audit | Vendor A relationship only | Vendor B relationship only | Own relationship-facing information |
+| CRM notes/pricing discussions | T | Restricted, audited support only | Vendor A only | Vendor B only | Never |
+| Product/category/package/price | T | No commercial ownership; support metadata only | Vendor A catalogue | Vendor B catalogue | Published vendor listing and displayed price only |
+| Cart/cart items | T + C | No routine access | No access unless authorized support | No access unless authorized support | Own cart; one tenant |
+| Order/order items/status | T + C | Aggregate/restricted audited support | Vendor A orders only | Vendor B orders only | Own orders across vendors |
+| Vendor invoice/payment/refund | T + C | Aggregate/restricted audited support | Vendor A records only | Vendor B records only | Own transaction documents |
+| Vendor merchant account | T | Provider configuration/support; restricted secrets | Own merchant account status | Own merchant account status | No |
+| Inventory/warehouse | T | No commercial ownership | Vendor A only | Vendor B only | Public availability only if published |
+| Shipment/return/installation/service/warranty | T + C | Restricted audited support | Vendor A only | Vendor B only | Own records |
+| Vendor audit events | T | Authorized audit/support access | Vendor A events per permission | Vendor B events per permission | No |
+| Subscription plan definitions | G | Manage | Read current plan | Read current plan | No |
+| Tenant subscription/invoices/payments | T, platform-billed | Manage platform billing | Own subscription and bills | Own subscription and bills | No |
+| Platform audit and health | G | Authorized platform roles | No | No | No |
+| Global reference/configuration | G | Manage | Read only where exposed | Read only where exposed | Public only |
+
+### 9.1 Customer privacy boundary
+
+A vendor may see only customer data needed to fulfil that vendor's own enquiry, quotation, order, payment, delivery, installation, return, warranty or service. A vendor may not query another vendor's customer relationship, notes, purchase history, support interactions, negotiated price or service record. Cross-vendor identity matching must not disclose that a customer has a relationship with another vendor.
+
+### 9.2 Platform support boundary
+
+Platform Super Admin may view platform-level operational metrics and audit records. Any access to tenant-private content for support must require an explicit permission, reason, ticket/reference, time limit and immutable audit entry. Platform analytics should be aggregated by default.
+
+## 10. Global identity and customer relationship design
+
+### 10.1 Identity model
+
+- users is the global authentication identity table. Normalize email and phone and enforce the agreed uniqueness/verification rules.
+- customer_profiles is one-to-one with a customer user identity. One person has exactly one global customer identity.
+- tenant_users links a global user to one or more vendor tenants as an employee, with tenant-specific roles and membership status.
+- tenant_customers links a global customer profile to a vendor tenant. Unique constraint: (tenant_id, customer_id).
+- tenant_customer_notes contains private vendor-only CRM notes under the relationship and tenant.
+- Customer authentication is global. Tenant authorization is not granted merely because a global customer identity exists.
+
+### 10.2 Global customer experience
+
+The customer portal queries orders by the authenticated customer ID, not by a customer-supplied customer_id. Each order carries tenant_id and is rendered with the vendor's public display name, vendor order number, status and permitted documents. Every detail request verifies both customer ownership and order tenant association.
+
+Vendor-facing APIs begin from the authenticated tenant context and query only that tenant's tenant_customers and associated transactions.
+
+## 11. Roles and permissions
+
+### 11.1 Standard roles
+
+| Role | Scope | Main permissions |
+|---|---|---|
+| PLATFORM_SUPER_ADMIN | Platform | Tenant lifecycle, plan management, platform analytics/audit, platform configuration |
+| PLATFORM_SUPPORT | Platform, restricted | Time-bound support with reason and audit |
+| VENDOR_ADMIN | One tenant | Tenant-wide vendor administration |
+| SALES_MANAGER | One tenant | Leads, quotations, assigned team and sales reports |
+| SALES_EXECUTIVE | One tenant/assigned | Assigned leads, customer relationship, quotations and permitted orders |
+| INVENTORY_MANAGER | One tenant | Products, stock and warehouses |
+| OPERATIONS_MANAGER | One tenant | Surveys, shipment/installation fulfilment |
+| ACCOUNTANT | One tenant | Vendor invoices, vendor payment status, refunds and finance reports |
+| SERVICE_MANAGER | One tenant | Service requests, engineer assignment and SLA |
+| SERVICE_ENGINEER | Assigned tenant resources | Assigned work only |
+| CONTENT_MANAGER | One tenant | Vendor storefront content |
+| CUSTOMER | Global identity, self | Own profile and own transactions across vendors |
+
+### 11.2 Permission catalogue
+
+Platform permissions: PLATFORM_TENANT_CREATE, PLATFORM_TENANT_UPDATE, PLATFORM_TENANT_SUSPEND, PLATFORM_TENANT_CLOSE, PLATFORM_PLAN_MANAGE, PLATFORM_SUBSCRIPTION_VIEW, PLATFORM_SUBSCRIPTION_ADJUST, PLATFORM_ANALYTICS_VIEW, PLATFORM_AUDIT_VIEW, PLATFORM_SUPPORT_ACCESS.
+
+Vendor permissions: TENANT_PROFILE_VIEW/UPDATE, USER_VIEW/CREATE/UPDATE/DISABLE, ROLE_VIEW/CREATE/UPDATE/ASSIGN, CUSTOMER_RELATION_VIEW/CREATE/UPDATE, CRM_NOTE_VIEW/CREATE/UPDATE, PRODUCT_VIEW/CREATE/UPDATE/ARCHIVE, PRICE_VIEW/UPDATE, LEAD_VIEW/CREATE/UPDATE/ASSIGN, QUOTATION_VIEW/CREATE/UPDATE/SEND/APPROVE/CONVERT, CART_SUPPORT_VIEW only when explicitly authorized, ORDER_VIEW/CREATE/UPDATE/CANCEL, INVENTORY_VIEW/RECEIVE/RESERVE/TRANSFER/ADJUST, INVOICE_VIEW/CREATE/SEND/VOID, VENDOR_PAYMENT_VIEW/RECONCILE/REFUND, SHIPMENT_VIEW/UPDATE, RETURN_VIEW/APPROVE/RECEIVE, INSTALLATION_VIEW/ASSIGN/UPDATE/COMMISSION, SERVICE_VIEW/CREATE/ASSIGN/UPDATE/RESOLVE, REPORT_VIEW/EXPORT, VENDOR_AUDIT_VIEW.
+
+A vendor role cannot contain PLATFORM_* permissions. Global customer identity does not grant employee permissions. Resource assignment restrictions are applied in addition to role permissions.
+
+## 12. Functional requirements
+
+### 12.1 Identity and session
+
+- IAM-001: Register/login once with a global identity.
+- IAM-002: Support email verification and optional mobile verification.
+- IAM-003: Use Spring Security with short-lived JWT access tokens.
+- IAM-004: Rotate refresh tokens, store only hashed refresh-token identifiers server-side, detect reuse and revoke token family.
+- IAM-005: Browser refresh/session cookies use HttpOnly, Secure and appropriate SameSite attributes; protect cookie-authenticated state-changing requests with CSRF controls. Do not store long-lived bearer tokens in localStorage.
+- IAM-006: Privileged platform users require MFA.
+- IAM-007: Tenant membership must be validated for every vendor context.
+- IAM-008: Password/session, membership, role and privilege changes are audited.
+
+### 12.2 Platform and vendor lifecycle
+
+- TEN-001: Platform Admin creates tenant and first Vendor Admin user/membership.
+- TEN-002: Vendor profile includes legal/display name, slug, contact, address, tax identifiers and onboarding status.
+- TEN-003: Tenant states are PENDING, UNDER_REVIEW, ACTIVE, SUSPENDED and CLOSED.
+- TEN-004: Tenant close is a controlled, non-cascading operation; preserve financial and audit records.
+- TEN-005: No platform commercial catalogue, product, stock, order, customer or service owner exists.
+- TEN-006: Saumya Solar must be created as an ordinary tenant if it sells.
+- TEN-007: Vendor slug is unique and used only for common-domain public routes.
+
+### 12.3 Subscription plans and entitlements
+
+- SUB-001: Platform Admin manages monthly, quarterly and yearly plans.
+- SUB-002: Plan includes price, currency, interval, entitlement limits, feature set, tax metadata and grace policy.
+- SUB-003: Plan price/entitlements are versioned; each subscription/invoice snapshots agreed terms.
+- SUB-004: Tenant may have one effective subscription at a time, with full subscription history.
+- SUB-005: Renewal creates an invoice/obligation idempotently and initiates subscription payment using platform merchant configuration.
+- SUB-006: Subscription payment failures, retry schedule, notices, grace period and suspension are recorded.
+- SUB-007: Entitlement enforcement is server-side.
+- SUB-008: Subscription suspension is distinct from manual tenant suspension.
+- SUB-009: Reactivation after successful payment is audited.
+- SUB-010: Subscription invoices/payments never share tables or transaction IDs with customer purchase payments.
+- SUB-011: Subscription cancellation, end-of-term expiry and refunds follow explicit policy and preserve history.
+
+### 12.4 Global customer and vendor CRM
+
+- CUS-001: Customer identity and authentication are global and unique.
+- CUS-002: A global customer can transact with multiple vendors using one account.
+- CUS-003: Create tenant_customers relationship when a customer submits an enquiry or starts a vendor relationship, as appropriate.
+- CUS-004: Vendor CRM notes, lead score, sales assignment, pricing discussion and contact history are tenant-private.
+- CUS-005: Vendor APIs cannot search or count customers outside their active tenant relationship.
+- CUS-006: Customer portal returns only records owned by the authenticated global customer.
+- CUS-007: A vendor sees only its relationship and transactions, not another tenant's private records.
+
+### 12.5 Vendor catalogue and pricing
+
+- CAT-001: Every category, product, package, price, image and publication state belongs to one tenant.
+- CAT-002: Tenant SKU uniqueness is enforced by UNIQUE(tenant_id, sku).
+- CAT-003: Public catalogue exposes only active/published tenant records.
+- CAT-004: There is no platform-owned commercial product catalogue.
+- CAT-005: Platform reference templates, if any, are non-saleable and must be explicitly copied into a tenant before publication.
+- CAT-006: Price, tax and discount changes are audited.
+
+### 12.6 Enquiry, lead and quotation
+
+- CRM-001: Public enquiry is associated with the vendor selected by storefront route.
+- CRM-002: Lead ownership and assignment are tenant-scoped.
+- CRM-003: Quotation line prices/tax are snapshotted on sent revisions.
+- CRM-004: Customer accepts/rejects a valid revision through global identity authorization.
+- CRM-005: Accepted quotation converts to one order at most, with idempotency.
+- CRM-006: Vendor CRM and pricing discussions remain private to that tenant.
+
+### 12.7 Cart and checkout
+
+- MKT-001: A cart has one customer_id and exactly one tenant_id.
+- MKT-002: First valid cart item fixes cart tenant.
+- MKT-003: Every cart item product must match cart tenant; enforce in service and composite database FK.
+- MKT-004: Cross-vendor item insertion returns HTTP 409 with stable RFC 9457 problem type CART_VENDOR_MISMATCH.
+- MKT-005: Cart switch requires explicit customer confirmation; no silent replacement or data loss.
+- MKT-006: Checkout revalidates vendor active status, subscription/marketplace eligibility as policy requires, product publication, price, tax, stock, shipping and vendor merchant-account readiness.
+- MKT-007: Checkout creates exactly one order for exactly one tenant.
+- MKT-008: All order items reference same-tenant products; order records price/tax/product snapshots.
+- MKT-009: Checkout and order creation are idempotent and concurrency-safe.
+- MKT-010: Inventory reservation is atomic with order state transition or uses an explicit saga with compensating release.
+
+### 12.8 Vendor-direct order payment
+
+- PAY-001: Every vendor has a verified vendor_payment_account for the selected provider before accepting online payments.
+- PAY-002: Customer payment intent/order is created under the vendor's merchant account context, not the platform subscription merchant.
+- PAY-003: Gateway settles purchase funds directly to the vendor merchant account according to its merchant agreement.
+- PAY-004: Platform stores vendor-owned payment reference, amount, currency, status, provider reference, order ID, tenant ID and reconciliation metadata, but does not hold customer funds.
+- PAY-005: Payment webhooks are signature-verified, replay-protected and idempotent.
+- PAY-006: Refund is issued against the original vendor merchant account and transaction; refund cannot exceed refundable amount.
+- PAY-007: Payment state changes are append-only events or audited transitions; never silently overwrite gateway evidence.
+- PAY-008: Platform does not create marketplace payouts, split transfers or a platform vendor settlement ledger for customer purchases.
+- PAY-009: Provider adapter must verify merchant account identity on create, verify, refund and reconciliation.
+- PAY-010: Mock payment adapter is allowed only in explicit local/test profile and feature flag; production fails closed if selected.
+- PAY-011: Production provider activation requires written confirmation that vendor-direct settlement is supported for target jurisdiction, account type and product.
+
+### 12.9 Subscription payment
+
+- SUBPAY-001: Subscription payment collection is a separate payment flow using platform merchant configuration.
+- SUBPAY-002: Subscription invoice is issued by the platform to the vendor tenant.
+- SUBPAY-003: Subscription payment records reference tenant_subscription and subscription_invoice, never an order.
+- SUBPAY-004: Separate provider credentials/configuration, webhook routing, idempotency namespace and reconciliation are used.
+- SUBPAY-005: Mock subscription payment behavior is also non-production only and must not simulate production collection.
+
+### 12.10 Order, invoice, fulfilment and returns
+
+- ORD-001: Order has exactly one tenant_id and one global customer_id.
+- ORD-002: Every order item, invoice, vendor payment, shipment, return and refund shares the order tenant_id.
+- ORD-003: Order lifecycle supports draft, confirmed, payment pending/paid, fulfilment, shipped/delivered or installation, completed, cancelled and refund states.
+- ORD-004: Vendor order number is unique per tenant.
+- ORD-005: Customer portal can list own orders across vendors and clearly labels each vendor.
+- FIN-001: Vendor invoice belongs to exactly one vendor order; subscription invoice is a distinct entity.
+- FIN-002: Invoice issue/correction rules are immutable/credit-note based.
+- SHP-001: Shipment and tracking events belong to one vendor order.
+- RET-001: Return belongs to one vendor order and its order items.
+- RET-002: Return eligibility, quantities, reason, approval, received condition and refund/credit outcomes are recorded.
+- RET-003: Return/refund endpoints validate tenant ownership and original payment.
+
+### 12.11 Inventory, branches and warehouses
+
+- INV-001: Tenant owns branches, warehouses, inventory balances and transactions.
+- INV-002: Stock distinguishes on-hand, reserved, available and damaged quantities.
+- INV-003: Inventory movements are immutable; correction uses reversing transactions.
+- INV-004: Reservations cannot oversell stock under concurrency.
+- INV-005: Transfer source and destination must belong to the same tenant.
+- INV-006: Serialized products retain serial traceability through fulfilment/installation.
+
+### 12.12 Installation, warranty and service
+
+- OPS-001: Installation derives from eligible order/quotation and has tenant/customer/site/order ownership.
+- OPS-002: Engineers can access only assigned jobs unless explicitly elevated.
+- OPS-003: Warranty is linked to eligible order item/product/installation.
+- OPS-004: Service request is tenant-owned and linked to the relevant customer and order/installation.
+- OPS-005: Customer sees only own installation, warranty and service details across vendors.
+- OPS-006: Vendor sees only its own service history and customer relationship.
+
+### 12.13 Notifications, documents and CMS
+
+- NTF-001: Email uses Spring Mail; Mailpit is the local development SMTP inbox.
+- NTF-002: SMS/WhatsApp use a provider interface and mock adapter behind explicit feature flags; Twilio may be added later.
+- NTF-003: Mock delivery cannot be enabled in production.
+- DOC-001: OpenPDF generates quotations, vendor invoices, subscription invoices and receipts from distinct templates/data owners.
+- DOC-002: MinIO is used locally behind an object-storage port; production uses S3-compatible adapter.
+- DOC-003: Object keys and document metadata include tenant ownership; global customer access is granted only after transaction authorization.
+- CMS-001: Published vendor storefront content is tenant-owned and path-routed.
+
+### 12.14 Reporting and audit
+
+- RPT-001: Vendor dashboards aggregate only the active tenant's own customer relationships and transactions.
+- RPT-002: Customer portal aggregates only the authenticated customer's transactions across tenants.
+- RPT-003: Platform analytics are aggregated/platform scope; tenant-private detail requires explicit audited support access.
+- AUD-001: Record actor, tenant, action, resource, outcome, timestamp, correlation ID and reason as appropriate.
+- AUD-002: Keep platform audit and vendor audit access separate.
+- AUD-003: Financial and audit events are immutable to ordinary users; corrections use compensating records.
+
+## 13. Core workflows and diagrams
+
+### 13.1 Enquiry to fulfilment
+
+~~~mermaid
+flowchart TD
+  A[Customer selects vendor on marketplace] --> B[Vendor storefront and published catalogue]
+  B --> C[Enquiry / lead under selected tenant]
+  C --> D[Vendor quotation]
+  D --> E[Customer accepts quotation]
+  E --> F[Single-vendor cart or order checkout]
+  F --> G[Vendor merchant payment request]
+  G --> H[Customer pays vendor directly]
+  H --> I[Verified gateway event]
+  I --> J[Vendor order marked paid]
+  J --> K[Inventory reservation and fulfilment]
+  K --> L[Shipment or installation]
+  L --> M[Vendor invoice / receipt and warranty]
+  M --> N[Returns / service where eligible]
+~~~
+
+### 13.2 Checkout sequence
+
+~~~mermaid
+sequenceDiagram
+  autonumber
+  actor Customer
+  participant Web as React Marketplace
+  participant API as Spring Boot API
+  participant Cart as Cart/Checkout Module
+  participant DB as MySQL
+  participant Pay as Vendor Payment Adapter
+  participant Gateway as Vendor Merchant Gateway
+  participant Vendor as Vendor Merchant Account
+  Customer->>Web: Select Vendor A and add product
+  Web->>API: Add item (product reference)
+  API->>Cart: Resolve customer and vendor from trusted route/product
+  Cart->>DB: Validate cart tenant and product tenant
+  DB-->>Cart: Same-tenant product and cart
+  Cart-->>Web: Cart updated for Vendor A
+  Customer->>Web: Checkout
+  Web->>API: POST checkout with idempotency key
+  API->>Cart: Revalidate tenant, price, tax, stock and merchant readiness
+  Cart->>DB: Create PENDING order and reserve stock transactionally
+  Cart->>Pay: Create payment for Vendor A merchant account
+  Pay->>Gateway: Create vendor-context payment request
+  Gateway-->>Pay: Provider payment reference / client action
+  Pay-->>API: Payment reference
+  API-->>Web: Vendor-hosted/tokenized payment action
+  Customer->>Gateway: Authorize/pay vendor
+  Gateway->>Vendor: Settle funds directly to Vendor A
+  Gateway-->>API: Signed payment webhook
+  API->>Pay: Verify signature and vendor merchant reference
+  Pay->>DB: Idempotently record payment event/status
+  DB-->>API: Order/payment state updated
+  API-->>Web: Customer order status
+~~~
+
+### 13.3 Direct vendor payment settlement design
+
+~~~mermaid
+flowchart TD
+  C[Customer] -->|Pays order total| G[Gateway payment flow]
+  G -->|Merchant context = Vendor A| VA[Vendor A merchant account]
+  G -->|Signed status event only| WH[Platform webhook]
+  WH --> VPA[Vendor Payment Adapter]
+  VPA -->|Verify signature, merchant, amount, currency and order| DB[(Tenant-owned payment record)]
+  DB --> O[Vendor A order payment status]
+  DB --> REC[Vendor A reconciliation reference]
+  subgraph No platform custody
+    N[No platform customer-fund balance]
+    P[No pooled funds]
+    S[No marketplace payout/split ledger]
+  end
+  G -.-> N
+~~~
+
+Design consequences:
+
+- The payment provider's merchant context must be Vendor A's verified merchant account.
+- Gateway settlement is made by the gateway to Vendor A under the vendor's merchant agreement.
+- The platform records status and references, not a platform-held customer cash balance.
+- The platform does not create payout instructions or marketplace split transfers.
+- Vendor reconciliation compares platform order/payment records with gateway/vendor settlement reports.
+- Vendor gateway fees and settlement timing are determined by the gateway/vendor agreement and are not assumed by the platform.
+- The platform's subscription charges use a distinct platform merchant account and separate records.
+
+Production note: the selected provider must contractually and technically support the intended vendor-direct model in the target country. The adapter contract is provider-neutral; a named provider cannot be considered approved merely because an SDK exists.
+
+### 13.4 Subscription state machine
+
+~~~mermaid
+stateDiagram-v2
+  [*] --> PENDING
+  PENDING --> ACTIVE: Initial subscription payment succeeds
+  PENDING --> PAST_DUE: Initial payment fails
+  PAST_DUE --> GRACE_PERIOD: Retry policy starts grace
+  ACTIVE --> PAST_DUE: Renewal invoice unpaid at due time
+  ACTIVE --> CANCELLED: Immediate cancellation approved
+  ACTIVE --> CANCEL_AT_PERIOD_END: Cancel at period end requested
+  CANCEL_AT_PERIOD_END --> CANCELLED: Period ends
+  GRACE_PERIOD --> ACTIVE: Payment succeeds
+  GRACE_PERIOD --> SUSPENDED: Grace period expires unpaid
+  SUSPENDED --> ACTIVE: Outstanding invoice paid / reactivated
+  SUSPENDED --> CANCELLED: Subscription cancelled under policy
+  ACTIVE --> EXPIRED: Non-renewing term ends
+  CANCELLED --> [*]
+  EXPIRED --> [*]
+~~~
+
+Subscription states:
+
+- PENDING: subscription created; initial payment/activation incomplete.
+- ACTIVE: entitled and paid for current period.
+- PAST_DUE: invoice is unpaid/failed collection; retries and reminders are pending.
+- GRACE_PERIOD: configured grace window is running; default permits normal access with prominent notices.
+- SUSPENDED: subscription entitlement blocks vendor writes; read-only data access may remain for billing/support according to policy.
+- CANCEL_AT_PERIOD_END: cancellation requested but current paid period remains active.
+- CANCELLED: subscription ended by explicit cancellation.
+- EXPIRED: paid term ended without renewal.
+
+Vendor tenant lifecycle states (PENDING, UNDER_REVIEW, ACTIVE, SUSPENDED, CLOSED) are separate. Effective vendor access requires tenant lifecycle ACTIVE, acceptable subscription state, active membership and required permission. A security/manual tenant suspension is not automatically cleared by subscription payment.
+
+### 13.5 Subscription billing sequence
+
+~~~mermaid
+sequenceDiagram
+  autonumber
+  participant Job as Subscription Scheduler
+  participant Sub as Subscription Module
+  participant DB as MySQL
+  participant Pay as Platform Subscription Payment Adapter
+  participant PG as Platform Merchant Gateway
+  participant Vendor as Vendor Admin
+  Job->>Sub: Renewal due
+  Sub->>DB: Idempotently create subscription invoice
+  Sub->>Pay: Collect invoice using platform merchant context
+  Pay->>PG: Create platform subscription payment
+  PG-->>Pay: Payment result/reference
+  Pay->>DB: Record subscription payment attempt
+  alt Payment succeeds
+    PG-->>Sub: Verified success event
+    Sub->>DB: Mark invoice paid and subscription ACTIVE
+    Sub-->>Vendor: Receipt/renewal notification
+  else Payment fails
+    PG-->>Sub: Verified failure event
+    Sub->>DB: Mark PAST_DUE / GRACE_PERIOD
+    Sub-->>Vendor: Payment failure and due-date notice
+  end
+~~~
+
+Customer purchase payment APIs and subscription billing APIs must use distinct provider configuration, secrets, idempotency namespaces, webhook routes or event classification, tables, accounting/reporting and reconciliation.
+
+## 14. ER model and database design
+
+### 14.1 Consistent ER diagram
+
+This diagram defines principal ownership and relationships. Join/child tables carry tenant_id where marked. The customer identity is global; vendor relationships and transactions are tenant-owned.
+
+~~~mermaid
+erDiagram
+  USERS ||--o| CUSTOMER_PROFILES : has
+  USERS ||--o{ TENANT_USERS : joins
+  TENANTS ||--o{ TENANT_USERS : employs
+  CUSTOMER_PROFILES ||--o{ TENANT_CUSTOMERS : relates
+  TENANTS ||--o{ TENANT_CUSTOMERS : owns_relationship
+  TENANT_CUSTOMERS ||--o{ TENANT_CUSTOMER_NOTES : has_private_notes
+
+  TENANTS ||--|| VENDOR_PROFILES : has
+  TENANTS ||--o{ PRODUCTS : owns
+  TENANTS ||--o{ CATEGORIES : owns
+  TENANTS ||--o{ SOLAR_PACKAGES : owns
+  TENANTS ||--o{ VENDOR_PAYMENT_ACCOUNTS : configures
+
+  CUSTOMER_PROFILES ||--o{ CARTS : owns
+  TENANTS ||--o{ CARTS : scopes
+  CARTS ||--o{ CART_ITEMS : contains
+  PRODUCTS ||--o{ CART_ITEMS : selected
+
+  CUSTOMER_PROFILES ||--o{ ORDERS : places
+  TENANTS ||--o{ ORDERS : owns
+  ORDERS ||--o{ ORDER_ITEMS : contains
+  PRODUCTS ||--o{ ORDER_ITEMS : snapshot_source
+  ORDERS ||--o{ INVOICES : billed
+  ORDERS ||--o{ VENDOR_PAYMENTS : paid_by
+  VENDOR_PAYMENT_ACCOUNTS ||--o{ VENDOR_PAYMENTS : processes
+  VENDOR_PAYMENTS ||--o{ PAYMENT_ATTEMPTS : has
+  VENDOR_PAYMENTS ||--o{ REFUNDS : reversed_by
+  ORDERS ||--o{ SHIPMENTS : fulfilled_by
+  ORDERS ||--o{ RETURNS : returned_by
+
+  SUBSCRIPTION_PLANS ||--o{ TENANT_SUBSCRIPTIONS : selected
+  TENANTS ||--o{ TENANT_SUBSCRIPTIONS : subscribes
+  TENANT_SUBSCRIPTIONS ||--o{ SUBSCRIPTION_INVOICES : billed
+  SUBSCRIPTION_INVOICES ||--o{ SUBSCRIPTION_PAYMENTS : paid_by
+
+  TENANTS ||--o{ INVENTORY_BALANCES : owns
+  TENANTS ||--o{ INVENTORY_TRANSACTIONS : records
+  TENANTS ||--o{ LEADS : manages
+  TENANTS ||--o{ QUOTATIONS : creates
+  TENANTS ||--o{ SERVICE_REQUESTS : owns
+  TENANTS ||--o{ VENDOR_AUDIT_EVENTS : records
+  USERS ||--o{ PLATFORM_AUDIT_EVENTS : acts
+
+  USERS {
+    bigint id PK
+    string normalized_email UK
+    string normalized_phone
+    string auth_status
+  }
+  CUSTOMER_PROFILES {
+    bigint id PK
+    bigint user_id FK,UK
+    string display_name
+  }
+  TENANTS {
+    bigint id PK
+    string slug UK
+    string lifecycle_status
+  }
+  TENANT_USERS {
+    bigint id PK
+    bigint tenant_id FK
+    bigint user_id FK
+    string membership_status
+  }
+  TENANT_CUSTOMERS {
+    bigint id PK
+    bigint tenant_id FK
+    bigint customer_id FK
+  }
+  TENANT_CUSTOMER_NOTES {
+    bigint id PK
+    bigint tenant_id FK
+    bigint tenant_customer_id FK
+    string note_visibility
+  }
+  PRODUCTS {
+    bigint id PK
+    bigint tenant_id FK
+    string sku
+    string publication_status
+  }
+  CARTS {
+    bigint id PK
+    bigint tenant_id FK
+    bigint customer_id FK
+    string status
+  }
+  CART_ITEMS {
+    bigint id PK
+    bigint tenant_id FK
+    bigint cart_id FK
+    bigint product_id FK
+  }
+  ORDERS {
+    bigint id PK
+    bigint tenant_id FK
+    bigint customer_id FK
+    string order_number
+    decimal total
+  }
+  ORDER_ITEMS {
+    bigint id PK
+    bigint tenant_id FK
+    bigint order_id FK
+    bigint product_id FK
+    decimal unit_price_snapshot
+  }
+  VENDOR_PAYMENTS {
+    bigint id PK
+    bigint tenant_id FK
+    bigint order_id FK
+    bigint merchant_account_id FK
+    decimal amount
+  }
+  SUBSCRIPTION_PLANS {
+    bigint id PK
+    string billing_interval
+    decimal price
+  }
+  TENANT_SUBSCRIPTIONS {
+    bigint id PK
+    bigint tenant_id FK
+    bigint plan_id FK
+    string state
+  }
+~~~
+
+The ER diagram is conceptual. Physical migrations must define full columns, keys, checks, indexes, deletion behavior and audit columns. All tenant-owned child tables must include tenant_id and use composite constraints wherever possible.
+
+### 14.2 Global and tenant-owned table inventory
+
+Global/platform-owned tables (no tenant_id unless a separate scope is justified):
+- users
+- customer_profiles
+- subscription_plans and subscription_plan_prices
+- platform_configuration
+- platform_audit_events
+- provider catalog/reference metadata
+- global permission definitions
+
+Tenant-owned tables (tenant_id NOT NULL):
+- tenants' vendor profile and tenant configuration
+- tenant_users, tenant roles and tenant role grants
+- tenant_customers and tenant_customer_notes
+- categories, products, product images metadata, solar_packages, package_items and vendor prices
+- branches, warehouses, inventory_balances and inventory_transactions
+- enquiries, leads, site_surveys, quotations, quotation revisions and quotation_items
+- carts, cart_items
+- orders, order_items, order_status_history
+- invoices, vendor_payment_accounts, vendor_payments, payment_attempts, refunds
+- shipments, shipment_events, returns and return_items
+- installations, installation assignments/checklists, warranties, service_requests and service_visits
+- vendor CMS content, vendor notifications, tenant-scoped exports and vendor_audit_events
+- tenant_subscriptions, subscription invoices, subscription payments, subscription attempts, usage and subscription events
+
+### 14.3 Mandatory ownership constraints
+
+- Composite unique key on tenant-owned parents: UNIQUE(tenant_id, id) to support tenant-aware foreign keys.
+- Product: UNIQUE(tenant_id, sku).
+- Vendor slug: UNIQUE(slug) globally because all stores share the domain.
+- Tenant customer: UNIQUE(tenant_id, customer_id).
+- Tenant membership: UNIQUE(tenant_id, user_id).
+- Vendor order: UNIQUE(tenant_id, order_number).
+- Order item references order and product with tenant-aware composite foreign keys.
+- Cart item references cart and product with tenant-aware composite foreign keys.
+- Vendor payment references order and vendor_payment_account with same tenant_id.
+- Vendor invoice, shipment, return and refund reference the originating vendor order and tenant_id.
+- Subscription invoice/payment references tenant_subscription and tenant_id; never vendor order.
+- Money uses DECIMAL, never floating point. Store currency and tax snapshots.
+- Tenant-owned rows use ON DELETE RESTRICT for financial, audit and historical records. Use archival/anonymization workflows where lawful.
+
+### 14.4 Example ownership-safe constraints
+
+~~~sql
+CREATE TABLE products (
+  id BIGINT NOT NULL,
+  tenant_id BIGINT NOT NULL,
+  sku VARCHAR(80) NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_products_tenant_id_id (tenant_id, id),
+  UNIQUE KEY uk_products_tenant_sku (tenant_id, sku),
+  CONSTRAINT fk_products_tenant
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+);
+
+CREATE TABLE orders (
+  id BIGINT NOT NULL,
+  tenant_id BIGINT NOT NULL,
+  customer_id BIGINT NOT NULL,
+  order_number VARCHAR(80) NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_orders_tenant_id_id (tenant_id, id),
+  UNIQUE KEY uk_orders_tenant_number (tenant_id, order_number),
+  CONSTRAINT fk_orders_tenant
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+  CONSTRAINT fk_orders_customer
+    FOREIGN KEY (customer_id) REFERENCES customer_profiles(id)
+);
+
+CREATE TABLE order_items (
+  id BIGINT NOT NULL,
+  tenant_id BIGINT NOT NULL,
+  order_id BIGINT NOT NULL,
+  product_id BIGINT NOT NULL,
+  PRIMARY KEY (id),
+  CONSTRAINT fk_order_items_order
+    FOREIGN KEY (tenant_id, order_id)
+    REFERENCES orders(tenant_id, id),
+  CONSTRAINT fk_order_items_product
+    FOREIGN KEY (tenant_id, product_id)
+    REFERENCES products(tenant_id, id)
+);
+~~~
+
+This illustrates the same-tenant parent/child relationship. Production migrations must also define data types, indexes, monetary snapshots, quantity constraints and deletion policy.
+
+## 15. REST API conventions
+
+### 15.1 Standards
+
+- REST under /api/v1.
+- OpenAPI 3 contract generated/maintained with request and response schemas.
+- Errors use RFC 9457 Problem Details (application/problem+json).
+- Pagination, sorting and filtering are server-side with bounded page size.
+- Authentication uses JWT access token and rotated refresh token.
+- Idempotency-Key required for checkout, payment creation/refund and other retry-sensitive mutations.
+- Vendor APIs do not accept tenant_id as a client-selected authorization parameter.
+- Common-domain vendor slug routes are public discovery only; authenticated vendor context is membership-derived.
+
+### 15.2 API route families
+
+| Family | Example endpoints | Scope |
+|---|---|---|
+| Authentication | POST /auth/register, /auth/login, /auth/refresh, /auth/logout | Global identity |
+| Marketplace | GET /marketplace/vendors, /vendors/{slug}, /vendors/{slug}/products | Public published data |
+| Customer | GET /customer/me, /customer/orders, /customer/orders/{id} | Own global identity |
+| Platform tenants | POST/GET/PATCH /platform/tenants | Platform permission |
+| Platform plans | CRUD /platform/subscription-plans | Platform permission |
+| Subscription | GET /vendor/subscription, GET /vendor/subscription/invoices | Active tenant |
+| Vendor catalogue | CRUD /vendor/products, /vendor/categories, /vendor/packages | Active tenant |
+| Vendor CRM | CRUD /vendor/customers, /vendor/leads, /vendor/quotations | Active tenant |
+| Cart | GET/POST/PATCH/DELETE /customer/cart | Customer, one tenant per cart |
+| Checkout | POST /customer/checkout | Customer, cart tenant |
+| Vendor orders | GET /vendor/orders, GET /vendor/orders/{id} | Active tenant |
+| Vendor payment | POST /customer/orders/{id}/payment-intent, POST /webhooks/vendor-payments/{provider}, POST /vendor/payments/{id}/refund | Customer/order owner or tenant accountant; webhook verified |
+| Subscription payment | POST /webhooks/platform-subscriptions/{provider} | Platform subscription flow |
+| Vendor finance | /vendor/invoices, /vendor/payments, /vendor/returns | Active tenant |
+| Audit | /platform/audit, /vendor/audit | Separate scopes |
+
+Endpoint examples are illustrative; exact contracts must be maintained in OpenAPI.
+
+### 15.3 Error contracts
+
+- 400: malformed or invalid request.
+- 401: unauthenticated.
+- 403: authenticated but not permitted.
+- 404: resource absent or intentionally non-disclosing for cross-tenant IDs.
+- 409: state conflict, cart vendor mismatch, duplicate idempotency mismatch or invalid transition.
+- 422: semantically invalid request where adopted by API policy.
+- 429: rate limit.
+
+Cross-tenant resource probes must not reveal whether another tenant's identifier exists.
+
+## 16. Technology baseline and integration adapters
+
+| Layer | Required baseline |
+|---|---|
+| Language/runtime | Java 21 |
+| Backend | Spring Boot 3.5, Spring Security, Spring Data JPA, Maven |
+| Frontend | React 19, TypeScript, Vite |
+| Database | MySQL 8.4 |
+| Schema migrations | Flyway |
+| Authentication | Spring Security, JWT access tokens, rotated refresh tokens |
+| API | REST, OpenAPI 3, RFC 9457 Problem Details |
+| Backend tests | JUnit 5, Testcontainers, REST Assured |
+| Frontend tests | Vitest, React Testing Library where appropriate, Playwright |
+| PDF | OpenPDF |
+| Email | Spring Mail; Mailpit for local SMTP capture |
+| SMS/WhatsApp | Provider adapter; mock adapter behind explicit flag; Twilio candidate for later integration |
+| File storage | Storage port; MinIO locally; S3-compatible production adapter |
+| Customer payment | Vendor-direct payment adapter; mock adapter behind explicit non-production flag; Stripe/Razorpay candidates subject to provider approval |
+| Subscription payment | Separate platform subscription payment adapter and platform merchant account |
+| Cache/rate limiting | Redis |
+| Monitoring | Spring Boot Actuator, Micrometer, Prometheus |
+| Local environment | Docker Compose |
+| Architecture | Modular monolith |
+
+### 16.1 Feature-flag rules for mock adapters
+
+- MOCK_PAYMENT_ENABLED and MOCK_MESSAGING_ENABLED default to false.
+- Mock providers are permitted only in explicit local/test profiles.
+- Production configuration validation must fail if a mock provider is selected or a mock flag is true.
+- Mock payment responses must be clearly marked test/simulated and may not be used as production payment evidence.
+- A mock payment must simulate vendor merchant identity, verified/unverified events, duplicate webhook delivery, failure, timeout and refund outcomes.
+- Adapter interfaces must not leak provider-specific SDK models into domain services.
+
+### 16.2 Payment adapter contracts
+
+Vendor payment adapter operations:
+- Validate vendor merchant-account readiness and capability.
+- Create customer payment session/intent within the vendor merchant context.
+- Verify signed webhook and correlate provider event, tenant, order, amount and currency.
+- Query transaction status.
+- Initiate refund against the original vendor merchant account/transaction.
+- Import or reconcile vendor settlement references where provider supports it.
+
+Subscription payment adapter operations:
+- Create payment for platform subscription invoice using platform merchant context.
+- Verify subscription payment webhook and correlate platform invoice/tenant.
+- Query transaction and handle retry/refund policies.
+
+Do not reuse merchant IDs, secrets, payment records, webhook idempotency namespaces or reconciliation processes between the two adapters.
+
+### 16.3 Provider approval gate
+
+The future provider selection (including Stripe or Razorpay) must be validated for India/target jurisdiction, merchant onboarding, vendor-direct collection, refunds, webhook signing, settlement reporting, tax invoicing, chargebacks and account eligibility. This is an external provider/legal/commercial approval gate. No provider-specific direct-settlement capability is assumed by this SRS.
+
+## 17. Subscription billing model
+
+### 17.1 Entities
+
+- subscription_plans: platform-owned plan definitions.
+- subscription_plan_prices: versioned price, currency and interval.
+- tenant_subscriptions: tenant, plan version, start/end, state and renewal settings.
+- subscription_invoices: platform-issued subscription invoices, immutable after issue except correction/credit note.
+- subscription_payments: payment for a subscription invoice, platform merchant context.
+- subscription_payment_attempts: attempt outcome, provider reference, retry schedule and failure.
+- subscription_events: append-only state transition and actor/reason.
+- subscription_usage: measured entitlement usage by tenant and period.
+
+### 17.2 Billing rules
+
+- Supported intervals: monthly, quarterly and yearly.
+- Subscription invoice includes billing period, plan snapshot, tax breakdown, due date and total.
+- Renewal is idempotent using subscription ID and billing period.
+- Payment retries use bounded backoff and configured maximum attempts.
+- Grace duration is a versioned plan/platform policy and the due dates are explicit.
+- Default grace behavior: preserve normal vendor access during grace with reminders; on grace expiry set subscription SUSPENDED and block vendor writes. Any read-only mode/storefront policy must be configured and tested.
+- Payment success during grace or suspension may reactivate subscription if no independent tenant/security suspension exists.
+- Vendor data and financial records are preserved after cancellation/expiry.
+- Platform may manually suspend a tenant independent of subscription status.
+- Tax, refund and statutory SaaS invoice requirements require local legal/tax review before production.
+
+### 17.3 State transition rules
+
+State machine in §13.4 is normative. Each transition records old state, new state, event, actor/system process, timestamp, reason, invoice/payment reference and correlation ID. Invalid transitions are rejected.
+
+## 18. Direct-to-vendor payment and reconciliation
+
+### 18.1 Ownership and money flow
+
+- Customer order is owned by one vendor tenant.
+- Customer payment is created under that tenant's verified merchant account.
+- Customer funds settle from the gateway directly to the vendor's merchant account.
+- The platform stores payment metadata and verified provider events for order status, customer support and vendor reconciliation.
+- The platform does not receive customer purchase funds, hold funds, split funds or pay vendors.
+- No platform vendor-payout ledger is required in this model.
+- Platform subscription fees are paid separately to the platform merchant account.
+
+### 18.2 Required records
+
+Vendor payment: tenant_id, order_id, customer_id, vendor_payment_account_id, provider, provider_payment_reference, amount, currency, status, authorized_at, captured_at, refunded_amount, provider_settlement_reference (when supplied), created_at.
+
+Vendor payment attempt: tenant_id, payment_id, idempotency_key, attempt status, provider request reference, error category and timestamps.
+
+Vendor payment account: tenant_id, provider, provider merchant-account reference, verification state, capabilities, encrypted credential reference/token handle, last verification time. Raw secrets must not be stored in application tables or logs.
+
+Refund: tenant_id, payment_id, order_id, amount, reason, provider refund reference, status and actor.
+
+The vendor-facing finance view can reconcile order amounts and payment references against provider settlement reports. The exact settlement date, transaction fee and bank credit are provider/vendor contractual details; the platform must not infer them from a successful authorization event.
+
+### 18.3 Payment state model
+
+A provider payment may move through CREATED, REQUIRES_CUSTOMER_ACTION, AUTHORIZED, CAPTURED/ SUCCEEDED, FAILED, CANCELLED, PARTIALLY_REFUNDED and REFUNDED. Actual transitions depend on the selected provider's capabilities. Persist provider events idempotently; do not treat a browser redirect as proof of payment.
+
+### 18.4 Refund and return controls
+
+- Refund must reference original order and payment.
+- Refund amount cannot exceed captured minus already refunded amount.
+- Partial refunds are supported only when provider and product policy support them.
+- Return acceptance and refund execution are separate state transitions.
+- Vendor authority and approval thresholds apply.
+- Webhook signatures, replay detection and reconciliation must cover refunds as well as payments.
+
+## 19. Database conventions and data integrity
+
+- Use BIGINT identifiers or UUIDs consistently; do not mix strategies without documented reason.
+- Use DECIMAL for money and explicit currency codes.
+- Timestamps are stored in UTC; tenant timezone controls display and billing date calculation.
+- Every mutable entity has created_at, created_by, updated_at, updated_by and version where appropriate.
+- Financial and audit rows are append-only or corrected through compensating records.
+- Tenant-owned entities include tenant_id NOT NULL.
+- Composite foreign keys enforce same-tenant relationships.
+- Foreign keys on financial/audit history use RESTRICT; deletion uses controlled archival/anonymization subject to retention.
+- Use optimistic locking for mutable aggregates and database locking/conditional updates for stock and checkout concurrency.
+- Use unique idempotency scope by tenant, actor/operation and key; store request hash and result.
+- Flyway migrations are versioned, tested against clean and upgraded MySQL 8.4 databases and use expand/contract for production.
+
+## 20. Security requirements
+
+### 20.1 Authentication and authorization
+
+- Spring Security is the authoritative authorization layer.
+- JWT access tokens are short-lived and audience/issuer/signature validated.
+- Refresh tokens rotate on every use; reuse revokes token family.
+- Refresh token storage is hashed/revocable; secure HttpOnly/Secure/SameSite cookies are preferred for browser session material with CSRF protection.
+- RBAC is permission-based and supplemented by tenant membership and record assignment.
+- Platform and vendor permissions are disjoint.
+- Global customer self-access is verified by customer ID on every resource.
+- Tenant scope is immutable within a request; thread/async context is cleared and explicitly propagated to jobs.
+
+### 20.2 Application and data security
+
+- Validate DTOs with Bean Validation and allow-listed input.
+- Use parameterized ORM/SQL.
+- Protect against IDOR, mass assignment, injection, CSRF, XSS, SSRF and unsafe uploads.
+- CORS allows only approved common-domain origins.
+- Apply rate limits to authentication, public enquiry, checkout, payment, exports and webhooks.
+- Webhooks verify provider signature, timestamp/replay protection, merchant account, amount, currency and related order/invoice.
+- Protect provider secrets with secret manager/encrypted credential references.
+- Encrypt data in transit and at rest; redact PII/secrets from logs.
+- Signed document URL issuance rechecks customer/tenant authorization.
+- Audit cross-tenant denials and support access according to policy.
+
+### 20.3 Critical security tests
+
+- Tenant A cannot use guessed IDs, query filters, path parameters, headers or body fields to access tenant B.
+- Tenant A cannot access tenant B private customer notes, price discussions, leads, order/payment/service history, attachments or exports.
+- Customer A cannot access Customer B order even when the order belongs to a vendor they both use.
+- Vendor A cannot use global customer ID to query Vendor B relationship.
+- Cross-tenant foreign key insertion is rejected by MySQL.
+- Tenant context is cleared after exceptions and thread reuse.
+- Background jobs and exports cannot omit tenant scope.
+- Platform support access is audited.
+
+## 21. Non-functional requirements
+
+### 21.1 Performance and scale
+
+- p95 normal read API target <= 500 ms under agreed baseline load, excluding provider calls and large reports.
+- p95 normal write API target <= 1 second under agreed baseline load.
+- Lists are paginated; default 20, maximum 100 unless approved.
+- Reports exceeding 30 seconds run asynchronously.
+- Initial capacity test target: 100 active tenants, 1,000 concurrent sessions and 100 API requests/second; revise using measured load.
+- Tenant-scoped indexes support all high-volume access paths.
+
+### 21.2 Availability and recovery
+
+- Initial monthly availability target 99.9%, excluding approved maintenance.
+- At least two stateless API instances in production where supported.
+- Initial RPO target 15 minutes and RTO target 4 hours subject to managed database capability.
+- Restore test at least quarterly.
+- Document backup, recovery, rollback and incident runbooks.
+
+### 21.3 Observability
+
+- Actuator health/liveness/readiness endpoints with restricted details.
+- Micrometer metrics exported to Prometheus.
+- Structured JSON logs with correlation/trace IDs and authorized tenant context only.
+- Monitor HTTP latency/error rate, JVM, DB pool, Redis, queue/job backlog, payment webhook failures, subscription renewals, notification failures and storage.
+- Alert on tenant-isolation denial spikes, failed payment events, renewal backlog, DB saturation and failed backup/restore.
+
+### 21.4 Quality and accessibility
+
+- OpenAPI contract tests and API compatibility checks.
+- Unit, integration, browser and security tests are required.
+- Core transactional screens target WCAG 2.2 AA.
+- Responsive desktop/tablet/mobile web behavior.
+- No horizontal overflow on core workspace layouts.
+
+## 22. Integration and background processing
+
+- Use transactional outbox for domain events leaving a database transaction.
+- Use inbox/idempotency for webhook and inbound event deduplication.
+- External provider calls use timeouts, bounded retry, circuit breaker where appropriate and dead-letter/manual retry.
+- Each async event carries event ID, tenant ID if tenant-owned, actor/source, aggregate ID, correlation ID and schema version.
+- Validate tenant state and ownership at job execution, not only at enqueue.
+- Never enqueue global customer events containing another tenant's private CRM information.
+
+Adapters:
+- Email: Spring Mail; Mailpit local.
+- SMS/WhatsApp: mock adapter flag for local/test; future Twilio adapter.
+- Customer payments: mock vendor-direct adapter flag for local/test; future approved Stripe/Razorpay adapter.
+- Subscription payments: separate platform billing adapter.
+- Storage: MinIO local and S3-compatible production adapter.
+- Cache/rate limit: Redis.
+
+## 23. Screen catalogue
+
+### Public marketplace
+- Landing page, vendor directory, vendor profile/storefront, vendor product/package search/detail, enquiry/quotation request, login/register and legal pages.
+
+### Global customer portal
+- Global dashboard, profile, order history across vendors, vendor-labelled order details, cart, cart-switch confirmation, checkout, invoices/receipts, payment status, shipments, returns/refunds, installation, warranty, service and notifications.
+
+### Vendor workspace
+- Vendor dashboard, vendor profile, catalogue/categories/products/packages/prices, inventory, leads/enquiries, customer relationships, private CRM notes, quotations, single-tenant orders, fulfilment, invoices, vendor payments/reconciliation, returns/refunds, branches/warehouses, employees/roles, reports, audit and settings.
+
+### Platform administration
+- Tenant directory/onboarding/status, initial Vendor Admin creation, subscription plans/prices, tenant subscriptions/invoices/payments, platform analytics, platform audit, integration configuration and system health. No commercial product catalogue, inventory or order management.
+
+## 24. API acceptance and behavior matrix
+
+| Operation | Actor | Tenant rule | Key validation |
+|---|---|---|---|
+| Browse vendor products | Public/customer | Resolve slug to active tenant | Published products only |
+| Add cart item | Authenticated customer | Product tenant sets/equals cart tenant | Reject mixed vendor |
+| Checkout | Authenticated customer | Exactly one cart tenant | Idempotency, price, stock, merchant ready |
+| View customer order | Global customer | order.customer_id equals principal customer ID | Display vendor label |
+| View vendor order | Vendor employee | order.tenant_id equals active tenant | Permission + assignment |
+| View CRM notes | Vendor employee | tenant_customer.tenant_id equals active tenant | CRM_NOTE_VIEW |
+| Create vendor payment | Customer/order owner | Order tenant determines merchant account | Never accept merchant tenant from client |
+| Payment webhook | Gateway | Match stored provider account/order tenant | Signature, replay, amount/currency |
+| Refund | Vendor accountant | Original payment/order tenant | Permission and refundable balance |
+| Renew subscription | Scheduler/platform | Tenant subscription record | Platform payment adapter only |
+| Platform tenant suspend | Platform Admin | Platform scope | Reason and audit |
+
+## 25. Acceptance criteria
+
+### 25.1 Tenant and platform ownership
+
+~~~gherkin
+Scenario: Super Admin has no commercial catalogue
+  Given a Platform Super Admin is authenticated
+  When the user accesses platform administration
+  Then no platform-owned product, catalogue, inventory or order can be created
+  And selling as Saumya Solar requires an ordinary vendor tenant
+
+Scenario: Vendor private CRM isolation
+  Given Vendor A and Vendor B both have a relationship with the same global customer
+  And each vendor has private CRM notes and pricing discussions
+  When Vendor A requests its customer relationship
+  Then only Vendor A relationship and notes are returned
+  And Vendor B data is not disclosed
+~~~
+
+### 25.2 Global identity and customer portal
+
+~~~gherkin
+Scenario: One customer identity across vendors
+  Given a customer has a global account
+  When the customer buys from Vendor A and Vendor B
+  Then both orders use the same global customer identity
+  And the customer portal lists both orders with the correct vendor labels
+  And each vendor sees only its own order and relationship
+~~~
+
+### 25.3 Single-vendor cart and checkout
+
+~~~gherkin
+Scenario: Mixed vendor cart item is rejected
+  Given a cart belongs to Vendor A
+  When the customer adds a Vendor B product
+  Then the API returns 409 CART_VENDOR_MISMATCH
+  And the original cart remains unchanged
+
+Scenario: Checkout creates one vendor order
+  Given the cart contains only Vendor A products
+  When checkout succeeds
+  Then exactly one Vendor A order is created
+  And every order item belongs to Vendor A
+  And retries with the same idempotency key return the same order
+~~~
+
+### 25.4 Direct vendor payment
+
+~~~gherkin
+Scenario: Customer payment goes directly to vendor
+  Given Vendor A has a verified eligible merchant account
+  And the customer checks out a Vendor A cart
+  When the customer pays successfully
+  Then the payment is created in Vendor A merchant context
+  And the gateway settlement destination is Vendor A
+  And the platform records the verified payment reference
+  And no platform customer-fund balance or vendor payout is created
+
+Scenario: Payment webhook cannot change another tenant order
+  Given a signed webhook references Vendor A merchant account
+  When the webhook references a Vendor B order or mismatched amount
+  Then the webhook is rejected/quarantined
+  And no Vendor B order or payment is changed
+~~~
+
+### 25.5 Subscription separation and lifecycle
+
+~~~gherkin
+Scenario: Vendor subscription renewal is separate
+  Given Vendor A has an active SaaS subscription
+  When renewal becomes due
+  Then a subscription invoice is created
+  And payment uses the platform subscription merchant context
+  And no vendor customer order payment record is created
+
+Scenario: Unpaid subscription is suspended after grace
+  Given Vendor A renewal payment fails
+  When the configured grace period expires without payment
+  Then subscription becomes SUSPENDED
+  And vendor write operations are denied
+  And vendor data and financial history remain intact
+
+Scenario: Payment restores subscription
+  Given Vendor A subscription is suspended only for non-payment
+  When the outstanding subscription invoice is paid
+  Then subscription can return to ACTIVE
+  And an independent manual/security tenant suspension remains in effect
+~~~
+
+### 25.6 Returns, refunds and customer authorization
+
+~~~gherkin
+Scenario: Return and refund remain vendor-scoped
+  Given an order belongs to Vendor A
+  When a return/refund is requested
+  Then it references only Vendor A order items and payment
+  And Vendor B cannot view, approve or execute it
+
+Scenario: Customer cannot read another customer's order
+  Given Customer A and Customer B have marketplace accounts
+  When Customer A requests Customer B order ID
+  Then no order details are disclosed
+~~~
+
+### 25.7 Database integrity
+
+- MySQL rejects an order item whose order and product tenant IDs differ.
+- MySQL rejects a cart item whose cart and product tenant IDs differ.
+- MySQL rejects a vendor payment whose merchant account tenant differs from the order tenant.
+- Tenant-owned rows cannot persist with null tenant_id.
+- Flyway clean-install and upgrade tests pass on MySQL 8.4.
+
+## 26. Testing strategy and release gates
+
+Backend:
+- JUnit 5 unit tests for domain rules, state transitions and pricing.
+- Testcontainers with MySQL 8.4 for Flyway, composite constraints, locking, transaction rollback and tenant isolation.
+- REST Assured API tests for authentication, authorization, errors, pagination, idempotency and webhooks.
+
+Frontend:
+- Vitest for unit/component tests.
+- Playwright for marketplace browsing, global customer flows, vendor workspace, cart vendor-switch, checkout and cross-tenant browser scenarios.
+
+Mandatory test suites:
+1. Role × endpoint authorization matrix.
+2. Tenant isolation across all tenant-owned entities and operations.
+3. Global customer identity with two or more vendors.
+4. Vendor-private CRM note and pricing discussion isolation.
+5. One-vendor cart and mixed-vendor rejection.
+6. Checkout concurrency/idempotency and same-tenant foreign keys.
+7. Vendor-direct payment mock scenarios, signature failure, duplicate webhook, mismatch, timeout and refund.
+8. Separate subscription payment, renewal, retry, grace and suspension tests.
+9. Object storage and export isolation.
+10. Background job tenant propagation and thread-context cleanup.
+11. Upgrade migration from the currently supported baseline schema.
+12. Docker Compose smoke test.
+
+A release is blocked if a critical tenant-isolation test fails, a mock adapter is active in production, direct-vendor payment account context is not verified, or subscription and purchase payment records are mixed.
+
+## 27. Delivery sequence
+
+### Release A — Foundation
+- Java 21/Spring Boot 3.5 modular monolith.
+- React 19/Vite/TypeScript.
+- MySQL 8.4/Flyway.
+- Global identity, tenant membership, JWT rotation and permission framework.
+- Common-domain routing.
+- Tenant ownership matrix translated into migrations and tests.
+
+### Release B — Vendor marketplace and customer identity
+- Tenant onboarding and initial Vendor Admin.
+- Global customer account.
+- Vendor directory/storefront/catalogue.
+- Vendor-specific customer relationships and private CRM.
+- Vendor dashboards and platform administration.
+
+### Release C — Commercial transactions
+- Enquiries, quotations, cart, single-vendor checkout and orders.
+- Vendor merchant account onboarding abstraction.
+- Flagged mock direct-vendor payment adapter.
+- Vendor invoices/receipts and customer order portal.
+- Returns/refund domain and authorization.
+
+### Release D — SaaS billing and operations
+- Plans, entitlements, subscription invoices/payments, renewals, grace and suspension.
+- Inventory and fulfilment.
+- Branch/warehouse, shipment, installation, warranty and service workflows.
+- Reporting, notifications and audit hardening.
+
+### Release E — Production readiness
+- Approved live vendor-direct payment provider and platform subscription payment provider.
+- Real messaging adapter only after explicit provider approval.
+- Backup/restore, alerting, load/security tests, legal/tax review and release rehearsal.
+
+## 28. Definition of Done
 
 A feature is complete only when:
+- Requirement and acceptance criteria are traceable.
+- UI, API, service, repository and persistence are integrated.
+- Tenant ownership, roles and resource assignment are enforced.
+- Database constraints and migrations are reviewed.
+- Automated unit, integration, API and relevant Playwright tests pass.
+- Idempotency, retry, error handling and audit behavior are present where applicable.
+- OpenAPI, operations and user documentation are updated.
+- Metrics, logs and alerts are included.
+- No mock provider is enabled in production.
+- Product Owner accepts the end-to-end journey in staging.
 
-- Functional requirements and acceptance criteria are implemented.
-- Tenant and permission checks are present and tested.
-- API and UI validation are implemented.
-- Automated unit and integration tests pass.
-- Relevant end-to-end tests pass.
-- OpenAPI and user-facing documentation are updated.
-- Audit, logging and metrics requirements are implemented.
-- Accessibility checks are completed for affected screens.
-- Database migrations are reviewed and tested.
-- Security findings are resolved or formally accepted.
-- Product Owner accepts the feature in staging.
+## 29. Risks, assumptions and items requiring approval
 
-## 26. Open Decisions Before Implementation
+1. Gateway vendor-direct merchant capability and onboarding requirements must be confirmed for the chosen provider and jurisdiction.
+2. Subscription billing provider, retry schedule, grace duration, tax and invoice compliance require product/finance/legal approval.
+3. Vendor returns, refund windows, shipping liability and cancellation policy require business approval.
+4. Customer identity verification, account recovery, duplicate account merge and privacy/consent policy require approval.
+5. Platform support access to tenant-private information requires a documented break-glass policy.
+6. Data retention, erasure and financial record retention must comply with applicable law.
+7. Price, GST, settlement-fee and tax invoice requirements require qualified tax/accounting review.
 
-The following decisions should be finalized during product inception:
+No implementation may silently invent an answer to these business/legal decisions. Defaults in this document define the architecture; the approval gates above govern production activation.
 
-1. Authentication provider: embedded Spring Security identity or external OIDC provider.
-2. Hosting provider and managed MySQL/object-storage services.
-3. Tenant URL model: shared domain path, subdomain or custom domain.
-4. Required GST invoice structure and fiscal numbering rules.
-5. Payment gateway and settlement model.
-6. Email, SMS and WhatsApp providers.
-7. Subscription plans, limits and billing policy.
-8. Data-retention, deletion and legal-hold policy.
-9. Supported languages and currency expansion.
-10. Whether one customer identity can belong to multiple vendor tenants.
-11. Whether inventory can support controlled negative stock/backorders.
-12. Discount and refund approval thresholds.
+## Appendix A. Naming and ownership examples
 
-## 27. Recommended Immediate Next Steps
+- Tenant: TEN-000001
+- Global customer: CUS-GLOBAL-000001
+- Tenant customer relationship: TCUS-TEN-000001-000001
+- Vendor order: ORD-TEN-000001-2026-000001
+- Vendor invoice: INV-TEN-000001-2026-000001
+- Subscription invoice: SUBINV-TEN-000001-2026-000001
 
-1. Approve MVP scope and explicitly defer Phase 2/3 capabilities.
-2. Finalize roles, permission matrix and order/service state machines.
-3. Create low-fidelity screen flows for public, customer, vendor and platform views.
-4. Convert the database design into an ER diagram and Flyway baseline migration.
-5. Produce the OpenAPI contract for identity, tenant, product, lead, quotation and order modules.
-6. Build a vertical slice: login → tenant context → product → quotation → order, including cross-tenant security tests.
-7. Set up CI, Testcontainers, observability, vulnerability scanning and staging before expanding modules.
-
----
-
-## Appendix A: Recommended Technology Baseline
-
-| Layer             | Recommendation                                                        |
-|-------------------|-----------------------------------------------------------------------|
-| Backend           | Java 21, Spring Boot 3.x, Spring Security, Spring Data JPA            |
-| Build             | Maven with version catalog and dependency locking                     |
-| Frontend          | React, TypeScript, React Router and a tested component library        |
-| Database          | MySQL 8.x with Flyway or Liquibase                                    |
-| API               | REST, OpenAPI 3.1 and RFC 9457 errors                                 |
-| Testing           | JUnit 5, Mockito, Testcontainers, REST Assured and Playwright/Cypress |
-| Storage           | S3-compatible object storage with signed URLs                         |
-| Cache             | Redis-compatible service when operationally required                  |
-| Observability     | Spring Boot Actuator, Micrometer, OpenTelemetry and centralized logs  |
-| Security pipeline | SAST, dependency, secret, DAST and container-image scanning           |
-| Packaging         | OCI container images with non-root runtime                            |
-
-## Appendix B: Naming Examples
-
-```text
-Tenant: TEN-000001
-Customer: CUS-2026-000001
-Lead: LED-2026-000001
-Quotation: QUO-2026-000001-R01
-Order: ORD-2026-000001
-Invoice: INV-2026-000001
-Installation: INS-2026-000001
-Service Request: SRV-2026-000001
-```
-
-Identifiers shown to users should be unique within the intended tenant/fiscal scope, while internal identifiers remain
-globally unique.
+Human-readable identifiers are not authorization tokens. Internal IDs must be protected by ownership checks regardless of whether they are sequential, UUID or opaque identifiers.
