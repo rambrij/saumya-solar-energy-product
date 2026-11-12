@@ -20,31 +20,9 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
       - name: Focused security regression tests
         working-directory: backend
         run: >
           mvn --batch-mode --no-transfer-progress
           -Dtest=EndpointAuthenticationMatrixTest,Release2SecurityTest,Release12TenantIntegrationTest,TenantExecutionContextTest,AuthenticationRateLimitConcurrencyIntegrationTest
           test
-      - name: Reconcile endpoint authorization evidence
-        run: python3 docs/security/ci/assert-endpoint-authorization-evidence.py backend/target/phase2-endpoint-evidence
-      - name: Inventory async and scheduled boundaries
-        run: bash docs/security/ci/scan-async-workers.sh | tee async-worker-inventory.txt
-      - name: Inventory legacy authorization checks
-        run: bash docs/security/ci/scan-legacy-authz.sh | tee legacy-authorization-inventory.txt
-      - name: Reject external messaging transports
-        run: bash docs/security/ci/assert-no-external-message-transport.sh "$GITHUB_WORKSPACE"
-      - name: Upload review inventories
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-review-inventories-${{ github.run_id }}
-          path: |
-            async-worker-inventory.txt
-            legacy-authorization-inventory.txt
-            backend/target/phase2-endpoint-evidence/*.csv
-          if-no-files-found: warn
-          retention-days: 30

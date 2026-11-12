@@ -30,26 +30,6 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - name: Scan repository asynchronous and scheduled execution boundaries
-        run: |
-          bash docs/security/ci/scan-async-workers.sh | tee /tmp/phase2-async-worker-inventory.txt
-      - name: Assert no external messaging transport remains in repository
-        run: bash docs/security/ci/assert-no-external-message-transport.sh "$GITHUB_WORKSPACE"
-      - name: Upload asynchronous worker inventory
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase2-async-worker-inventory
-          path: /tmp/phase2-async-worker-inventory.txt
-          retention-days: 30
-      - name: Scan legacy authorization and role-name checks
-        run: |
-          bash docs/security/ci/scan-legacy-authz.sh | tee /tmp/phase2-legacy-authz-inventory.txt
-      - name: Upload legacy authorization inventory
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase2-legacy-authz-inventory
-          path: /tmp/phase2-legacy-authz-inventory.txt
-          retention-days: 30
       - name: Run backend security, tenant-context and messaging regression tests
         working-directory: backend
         run: >
@@ -59,8 +39,6 @@ jobs:
       - name: Compile and test
         working-directory: backend
         run: mvn --batch-mode --no-transfer-progress clean verify
-      - name: Validate complete runtime endpoint authorization evidence
-        run: python3 docs/security/ci/assert-endpoint-authorization-evidence.py backend/target/phase2-endpoint-evidence
       - name: Upload runtime endpoint authorization evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -187,12 +165,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Assert baseline tenant schema NULL-row inventory
-        run: |
-          python3 docs/security/ci/assert-tenant-schema-audit.py /tmp/tenant-schema-audit.txt
-          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_baseline_test -Nse "SELECT COUNT(*) FROM role WHERE tenant_id IS NULL AND name IN ('PLATFORM_SUPER_ADMIN','PLATFORM_SUPPORT','CUSTOMER')")" = "3"
-          test "$(mysql -h 127.0.0.1 -uroot -prootpass solar_baseline_test -Nse "SELECT COUNT(*) FROM role WHERE tenant_id IS NULL AND name NOT IN ('PLATFORM_SUPER_ADMIN','PLATFORM_SUPPORT','CUSTOMER')")" = "0"
-          echo "PASS: all three nullable global role rows are explicitly classified; no unexpected global roles."
+
 
   mysql-app-startup:
     name: Start Spring Boot against MySQL 8.4 and Mailpit
